@@ -1,6 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class Heightmap
 {
@@ -124,8 +127,68 @@ public class Heightmap
         return count;
     }
 
+    public void Border(int width, float height)
+    {
+        for (int w = 0; w < width; w++)
+        {
+            for (int s = 0; s < sizeX; s++)
+            {
+                heights[w * sizeX + s] = height;
+                heights[(sizeY - 1 - w) * sizeX + s] = height;
+            }
+            for (int s = 0; s < sizeY; s++)
+            {
+                heights[s * sizeX + w] = height;
+                heights[s * sizeX + (sizeX - 1 - w)] = height;
+            }
+        }
+    }
+
     public float Get(int x, int y)
     {
         return heights[y * sizeX + x];
+    }
+
+    public float Get(int idx)
+    {
+        return heights[idx];
+    }
+
+    public void Set(int x, int y, float h)
+    {
+        heights[y * sizeX + x] = h;
+    }
+
+    public void Set(int idx, float h)
+    {
+        heights[idx] = h;
+    }
+
+    public Texture2D GetTexture()
+    {
+        Texture2D newTexture = new Texture2D(sizeX, sizeY, TextureFormat.ARGB32, false);
+        Color c = new Color();
+        for (int y = 0; y < sizeY; y++)
+        {
+            for (int x = 0; x < sizeX; x++)
+            {
+                c.r = c.g = c.b = c.a = Get(x, y);
+                newTexture.SetPixel(x, y, c);
+            }
+        }
+        
+        return newTexture;
+    }
+
+    public void SaveTexture(string filename)
+    {
+        if (filename != "")
+        {
+            var newTexture = GetTexture();
+
+            byte[] bytes = newTexture.EncodeToPNG();
+
+            System.IO.File.WriteAllBytes(filename, bytes);
+        }
     }
 }

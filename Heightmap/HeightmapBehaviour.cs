@@ -72,17 +72,6 @@ public class HeightmapBehaviour : MonoBehaviour
     void ReplaceTexture(Heightmap heightmap, Texture2D texture)
     {
 #if UNITY_EDITOR
-        Texture2D newTexture = new Texture2D(size.x, size.y, TextureFormat.ARGB32, false);
-        Color c = new Color();
-        for (int y = 0; y < size.y; y++)
-        {
-            for (int x = 0; x < size.x; x++)
-            {
-                c.r = c.g = c.b = c.a = heightmap.Get(x, y);
-                newTexture.SetPixel(x, y, c);
-            }
-        }
-
         string filename = "Assets/Textures/heightmap.png";
 
         if (texture != null)
@@ -90,12 +79,7 @@ public class HeightmapBehaviour : MonoBehaviour
             filename = AssetDatabase.GetAssetPath(texture);
         }
 
-        if (filename != "")
-        {
-            byte[] bytes = newTexture.EncodeToPNG();
-
-            System.IO.File.WriteAllBytes(filename, bytes);
-        }
+        heightmap.SaveTexture(filename);
 
         if (texture == null)
         {
