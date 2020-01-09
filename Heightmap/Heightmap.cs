@@ -154,6 +154,14 @@ public class Heightmap
         return heights[idx];
     }
 
+    public float SafeGet(int x, int y, float height)
+    {
+        if ((x < 0) || (x >= sizeX)) return height;
+        if ((y < 0) || (y >= sizeX)) return height;
+
+        return heights[y * sizeX + x];
+    }
+
     public void Set(int x, int y, float h)
     {
         heights[y * sizeX + x] = h;

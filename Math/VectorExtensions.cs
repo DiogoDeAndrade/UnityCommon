@@ -1,0 +1,12 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+static public class VectorExtensions
+{
+    public static Vector3 x0z(this Vector3 inV)
+    {
+        return new Vector3(inV.x, 0.0f, inV.z);
+    }
+};
+
