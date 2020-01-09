@@ -140,7 +140,7 @@ public class CubeWorldGen
 
                 mesh.RecalculateTangents();
 
-                mesh.UploadMeshData(true);
+                mesh.UploadMeshData(false);
                 meshes.Add(mesh);
             }
         }
