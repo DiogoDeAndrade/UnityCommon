@@ -11,6 +11,8 @@ public class CubeWorldGen
     bool    noise = false;
     Vector3 noise_frequency;
     float   noise_amplitude;
+    bool    world_tex_coord_wall;
+    bool    world_tex_coord_floor;
 
     public CubeWorldGen(int sectionSizeX, int sectionSizeY, Vector3 tileSize)
     {
@@ -29,6 +31,16 @@ public class CubeWorldGen
     public void SetReuse(bool b)
     {
         reuse_vertex = b;
+    }
+
+    public void SetWorldTexCoordFloor(bool b)
+    {
+        world_tex_coord_floor = b;
+    }
+
+    public void SetWorldTexCoordWall(bool b)
+    {
+        world_tex_coord_wall = b;
     }
 
     public void GetMeshes(Heightmap heightmap, ref List<Mesh> meshes)
@@ -60,9 +72,14 @@ public class CubeWorldGen
                     {
                         int     tileX = sectionX * sectionSizeX + dx;
                         float   selfHeight = heightmap.Get(tileX, tileY);
+                        Vector4 rect;
+
+                        if (world_tex_coord_floor) rect = new Vector4(tileX, tileY + 1, tileX + 1, tileY);
+                        else rect = new Vector4(0.0f, 0.0f, 1.0f, 1.0f);
+
                         Vector3 center = new Vector3((tileX + 0.5f) * tileSize.x, selfHeight * tileSize.y, (tileY + 0.5f) * tileSize.z);
 
-                        AddQuad(center, Vector3.right * tileSize.x, Vector3.forward * tileSize.z, verts, uvs, triangles0, 1, reuse_vertex);
+                        AddQuad(center, Vector3.right * tileSize.x, Vector3.forward * tileSize.z, verts, uvs, triangles0, rect, 1, reuse_vertex);
 
                         float rightHeight = heightmap.SafeGet(tileX + 1, tileY, 0);
                         float leftHeight = heightmap.SafeGet(tileX - 1, tileY,0);
@@ -71,30 +88,42 @@ public class CubeWorldGen
 
                         if (rightHeight < selfHeight)
                         {
+                            if (world_tex_coord_wall) rect = new Vector4(tileY, 0, tileY + 1, 1);
+                            else rect = new Vector4(0.0f, 0.0f, 1.0f, 1.0f);
+
                             float deltaHeight = (selfHeight - rightHeight) * tileSize.y; 
                             Vector3 rightCenter = new Vector3((tileX + 1.0f) * tileSize.x, rightHeight + deltaHeight * 0.5f, (tileY + 0.5f) * tileSize.z);
-                            AddQuad(rightCenter, Vector3.forward * tileSize.z, Vector3.up * deltaHeight, verts, uvs, triangles1, 1, reuse_vertex);
+                            AddQuad(rightCenter, Vector3.forward * tileSize.z, Vector3.up * deltaHeight, verts, uvs, triangles1, rect, 1, reuse_vertex);
                         }
                         
                         if (leftHeight < selfHeight)
                         {
+                            if (world_tex_coord_wall) rect = new Vector4(tileY, 0, tileY + 1, 1);
+                            else rect = new Vector4(0.0f, 0.0f, 1.0f, 1.0f);
+
                             float deltaHeight = (selfHeight - leftHeight) * tileSize.y;
                             Vector3 leftCenter = new Vector3(tileX * tileSize.x, leftHeight + deltaHeight * 0.5f, (tileY + 0.5f) * tileSize.z);
-                            AddQuad(leftCenter, Vector3.up * tileSize.y, Vector3.forward * deltaHeight, verts, uvs, triangles1, 1, reuse_vertex);
+                            AddQuad(leftCenter, Vector3.up * tileSize.y, Vector3.forward * deltaHeight, verts, uvs, triangles1, rect, 1, reuse_vertex);
                         }
 
                         if (downHeight < selfHeight)
                         {
+                            if (world_tex_coord_wall) rect = new Vector4(tileX, 0, tileX + 1, 1);
+                            else rect = new Vector4(0.0f, 0.0f, 1.0f, 1.0f);
+
                             float deltaHeight = (selfHeight - downHeight) * tileSize.y;
                             Vector3 downCenter = new Vector3((tileX + 0.5f) * tileSize.x, downHeight + deltaHeight * 0.5f, (tileY + 1.0f) * tileSize.z);
-                            AddQuad(downCenter, Vector3.up * deltaHeight, Vector3.right * tileSize.z, verts, uvs, triangles1, 1, reuse_vertex);
+                            AddQuad(downCenter, Vector3.up * deltaHeight, Vector3.right * tileSize.z, verts, uvs, triangles1, rect, 1, reuse_vertex);
                         }
 
                         if (upHeight < selfHeight)
                         {
+                            if (world_tex_coord_wall) rect = new Vector4(tileX, 0, tileX + 1, 1);
+                            else rect = new Vector4(0.0f, 0.0f, 1.0f, 1.0f);
+
                             float deltaHeight = (selfHeight - upHeight) * tileSize.y;
                             Vector3 downCenter = new Vector3((tileX + 0.5f) * tileSize.x, upHeight + deltaHeight * 0.5f, tileY * tileSize.z);
-                            AddQuad(downCenter, Vector3.right * tileSize.z, Vector3.up * deltaHeight, verts, uvs, triangles1, 1, reuse_vertex);
+                            AddQuad(downCenter, Vector3.right * tileSize.z, Vector3.up * deltaHeight, verts, uvs, triangles1, rect, 1, reuse_vertex);
                         }
                     }
                 }
@@ -146,7 +175,7 @@ public class CubeWorldGen
         }
     }
 
-    void AddQuad(Vector3 center, Vector3 axisX, Vector3 axisZ, List<Vector3> verts, List<Vector2> uvs, List<int> triangles, int tesselation, bool reuse)
+    void AddQuad(Vector3 center, Vector3 axisX, Vector3 axisZ, List<Vector3> verts, List<Vector2> uvs, List<int> triangles, Vector4 uv_rect, int tesselation, bool reuse)
     {
         if (tesselation == 1)
         {
@@ -154,10 +183,10 @@ public class CubeWorldGen
             Vector3 v2 = center - axisX * 0.5f + axisZ * 0.5f;
             Vector3 v3 = center + axisX * 0.5f + axisZ * 0.5f;
             Vector3 v4 = center + axisX * 0.5f - axisZ * 0.5f;
-            Vector2 uv1 = new Vector2(0.0f, 1.0f);
-            Vector2 uv2 = new Vector2(0.0f, 0.0f);
-            Vector2 uv3 = new Vector2(1.0f, 0.0f);
-            Vector2 uv4 = new Vector2(1.0f, 1.0f);
+            Vector2 uv1 = new Vector2(uv_rect.x, uv_rect.w);
+            Vector2 uv2 = new Vector2(uv_rect.x, uv_rect.y);
+            Vector2 uv3 = new Vector2(uv_rect.z, uv_rect.y);
+            Vector2 uv4 = new Vector2(uv_rect.z, uv_rect.w);
 
             if (reuse_vertex)
             { 
