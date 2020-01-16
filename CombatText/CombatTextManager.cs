@@ -26,6 +26,7 @@ public class CombatTextManager : MonoBehaviour
     public TextMeshProUGUI textPrefab;
     public float           defaultTime = 1.0f;
     public Vector2         movementVector;
+    public float           fadeRate = 1;
 
     List<TextElem> textList;
     Canvas         canvas;
@@ -68,7 +69,7 @@ public class CombatTextManager : MonoBehaviour
             }
             else
             {
-                float t = tElem.elapsedTime / tElem.totalTime;
+                float t = Mathf.Pow(tElem.elapsedTime / tElem.totalTime, fadeRate);
                 Color c = Color.Lerp(tElem.startColor, tElem.endColor, t);
 
                 tElem.textObject.color = c;
