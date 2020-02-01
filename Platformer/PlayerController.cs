@@ -13,8 +13,10 @@ public class PlayerController : MonoBehaviour
     public float        jumpSustainMaxTime = 0.0f;
     public float        gravityJumpMultiplier = 4.0f;
     public float        coyoteTime = 0.1f;
+    public bool         knockbackEnable = true;
     [Header("References")]
     public GameObject   groundPoint;
+    public Transform    followTarget;
     [Header("Controls")]
     public string       xAxis = "Horizontal";
     public string       jumpButton = "Jump";
@@ -30,6 +32,15 @@ public class PlayerController : MonoBehaviour
     ContactFilter2D groundContactFilter;
     float           timeOfFall;
     bool            movementEnable = true;
+    HealthSystem    healthSystem;
+
+    public bool invulnerable
+    {
+        get
+        {
+            return healthSystem.isInvulnerable;
+        }
+    }
 
     Vector2 groundPointPosition
     {
@@ -107,6 +118,7 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         timeScaler = GetComponent<TimeScaler2d>();
         anim = GetComponent<Animator>();
+        healthSystem = GetComponent<HealthSystem>();
         if (groundPoint)
             coyoteCollider = groundPoint.GetComponent<Collider2D>();
         else
@@ -114,6 +126,11 @@ public class PlayerController : MonoBehaviour
 
         groundContactFilter = new ContactFilter2D();
         groundContactFilter.layerMask = groundMask;
+
+        if (followTarget == null)
+        {
+            followTarget = transform;
+        }
     }
 
     private void FixedUpdate()
@@ -239,5 +256,33 @@ public class PlayerController : MonoBehaviour
     public void EnableMovement(bool b)
     {
         movementEnable = b;
+    }
+
+    public Transform GetFollowTarget()
+    {
+        return followTarget;
+    }
+
+    public void DealDamage(float damage)
+    {
+        healthSystem.DealDamage(damage);
+
+        if (healthSystem.isDead)
+        {
+
+        }
+        else
+        {
+            healthSystem.isInvulnerable = true;
+
+            anim.SetTrigger("Hit");
+
+            if (knockbackEnable)
+            {
+                var v = velocity;
+                v.y = 100.0f;
+                velocity = v;
+            }
+        }
     }
 }
