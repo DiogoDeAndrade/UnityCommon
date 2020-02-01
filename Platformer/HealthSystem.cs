@@ -8,16 +8,13 @@ public class HealthSystem : MonoBehaviour
     public float maxHealth = 100.0f;
     public float invulnerabilityTime = 2.0f;
     public bool  invulnerabilityBlink = true;
-    [ShowIf("invulnerabilityBlink")]
-    public float            blinkTime = 0.2f;
-    [ShowIf("invulnerabilityBlink")]
-    public Renderer[]       renderers;
 
     protected float _health = 100.0f;
     protected bool  _dead;
     protected float invulnerabilityTimer;
 
     TimeScaler2d        timeScaler;
+    Animator            animator;
     float               blinkTimer;
 
     public bool isInvulnerable
@@ -25,10 +22,6 @@ public class HealthSystem : MonoBehaviour
         get { return invulnerabilityTimer > 0.0f; }
         set
         {
-            if (invulnerabilityTimer <= 0.0f)
-            {
-                blinkTimer = blinkTime;
-            }
             invulnerabilityTimer = invulnerabilityTime;
 
         }
@@ -49,15 +42,7 @@ public class HealthSystem : MonoBehaviour
         _dead = false;
 
         timeScaler = GetComponent<TimeScaler2d>();
-
-        if (invulnerabilityBlink)
-        {
-            if ((renderers == null) || (renderers.Length == 0))
-            {
-                renderers = new SpriteRenderer[1];
-                renderers[0] = GetComponent<SpriteRenderer>();
-            }
-        }
+        animator = GetComponent<Animator>();
     }
 
     // Update is called once per frame
@@ -70,36 +55,31 @@ public class HealthSystem : MonoBehaviour
             if (invulnerabilityTimer <= 0.0f)
             {
                 invulnerabilityTimer = 0.0f;
-                if (invulnerabilityBlink)
-                {
-                    foreach (var sr in renderers)
-                        sr.enabled = true;
-                }
+                animator.SetBool("Invulnerable", false);
             }
             else
             {
-                if (invulnerabilityBlink)
-                {
-                    blinkTimer -= Time.deltaTime;
-                    if (blinkTimer < 0.0f)
-                    {
-                        blinkTimer += blinkTime;
-
-                        foreach (var sr in renderers)
-                            sr.enabled = !sr.enabled;
-                    }
-                }
+                animator.SetBool("Invulnerable", true);
             }
+        }
+        else
+        {
+            animator.SetBool("Invulnerable", false);
         }
     }
 
-    public void DealDamage(float damage)
+    public bool DealDamage(float damage)
     {
+        if (isInvulnerable) return false;
+        if (_dead) return false;
+
         _health -= damage;
-        if (_health < 0.0f)
+        if (_health <= 0.0f)
         {
             _health = 0.0f;
             _dead = true;
         }
+
+        return true;
     }
 }

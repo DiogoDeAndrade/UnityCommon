@@ -34,11 +34,19 @@ public class PlayerController : MonoBehaviour
     bool            movementEnable = true;
     HealthSystem    healthSystem;
 
-    public bool invulnerable
+    public bool isInvulnerable
     {
         get
         {
             return healthSystem.isInvulnerable;
+        }
+    }
+
+    public bool isDead
+    {
+        get
+        {
+            return healthSystem.isDead;
         }
     }
 
@@ -201,6 +209,8 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (isDead) return;
+
         if (movementEnable)
             movementDir.x = Input.GetAxis(xAxis);
         else
@@ -263,13 +273,15 @@ public class PlayerController : MonoBehaviour
         return followTarget;
     }
 
-    public void DealDamage(float damage)
+    public bool DealDamage(float damage)
     {
-        healthSystem.DealDamage(damage);
+        bool ret = healthSystem.DealDamage(damage);
 
         if (healthSystem.isDead)
         {
+            movementDir = Vector2.zero;
 
+            anim.SetTrigger("Dead");
         }
         else
         {
@@ -284,5 +296,12 @@ public class PlayerController : MonoBehaviour
                 velocity = v;
             }
         }
+
+        return ret;
+    }
+
+    public void DestroySelf()
+    {
+        Destroy(gameObject);
     }
 }
