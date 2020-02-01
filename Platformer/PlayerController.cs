@@ -22,12 +22,14 @@ public class PlayerController : MonoBehaviour
     Vector2         movementDir;
     Vector2         currentVelocity;
     Rigidbody2D     rb;
+    TimeScaler2d    timeScaler;
     Animator        anim;
     float           jumpTime;
     bool            jumpPress;
     Collider2D      coyoteCollider;
     ContactFilter2D groundContactFilter;
     float           timeOfFall;
+    float           scaledTime = 0.0f;
 
     Vector2 groundPointPosition
     {
@@ -61,7 +63,7 @@ public class PlayerController : MonoBehaviour
     {
         get
         {
-            return Time.time;
+            return scaledTime;
         }
     }
 
@@ -69,11 +71,16 @@ public class PlayerController : MonoBehaviour
     {
         get
         {
+            if (timeScaler) return timeScaler.originalGravityScale;
+
             return rb.gravityScale;
         }
         set
         {
-            rb.gravityScale = value;
+            if (timeScaler)
+                timeScaler.originalGravityScale = value;
+            else
+                rb.gravityScale = value;
         }
     }
 
@@ -81,17 +88,23 @@ public class PlayerController : MonoBehaviour
     {
         get
         {
+            if (timeScaler) return timeScaler.originalVelocity;
+
             return rb.velocity;
         }
         set
         {
-            rb.velocity = value;
+            if (timeScaler)
+                timeScaler.originalVelocity = value;
+            else
+                rb.velocity = value;
         }
     }
 
     void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        timeScaler = GetComponent<TimeScaler2d>();
         anim = GetComponent<Animator>();
         if (groundPoint)
             coyoteCollider = groundPoint.GetComponent<Collider2D>();
@@ -104,6 +117,9 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (timeScaler) scaledTime += Time.fixedDeltaTime * timeScaler.timeScale;
+        else scaledTime += Time.fixedDeltaTime;
+
         currentVelocity = velocity;
 
         if (Mathf.Abs(movementDir.x) > 0.0001f)
@@ -201,9 +217,12 @@ public class PlayerController : MonoBehaviour
         {
             jumpPress = false;
         }
-        
+
         // Animation/Visual update
-        anim.SetFloat("AbsSpeedX", Mathf.Abs(movementDir.x));
+        float absMovementX = Mathf.Abs(movementDir.x);
+        anim.SetFloat("AbsSpeedX", absMovementX);
+        if (absMovementX > 0.0f) anim.SetFloat("AnimSpeed", absMovementX);
+        else anim.SetFloat("AnimSpeed", 1.0f);
 
         Vector2 right = transform.right;
 
