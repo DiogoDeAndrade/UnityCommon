@@ -4,7 +4,13 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class HealthSystem : MonoBehaviour
-{    
+{
+    public delegate void OnHit(float damage);
+    public event OnHit  onHit;
+
+    public delegate void OnDead();
+    public event OnDead onDead;
+
     public float maxHealth = 100.0f;
     public float invulnerabilityTime = 2.0f;
     public bool  invulnerabilityBlink = true;
@@ -78,6 +84,12 @@ public class HealthSystem : MonoBehaviour
         {
             _health = 0.0f;
             _dead = true;
+
+            onDead();
+        }
+        else
+        {
+            onHit(damage);
         }
 
         return true;

@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -127,6 +128,9 @@ public class PlayerController : MonoBehaviour
         timeScaler = GetComponent<TimeScaler2d>();
         anim = GetComponent<Animator>();
         healthSystem = GetComponent<HealthSystem>();
+        healthSystem.onHit += OnHit;
+        healthSystem.onDead += OnDead;
+
         if (groundPoint)
             coyoteCollider = groundPoint.GetComponent<Collider2D>();
         else
@@ -273,31 +277,25 @@ public class PlayerController : MonoBehaviour
         return followTarget;
     }
 
-    public bool DealDamage(float damage)
+    private void OnDead()
     {
-        bool ret = healthSystem.DealDamage(damage);
+        movementDir = Vector2.zero;
 
-        if (healthSystem.isDead)
+        anim.SetTrigger("Dead");
+    }
+
+    private void OnHit(float damage)
+    {
+        healthSystem.isInvulnerable = true;
+
+        anim.SetTrigger("Hit");
+
+        if (knockbackEnable)
         {
-            movementDir = Vector2.zero;
-
-            anim.SetTrigger("Dead");
+            var v = velocity;
+            v.y = 100.0f;
+            velocity = v;
         }
-        else
-        {
-            healthSystem.isInvulnerable = true;
-
-            anim.SetTrigger("Hit");
-
-            if (knockbackEnable)
-            {
-                var v = velocity;
-                v.y = 100.0f;
-                velocity = v;
-            }
-        }
-
-        return ret;
     }
 
     public void DestroySelf()
