@@ -29,6 +29,7 @@ public class PlayerController : MonoBehaviour
     Collider2D      coyoteCollider;
     ContactFilter2D groundContactFilter;
     float           timeOfFall;
+    bool            movementEnable = true;
 
     Vector2 groundPointPosition
     {
@@ -38,7 +39,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    bool isGrounded
+    public bool isGrounded
     {
         get
         {
@@ -183,7 +184,10 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        movementDir.x = Input.GetAxis(xAxis);
+        if (movementEnable)
+            movementDir.x = Input.GetAxis(xAxis);
+        else
+            movementDir.x = 0.0f;
 
         bool grounded = isGrounded;
 
@@ -192,7 +196,7 @@ public class PlayerController : MonoBehaviour
             gravity = 1.0f;
         }
 
-        if (Input.GetButtonDown(jumpButton))
+        if ((Input.GetButtonDown(jumpButton)) && (movementEnable))
         {
             if (Mathf.Abs(currentVelocity.y) < 0.0001f)
             {
@@ -230,5 +234,10 @@ public class PlayerController : MonoBehaviour
             if (movementDir.x > 0.0001f) transform.rotation = Quaternion.identity;
             else if (movementDir.x < -0.0001f) transform.rotation = Quaternion.Euler(0.0f, 180.0f, 0.0f);
         }
+    }
+
+    public void EnableMovement(bool b)
+    {
+        movementEnable = b;
     }
 }
