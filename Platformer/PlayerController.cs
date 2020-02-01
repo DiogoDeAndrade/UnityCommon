@@ -29,7 +29,6 @@ public class PlayerController : MonoBehaviour
     Collider2D      coyoteCollider;
     ContactFilter2D groundContactFilter;
     float           timeOfFall;
-    float           scaledTime = 0.0f;
 
     Vector2 groundPointPosition
     {
@@ -63,7 +62,8 @@ public class PlayerController : MonoBehaviour
     {
         get
         {
-            return scaledTime;
+            if (timeScaler) return Time.time;
+            else return timeScaler.time;
         }
     }
 
@@ -117,9 +117,6 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (timeScaler) scaledTime += Time.fixedDeltaTime * timeScaler.timeScale;
-        else scaledTime += Time.fixedDeltaTime;
-
         currentVelocity = velocity;
 
         if (Mathf.Abs(movementDir.x) > 0.0001f)
@@ -190,7 +187,7 @@ public class PlayerController : MonoBehaviour
 
         bool grounded = isGrounded;
 
-        if (isGrounded)
+        if (grounded)
         {
             gravity = 1.0f;
         }
@@ -199,7 +196,7 @@ public class PlayerController : MonoBehaviour
         {
             if (Mathf.Abs(currentVelocity.y) < 0.0001f)
             {
-                if (isGrounded)
+                if (grounded)
                 {
                     movementDir.y = 1.0f;
                     jumpTime = timestamp;
@@ -221,8 +218,10 @@ public class PlayerController : MonoBehaviour
         // Animation/Visual update
         float absMovementX = Mathf.Abs(movementDir.x);
         anim.SetFloat("AbsSpeedX", absMovementX);
+        anim.SetFloat("SpeedY", currentVelocity.y);
         if (absMovementX > 0.0f) anim.SetFloat("AnimSpeed", absMovementX);
         else anim.SetFloat("AnimSpeed", 1.0f);
+        anim.SetBool("Grounded", grounded);
 
         Vector2 right = transform.right;
 

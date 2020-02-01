@@ -9,7 +9,13 @@ public class TimeScaler2d : MonoBehaviour
         get { return _timeScale; }
     }
 
+    public float time
+    {
+        get { return _time; }
+    }
+
     float _timeScale = 1.0f;
+    float _time = 0.0f;
 
     Rigidbody2D     rb;
     Animator[]      animators;
@@ -44,10 +50,9 @@ public class TimeScaler2d : MonoBehaviour
         animators = GetComponentsInChildren<Animator>(true);
     }
 
-    private void Update()
+    void Update()
     {
-        if (rb.velocity.magnitude > 0.01f)
-            Debug.Log(name + " velocity = " + rb.velocity);
+        _time += Time.deltaTime * _timeScale;
     }
 
     public void ModifyScale(float s)
@@ -86,5 +91,11 @@ public class TimeScaler2d : MonoBehaviour
         {
             anim.speed = _timeScale;
         }
+    }
+
+    public void AddForce(Vector2 force, ForceMode2D mode)
+    {
+//        rb.AddForce(force * timeScale, mode);
+        rb.AddForce(force, mode);
     }
 }
