@@ -15,14 +15,22 @@ public class PlayerController : MonoBehaviour
     public float        gravityJumpMultiplier = 4.0f;
     public float        coyoteTime = 0.1f;
     public bool         knockbackEnable = true;
+    public float        interactionRadius = 10.0f;
+    public LayerMask    interactionMask;
     [Header("References")]
     public GameObject   groundPoint;
     public Transform    followTarget;
     [Header("Controls")]
     public string       xAxis = "Horizontal";
     public string       jumpButton = "Jump";
+    public string       interact = "Interact";
+    [Header("Sounds")]
+    public AudioSource stepSound;
+    public AudioSource jumpSound;
+    public AudioSource deathSound;
+    public AudioSource hitSound;
 
-    Vector2         movementDir;
+    Vector2 movementDir;
     Vector2         currentVelocity;
     Rigidbody2D     rb;
     TimeScaler2d    timeScaler;
@@ -137,7 +145,7 @@ public class PlayerController : MonoBehaviour
             coyoteCollider = null;
 
         groundContactFilter = new ContactFilter2D();
-        groundContactFilter.layerMask = groundMask;
+        groundContactFilter.SetLayerMask(groundMask);
 
         if (followTarget == null)
         {
@@ -149,7 +157,7 @@ public class PlayerController : MonoBehaviour
     {
         currentVelocity = velocity;
 
-        if (Mathf.Abs(movementDir.x) > 0.0001f)
+        if (Mathf.Abs(movementDir.x) > 0.01f)
         {
             currentVelocity.x = movementDir.x * moveSpeed;
         }
@@ -172,7 +180,7 @@ public class PlayerController : MonoBehaviour
         if (jumpPress)
         {
             // Going up
-            if (currentVelocity.y > 0.0001f)
+            if (currentVelocity.y > 0.01f)
             {
                 if ((timestamp - jumpTime) > jumpSustainMaxTime)
                 {
@@ -189,7 +197,7 @@ public class PlayerController : MonoBehaviour
             gravity = gravityJumpMultiplier;
         }
 
-        if (Mathf.Abs(currentVelocity.y) > 0.001f)
+        if (Mathf.Abs(currentVelocity.y) > 0.01f)
         {
             coyoteCollider.enabled = false;
         }
@@ -229,7 +237,7 @@ public class PlayerController : MonoBehaviour
 
         if ((Input.GetButtonDown(jumpButton)) && (movementEnable))
         {
-            if (Mathf.Abs(currentVelocity.y) < 0.0001f)
+            if (Mathf.Abs(currentVelocity.y) < 0.01f)
             {
                 if (grounded)
                 {
@@ -238,8 +246,16 @@ public class PlayerController : MonoBehaviour
 
                     gravity = 1.0f;
                     jumpPress = true;
+
+                    if (jumpSound)
+                    {
+                        jumpSound.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
+                        jumpSound.Play();
+                    }
+
                 }
             }
+
         }
         else if (Input.GetButton(jumpButton))
         {
@@ -262,14 +278,34 @@ public class PlayerController : MonoBehaviour
 
         if (Vector2.Dot(right, movementDir) < 0.0f)
         {
-            if (movementDir.x > 0.0001f) transform.rotation = Quaternion.identity;
-            else if (movementDir.x < -0.0001f) transform.rotation = Quaternion.Euler(0.0f, 180.0f, 0.0f);
+            if (movementDir.x > 0.01f) transform.rotation = Quaternion.identity;
+            else if (movementDir.x < -0.01f) transform.rotation = Quaternion.Euler(0.0f, 180.0f, 0.0f);
+        }
+
+        // Interaction
+        if (Input.GetButtonDown(interact))
+        {
+            var colliders = Physics2D.OverlapCircleAll(transform.position, interactionRadius, interactionMask);
+
+            bool interact = false;
+            foreach (var collider in colliders)
+            {
+                Interactable interactable = collider.GetComponentInParent<Interactable>();
+
+                if (interactable)
+                {
+                    interactable.Interact();
+                    interact = true;
+                }
+            }
+
+            if (interact) anim.SetBool("Attack", interact);
         }
     }
 
     public void EnableMovement(bool b)
     {
-        movementEnable = b;
+        movementEnable = b; 
     }
 
     public Transform GetFollowTarget()
@@ -282,6 +318,8 @@ public class PlayerController : MonoBehaviour
         movementDir = Vector2.zero;
 
         anim.SetTrigger("Dead");
+
+        if (deathSound) deathSound.Play();
     }
 
     private void OnHit(float damage)
@@ -296,10 +334,30 @@ public class PlayerController : MonoBehaviour
             v.y = 100.0f;
             velocity = v;
         }
+
+        if (hitSound)
+        {
+            hitSound.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
+            hitSound.Play();
+        }
     }
 
     public void DestroySelf()
     {
         Destroy(gameObject);
+    }
+
+    public void Celebrate()
+    {
+        anim.SetTrigger("Celebrate");
+    }
+
+    public void StepSound()
+    {
+        if (stepSound)
+        {
+            stepSound.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
+            stepSound.Play();
+        }
     }
 }

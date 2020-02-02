@@ -4,6 +4,13 @@ using UnityEngine;
 
 public static class GameObjectExtensions
 {
+    public static GameObject GetRootObject(this GameObject go)
+    {
+        if (go.transform.parent == null) return go;
+
+        return go.transform.parent.gameObject.GetRootObject();
+    }
+
     public static void DeleteAllChildren(this GameObject go)
     {
         List<Transform> toDestroy = new List<Transform>();

@@ -5,15 +5,18 @@ using UnityEngine;
 
 public class HealthSystem : MonoBehaviour
 {
+    public enum Faction { Neutral, Friendly, Enemy };
+
     public delegate void OnHit(float damage);
     public event OnHit  onHit;
 
     public delegate void OnDead();
     public event OnDead onDead;
 
-    public float maxHealth = 100.0f;
-    public float invulnerabilityTime = 2.0f;
-    public bool  invulnerabilityBlink = true;
+    public Faction  faction;
+    public float    maxHealth = 100.0f;
+    public float    invulnerabilityTime = 2.0f;
+    public bool     invulnerabilityBlink = true;
 
     protected float _health = 100.0f;
     protected bool  _dead;

@@ -14,6 +14,11 @@ public class TimeScaler2d : MonoBehaviour
         get { return _time; }
     }
 
+    public float deltaTime
+    {
+        get { return Time.deltaTime * _timeScale; }
+    }
+
     float _timeScale = 1.0f;
     float _time = 0.0f;
 
