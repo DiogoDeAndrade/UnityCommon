@@ -26,6 +26,16 @@ public class HealthSystem : MonoBehaviour
     Animator            animator;
     float               blinkTimer;
 
+    public float health
+    {
+        get { return _health; }
+    }
+
+    public float normalizedHealth
+    {
+        get { return _health / maxHealth; }
+    }
+
     public bool isInvulnerable
     {
         get { return invulnerabilityTimer > 0.0f; }
@@ -44,8 +54,7 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
-    // Start is called before the first frame update
-    void Start()
+    void Awake()
     {
         _health = maxHealth;
         _dead = false;
