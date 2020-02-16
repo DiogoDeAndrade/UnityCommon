@@ -26,6 +26,7 @@ public class ResourceBar : MonoBehaviour
     public float            timeOfFadeIn = 0.5f;
     [ShowIf("fadeAfterTime")]
     public float            timeOfFadeOut = 1.0f;
+    public bool             respectRotation = false;
 
     public bool NeedSpeedVar() { return (updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed); }
 
@@ -42,6 +43,9 @@ public class ResourceBar : MonoBehaviour
     float           alpha;
     float           changeTimer;
 
+    // Keep vars
+    Quaternion      initialRotation;
+
     void Start()
     {
         uiImage = bar.GetComponent<Image>();
@@ -49,6 +53,7 @@ public class ResourceBar : MonoBehaviour
         prevT = currentT = GetNormalizedResource();
         canvasGroup = GetComponent<CanvasGroup>();
         changeTimer = 0.0f;
+        initialRotation = transform.rotation;
         if (fadeAfterTime)
         {
             if (startDisabled)
@@ -103,6 +108,14 @@ public class ResourceBar : MonoBehaviour
         RunFade();
 
         prevT = currentT;
+    }
+
+    private void LateUpdate()
+    {
+        if (!respectRotation)
+        {
+            transform.rotation = initialRotation;
+        }
     }
 
     protected virtual float GetNormalizedResource()

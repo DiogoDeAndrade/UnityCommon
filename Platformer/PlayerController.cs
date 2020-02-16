@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using NaughtyAttributes;
 
 public class PlayerController : MonoBehaviour
 {
@@ -29,6 +30,17 @@ public class PlayerController : MonoBehaviour
     public AudioSource jumpSound;
     public AudioSource deathSound;
     public AudioSource hitSound;
+    [Header("Shake Effect")]
+    public bool         shakeOnHit = false;
+    [ShowIf("shakeOnHit")]
+    public float        hitShakeStrength = 20.0f;
+    [ShowIf("shakeOnHit")]
+    public float        hitShakeTime = 0.1f;
+    public bool         shakeOnDead = false;
+    [ShowIf("shakeOnDead")]
+    public float        deadShakeStrength = 40.0f;
+    [ShowIf("shakeOnDead")]
+    public float        deadShakeTime = 0.1f;
 
     Vector2 movementDir;
     Vector2         currentVelocity;
@@ -320,6 +332,11 @@ public class PlayerController : MonoBehaviour
         anim.SetTrigger("Dead");
 
         if (deathSound) deathSound.Play();
+
+        if (shakeOnDead)
+        {
+            CameraShake2d.Shake(deadShakeStrength, deadShakeTime);
+        }
     }
 
     private void OnHit(float damage)
@@ -339,6 +356,11 @@ public class PlayerController : MonoBehaviour
         {
             hitSound.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
             hitSound.Play();
+        }
+
+        if (shakeOnHit)
+        {
+            CameraShake2d.Shake(hitShakeStrength, hitShakeTime);
         }
     }
 
