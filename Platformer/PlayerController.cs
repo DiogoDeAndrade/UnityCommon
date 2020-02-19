@@ -22,6 +22,7 @@ public class PlayerController : MonoBehaviour
     public GameObject   groundPoint;
     public Transform    followTarget;
     [Header("Controls")]
+    public bool         enableControls = true;
     public string       xAxis = "Horizontal";
     public string       jumpButton = "Jump";
     public string       interact = "Interact";
@@ -235,7 +236,7 @@ public class PlayerController : MonoBehaviour
     {
         if (isDead) return;
 
-        if (movementEnable)
+        if ((movementEnable) && (enableControls))
             movementDir.x = Input.GetAxis(xAxis);
         else
             movementDir.x = 0.0f;
@@ -247,7 +248,7 @@ public class PlayerController : MonoBehaviour
             gravity = 1.0f;
         }
 
-        if ((Input.GetButtonDown(jumpButton)) && (movementEnable))
+        if ((Input.GetButtonDown(jumpButton)) && (movementEnable) && (enableControls))
         {
             if (Mathf.Abs(currentVelocity.y) < 0.01f)
             {
@@ -295,7 +296,7 @@ public class PlayerController : MonoBehaviour
         }
 
         // Interaction
-        if (Input.GetButtonDown(interact))
+        if ((Input.GetButtonDown(interact)) && (enableControls))
         {
             var colliders = Physics2D.OverlapCircleAll(transform.position, interactionRadius, interactionMask);
 
@@ -381,5 +382,16 @@ public class PlayerController : MonoBehaviour
             stepSound.pitch = UnityEngine.Random.Range(0.9f, 1.1f);
             stepSound.Play();
         }
+    }
+
+    public void EnableControls(bool b)
+    {
+        enableControls = b;
+
+        var backpack = GetComponent<Backpack>();
+        if (backpack) backpack.enableControls = b;
+
+        var weapon = GetComponent<Weapon>();
+        if (weapon) weapon.enableControls = b;
     }
 }

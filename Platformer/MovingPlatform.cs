@@ -1,6 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class MovingPlatform : ActivatedComponent
 {
@@ -27,8 +30,11 @@ public class MovingPlatform : ActivatedComponent
         index = 0;
         foreach (var p in waypoints)
         {
-            positions[index] = p.position;
-            index++;
+            if (p)
+            {
+                positions[index] = p.position;
+                index++;
+            }
         }
 
         index = 0;
@@ -94,23 +100,52 @@ public class MovingPlatform : ActivatedComponent
         prevPos = transform.position;
     }
 
-    private void OnDrawGizmosSelected()
+#if UNITY_EDITOR
+    private void OnDrawGizmos()
     {
-        Gizmos.color = Color.yellow;
+        bool selected = false;
 
-        if (positions != null)
+        foreach (var sel in Selection.objects)
         {
-            for (int i = 0; i < positions.Length - 1; i++)
+            if (sel == gameObject)
             {
-                Gizmos.DrawLine(positions[i], positions[i + 1]);
+                selected = true;
+                break;
+            }
+
+            GameObject go = sel as GameObject;
+            if (go)
+            {
+                if (go.transform.IsChildOf(transform))
+                {
+                    selected = true;
+                    break;
+                }
             }
         }
-        else
+
+        if (selected)
         {
-            for (int i = 0; i < waypoints.Length - 1; i++)
+            Gizmos.color = Color.yellow;
+
+            if ((positions != null) && (positions.Length > 0))
             {
-                Gizmos.DrawLine(waypoints[i].position, waypoints[i + 1].position);
+                for (int i = 0; i < positions.Length - 1; i++)
+                {
+                    Gizmos.DrawLine(positions[i], positions[i + 1]);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < waypoints.Length - 1; i++)
+                {
+                    if (waypoints[i])
+                    {
+                        Gizmos.DrawLine(waypoints[i].position, waypoints[i + 1].position);
+                    }
+                }
             }
         }
     }
+#endif
 }
