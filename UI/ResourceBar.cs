@@ -27,6 +27,7 @@ public class ResourceBar : MonoBehaviour
     [ShowIf("fadeAfterTime")]
     public float            timeOfFadeOut = 1.0f;
     public bool             respectRotation = false;
+    public bool             zeroResourceZeroAlpha = false;
 
     public bool NeedSpeedVar() { return (updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed); }
 
@@ -167,6 +168,12 @@ public class ResourceBar : MonoBehaviour
                     canvasGroup.alpha = alpha;
                 }
             }
+        }
+
+        if ((zeroResourceZeroAlpha) && (GetNormalizedResource() <= 0))
+        {
+            alpha = 0.0f;
+            canvasGroup.alpha = 0.0f;
         }
     }
 }
