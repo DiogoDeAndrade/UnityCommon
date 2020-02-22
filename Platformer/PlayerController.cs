@@ -31,7 +31,8 @@ public class PlayerController : MonoBehaviour
     public AudioSource jumpSound;
     public AudioSource deathSound;
     public AudioSource hitSound;
-    [Header("Shake Effect")]
+    [Header("Camera")]
+    public Transform    followPos;
     public bool         shakeOnHit = false;
     [ShowIf("shakeOnHit")]
     public float        hitShakeStrength = 20.0f;

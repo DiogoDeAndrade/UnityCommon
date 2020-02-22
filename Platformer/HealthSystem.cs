@@ -97,11 +97,11 @@ public class HealthSystem : MonoBehaviour
             _health = 0.0f;
             _dead = true;
 
-            onDead();
+            onDead?.Invoke();
         }
         else
         {
-            onHit(damage);
+            onHit?.Invoke(damage);
         }
 
         return true;
