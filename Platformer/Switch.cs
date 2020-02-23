@@ -47,7 +47,7 @@ public class Switch : Interactable
             if (anim) anim.SetBool("Switch", state);
             foreach (var ac in activators)
             {
-                ac.active = state;
+                ac.active = !ac.active;
             }
             if (toggleSound) toggleSound.Play();            
         }
