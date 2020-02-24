@@ -17,6 +17,10 @@ public class HealthSystem : MonoBehaviour
     public float    maxHealth = 100.0f;
     public float    invulnerabilityTime = 2.0f;
     public bool     invulnerabilityBlink = true;
+    [ShowIf("invulnerabilityBlink")]
+    public bool     useAnimatorForBlink = true;
+    [HideIf("useAnimatorForBlink")]
+    public float    blinkTime = 0.1f;
 
     protected float _health = 100.0f;
     protected bool  _dead;
@@ -25,6 +29,7 @@ public class HealthSystem : MonoBehaviour
     TimeScaler2d        timeScaler;
     Animator            animator;
     float               blinkTimer;
+    SpriteRenderer      spriteRenderer;
 
     public float health
     {
@@ -61,6 +66,7 @@ public class HealthSystem : MonoBehaviour
 
         timeScaler = GetComponent<TimeScaler2d>();
         animator = GetComponent<Animator>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
     }
 
     // Update is called once per frame
@@ -73,16 +79,28 @@ public class HealthSystem : MonoBehaviour
             if (invulnerabilityTimer <= 0.0f)
             {
                 invulnerabilityTimer = 0.0f;
-                animator.SetBool("Invulnerable", false);
+                if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
+                else spriteRenderer.enabled = true;
             }
             else
             {
-                animator.SetBool("Invulnerable", true);
+                if (useAnimatorForBlink) animator.SetBool("Invulnerable", true);
+                else
+                {
+                    blinkTimer -= Time.deltaTime;
+                    if (blinkTimer < 0)
+                    {
+                        blinkTimer = blinkTime;
+
+                        spriteRenderer.enabled = !spriteRenderer.enabled;
+                    }
+                }
             }
         }
         else
         {
-            animator.SetBool("Invulnerable", false);
+            if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
+            else if (!spriteRenderer.enabled) spriteRenderer.enabled = true;
         }
     }
 
