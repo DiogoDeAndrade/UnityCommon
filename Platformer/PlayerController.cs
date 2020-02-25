@@ -388,11 +388,5 @@ public class PlayerController : MonoBehaviour
     public void EnableControls(bool b)
     {
         enableControls = b;
-
-        var backpack = GetComponent<Backpack>();
-        if (backpack) backpack.enableControls = b;
-
-        var weapon = GetComponent<Weapon>();
-        if (weapon) weapon.enableControls = b;
     }
 }
