@@ -10,7 +10,7 @@ public class FullscreenFader : MonoBehaviour
     public bool     startFaded;
     [ShowIf("startFaded")]
     public bool     autoFadeIn;
-    [ShowIf(ConditionOperator.And, "startFaded", "autoFadeIn")]
+    [ShowIf(EConditionOperator.And, "startFaded", "autoFadeIn")]
     public float    fadeInSpeed;
 
     Image fader;

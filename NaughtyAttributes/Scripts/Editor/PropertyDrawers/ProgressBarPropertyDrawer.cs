@@ -1,96 +1,82 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEditor;
-using System;
 
 namespace NaughtyAttributes.Editor
 {
-    [PropertyDrawer(typeof(ProgressBarAttribute))]
-    public class ProgressBarPropertyDrawer : PropertyDrawer
-    {
-        public override void DrawProperty(SerializedProperty property)
-        {
-            EditorDrawUtility.DrawHeader(property);
+	[CustomPropertyDrawer(typeof(ProgressBarAttribute))]
+	public class ProgressBarPropertyDrawer : PropertyDrawerBase
+	{
+		protected override float GetPropertyHeight_Internal(SerializedProperty property, GUIContent label)
+		{
+			return IsNumber(property)
+				? GetPropertyHeight(property)
+				: GetPropertyHeight(property) + GetHelpBoxHeight();
+		}
 
-            if (property.propertyType != SerializedPropertyType.Float && property.propertyType != SerializedPropertyType.Integer)
-            {
-                EditorGUILayout.HelpBox("Field " + property.name + " is not a number", MessageType.Warning);
-                return;
-            }
+		protected override void OnGUI_Internal(Rect rect, SerializedProperty property, GUIContent label)
+		{
+			if (!IsNumber(property))
+			{
+				string message = string.Format("Field {0} is not a number", property.name);
+				DrawDefaultPropertyAndHelpBox(rect, property, message, MessageType.Warning);
+				return;
+			}
 
-            var value = property.propertyType == SerializedPropertyType.Integer ? property.intValue : property.floatValue;
-            var valueFormatted = property.propertyType == SerializedPropertyType.Integer ? value.ToString() : String.Format("{0:0.00}", value);
+			ProgressBarAttribute progressBarAttribute = PropertyUtility.GetAttribute<ProgressBarAttribute>(property);
+			var value = property.propertyType == SerializedPropertyType.Integer ? property.intValue : property.floatValue;
+			var valueFormatted = property.propertyType == SerializedPropertyType.Integer ? value.ToString() : string.Format("{0:0.00}", value);
+			var fillPercentage = value / progressBarAttribute.MaxValue;
+			var barLabel = (!string.IsNullOrEmpty(progressBarAttribute.Name) ? "[" + progressBarAttribute.Name + "] " : "") + valueFormatted + "/" + progressBarAttribute.MaxValue;
+			var barColor = progressBarAttribute.Color.GetColor();
+			var labelColor = Color.white;
 
-            ProgressBarAttribute progressBarAttribute = PropertyUtility.GetAttribute<ProgressBarAttribute>(property);
-            var position = EditorGUILayout.GetControlRect();
-            var maxValue = progressBarAttribute.MaxValue;
-            float lineHight = EditorGUIUtility.singleLineHeight;
-            float padding = EditorGUIUtility.standardVerticalSpacing;
-            var barPosition = new Rect(position.position.x, position.position.y, position.size.x, lineHight);
+			var indentLength = NaughtyEditorGUI.GetIndentLength(rect);
+			Rect barRect = new Rect()
+			{
+				x = rect.x + indentLength,
+				y = rect.y,
+				width = rect.width - indentLength,
+				height = EditorGUIUtility.singleLineHeight
+			};
 
-            var fillPercentage = value / maxValue;
-            var barLabel = (!string.IsNullOrEmpty(progressBarAttribute.Name) ? "[" + progressBarAttribute.Name + "] " : "") + valueFormatted + "/" + maxValue;
+			DrawBar(barRect, Mathf.Clamp01(fillPercentage), barLabel, barColor, labelColor);
+		}
 
-            var color = GetColor(progressBarAttribute.Color);
-            var color2 = Color.white;
-            DrawBar(barPosition, Mathf.Clamp01(fillPercentage), barLabel, color, color2);
-        }
+		private void DrawBar(Rect rect, float fillPercent, string label, Color barColor, Color labelColor)
+		{
+			if (Event.current.type != EventType.Repaint)
+			{
+				return;
+			}
 
-        private void DrawBar(Rect position, float fillPercent, string label, Color barColor, Color labelColor)
-        {
-            if (Event.current.type != EventType.Repaint)
-            {
-                return;
-            }
+			var fillRect = new Rect(rect.x, rect.y, rect.width * fillPercent, rect.height);
 
-            Color savedColor = GUI.color;
+			EditorGUI.DrawRect(rect, new Color(0.13f, 0.13f, 0.13f));
+			EditorGUI.DrawRect(fillRect, barColor);
 
-            var fillRect = new Rect(position.x, position.y, position.width * fillPercent, position.height);
+			// set alignment and cache the default
+			var align = GUI.skin.label.alignment;
+			GUI.skin.label.alignment = TextAnchor.UpperCenter;
 
-            EditorGUI.DrawRect(position, new Color(0.13f, 0.13f, 0.13f));
-            EditorGUI.DrawRect(fillRect, barColor);
+			// set the color and cache the default
+			var c = GUI.contentColor;
+			GUI.contentColor = labelColor;
 
-            // set alignment and cache the default
-            var align = GUI.skin.label.alignment;
-            GUI.skin.label.alignment = TextAnchor.UpperCenter;
+			// calculate the position
+			var labelRect = new Rect(rect.x, rect.y - 2, rect.width, rect.height);
 
-            // set the color and cache the default
-            var c = GUI.contentColor;
-            GUI.contentColor = labelColor;
+			// draw~
+			EditorGUI.DropShadowLabel(labelRect, label);
 
-            // calculate the position
-            var labelRect = new Rect(position.x, position.y - 2, position.width, position.height);
+			// reset color and alignment
+			GUI.contentColor = c;
+			GUI.skin.label.alignment = align;
+		}
 
-            // draw~
-            EditorGUI.DropShadowLabel(labelRect, label);
-
-            // reset color and alignment
-            GUI.contentColor = c;
-            GUI.skin.label.alignment = align;
-        }
-
-        private Color GetColor(ProgressBarColor color)
-        {
-            switch (color)
-            {
-                case ProgressBarColor.Red:
-                    return new Color32(255, 0, 63, 255);
-                case ProgressBarColor.Pink:
-                    return new Color32(255, 152, 203, 255);
-                case ProgressBarColor.Orange:
-                    return new Color32(255, 128, 0, 255);
-                case ProgressBarColor.Yellow:
-                    return new Color32(255, 211, 0, 255);
-                case ProgressBarColor.Green:
-                    return new Color32(102, 255, 0, 255);
-                case ProgressBarColor.Blue:
-                    return new Color32(0, 135, 189, 255);
-                case ProgressBarColor.Indigo:
-                    return new Color32(75, 0, 130, 255);
-                case ProgressBarColor.Violet:
-                    return new Color32(127, 0, 255, 255);
-                default:
-                    return Color.white;
-            }
-        }
-    }
+		private bool IsNumber(SerializedProperty property)
+		{
+			bool isNumber = property.propertyType == SerializedPropertyType.Float || property.propertyType == SerializedPropertyType.Integer;
+			return isNumber;
+		}
+	}
 }
