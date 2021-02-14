@@ -38,5 +38,9 @@ static public class VectorExtensions
     {
         return new Vector2(inV.z, inV.y);
     }
+    public static Vector3 xyz(this Vector4 v)
+    {
+        return new Vector3(v.x, v.y, v.z);
+    }
 };
 
