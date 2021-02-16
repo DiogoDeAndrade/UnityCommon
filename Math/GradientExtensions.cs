@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-static public class GradientExtensions
+public static class GradientExtensions
 {
     public static void FromColor(this Gradient g, Color c)
     {

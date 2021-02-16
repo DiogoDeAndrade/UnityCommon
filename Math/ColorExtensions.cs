@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-static public class ColorExtensions
+public static class ColorExtensions
 {
     public static Color ChangeAlpha(this Color c, float a)
     {

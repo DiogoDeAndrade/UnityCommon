@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-static public class VectorExtensions
+public static class VectorExtensions
 {
     public static Vector3 x0z(this Vector3 inV)
     {
@@ -38,6 +38,12 @@ static public class VectorExtensions
     {
         return new Vector2(inV.z, inV.y);
     }
+
+    public static float Random(this Vector2 limits, System.Random random)
+    {
+        return random.Range(limits.x, limits.y);
+    }
+
     public static Vector3 xyz(this Vector4 v)
     {
         return new Vector3(v.x, v.y, v.z);

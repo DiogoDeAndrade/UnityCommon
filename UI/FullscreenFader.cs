@@ -73,22 +73,22 @@ public class FullscreenFader : MonoBehaviour
         fadeInc = (targetAlpha - fader.color.a) / time;
     }
 
-    static public void FadeIn(float time)
+    public static void FadeIn(float time)
     {
         fsFader._Fade(0.0f, time, fsFader.faderColor);
     }
 
-    static public void FadeIn(float time, Color color)
+    public static void FadeIn(float time, Color color)
     {
         fsFader._Fade(0.0f, time, color);
     }
 
-    static public void FadeOut(float time)
+    public static void FadeOut(float time)
     {
         fsFader._Fade(1.0f, time, fsFader.faderColor);
     }
 
-    static public void FadeOut(float time, Color color)
+    public static void FadeOut(float time, Color color)
     {
         fsFader._Fade(1.0f, time, color);
     }

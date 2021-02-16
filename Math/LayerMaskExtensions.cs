@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-static public class LayerMaskExtensions
+public static class LayerMaskExtensions
 {
     public static bool HasLayer(this LayerMask layerMask, int layer)
     {

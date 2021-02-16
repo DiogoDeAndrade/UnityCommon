@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 static class RandomExtension
 {
-    static public float Range(this System.Random rnd, float valMin, float valMax)
+    public static float Range(this System.Random rnd, float valMin, float valMax)
     {
         return (float)(rnd.NextDouble() * (valMax - valMin) + valMin);
     }
