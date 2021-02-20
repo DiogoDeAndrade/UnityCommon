@@ -51,7 +51,10 @@ public class LineGraph : MonoBehaviour
     [BoxGroup("Axis")]
     public          string  labelFormatY = "0.00";
 
-    string          _title;
+    [BoxGroup("Perfomance")]
+    public          float   distanceBetweenPointsX = 0;
+
+    string _title;
     bool            dirty;
     bool            layoutDirty;
     Vector2         min = new Vector2(float.MaxValue, float.MaxValue);
@@ -271,6 +274,8 @@ public class LineGraph : MonoBehaviour
 
             Vector2 offset = new Vector2(-width * 0.5f, -height * 0.5f);
 
+            float lastCoordX = -float.MaxValue;
+
             List<Vector2> points = new List<Vector2>();
             for (int i = 0; i < sg.dataPoints.Count; i++)
             {
@@ -279,8 +284,14 @@ public class LineGraph : MonoBehaviour
                 if (dataPoint.x < displayMin.x) continue;
                 if (dataPoint.x > displayMax.x) break;
 
-                points.Add(new Vector2(offset.x + width * (dataPoint.x - displayMin.x) / (displayMax.x - displayMin.x), 
-                                       offset.y + height * (dataPoint.y - displayMin.y) / (displayMax.y - displayMin.y)));
+                float x = offset.x + width * (dataPoint.x - displayMin.x) / (displayMax.x - displayMin.x);
+                float y = offset.y + height * (dataPoint.y - displayMin.y) / (displayMax.y - displayMin.y);
+
+                if ((x - lastCoordX) < distanceBetweenPointsX) continue;
+
+                points.Add(new Vector2(x, y));
+
+                lastCoordX = x;
             }
 
             sg.lineRenderer.Points = points.ToArray();
@@ -341,7 +352,7 @@ public class LineGraph : MonoBehaviour
 #if UNITY_EDITOR
         if (!Application.isPlaying)
         {
-            Handles.Label(transform.position, name);
+            Handles.Label(transform.position, "LineGraph: " + name);
         }
 #endif
     }

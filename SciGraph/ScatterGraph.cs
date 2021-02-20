@@ -9,40 +9,36 @@ using NaughtyAttributes;
 using UnityEditor;
 #endif
 
-public class HistGraph : MonoBehaviour
+public class ScatterGraph : MonoBehaviour
 {
-    public struct Bin
-    {
-        public int      value;
-        public Vector2  range;
-    }
+    public enum DotShape { Pixel, Rect, Circle, Plus };
+
     public bool             background = true;
     [ShowIf("background")]
     public Color            backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.85f);
-    public float            padding = 0;
     public bool             displayLegend = false;
-    public Color            textColor = Color.white;
-    public int              fontSize = 12;
+    public Color            textColor = Color.yellow;
     public float            titleTextSize = 14;
+    public DotShape         dotShape = DotShape.Pixel;
+    [ShowIf("dotShapeNeedsSize")]
+    public int              dotShapeSize = 1;
 
     [BoxGroup("Graph Area")]
-    public Vector2 minGraphArea = new Vector2(0.15f, 0.15f);
+    public Vector2  minGraphArea = new Vector2(0.15f, 0.15f);
     [BoxGroup("Graph Area")]
-    public Vector2 maxGraphArea = new Vector2(0.95f, 0.85f);
+    public Vector2  maxGraphArea = new Vector2(0.95f, 0.85f);
+    [BoxGroup("Graph Area")]
+    public Color    graphBackgroundColor = new Color(0,0,0,0);
     [BoxGroup("Graph Area")]
     public bool     fixedLimit;
     [ShowIf("fixedLimit"), BoxGroup("Graph Area")]
-    public int      maxLimit = 10;
+    public Vector2  rangeX;
     [ShowIf("fixedLimit"), BoxGroup("Graph Area")]
-    public bool     allowExpandY = false;
-    [BoxGroup("Bin Config")]
-    public int      nBins = 10;
-    [BoxGroup("Bin Config")]
-    public bool     useBinFixedRange = false;
-    [BoxGroup("Bin Config"), ShowIf("useBinFixedRange"), SerializeField]
-            Vector2 binRange = new Vector2(0.0f, 100.0f);
-    [BoxGroup("Bin Config"), HideIf("useBinFixedRange")]
-    public int      binMainSubgraph = 0;
+    public Vector2  rangeY;
+    [ShowIf("fixedLimit"), BoxGroup("Graph Area")]
+    public bool     allowExpandX;
+    [ShowIf("fixedLimit"), BoxGroup("Graph Area")]
+    public bool     allowExpandY;
     [BoxGroup("Axis")]
     public          bool    displayAxisX = true;
     [BoxGroup("Axis")]
@@ -58,7 +54,10 @@ public class HistGraph : MonoBehaviour
     [BoxGroup("Axis")]
     public          string  labelFormatY = "0.00";
 
-    string              _title;
+    [BoxGroup("Performance"), Range(1, 8)]
+    public          int     resolutionScale = 1;
+
+    string _title;
     bool                dirty;
     bool                layoutDirty;
     TextMeshProUGUI     titleElement;
@@ -68,29 +67,20 @@ public class HistGraph : MonoBehaviour
     Axis                axisX;
     Axis                axisY;
     Legend              legend;
-
-    struct BinObj
-    {
-        public RectTransform   rectRT;
-        public Image           rect;
-    };
-
-    struct BinLabel
-    {
-        public RectTransform labelRT;
-        public TextMeshProUGUI label;
-    }
+    Texture2D           texture;
+    Color[]             bitmap;
+    RawImage            rawImage;
 
     class Subgraph
     {
-        public string       name;
-        public Bin[]        data;
-        public Color        color;
-        public List<BinObj> binObjs;
+        public string           name;
+        public List<Vector2>    data;
+        public Color            color;
     }
 
     List<Subgraph>         subGraphs;
-    List<BinLabel>         binLabels;
+
+    bool dotShapeNeedsSize => (dotShape == DotShape.Rect) || (dotShape == DotShape.Circle) || (dotShape == DotShape.Plus);
 
     public string title
     {
@@ -129,6 +119,13 @@ public class HistGraph : MonoBehaviour
         graphingArea.pivot = new Vector2(0.5f, 0.5f);
         graphingArea.offsetMin = graphingArea.offsetMax = Vector2.zero;
 
+        var rawImageRT = GraphUtils.CreateUIObject("Plot", graphingArea);
+        rawImageRT.anchorMin = new Vector2(0, 0);
+        rawImageRT.anchorMax = new Vector2(1, 1);
+        rawImageRT.pivot = new Vector2(0.5f, 0.5f);
+        rawImageRT.offsetMin = rawImageRT.offsetMax = Vector2.zero;
+        rawImage = rawImageRT.gameObject.AddComponent<RawImage>();
+
         prevRect = rectTransform.rect;
         layoutDirty = true;
     }
@@ -142,7 +139,7 @@ public class HistGraph : MonoBehaviour
         }
         if (dirty)
         {
-            RefreshHistogram();
+            RefreshPlot();
         }
     }
 
@@ -151,7 +148,6 @@ public class HistGraph : MonoBehaviour
         var subgraph = new Subgraph();
         subgraph.name = name;
         subgraph.color = color;
-        subgraph.binObjs = new List<BinObj>();
 
         if (subGraphs == null) subGraphs = new List<Subgraph>();
         subGraphs.Add(subgraph);
@@ -161,7 +157,7 @@ public class HistGraph : MonoBehaviour
         return subGraphs.Count - 1;
     }
 
-    public void SetData(int subgraph_id, Bin[] data)
+    public void SetData(int subgraph_id, List<Vector2> data)
     {
         subGraphs[subgraph_id].data = data;
         dirty = true;
@@ -245,34 +241,63 @@ public class HistGraph : MonoBehaviour
         }
     }
 
-    void RefreshHistogram()
+    void RefreshPlot()
     {
-        float width = graphingArea.rect.width;
-        float height = graphingArea.rect.height;
+        int width = (int)graphingArea.rect.width;
+        int height = (int)graphingArea.rect.height;
 
-        float maxValue = 0; 
+        int texWidth = width * resolutionScale;
+        int texHeight = height * resolutionScale;
+
+        if ((texture == null) || (texture.width != texWidth) || (texture.height != texHeight))
+        {
+            texture = new Texture2D(texWidth, texHeight, TextureFormat.RGBA32, true);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            bitmap = new Color[texture.width * texture.height];
+
+            rawImage.texture = texture;
+        }
+
+        float minX = float.MaxValue;
+        float maxX = -float.MaxValue;
+        float minY = float.MaxValue;
+        float maxY = -float.MaxValue;
+
         foreach (var graph in subGraphs)
         {
             if (graph.data != null)
             {
-                for (int i = 0; i < graph.data.Length; i++)
+                foreach (var dataPoint in graph.data)
                 {
-                    maxValue = Mathf.Max(maxValue, graph.data[i].value);
+                    minX = Mathf.Min(minX, dataPoint.x);
+                    maxX = Mathf.Max(maxX, dataPoint.x);
+                    minY = Mathf.Min(minY, dataPoint.y);
+                    maxY = Mathf.Max(maxY, dataPoint.y);
                 }
             }
         }
 
         if (fixedLimit)
         {
+            if (allowExpandX)
+            {
+                if (minX < rangeX.x) rangeX.x = minX;
+                if (maxX > rangeX.y) rangeX.y = maxX;
+            }
             if (allowExpandY)
             {
-                if (maxValue > maxLimit)
-                {
-                    maxLimit = (int)maxValue;
-                }
+                if (minY < rangeY.x) rangeY.x = minY;
+                if (maxY > rangeY.y) rangeY.y = maxY;
             }
+            minX = rangeX.x;
+            minY = rangeY.x;
+            maxX = rangeX.y;
+            maxY = rangeY.y;
+        }
 
-            maxValue = maxLimit;
+        for (int i = 0; i < texWidth * texHeight; i++)
+        {
+            bitmap[i] = graphBackgroundColor;
         }
 
         for (int graph_id = 0; graph_id < subGraphs.Count; graph_id++)
@@ -280,75 +305,69 @@ public class HistGraph : MonoBehaviour
             var graph = subGraphs[graph_id];
             if (graph.data == null) continue;
 
-            for (int i = graph.binObjs.Count; i < graph.data.Length; i++)
+            foreach (var dataPoint in graph.data)
             {
-                // Create object
-                var newBinObj = CreateBin(i);
+                // Draw point in scatter plot
+                int u = (int)(texWidth * ((dataPoint.x - minX) / (maxX - minX)));
+                if ((u < 0) || (u >= texWidth)) continue;
+                int v = (int)(texHeight * ((dataPoint.y - minY) / (maxY - minY)));
+                if ((v < 0) || (v >= texHeight)) continue;
 
-                graph.binObjs.Add(newBinObj);
-            }
-
-            if (graph.binObjs.Count > graph.data.Length)
-            {
-                for (int i = graph.data.Length; i < graph.binObjs.Count; i++)
+                switch (dotShape)
                 {
-                    // Remove objects
-                    Destroy(graph.binObjs[i].rectRT.gameObject);
+                    case DotShape.Pixel:
+                        bitmap[u + texWidth * v] = graph.color;
+                        break;
+                    case DotShape.Rect:
+                        for (int vv = Mathf.Max(0, v - dotShapeSize); vv <= Mathf.Min(texHeight - 1, v + dotShapeSize); vv++)
+                        {
+                            for (int uu = Mathf.Max(0, u - dotShapeSize); uu <= Mathf.Min(texWidth - 1, u + dotShapeSize); uu++)
+                            {
+                                bitmap[uu + texWidth * vv] = graph.color;
+                            }
+                        }
+                        break;
+                    case DotShape.Circle:
+                        float sqrSize = dotShapeSize * dotShapeSize;
+                        for (int vv = Mathf.Max(0, v - dotShapeSize - 1); vv <= Mathf.Min(texHeight - 1, v + dotShapeSize + 1); vv++)
+                        {
+                            for (int uu = Mathf.Max(0, u - dotShapeSize - 1); uu <= Mathf.Min(texWidth- 1, u + dotShapeSize + 1); uu++)
+                            {
+                                float dx = uu - u;
+                                float dy = vv - v;
+                                if ((dx * dx + dy * dy) < sqrSize)
+                                {
+                                    bitmap[uu + texWidth * vv] = graph.color;
+                                }
+                            }
+                        }
+                        break;
+                    case DotShape.Plus:
+                        for (int uu = Mathf.Max(0, u - dotShapeSize); uu <= Mathf.Min(texWidth - 1, u + dotShapeSize); uu++) bitmap[uu + texWidth * v] = graph.color;
+                        for (int vv = Mathf.Max(0, v - dotShapeSize); vv <= Mathf.Min(texHeight - 1, v + dotShapeSize); vv++) bitmap[u + texWidth * vv] = graph.color;
+                        break;
                 }
-                graph.binObjs.RemoveRange(graph.data.Length, graph.binObjs.Count - graph.data.Length);
-            }
-
-            float dx = width / graph.data.Length;
-
-            for (int i = 0; i < graph.data.Length; i++)
-            {
-                float barWidth = (dx - padding) / subGraphs.Count;
-
-                float t = Mathf.Clamp01(graph.data[i].value / maxValue);
-                graph.binObjs[i].rectRT.localScale = Vector2.one;
-                graph.binObjs[i].rectRT.anchoredPosition = new Vector2(dx * i + padding * 0.5f + barWidth * graph_id, 0);
-                graph.binObjs[i].rectRT.sizeDelta = new Vector2(barWidth, height * t);
-
-                graph.binObjs[i].rect.color = graph.color;
             }
         }
 
+        texture.SetPixels(bitmap);
+        texture.Apply(true, false);
+
+        if (axisX)
+        {
+            if (displayAxisX)
+            {
+                axisX.range = new Vector2(minX, maxX);
+            }
+            axisY.gameObject.SetActive(displayAxisY);
+        }
         if (axisY)
         {
             if (displayAxisY)
             {
-                axisY.range = new Vector2(0, maxValue);
+                axisY.range = new Vector2(minY, maxY);
             }
             axisY.gameObject.SetActive(displayAxisY);
-        }
-
-        if (binLabels == null) binLabels = new List<BinLabel>();
-
-        int binCount = subGraphs[0].data.Length;
-        for (int i = binLabels.Count; i < binCount; i++)
-        {
-            // Create object
-            var newBinLabel = CreateBinLabel(i);
-
-            binLabels.Add(newBinLabel);
-        }
-
-        if (binLabels.Count > binCount)
-        {
-            for (int i = binCount; i < binLabels.Count; i++)
-            {
-                // Remove objects
-                Destroy(binLabels[i].labelRT.gameObject);
-            }
-            binLabels.RemoveRange(binCount, binLabels.Count - binCount);
-        }
-
-        float tdx = width / binCount;
-        for (int i = 0; i < binLabels.Count; i++)
-        {
-            float midPoint = (subGraphs[0].data[i].range.x + subGraphs[0].data[i].range.y) * 0.5f;
-            binLabels[i].label.text = string.Format("{0:0.00}", midPoint);
-            binLabels[i].labelRT.anchoredPosition = new Vector2(tdx * (i + 0.5f) + padding * 0.5f, 0);
         }
 
         if (legend)
@@ -363,70 +382,12 @@ public class HistGraph : MonoBehaviour
         dirty = false;
     }
 
-    BinObj CreateBin(int index)
-    {
-        GameObject newObj = new GameObject();
-        newObj.name = string.Format("Bin {0:000}", index);
-        newObj.transform.SetParent(graphingArea.transform);
-
-        GameObject newTextObj = new GameObject();
-        newTextObj.name = string.Format("Bin Text {0:000}", index);
-        newTextObj.transform.SetParent(newObj.transform);
-
-        var newBinObj = new BinObj();
-        newBinObj.rect = newObj.AddComponent<Image>();
-
-        newBinObj.rectRT = newObj.GetComponent<RectTransform>();
-        if (newBinObj.rectRT == null) newBinObj.rectRT = newObj.AddComponent<RectTransform>();
-        newBinObj.rectRT.anchorMin = Vector2.zero;
-        newBinObj.rectRT.anchorMax = Vector2.zero;
-        newBinObj.rectRT.pivot = Vector2.zero;
-
-        return newBinObj;
-    }
-
-    BinLabel CreateBinLabel(int index)
-    {
-        var rt = GraphUtils.CreateUIObject(string.Format("Bin Label {0:000}", index), graphingArea);
-
-        var newBinLabel = new BinLabel();
-        newBinLabel.labelRT = rt;
-        newBinLabel.label = rt.gameObject.AddComponent<TextMeshProUGUI>();
-        newBinLabel.label.alignment = TextAlignmentOptions.Center;
-        newBinLabel.label.alignment = TextAlignmentOptions.Top;
-        newBinLabel.label.fontSize = fontSize;
-        newBinLabel.label.color = textColor;
-
-        newBinLabel.labelRT.anchorMin = new Vector2(0.0f, 0.0f);
-        newBinLabel.labelRT.anchorMax = new Vector2(0.0f, 0.0f);
-        newBinLabel.labelRT.pivot = new Vector2(0.5f, 1.0f);
-
-        return newBinLabel;
-    }
-
-    public Vector2 GetRange()
-    {
-        if (useBinFixedRange) return binRange;
-
-        var subgraph = subGraphs[binMainSubgraph];
-        if (subgraph.data != null)
-        {
-            Vector2 r = new Vector2();
-            r.x = subgraph.data[0].range.x;
-            r.y = subgraph.data[subgraph.data.Length - 1].range.y;
-
-            return r;
-        }
-
-        return Vector2.zero;
-    }
-
     private void OnDrawGizmos()
     {
 #if UNITY_EDITOR
         if (!Application.isPlaying)
         {
-            Handles.Label(transform.position, "HistGraph: " + name);
+            Handles.Label(transform.position, "ScatterGraph: " + name);
         }
 #endif
     }
