@@ -46,6 +46,10 @@ public class LineGraph : MonoBehaviour
     public          string  labelAxisX = "AxisX";
     [BoxGroup("Axis")]
     public          string  labelAxisY = "AxisY";
+    [BoxGroup("Axis")]
+    public          string  labelFormatX = "0.00";
+    [BoxGroup("Axis")]
+    public          string  labelFormatY = "0.00";
 
     string          _title;
     bool            dirty;
@@ -98,12 +102,11 @@ public class LineGraph : MonoBehaviour
         titleElement = GraphUtils.CreateTextRenderer("Title", textColor, titleTextSize, rectTransform);
         titleElement.alignment = TextAlignmentOptions.Center;
         titleElement.alignment = TextAlignmentOptions.Top;
+        titleElement.text = _title;
         RectTransform rt = titleElement.GetComponent<RectTransform>();
         rt.anchorMin = new Vector2(0, 0);
         rt.anchorMax = new Vector2(1, 1);
         rt.pivot = new Vector2(0.5f, 1.0f);
-
-        if (titleElement) titleElement.text = _title;
 
         graphingArea = GraphUtils.CreateUIObject("LineContainer", rectTransform);
         graphingArea.anchorMin = new Vector2(0, 0);
@@ -181,6 +184,7 @@ public class LineGraph : MonoBehaviour
                 axisX.orientation = Axis.Orientation.Horizontal;
                 axisX.textColor = textColor;
                 axisX.textSize = axisTextSize;
+                axisX.labelFormat = labelFormatX;
             }
             axisX.UpdateLayout();
             axisX.labelAxis = labelAxisX;
@@ -200,6 +204,7 @@ public class LineGraph : MonoBehaviour
                 axisY.orientation = Axis.Orientation.Vertical;
                 axisY.textColor = textColor;
                 axisY.textSize = axisTextSize;
+                axisY.labelFormat = labelFormatY;
             }
             axisY.UpdateLayout();
             axisY.labelAxis = labelAxisY;
@@ -208,6 +213,8 @@ public class LineGraph : MonoBehaviour
         {
             if (axisY != null) axisY.gameObject.SetActive(false);
         }
+
+        UpdateLegend();
 
         prevRect = rectTransform.rect;
         layoutDirty = false;
@@ -294,7 +301,7 @@ public class LineGraph : MonoBehaviour
                         new Vector2(offset.x + width, y),
                     };
 
-                    sg.currentValueLabel.text = string.Format("{0:0.0}", valueY);
+                    sg.currentValueLabel.text = string.Format("{0:" + labelFormatY + "}", valueY);
                     sg.currentValueLabelRT.anchoredPosition = new Vector2(-5, y);
                 }
             }
@@ -320,6 +327,10 @@ public class LineGraph : MonoBehaviour
         if (legend)
         {
             legend.gameObject.SetActive(displayLegend);
+        }
+        else
+        {
+            if (displayLegend) layoutDirty = true;
         }
 
         dirty = false;

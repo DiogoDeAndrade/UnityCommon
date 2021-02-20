@@ -10,6 +10,7 @@ public class Axis : MonoBehaviour
     public Orientation orientation;
     public Color       textColor;
     public float       textSize;
+    public string      labelFormat = "0.00";
 
     Vector2 _range;
     public Vector2     range
@@ -101,10 +102,10 @@ public class Axis : MonoBehaviour
                 labelMin.enableWordWrapping = false;
 
                 labelMaxRT.offsetMin = labelMaxRT.offsetMax = Vector2.zero;
-                labelMaxRT.anchorMin = new Vector2(0.0f, 0.0f);
-                labelMaxRT.anchorMax = new Vector2(0.0f, 1.0f);
-                labelMaxRT.pivot = new Vector2(0.0f, 1.0f);
-                labelMax.alignment = TextAlignmentOptions.TopLeft;
+                labelMaxRT.anchorMin = new Vector2(1.0f, 1.0f);
+                labelMaxRT.anchorMax = new Vector2(1.0f, 1.0f);
+                labelMaxRT.pivot = new Vector2(1.0f, 1.0f);
+                labelMax.alignment = TextAlignmentOptions.TopRight;
                 labelMax.overflowMode = TextOverflowModes.Overflow;
                 labelMax.enableWordWrapping = false;
 
@@ -124,8 +125,8 @@ public class Axis : MonoBehaviour
 
     void UpdateVisuals()
     {
-        if (labelMin) labelMin.text = "" + _range.x;
-        if (labelMax) labelMax.text = "" + _range.y;
+        if (labelMin) labelMin.text = string.Format("{0:" + labelFormat + "}", _range.x);
+        if (labelMax) labelMax.text = string.Format("{0:" + labelFormat + "}", _range.y);
         if (labelAxisText) labelAxisText.text = labelAxis;
     }
 }
