@@ -34,7 +34,7 @@ public class Axis : MonoBehaviour
     TextMeshProUGUI labelAxisText;
     RectTransform   labelAxisRT;
 
-    void UpdateVisuals()
+    public void UpdateLayout()
     {
         if (rectTransform == null) rectTransform = GetComponent<RectTransform>();
         if (parentRT == null) parentRT = rectTransform.parent.GetComponent<RectTransform>();
@@ -120,9 +120,12 @@ public class Axis : MonoBehaviour
                 labelAxisText.enableWordWrapping = false;
                 break;
         }
+    }
 
-        labelMin.text = "" + _range.x;
-        labelMax.text = "" + _range.y;
-        labelAxisText.text = labelAxis;
+    void UpdateVisuals()
+    {
+        if (labelMin) labelMin.text = "" + _range.x;
+        if (labelMax) labelMax.text = "" + _range.y;
+        if (labelAxisText) labelAxisText.text = labelAxis;
     }
 }

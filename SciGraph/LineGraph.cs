@@ -5,22 +5,26 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.UI.Extensions;
 using NaughtyAttributes;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
+[RequireComponent(typeof(Image))]
 public class LineGraph : MonoBehaviour
 {
     public          bool    background = true;
     [ShowIf("background")]
-    public          Color   backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.75f);
+    public          Color   backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.85f);
     public          bool    displayCurrentValue = false;
-    public          bool    displayCaption = false;
+    public          bool    displayLegend = false;
     public          Color   textColor = Color.white;
-    public          float   labelTextSize = 10;
+    public          float   labelTextSize = 8;
     public          float   titleTextSize = 14;
 
     [BoxGroup("Graph Area")]
     public          Vector2 minGraphArea = new Vector2(0.15f, 0.15f);
     [BoxGroup("Graph Area")]
-    public          Vector2 maxGraphArea = new Vector2(0.95f, 0.8f);
+    public          Vector2 maxGraphArea = new Vector2(0.95f, 0.85f);
     [BoxGroup("Graph Area")]
     public bool     fixedLimits;
     [ShowIf("fixedLimits"), BoxGroup("Graph Area")]
@@ -37,7 +41,7 @@ public class LineGraph : MonoBehaviour
     [BoxGroup("Axis")]
     public          bool    displayAxisY = true;
     [BoxGroup("Axis")]
-    public          float   axisTextSize = 12;
+    public          float   axisTextSize = 10;
     [BoxGroup("Axis")]
     public          string  labelAxisX = "AxisX";
     [BoxGroup("Axis")]
@@ -45,6 +49,7 @@ public class LineGraph : MonoBehaviour
 
     string          _title;
     bool            dirty;
+    bool            layoutDirty;
     Vector2         min = new Vector2(float.MaxValue, float.MaxValue);
     Vector2         max = new Vector2(-float.MaxValue, -float.MaxValue);
     Vector2         dataRange;
@@ -53,6 +58,7 @@ public class LineGraph : MonoBehaviour
     RectTransform   rectTransform;
     RectTransform   graphingArea;
     TextMeshProUGUI titleElement;
+    Legend          legend;
 
     struct SubLineGraph
     {
@@ -65,6 +71,7 @@ public class LineGraph : MonoBehaviour
     }
 
     List<SubLineGraph>    subGraphs;
+    Rect                  prevRect;
 
     public string title
     {
@@ -74,10 +81,16 @@ public class LineGraph : MonoBehaviour
 
     void Awake()
     {
+        Image img = gameObject.GetComponent<Image>();
         if (background)
         {
-            Image img = gameObject.AddComponent<Image>();
+            if (img == null) img = gameObject.GetComponent<Image>();
             img.color = backgroundColor;
+            img.enabled = true;
+        }
+        else
+        {
+            if (img != null) img.enabled = false;
         }
 
         rectTransform = GetComponent<RectTransform>();
@@ -92,20 +105,26 @@ public class LineGraph : MonoBehaviour
 
         if (titleElement) titleElement.text = _title;
 
-        graphingArea = GraphUtils.NewGameObjectUI("LineContainer", rectTransform);
+        graphingArea = GraphUtils.CreateUIObject("LineContainer", rectTransform);
         graphingArea.anchorMin = new Vector2(0, 0);
         graphingArea.anchorMax = new Vector2(1, 1);
         graphingArea.pivot = new Vector2(0.5f, 0.5f);
         graphingArea.offsetMin = graphingArea.offsetMax = Vector2.zero;
+
+        prevRect = rectTransform.rect;
+        layoutDirty = true;
     }
 
     // Update is called once per frame
     void Update()
     {
+        if ((layoutDirty) || (prevRect != rectTransform.rect))
+        {
+            UpdateLayout();
+        }
         if (dirty)
         {
             RefreshLines();
-            dirty = false;
         }
     }
 
@@ -123,6 +142,8 @@ public class LineGraph : MonoBehaviour
         if (subGraphs == null) subGraphs = new List<SubLineGraph>();
         subGraphs.Add(subgraph);
 
+        UpdateLegend();
+
         return subGraphs.Count - 1;
     }
 
@@ -139,9 +160,8 @@ public class LineGraph : MonoBehaviour
         dirty = true;
     }
 
-    void RefreshLines()
+    void UpdateLayout()
     {
-        // Create graph area
         graphingArea.sizeDelta = new Vector2(rectTransform.rect.width * (maxGraphArea.x - minGraphArea.x),
                                              rectTransform.rect.height * (maxGraphArea.y - minGraphArea.y));
         graphingArea.anchoredPosition = new Vector2(rectTransform.rect.width * minGraphArea.x,
@@ -151,6 +171,71 @@ public class LineGraph : MonoBehaviour
         graphingArea.offsetMax = new Vector2(-rectTransform.rect.width * (1 - maxGraphArea.x),
                                              -rectTransform.rect.height * (1 - maxGraphArea.y));
 
+        if (displayAxisX)
+        {
+            if (axisX == null)
+            {
+                RectTransform rt = GraphUtils.CreateUIObject("AxisX", graphingArea);
+
+                axisX = rt.gameObject.AddComponent<Axis>();
+                axisX.orientation = Axis.Orientation.Horizontal;
+                axisX.textColor = textColor;
+                axisX.textSize = axisTextSize;
+            }
+            axisX.UpdateLayout();
+            axisX.labelAxis = labelAxisX;
+        }
+        else
+        {
+            if (axisX != null) axisX.gameObject.SetActive(false);
+        }
+
+        if (displayAxisY)
+        {
+            if (axisY == null)
+            {
+                RectTransform rt = GraphUtils.CreateUIObject("AxisY", graphingArea);
+
+                axisY = rt.gameObject.AddComponent<Axis>();
+                axisY.orientation = Axis.Orientation.Vertical;
+                axisY.textColor = textColor;
+                axisY.textSize = axisTextSize;
+            }
+            axisY.UpdateLayout();
+            axisY.labelAxis = labelAxisY;
+        }
+        else
+        {
+            if (axisY != null) axisY.gameObject.SetActive(false);
+        }
+
+        prevRect = rectTransform.rect;
+        layoutDirty = false;
+    }
+
+    void UpdateLegend()
+    {
+        if (displayLegend)
+        {
+            if (legend == null)
+            {
+                var rt = GraphUtils.CreateUIObject("Legend", graphingArea);
+                legend = rt.gameObject.AddComponent<Legend>();
+                rt.anchorMin = rt.anchorMax = new Vector2(1, 1);
+                rt.pivot = new Vector2(1, 1);
+            }
+            legend.gameObject.SetActive(true);
+
+            legend.Clear();
+            foreach (var sg in subGraphs)
+            {
+                legend.Add(sg.name, sg.lineRenderer.color);
+            }
+        }
+    }
+
+    void RefreshLines()
+    {
         // Get limits
         Vector2 displayMin = min;
         Vector2 displayMax = max;
@@ -220,42 +305,33 @@ public class LineGraph : MonoBehaviour
             }
         }
 
-        if (displayAxisX)
+        if (axisX != null)
         {
-            if (axisX == null)
-            {
-                RectTransform rt = GraphUtils.NewGameObjectUI("AxisX", graphingArea);
-
-                axisX = rt.gameObject.AddComponent<Axis>();
-                axisX.orientation = Axis.Orientation.Horizontal;
-                axisX.textColor = textColor;
-                axisX.textSize = axisTextSize;                
-            }
             axisX.range = new Vector2(displayMin.x, displayMax.x);
-            axisX.labelAxis = labelAxisX;
-        }
-        else
-        {
-            if (axisX != null) axisX.gameObject.SetActive(false);
+            axisX.gameObject.SetActive(displayAxisX);
         }
 
-        if (displayAxisY)
+        if (axisY != null)
         {
-            if (axisY == null)
-            {
-                RectTransform rt = GraphUtils.NewGameObjectUI("AxisY", graphingArea);
-
-                axisY = rt.gameObject.AddComponent<Axis>();
-                axisY.orientation = Axis.Orientation.Vertical;
-                axisY.textColor = textColor;
-                axisY.textSize = axisTextSize;
-            }
             axisY.range = new Vector2(displayMin.y, displayMax.y);
-            axisY.labelAxis = labelAxisY;
+            axisY.gameObject.SetActive(displayAxisY);
         }
-        else
+
+        if (legend)
         {
-            if (axisY != null) axisY.gameObject.SetActive(false);
+            legend.gameObject.SetActive(displayLegend);
         }
+
+        dirty = false;
+    }
+
+    private void OnDrawGizmos()
+    {
+#if UNITY_EDITOR
+        if (!Application.isPlaying)
+        {
+            Handles.Label(transform.position, name);
+        }
+#endif
     }
 }

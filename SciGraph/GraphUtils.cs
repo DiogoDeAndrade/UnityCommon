@@ -1,12 +1,13 @@
 ﻿using UnityEngine;
 using UnityEngine.UI.Extensions;
 using TMPro;
+using UnityEngine.UI;
 
 static class GraphUtils
 {
     public static UILineRenderer CreateLineRenderer(string name, Color color, RectTransform parent)
     {
-        var rt = NewGameObjectUI(name, parent);
+        var rt = CreateUIObject(name, parent);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
         rt.anchorMin = new Vector2(0, 0);
         rt.anchorMax = new Vector2(1, 1);
@@ -25,7 +26,7 @@ static class GraphUtils
 
     public static TextMeshProUGUI CreateTextRenderer(string name, Color color, float defaultTextSize, RectTransform parent)
     {
-        var rt = NewGameObjectUI(name, parent);
+        var rt = CreateUIObject(name, parent);
         rt.offsetMin = rt.offsetMax = Vector2.zero;
         rt.anchorMin = new Vector2(0, 0);
         rt.anchorMax = new Vector2(0, 1);
@@ -45,7 +46,24 @@ static class GraphUtils
         return text;
     }
 
-    public static RectTransform NewGameObjectUI(string name, Transform parent)
+    public static Image CreateImageRenderer(string name, Color color, float sx, float sy, RectTransform parent)
+    {
+        var rt = CreateUIObject(name, parent);
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        rt.anchorMin = new Vector2(0, 0);
+        rt.anchorMax = new Vector2(0, 1);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.localScale = Vector3.one;
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = new Vector2(sx, sy);
+
+        var img = rt.gameObject.AddComponent<Image>();
+        img.color = color;
+
+        return img;
+    }
+
+    public static RectTransform CreateUIObject(string name, Transform parent)
     {
         GameObject go = new GameObject(name);
         go.transform.SetParent(parent, false);
