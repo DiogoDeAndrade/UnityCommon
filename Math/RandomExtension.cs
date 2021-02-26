@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-static class RandomExtension
+public static class RandomExtension
 {
     public static float Range(this System.Random rnd, float valMin, float valMax)
     {
