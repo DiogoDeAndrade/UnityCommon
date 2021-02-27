@@ -1,13 +1,14 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
 public class AssetUtils
 {
-    public static T CreateOrReplaceAsset<T>(T asset, string path) where T : Object
+    public static T CreateOrReplaceAsset<T>(T asset, string path) where T : UnityEngine.Object
     {
 #if UNITY_EDITOR
         T existingAsset = AssetDatabase.LoadAssetAtPath<T>(path);
@@ -29,7 +30,7 @@ public class AssetUtils
 #endif
     }
 
-    public static T CreateOrReplaceAsset<T>(T oldAsset, T newAsset) where T : Object
+    public static T CreateOrReplaceAsset<T>(T oldAsset, T newAsset) where T : UnityEngine.Object
     {
 #if UNITY_EDITOR
         string path = AssetDatabase.GetAssetPath(oldAsset);
@@ -56,6 +57,21 @@ public class AssetUtils
         Debug.LogError("CreateOrReplaceAsset not available in runtime!");
         return null;
 #endif
+    }
+
+    public static T Copy<T>(T obj, string path) where T : UnityEngine.Object
+    {
+        if (obj == null) return null;
+
+        var copyObj = UnityEngine.Object.Instantiate(obj);
+        copyObj.name = obj.name;
+
+        var filename = path + "/" + obj.name + ".asset";
+        Uri p1 = new Uri(Application.dataPath);
+        Uri p2 = new Uri(filename);
+        Uri relativePath = p1.MakeRelativeUri(p2);
+
+        return CreateOrReplaceAsset<T>(copyObj, relativePath.ToString());
     }
 
 }
