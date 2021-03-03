@@ -36,6 +36,18 @@ public static class GameObjectExtensions
 #endif
         }
     }
+
+    public static void Delete(this GameObject go)
+    {
+        if (Application.isPlaying)
+        {
+            GameObject.Destroy(go);
+        }
+        else
+        {
+            GameObject.DestroyImmediate(go);
+        }
+    }
 }
 
     
