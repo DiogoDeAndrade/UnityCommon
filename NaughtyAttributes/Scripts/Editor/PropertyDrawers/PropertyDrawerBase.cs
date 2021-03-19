@@ -24,9 +24,11 @@ namespace NaughtyAttributes.Editor
 			// Check if enabled and draw
 			EditorGUI.BeginChangeCheck();
 			bool enabled = PropertyUtility.IsEnabled(property);
-			GUI.enabled = enabled;
-			OnGUI_Internal(rect, property, new GUIContent(PropertyUtility.GetLabel(property)));
-			GUI.enabled = true;
+
+			using (new EditorGUI.DisabledScope(disabled: !enabled))
+			{
+				OnGUI_Internal(rect, property, PropertyUtility.GetLabel(property));
+			}
 
 			// Call OnValueChanged callbacks
 			if (EditorGUI.EndChangeCheck())
@@ -50,27 +52,33 @@ namespace NaughtyAttributes.Editor
 
 		protected virtual float GetPropertyHeight_Internal(SerializedProperty property, GUIContent label)
 		{
-			return base.GetPropertyHeight(property, label);
+			return EditorGUI.GetPropertyHeight(property, includeChildren: true);
 		}
 
-		protected virtual float GetPropertyHeight(SerializedProperty property)
+		protected float GetPropertyHeight(SerializedProperty property)
 		{
-			return EditorGUI.GetPropertyHeight(property, true);
+			SpecialCaseDrawerAttribute specialCaseAttribute = PropertyUtility.GetAttribute<SpecialCaseDrawerAttribute>(property);
+			if (specialCaseAttribute != null)
+			{
+				return specialCaseAttribute.GetDrawer().GetPropertyHeight(property);
+			}
+
+			return EditorGUI.GetPropertyHeight(property, includeChildren: true);
 		}
 
 		public virtual float GetHelpBoxHeight()
 		{
-			return EditorGUIUtility.singleLineHeight * 3.0f;
+			return EditorGUIUtility.singleLineHeight * 2.0f;
 		}
 
 		public void DrawDefaultPropertyAndHelpBox(Rect rect, SerializedProperty property, string message, MessageType messageType)
 		{
 			float indentLength = NaughtyEditorGUI.GetIndentLength(rect);
 			Rect helpBoxRect = new Rect(
-					rect.x + indentLength,
-					rect.y,
-					rect.width - indentLength,
-					GetHelpBoxHeight() - 2.0f);
+				rect.x + indentLength,
+				rect.y,
+				rect.width - indentLength,
+				GetHelpBoxHeight());
 
 			NaughtyEditorGUI.HelpBox(helpBoxRect, message, MessageType.Warning, context: property.serializedObject.targetObject);
 

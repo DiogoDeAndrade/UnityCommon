@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEditor;
+using System.Reflection;
 
 namespace NaughtyAttributes.Editor
 {
@@ -8,7 +9,10 @@ namespace NaughtyAttributes.Editor
 	{
 		protected override float GetPropertyHeight_Internal(SerializedProperty property, GUIContent label)
 		{
-			return IsNumber(property)
+			ProgressBarAttribute progressBarAttribute = PropertyUtility.GetAttribute<ProgressBarAttribute>(property);
+			var maxValue = GetMaxValue(property, progressBarAttribute);
+
+			return IsNumber(property) && maxValue is float
 				? GetPropertyHeight(property)
 				: GetPropertyHeight(property) + GetHelpBoxHeight();
 		}
@@ -25,21 +29,68 @@ namespace NaughtyAttributes.Editor
 			ProgressBarAttribute progressBarAttribute = PropertyUtility.GetAttribute<ProgressBarAttribute>(property);
 			var value = property.propertyType == SerializedPropertyType.Integer ? property.intValue : property.floatValue;
 			var valueFormatted = property.propertyType == SerializedPropertyType.Integer ? value.ToString() : string.Format("{0:0.00}", value);
-			var fillPercentage = value / progressBarAttribute.MaxValue;
-			var barLabel = (!string.IsNullOrEmpty(progressBarAttribute.Name) ? "[" + progressBarAttribute.Name + "] " : "") + valueFormatted + "/" + progressBarAttribute.MaxValue;
-			var barColor = progressBarAttribute.Color.GetColor();
-			var labelColor = Color.white;
+			var maxValue = GetMaxValue(property, progressBarAttribute);
 
-			var indentLength = NaughtyEditorGUI.GetIndentLength(rect);
-			Rect barRect = new Rect()
+			if (maxValue != null && maxValue is float)
 			{
-				x = rect.x + indentLength,
-				y = rect.y,
-				width = rect.width - indentLength,
-				height = EditorGUIUtility.singleLineHeight
-			};
+				var fillPercentage = value / (float)maxValue;
+				var barLabel = (!string.IsNullOrEmpty(progressBarAttribute.Name) ? "[" + progressBarAttribute.Name + "] " : "") + valueFormatted + "/" + maxValue;
+				var barColor = progressBarAttribute.Color.GetColor();
+				var labelColor = Color.white;
 
-			DrawBar(barRect, Mathf.Clamp01(fillPercentage), barLabel, barColor, labelColor);
+				var indentLength = NaughtyEditorGUI.GetIndentLength(rect);
+				Rect barRect = new Rect()
+				{
+					x = rect.x + indentLength,
+					y = rect.y,
+					width = rect.width - indentLength,
+					height = EditorGUIUtility.singleLineHeight
+				};
+
+				DrawBar(barRect, Mathf.Clamp01(fillPercentage), barLabel, barColor, labelColor);
+			}
+			else
+			{
+				string message = string.Format(
+					"The provided dynamic max value for the progress bar is not correct. Please check if the '{0}' is correct, or the return type is float",
+					nameof(progressBarAttribute.MaxValueName));
+
+				DrawDefaultPropertyAndHelpBox(rect, property, message, MessageType.Warning);
+			}
+		}
+
+		private object GetMaxValue(SerializedProperty property, ProgressBarAttribute progressBarAttribute)
+		{
+			if (string.IsNullOrEmpty(progressBarAttribute.MaxValueName))
+			{
+				return progressBarAttribute.MaxValue;
+			}
+			else
+			{
+				object target = PropertyUtility.GetTargetObjectWithProperty(property);
+
+				FieldInfo valuesFieldInfo = ReflectionUtility.GetField(target, progressBarAttribute.MaxValueName);
+				if (valuesFieldInfo != null)
+				{
+					return valuesFieldInfo.GetValue(target);
+				}
+
+				PropertyInfo valuesPropertyInfo = ReflectionUtility.GetProperty(target, progressBarAttribute.MaxValueName);
+				if (valuesPropertyInfo != null)
+				{
+					return valuesPropertyInfo.GetValue(target);
+				}
+
+				MethodInfo methodValuesInfo = ReflectionUtility.GetMethod(target, progressBarAttribute.MaxValueName);
+				if (methodValuesInfo != null &&
+					methodValuesInfo.ReturnType == typeof(float) &&
+					methodValuesInfo.GetParameters().Length == 0)
+				{
+					return methodValuesInfo.Invoke(target, null);
+				}
+
+				return null;
+			}
 		}
 
 		private void DrawBar(Rect rect, float fillPercent, string label, Color barColor, Color labelColor)

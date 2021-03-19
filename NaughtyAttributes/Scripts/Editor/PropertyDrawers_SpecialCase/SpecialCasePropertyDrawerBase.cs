@@ -7,7 +7,7 @@ namespace NaughtyAttributes.Editor
 {
 	public abstract class SpecialCasePropertyDrawerBase
 	{
-		public void OnGUI(SerializedProperty property)
+		public void OnGUI(Rect rect, SerializedProperty property)
 		{
 			// Check if visible
 			bool visible = PropertyUtility.IsVisible(property);
@@ -26,9 +26,11 @@ namespace NaughtyAttributes.Editor
 			// Check if enabled and draw
 			EditorGUI.BeginChangeCheck();
 			bool enabled = PropertyUtility.IsEnabled(property);
-			GUI.enabled = enabled;
-			OnGUI_Internal(property, new GUIContent(PropertyUtility.GetLabel(property)));
-			GUI.enabled = true;
+
+			using (new EditorGUI.DisabledScope(disabled: !enabled))
+			{
+				OnGUI_Internal(rect, property, PropertyUtility.GetLabel(property));
+			}
 
 			// Call OnValueChanged callbacks
 			if (EditorGUI.EndChangeCheck())
@@ -37,7 +39,13 @@ namespace NaughtyAttributes.Editor
 			}
 		}
 
-		protected abstract void OnGUI_Internal(SerializedProperty property, GUIContent label);
+		public float GetPropertyHeight(SerializedProperty property)
+		{
+			return GetPropertyHeight_Internal(property);
+		}
+
+		protected abstract void OnGUI_Internal(Rect rect, SerializedProperty property, GUIContent label);
+		protected abstract float GetPropertyHeight_Internal(SerializedProperty property);
 	}
 
 	public static class SpecialCaseDrawerAttributeExtensions

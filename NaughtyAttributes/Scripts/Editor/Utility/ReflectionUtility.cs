@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using UnityEditor;
+using UnityEngine;
 
 namespace NaughtyAttributes.Editor
 {
@@ -9,6 +11,12 @@ namespace NaughtyAttributes.Editor
 	{
 		public static IEnumerable<FieldInfo> GetAllFields(object target, Func<FieldInfo, bool> predicate)
 		{
+			if (target == null)
+			{
+				Debug.LogError("The target object is null. Check for missing scripts.");
+				yield break;
+			}
+
 			List<Type> types = new List<Type>()
 			{
 				target.GetType()
@@ -34,6 +42,12 @@ namespace NaughtyAttributes.Editor
 
 		public static IEnumerable<PropertyInfo> GetAllProperties(object target, Func<PropertyInfo, bool> predicate)
 		{
+			if (target == null)
+			{
+				Debug.LogError("The target object is null. Check for missing scripts.");
+				yield break;
+			}
+
 			List<Type> types = new List<Type>()
 			{
 				target.GetType()
@@ -59,6 +73,12 @@ namespace NaughtyAttributes.Editor
 
 		public static IEnumerable<MethodInfo> GetAllMethods(object target, Func<MethodInfo, bool> predicate)
 		{
+			if (target == null)
+			{
+				Debug.LogError("The target object is null. Check for missing scripts.");
+				return null;
+			}
+
 			IEnumerable<MethodInfo> methodInfos = target.GetType()
 				.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
 				.Where(predicate);
@@ -79,6 +99,18 @@ namespace NaughtyAttributes.Editor
 		public static MethodInfo GetMethod(object target, string methodName)
 		{
 			return GetAllMethods(target, m => m.Name.Equals(methodName, StringComparison.InvariantCulture)).FirstOrDefault();
+		}
+
+		public static Type GetListElementType(Type listType)
+		{
+			if (listType.IsGenericType)
+			{
+				return listType.GetGenericArguments()[0];
+			}
+			else
+			{
+				return listType.GetElementType();
+			}
 		}
 	}
 }
