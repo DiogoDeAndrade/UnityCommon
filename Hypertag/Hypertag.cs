@@ -4,7 +4,7 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "Hypertag")]
 public class Hypertag : ScriptableObject
 {
-    public static T FindObjectOfType<T>(Hypertag tag) where T : Component
+    public static T FindObjectWithHypertag<T>(Hypertag tag) where T : Component
     {
         var objects = FindObjectsOfType<HypertaggedObject>();
         foreach (var obj in objects)
@@ -20,7 +20,7 @@ public class Hypertag : ScriptableObject
         return null;
     }
 
-    public static List<T> FindObjectsOfType<T>(Hypertag tag) where T : Component
+    public static List<T> FindObjectsWithHypertag<T>(Hypertag tag) where T : Component
     {
         List<T> ret = new List<T>();
         var objects = FindObjectsOfType<HypertaggedObject>();
