@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 
+#if UNITY_EDITOR
 public class LpcSpriteProcessor : AssetPostprocessor {
 
 	public enum LpcAnimationState
@@ -235,3 +236,4 @@ public class LpcSpriteProcessor : AssetPostprocessor {
 	}
 
 }
+#endif

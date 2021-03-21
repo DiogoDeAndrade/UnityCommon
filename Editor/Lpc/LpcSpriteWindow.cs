@@ -2,7 +2,7 @@
 using UnityEditor;
 using System.Collections;
 
-
+#if UNIYT_EDITOR
 class LpcSpriteWindow : EditorWindow {
 
 	private bool m_ImportEmptySprites;
@@ -109,3 +109,4 @@ class LpcSpriteWindow : EditorWindow {
 		LpcSpriteSettings.SetHuFrameCount (m_HuFrameCount);
 	}
 }
+#endif

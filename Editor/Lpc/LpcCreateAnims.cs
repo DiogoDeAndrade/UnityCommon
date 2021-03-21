@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
+#if UNITY_EDITOR
 public class LpcCreateAnims
 {
     struct AnimKey
@@ -217,3 +218,4 @@ public class LpcCreateAnims
         return true;
     }
 }
+#endif

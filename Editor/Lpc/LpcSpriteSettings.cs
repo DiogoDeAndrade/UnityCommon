@@ -2,6 +2,7 @@
 using UnityEditor;
 using System.Collections;
 
+#if UNITY_EDITOR
 public class LpcSpriteSettings : Object {
 
 	// Animations in LPC Sprite Sheets do have various number of
@@ -173,3 +174,4 @@ public class LpcSpriteSettings : Object {
 		EditorPrefs.SetInt (HuFrameCount, frames);
 	}
 }
+#endif
