@@ -19,6 +19,11 @@ public static class VectorExtensions
         return new Vector2(inV.x, inV.y);
     }
 
+    public static Vector3 xy0(this Vector2 inV)
+    {
+        return new Vector3(inV.x, inV.y, 0);
+    }
+
     public static Vector2 yz(this Vector3 inV)
     {
         return new Vector2(inV.y, inV.z);
