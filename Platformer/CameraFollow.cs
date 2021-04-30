@@ -116,7 +116,7 @@ public class CameraFollow : MonoBehaviour
         if (targetObject)
         {
             Gizmos.color = Color.red;
-            Gizmos.DrawSphere(targetObject.position, 2.0f);
+            Gizmos.DrawSphere(targetObject.position, 0.5f);
         }
 
         if (mode == Mode.Box)
