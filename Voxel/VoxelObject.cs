@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 public class VoxelObject : MonoBehaviour
 {
     [Serializable]
-    public enum MaterialMode { None, Palette, Multi };
+    public enum MaterialMode { Single, Palette, Multi };
 
     [SerializeField] Vector3Int             _gridSize = Vector3Int.zero;
     [SerializeField] Vector3                _voxelSize = Vector3.one;
@@ -45,7 +45,7 @@ public class VoxelObject : MonoBehaviour
         get => _data;
         set
         {
-            _data = data;
+            _data = value;
             if (_data.Length != _gridSize.x * _gridSize.y * _gridSize.z)
             {
                 Debug.LogWarning("Voxel grid size incompatible with provided data: set grid size first!");
@@ -165,10 +165,12 @@ public class VoxelObject : MonoBehaviour
                         List<int> targetIndices = null;
                         switch (_materialMode)
                         {
-                            case MaterialMode.None:
+                            case MaterialMode.Single:
+                                targetIndices = _indices[0];
+                                break;
                             case MaterialMode.Palette:
                                 targetIndices = _indices[0];
-                                uv1 = uv2 = uv3 = uv4 = new Vector2((value % 16) * uvPaletteScale + uvPaletteOffset, 1 - (value / 16) * uvPaletteScale + uvPaletteOffset);
+                                uv1 = uv2 = uv3 = uv4 = new Vector2((value % 16) * uvPaletteScale + uvPaletteOffset, 1 - ((value / 16) * uvPaletteScale + uvPaletteOffset));
                                 break;
                             case MaterialMode.Multi:
                                 targetIndices = _indices[_voxelValueToMaterialId[value]];
@@ -185,7 +187,7 @@ public class VoxelObject : MonoBehaviour
                             p3 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
                             p4 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
                             n = -Vector3.forward;
-                            if (_materialMode == MaterialMode.Multi)
+                            if (_materialMode != MaterialMode.Palette)
                             {
                                 uv1 = new Vector2(p1.x * uvScale.x, p1.y * uvScale.y);
                                 uv2 = new Vector2(p2.x * uvScale.x, p2.y * uvScale.y);
@@ -202,7 +204,7 @@ public class VoxelObject : MonoBehaviour
                             p3 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
                             p4 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
                             n = Vector3.right;
-                            if (_materialMode == MaterialMode.Multi)
+                            if (_materialMode != MaterialMode.Palette)
                             {
                                 uv1 = new Vector2(p1.z * uvScale.z, p1.y * uvScale.y);
                                 uv2 = new Vector2(p2.z * uvScale.z, p2.y * uvScale.y);
@@ -219,7 +221,7 @@ public class VoxelObject : MonoBehaviour
                             p3 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
                             p4 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
                             n = Vector3.forward;
-                            if (_materialMode == MaterialMode.Multi)
+                            if (_materialMode != MaterialMode.Palette)
                             {
                                 uv1 = new Vector2(p1.x * uvScale.x, p1.y * uvScale.y);
                                 uv2 = new Vector2(p2.x * uvScale.x, p2.y * uvScale.y);
@@ -236,7 +238,7 @@ public class VoxelObject : MonoBehaviour
                             p3 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
                             p4 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
                             n = -Vector3.right;
-                            if (_materialMode == MaterialMode.Multi)
+                            if (_materialMode != MaterialMode.Palette)
                             {
                                 uv1 = new Vector2(p1.z * uvScale.z, p1.y * uvScale.y);
                                 uv2 = new Vector2(p2.z * uvScale.z, p2.y * uvScale.y);
@@ -253,7 +255,7 @@ public class VoxelObject : MonoBehaviour
                             p3 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
                             p4 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
                             n = Vector3.up;
-                            if (_materialMode == MaterialMode.Multi)
+                            if (_materialMode != MaterialMode.Palette)
                             {
                                 uv1 = new Vector2(p1.x * uvScale.x, p1.z * uvScale.z);
                                 uv2 = new Vector2(p2.x * uvScale.x, p2.z * uvScale.z);
@@ -270,7 +272,7 @@ public class VoxelObject : MonoBehaviour
                             p3 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
                             p4 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
                             n = -Vector3.up;
-                            if (_materialMode == MaterialMode.Multi)
+                            if (_materialMode != MaterialMode.Palette)
                             {
                                 uv1 = new Vector2(p1.x * uvScale.x, p1.z * uvScale.z);
                                 uv2 = new Vector2(p2.x * uvScale.x, p2.z * uvScale.z);
@@ -291,6 +293,7 @@ public class VoxelObject : MonoBehaviour
         _mesh.SetVertices(_vertices);
         _mesh.SetNormals(_normals);
         _mesh.SetUVs(0, _uvs);
+        if (_vertices.Count > 65535) _mesh.indexFormat = IndexFormat.UInt32;
         _mesh.subMeshCount = _indices.Count;
         if (_materialMode == MaterialMode.Multi)
         {
