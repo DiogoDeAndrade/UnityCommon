@@ -335,4 +335,16 @@ public class VoxelObject : MonoBehaviour
 
         return -1;
     }
+
+    public (Vector3, Vector3) GetAABB(Vector3Int coords)
+    {
+        return GetAABB(coords.x, coords.y, coords.z);
+    }
+    public (Vector3, Vector3) GetAABB(int x, int y, int z)
+    {
+        Vector3 aabb_min = transform.position + offset + x * voxelSize.x * transform.right + y * voxelSize.y * transform.up + z * voxelSize.z * transform.forward;
+        Vector3 aabb_max = aabb_min + voxelSize.x * transform.right + voxelSize.y * transform.up + voxelSize.z * transform.forward;
+
+        return (aabb_min, aabb_max);
+    }
 }
