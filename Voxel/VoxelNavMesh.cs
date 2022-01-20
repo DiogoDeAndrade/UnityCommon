@@ -6,7 +6,7 @@ public class VoxelNavMesh
 {
     Mesh mesh;
 
-    public void Build(VoxelData vd, List<int> validVoxels, bool simplify, int maxSimplificationIterations)
+    public void Build(VoxelData vd, List<int> validVoxels, bool simplify)
     {
         var vertices = new List<Vector3>();
         var indices = new List<int>();
@@ -71,7 +71,7 @@ public class VoxelNavMesh
 
         if (simplify)
         {
-            mesh = MeshTools.SimplifyMeshInterior(mesh, maxSimplificationIterations);
+            mesh = MeshTools.SimplifyMeshInterior(mesh, 0.01f);
         }
     }
 
