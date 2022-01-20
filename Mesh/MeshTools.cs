@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 public static class MeshTools
 {
@@ -363,6 +364,406 @@ public static class MeshTools
         }
 
         mesh.SetColors(color);
+    }
+
+    public static Mesh SimplifyMesh(Mesh sourceMesh, float quality)
+    {
+        // Create our mesh simplifier and setup our entire mesh in it
+        var meshSimplifier = new UnityMeshSimplifier.MeshSimplifier();
+        meshSimplifier.Initialize(sourceMesh);
+
+        // This is where the magic happens, lets simplify!
+        meshSimplifier.SimplifyMesh(quality);
+
+        // Create our final mesh and apply it back to our mesh filter
+        return meshSimplifier.ToMesh();
+    }
+
+    public class Topology
+    {
+        public class Edge
+        {
+            public int          i1, i2;
+            public List<int>    triangles;
+        }
+
+        public class Triangle
+        {
+            public int      v1, v2, v3;
+            public int      e1, e2, e3;
+        }
+
+        public List<Vector3>    vertices;
+        public List<Edge>       edges;
+        public List<Triangle>   triangles;
+        public Dictionary<Edge, int>    edgesId;
+
+        public Topology(Mesh mesh)
+        {
+            vertices = new List<Vector3>(mesh.vertices);
+            triangles = new List<Triangle>();
+            edges = new List<Edge>();
+
+            for (int submesh = 0; submesh<mesh.subMeshCount; submesh++)
+            {
+                var indices = mesh.GetIndices(submesh);
+                for (int i = 0; i<indices.Length; i += 3)
+                {
+                    Triangle tri = new Triangle();
+                    tri.v1 = indices[i];
+                    tri.v2 = indices[i + 1];
+                    tri.v3 = indices[i + 2];
+                    tri.e1 = FindOrAddEdge(tri.v1, tri.v2);
+                    tri.e2 = FindOrAddEdge(tri.v2, tri.v3);
+                    tri.e3 = FindOrAddEdge(tri.v3, tri.v1);
+
+                    triangles.Add(tri);
+
+                    int triIndex = triangles.Count - 1;
+
+                    edges[tri.e1].triangles.Add(triIndex);
+                    edges[tri.e2].triangles.Add(triIndex);
+                    edges[tri.e3].triangles.Add(triIndex);
+                }
+            }
+        }
+
+        public int FindEdge(int i1, int i2)
+        {
+            for (int i = 0; i < edges.Count; i++)
+            {
+                if (((edges[i].i1 == i1) && (edges[i].i2 == i2)) ||
+                    ((edges[i].i2 == i1) && (edges[i].i1 == i2)))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        public int FindEdgeExact(int i1, int i2)
+        {
+            for (int i = 0; i < edges.Count; i++)
+            {
+                if ((edges[i].i1 == i1) && (edges[i].i2 == i2))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        public int FindOrAddEdge(int i1, int i2)
+        {
+            var index = FindEdge(i1, i2);
+            if (index != -1) return index;
+
+            Edge edge = new Edge() { i1 = i1, i2 = i2, triangles = new List<int>() };
+            edges.Add(edge);
+
+            return edges.Count - 1;
+        }
+
+
+        public void CollapseEdge(int src, int dest)
+        {
+            for (int i = 0; i < edges.Count; i++)
+            {
+                Edge edge = edges[i];
+                bool change = false;
+                if (edge.i1 == src) { edge.i1 = dest; change = true; }
+                if (edge.i2 == src) { edge.i2 = dest; change = true; }
+
+                if (change)
+                {
+                    for (int triIndex = 0; triIndex < edge.triangles.Count; triIndex++)
+                    {
+                        var tri = triangles[edge.triangles[triIndex]];
+
+                        if (tri.v1 == src) tri.v1 = dest;
+                        if (tri.v2 == src) tri.v2 = dest;
+                        if (tri.v3 == src) tri.v3 = dest;
+                    }
+                }
+            }
+
+            // Remove vertex src
+            RemoveVertex(src);
+        }
+
+        private void RemoveVertex(int vertex)
+        { 
+            for (int i = 0; i < edges.Count; i++)
+            {
+                Edge edge = edges[i];
+                if (edge.i1 > vertex) edge.i1--;
+                if (edge.i2 > vertex) edge.i2--;
+            }
+            for (int i = 0; i < triangles.Count; i++)
+            {
+                Triangle tri = triangles[i];
+                if (tri.v1 > vertex) tri.v1--;
+                if (tri.v2 > vertex) tri.v2--;
+                if (tri.v3 > vertex) tri.v3--;
+            }
+
+            vertices.RemoveAt(vertex);
+        }
+
+        public bool Cleanup()
+        {
+            int n = edges.Count + triangles.Count;
+
+            // Get a list of edges to remove (degenerates and duplicates)
+            List<int>   idList = new List<int>();
+            for (int i = 0; i < edges.Count; i++)
+            {
+                var edge = edges[i];
+                if (edge.i1 == edge.i2)
+                {
+                    idList.Add(i);
+                }
+                else
+                {
+                    int otherEdge = FindEdgeExact(edge.i2, edge.i1);
+                    if (otherEdge != -1)
+                    { 
+                        // This edge is duplicate, so we have to transfer the triangles to the other
+                        // one
+                        foreach (var tIndex in edge.triangles)
+                        {
+                            if (!edges[otherEdge].triangles.Contains(tIndex))
+                            {
+                                edges[otherEdge].triangles.Add(tIndex);
+                            }
+
+                            // Go to the triangle and replace edge i by edge j
+                            var tri = triangles[tIndex];
+                            if (tri.e1 == i) tri.e1 = otherEdge;
+                            if (tri.e2 == i) tri.e2 = otherEdge;
+                            if (tri.e3 == i) tri.e3 = otherEdge;
+                        }
+                        edge.triangles.Clear();
+                        // Mark it for removal
+                        idList.Add(i);
+                    }
+                }
+            }
+
+            for (int i = 0; i < idList.Count; i++)
+            {
+                var id = idList[i];
+                foreach (var tri in triangles)
+                {
+                    if (tri.e1 > id) tri.e1--;
+                    if (tri.e2 > id) tri.e2--;
+                    if (tri.e3 > id) tri.e3--;
+                }
+                edges.RemoveAt(id);
+
+                // Go to the rest of the list and change the IDs of the other edges to remove
+                for (int j = i + 1; j < idList.Count; j++)
+                {
+                    if (idList[j] > id) idList[j]--;
+                }
+            }
+
+            idList.Clear();
+
+            // Get a list of triangles to remove
+            for (int i = 0; i < triangles.Count; i++)
+            {
+                var tri = triangles[i];
+                if ((tri.v1 == tri.v2) ||
+                    (tri.v2 == tri.v3) ||
+                    (tri.v3 == tri.v1))
+                {
+                    idList.Add(i);
+                }
+            }
+
+            for (int i = 0; i < idList.Count; i++)
+            {
+                var id = idList[i];
+
+                foreach (var edge in edges)
+                {
+                    edge.triangles.Remove(id);
+
+                    for (int j = 0; j < edge.triangles.Count; j++)
+                    {
+                        if (edge.triangles[j] > id) edge.triangles[j]--;
+                    }
+                }
+                triangles.RemoveAt(id);
+
+                // Go to the rest of the list and change the IDs of the other triangles to remove
+                for (int j = i + 1; j < idList.Count; j++)
+                {
+                    if (idList[j] > id) idList[j]--;
+                }
+            }
+
+            foreach (var edge in edges)
+            {
+                edge.triangles = edge.triangles.Distinct().ToList();
+            }
+
+            if (n != edges.Count + triangles.Count)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public HashSet<int> GetBoundary()
+        {
+            var pinnedVertex = new HashSet<int>();
+            foreach (var edge in edges)
+            {
+                if (edge.triangles.Count == 1)
+                {
+                    pinnedVertex.Add(edge.i1);
+                    pinnedVertex.Add(edge.i2);
+                }
+            }
+
+            return pinnedVertex;
+        }
+    }
+
+    public static Mesh FromTopology(Topology top)
+    {
+        List<int> indices = new List<int>();
+        foreach (var tri in top.triangles)
+        {
+            indices.Add(tri.v1);
+            indices.Add(tri.v2);
+            indices.Add(tri.v3);
+        }
+
+        Mesh mesh = new Mesh();
+
+        mesh.indexFormat = (top.vertices.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
+        mesh.SetVertices(top.vertices);
+        mesh.SetTriangles(indices, 0);
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
+        mesh.name = "FromTopology";
+
+        return mesh;
+    }
+
+    public static Mesh SimplifyMeshInterior(Mesh sourceMesh, int maxIteration)
+    {
+        System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var t0 = stopwatch.ElapsedMilliseconds;
+        var topology = new Topology(sourceMesh);
+        Debug.Log("Get topology = " + (stopwatch.ElapsedMilliseconds - t0));
+
+        // Mark vertices as "pinned" if they belong to outside (so we don't move one of them to 
+        // the inside)
+        t0 = stopwatch.ElapsedMilliseconds;
+        var pinnedVertex = topology.GetBoundary();
+        Debug.Log("Get boundary = " + (stopwatch.ElapsedMilliseconds - t0));
+
+        int     iterationCount = 0;
+        long    accumCollapse = 0;
+        long    accumCleanup = 0;
+        long    accumPinned = 0;
+
+        bool exit = false;
+        while (!exit)
+        {
+            exit = true;
+
+            // For all edges
+            foreach (var edge in topology.edges)
+            {
+                // If this edge is not valid, continue
+                // If this edge is not shared by triangles, it is an "outside" edge, don't change anything about it
+                if (edge.triangles.Count == 1) continue;
+
+                // Edge is interior and shared by triangles
+                int srcVertex = edge.i1;
+                int destVertex = edge.i2;
+
+                // Edge doesn't include pinned vertices (ones on the edge)
+                if (pinnedVertex.Contains(srcVertex))
+                {
+                    // srcVertex is pinned, do not move it, move the other one
+                    srcVertex = edge.i2;
+                    destVertex = edge.i1;
+
+                    // Check if new source is pinned
+                    if (pinnedVertex.Contains(srcVertex))
+                    {
+                        // Both vertices on this edge are pinned, so can't collapse this edge
+                        // Carry on
+                        continue;
+                    }
+                }
+
+                // Collapse edge
+                /*Debug.Log(iterationCount);
+                
+                if (iterationCount == 2280)
+                {
+                    int a = 10;
+                }
+
+                Debug.Log("Collapse " + srcVertex + " to " + destVertex);*/
+
+                t0 = stopwatch.ElapsedMilliseconds;
+                topology.CollapseEdge(srcVertex, destVertex);
+                accumCollapse += (stopwatch.ElapsedMilliseconds - t0);
+                
+                iterationCount++;
+
+                // Remove degenerate triangles/edges, and restart the iteration if
+                // there's even a single one in that condition (edge IDs would be
+                // invalid so iteration would fail)
+                t0 = stopwatch.ElapsedMilliseconds;
+                bool leave = topology.Cleanup();
+                accumCleanup += (stopwatch.ElapsedMilliseconds - t0);
+
+                if ((maxIteration != 0) && (iterationCount >= maxIteration))
+                {
+                    exit = true;
+                    break;
+                }
+
+                // Recompute pinned vertices
+                t0 = stopwatch.ElapsedMilliseconds;
+                var tmp = pinnedVertex.ToList();
+                for (int i = 0; i < tmp.Count; i++)
+                {
+                    if (tmp[i] > srcVertex) tmp[i]--;
+                }
+                pinnedVertex = new HashSet<int>(tmp);
+                accumPinned += (stopwatch.ElapsedMilliseconds - t0);
+
+                if (leave)
+                {
+                    exit = false;
+                    break;
+                }
+            }
+        }
+
+        // Build mesh from topology
+        Debug.Log("Accum collapse = " + accumCollapse + " (avg. " + accumCollapse / (float)iterationCount + ")");
+        Debug.Log("Accum cleanup = " + accumCleanup + " (avg. " + accumCleanup / (float)iterationCount + ")");
+        Debug.Log("Accum pinned = " + accumPinned + " (avg. " + accumPinned / (float)iterationCount + ")");
+
+        t0 = stopwatch.ElapsedMilliseconds;
+        var retMesh = FromTopology(topology);
+        Debug.Log("Mesh from topology = " + (stopwatch.ElapsedMilliseconds - t0));
+
+        return retMesh;
     }
 
 }

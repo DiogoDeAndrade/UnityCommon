@@ -4,13 +4,6 @@ using UnityEngine;
 
 public static class VoxelTools 
 {
-    public class VoxelData
-    {
-        public byte[] data;
-        public Vector3Int gridSize;
-        public Vector3 voxelSize;
-        public Vector3 offset;
-    }
     static public VoxelData Voxelize(Mesh mesh, float density, float triangleScale = 1.0f, float gridScale = 1.0f)
     {
         VoxelData ret = new VoxelData();
@@ -164,5 +157,137 @@ public static class VoxelTools
 
         // Nothing on top, infinite height
         return int.MaxValue;
+    }
+
+    public static (int, int, int)? FindVoxel(VoxelData vd, byte value)
+    {
+        int index = 0;
+
+        for (int z = 0; z < vd.gridSize.z; z++)
+        {
+            for (int y = 0; y < vd.gridSize.y; y++)
+            {
+                for (int x = 0; x < vd.gridSize.x; x++)
+                {
+                    if (vd.data[index] == value)
+                    {
+                        return (x, y, z);
+                    }
+                    index++;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static void FloodFill(VoxelData vd, int x, int y, int z, byte value, byte newValue)
+    {
+        if ((x < 0) || (y < 0) || (z < 0)) return;
+        if ((x >= vd.gridSize.x) || (y >= vd.gridSize.y) || (z >= vd.gridSize.z)) return;
+
+        int index = x + (y * vd.gridSize.x) + (z * vd.gridSize.x * vd.gridSize.y);
+        if (vd.data[index] == value)
+        {
+            vd.data[index] = newValue;
+
+            FloodFill(vd, x - 1, y, z, value, newValue);
+            FloodFill(vd, x + 1, y, z, value, newValue);
+            FloodFill(vd, x, y - 1, z, value, newValue);
+            FloodFill(vd, x, y + 1, z, value, newValue);
+            FloodFill(vd, x, y, z - 1, value, newValue);
+            FloodFill(vd, x, y, z + 1, value, newValue);
+        }
+    }
+
+    public static int FloodFillWithStep(VoxelData vd, int stepSize, int x, int y, int z, byte value, byte newValue)
+    {
+        int count = 0;
+        Queue<Vector3Int> explore = new Queue<Vector3Int>();
+
+        explore.Enqueue(new Vector3Int(x, y, z));
+
+        while (explore.Count > 0)
+        {
+            var current = explore.Dequeue();
+
+            if ((current.x < 0) || (current.y < 0) || (current.z < 0)) continue;
+            if ((current.x >= vd.gridSize.x) || (current.y >= vd.gridSize.y) || (current.z >= vd.gridSize.z)) continue;
+
+            int index = current.x + (current.y * vd.gridSize.x) + (current.z * vd.gridSize.x * vd.gridSize.y);
+            if (vd.data[index] == value)
+            {
+                vd.data[index] = newValue;
+                count++;
+
+                for (int dy = -stepSize; dy <= stepSize; dy++)
+                {
+                    explore.Enqueue(new Vector3Int(current.x - 1, current.y + dy, current.z));
+                    explore.Enqueue(new Vector3Int(current.x + 1, current.y + dy, current.z));
+                    explore.Enqueue(new Vector3Int(current.x, current.y + dy, current.z - 1));
+                    explore.Enqueue(new Vector3Int(current.x, current.y + dy, current.z + 1));
+                }
+                explore.Enqueue(new Vector3Int(current.x, current.y - 1, current.z));
+                explore.Enqueue(new Vector3Int(current.x, current.y + 1, current.z));
+            }
+        }
+
+        return count;
+    }
+
+    public static int CountVoxel(VoxelData vd, byte value)
+    {
+        int index = 0;
+        int count = 0;
+
+        for (int z = 0; z < vd.gridSize.z; z++)
+        {
+            for (int y = 0; y < vd.gridSize.y; y++)
+            {
+                for (int x = 0; x < vd.gridSize.x; x++)
+                {
+                    if (vd.data[index] == value) count++;
+                    index++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    public struct VoxelRegion
+    {
+        public int  startX, startY, startZ;
+        public int  size;
+        public byte voxelId;
+    }
+
+    public static List<VoxelRegion> MarkRegions(VoxelData vd, int stepSize, byte value, byte firstRegion, byte lastRegion)
+    {
+        int regionId = 0;
+        int regionRange = lastRegion - firstRegion + 1;
+
+        List<VoxelRegion>   ret = null;
+
+        var pos = FindVoxel(vd, value);
+        while (pos.HasValue)
+        {
+            // Found a start position for the region
+            int x, y, z;
+            (x, y, z) = pos.Value;
+
+            if (ret == null) ret = new List<VoxelRegion>();
+            VoxelRegion vr = new VoxelRegion();
+            vr.startX = x; vr.startY = y; vr.startZ = z;
+            vr.size = FloodFillWithStep(vd, stepSize, x, y, z, value, (byte)(regionId + firstRegion));
+            vr.voxelId = (byte)(regionId + firstRegion);
+            ret.Add(vr);
+
+            regionId = (regionId + 1) % regionRange;
+
+            pos = FindVoxel(vd, value);
+        }
+
+        return ret;
     }
 }
