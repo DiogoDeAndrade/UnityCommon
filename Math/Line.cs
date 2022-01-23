@@ -39,4 +39,22 @@ public static class Line
             return false;
         }
     }
+
+    public static float Distance(Vector3 p0, Vector3 p1, Vector3 p)
+    {
+        Vector3 ab = p1 - p0;
+        Vector3 av = p - p0;
+
+        if (Vector3.Dot(av, ab) <= 0)
+        {
+            return ab.magnitude;
+        }
+        Vector3 bv = p - p1;
+        if (Vector3.Dot(bv, ab) >= 0)
+        {
+            return bv.magnitude;
+        }
+
+        return Vector3.Cross(ab, av).magnitude / ab.magnitude;
+    }
 }

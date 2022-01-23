@@ -5,17 +5,28 @@ using UnityEngine;
 public class VoxelNavMesh
 {
     Mesh mesh;
+    Mesh unsimplifiedMesh;
 
-    public void Build(VoxelData vd, List<int> validVoxels, bool simplify)
+    public void Build(VoxelData vd, List<int> validVoxels, float stepSize, bool simplify, bool keepUnsimplifiedMesh)
     {
         var vertices = new List<Vector3>();
         var indices = new List<int>();
 
-        int FindOrAdd(Vector3 p)
+        int FindOrAdd(Vector3 p, float stepSize)
         {
             for (int i = 0; i < vertices.Count; i++)
             {
-                if (p == vertices[i]) return i;
+                if (p.xz() == vertices[i].xz())
+                {
+                    if (Mathf.Abs(p.y - vertices[i].y) <= stepSize)
+                    {
+                        if (p.y < vertices[i].y)
+                        {
+                            vertices[i] = p;
+                        }
+                        return i;
+                    }
+                }
             }
 
             vertices.Add(p);
@@ -47,10 +58,10 @@ public class VoxelNavMesh
                                                  (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
                                                  (z - 0.0f) * vd.voxelSize.z + vd.offset.z);
 
-                        int i1 = FindOrAdd(p1);
-                        int i2 = FindOrAdd(p2);
-                        int i3 = FindOrAdd(p3);
-                        int i4 = FindOrAdd(p4);
+                        int i1 = FindOrAdd(p1, stepSize);
+                        int i2 = FindOrAdd(p2, stepSize);
+                        int i3 = FindOrAdd(p3, stepSize);
+                        int i4 = FindOrAdd(p4, stepSize);
 
                         indices.Add(i1); indices.Add(i2); indices.Add(i3);
                         indices.Add(i1); indices.Add(i3); indices.Add(i4);
@@ -71,6 +82,7 @@ public class VoxelNavMesh
 
         if (simplify)
         {
+            if (keepUnsimplifiedMesh) unsimplifiedMesh = mesh;
             mesh = MeshTools.SimplifyMeshInterior(mesh, 0.01f);
         }
     }
@@ -78,5 +90,9 @@ public class VoxelNavMesh
     public Mesh GetMesh()
     {
         return mesh;
+    }
+    public Mesh GetUnsimplifiedMesh()
+    {
+        return unsimplifiedMesh;
     }
 }

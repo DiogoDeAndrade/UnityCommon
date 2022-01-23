@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+[System.Serializable]
 public class Topology
 {
     public class Edge
@@ -17,6 +18,15 @@ public class Topology
             if (i2 == otherEdge.i1) return i2;
             if (i1 == otherEdge.i2) return i1;
             if (i2 == otherEdge.i2) return i2;
+            return -1;
+        }
+
+        public int GetOtherVertex(Edge otherEdge)
+        {
+            if (i1 == otherEdge.i1) return i2;
+            if (i2 == otherEdge.i1) return i1;
+            if (i1 == otherEdge.i2) return i2;
+            if (i2 == otherEdge.i2) return i1;
             return -1;
         }
 
@@ -254,7 +264,7 @@ public class Topology
         vertices.RemoveAt(vertex);
     }
 
-    public HashSet<int> GetBoundary()
+    public HashSet<int> GetBoundaryVertices()
     {
         var pinnedVertex = new HashSet<int>();
         foreach (var edge in edges)
@@ -268,6 +278,99 @@ public class Topology
         }
 
         return pinnedVertex;
+    }
+
+    public Boundary GetBoundary()
+    {
+        var ret = new Boundary();
+
+        List<Edge> edgeEdges = new List<Edge>();
+
+        foreach (var edge in edges)
+        {
+            if (edge == null) continue;
+            if (edge.triangles.Count == 1)
+            {
+                edgeEdges.Add(edge);
+            }
+        }
+
+        // Group all edge loops
+        while (edgeEdges.Count > 1)
+        {
+            // Start an edge loop
+            Polyline edgeLoop = new Polyline();
+
+            Edge e1 = edgeEdges[0];
+            edgeEdges[0] = null;
+            int initialVertex = -1;
+            int nextVertex = -1;
+            bool closed = false;
+
+            while (!closed)
+            {
+                // Find next edge that shares a vertex
+                for (int j = 1; j < edgeEdges.Count; j++)
+                {
+                    Edge e2 = edgeEdges[j];
+                    if (e2 == null) continue;
+
+                    if (nextVertex == -1)
+                    {
+                        int sharedVertex = e1.GetSharedVertex(e2);
+                        if (sharedVertex != -1)
+                        {
+                            edgeEdges[j] = null;
+
+                            initialVertex = nextVertex = e1.GetOtherVertex(e2);
+
+                            edgeLoop.Add(vertices[nextVertex]);
+                            edgeLoop.Add(vertices[sharedVertex]);
+
+                            nextVertex = e2.GetOtherVertex(e1);
+
+                            edgeLoop.Add(vertices[nextVertex]);
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if ((e2.i1 == nextVertex) || (e2.i2 == nextVertex))
+                        { 
+                            if (e2.i1 == nextVertex) nextVertex = e2.i2;
+                            else nextVertex = e2.i1;
+
+                            edgeEdges[j] = null;
+
+                            if (initialVertex == nextVertex)
+                            {
+                                closed = true;
+                                break;
+                            }
+                            edgeLoop.Add(vertices[nextVertex]);
+                            
+                            break;
+                        }
+                    }
+                }
+
+                if ((edgeLoop.Count == 0) && (nextVertex == -1))
+                {
+                    Debug.LogWarning("Couldn't find edge loop for edge " + e1.i1 + "=>" + e1.i2);
+                    break;
+                }
+            }
+
+            if (edgeLoop.Count > 0)
+            {
+                ret.Add(edgeLoop);
+            }
+
+            // Remove null edges
+            edgeEdges.RemoveAll((x) => x == null);
+        }
+
+        return ret;
     }
 
     public void OptimizeBoundary(float cosTolerance, bool checkIntersections)
@@ -337,7 +440,7 @@ public class Topology
         // Mark vertices as "pinned" if they belong to outside (so we don't move one of them to 
         // the inside)
         //t0 = stopwatch.ElapsedMilliseconds;
-        var pinnedVertex = GetBoundary();
+        var pinnedVertex = GetBoundaryVertices();
         //Debug.Log("Get boundary = " + (stopwatch.ElapsedMilliseconds - t0));
 
         // Collapse interior edges
@@ -392,5 +495,39 @@ public class Topology
                 //accumPinned += (stopwatch.ElapsedMilliseconds - t0);
             }
         }//*/
+    }
+}
+
+[System.Serializable]
+public class Boundary
+{
+    [SerializeField]
+    List<Polyline> polylines;
+
+    public int Count
+    {
+        get => (polylines != null) ? (polylines.Count) : (0);
+    }
+
+    public void Add(Polyline line)
+    {
+        if (polylines == null) polylines = new List<Polyline>();
+
+        polylines.Add(line);
+    }
+
+    public Polyline Get(int index)
+    {
+        return polylines[index];
+    }
+
+    public void Simplify(float maxDistance)
+    {
+        if (polylines == null) return;
+
+        foreach (var poly in polylines)
+        {
+            poly.Simplify(maxDistance);
+        }
     }
 }
