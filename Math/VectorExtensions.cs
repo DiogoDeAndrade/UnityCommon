@@ -53,5 +53,15 @@ public static class VectorExtensions
     {
         return new Vector3(v.x, v.y, v.z);
     }
+
+    public static Vector4 xyz0(this Vector3 v)
+    {
+        return new Vector4(v.x, v.y, v.z, 0);
+    }
+
+    public static Vector4 xyz1(this Vector3 v)
+    {
+        return new Vector4(v.x, v.y, v.z, 1);
+    }
 };
 

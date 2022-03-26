@@ -46,9 +46,12 @@ public class VoxelObject : MonoBehaviour
         set
         {
             _data = value;
-            if (_data.Length != _gridSize.x * _gridSize.y * _gridSize.z)
+            if (_data != null)
             {
-                Debug.LogWarning("Voxel grid size incompatible with provided data: set grid size first!");
+                if (_data.Length != _gridSize.x * _gridSize.y * _gridSize.z)
+                {
+                    Debug.LogWarning("Voxel grid size incompatible with provided data: set grid size first!");
+                }
             }
             _mesh = null;
         }
@@ -105,6 +108,7 @@ public class VoxelObject : MonoBehaviour
     public Mesh GetMesh()
     {
         if (_mesh) return _mesh;
+        if (_data == null) return null;
 
         _voxelValueToMaterialId = new Dictionary<int, int>();
 

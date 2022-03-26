@@ -431,4 +431,39 @@ public static class MeshTools
         return retMesh;
     }
 
+    public static Mesh TriangulateEarClipping(Polyline polyline)
+    {
+        int PrevVertex(int v, int maxVertex) => (v > 0) ? (v - 1) : (maxVertex - 1);
+        int NextVertex(int v, int maxVertex) => (v + 1) % maxVertex;
+
+        var vertex = polyline.GetVertices();
+
+        List<int> vertexIndex = new List<int>();
+        for (int i = 0; i < polyline.Count; i++) vertexIndex.Add(i);
+        List<int> reflexIndex = new List<int>();
+        List<int> convexIndex = new List<int>();
+
+        for (int i = 0; i < vertex.Count; i++)
+        {
+            Vector3 p0 = vertex[PrevVertex(i, vertex.Count)];
+            Vector3 p1 = vertex[i];
+            Vector3 p2 = vertex[NextVertex(i, vertex.Count)];
+            Vector3 pp0 = p1 - p0;
+            Vector3 pp1 = p2 - p0;
+
+            //float s = 0; // Vector3.Cross(pp0, pp1).magnitude / (pp0.magnitude * pp1.magnitude);
+        }
+
+
+        Mesh mesh = new Mesh();
+
+/*        mesh.indexFormat = (vertex.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
+        mesh.SetVertices(vertex);
+        mesh.SetTriangles(indices, 0);
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
+        mesh.name = "TriangulateEarClipping";*/
+
+        return mesh;
+    }
 }

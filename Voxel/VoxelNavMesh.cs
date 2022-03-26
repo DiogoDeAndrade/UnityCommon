@@ -4,10 +4,14 @@ using UnityEngine;
 
 public class VoxelNavMesh
 {
+    public enum TriangulationMesh { Simplification, EarClipping };
+
     Mesh mesh;
     Mesh unsimplifiedMesh;
 
-    public void Build(VoxelData vd, List<int> validVoxels, float stepSize, bool simplify, bool keepUnsimplifiedMesh)
+    public void Build(VoxelData vd, List<int> validVoxels, 
+                      TriangulationMesh method, bool simplifyBoundary,
+                      float stepSize, bool simplify, bool keepUnsimplifiedMesh)
     {
         var vertices = new List<Vector3>();
         var indices = new List<int>();
@@ -82,8 +86,21 @@ public class VoxelNavMesh
 
         if (simplify)
         {
-            if (keepUnsimplifiedMesh) unsimplifiedMesh = mesh;
-            mesh = MeshTools.SimplifyMeshInterior(mesh, 0.01f);
+            if (method == TriangulationMesh.Simplification)
+            {
+                if (keepUnsimplifiedMesh) unsimplifiedMesh = mesh;
+                mesh = MeshTools.SimplifyMeshInterior(mesh, 0.01f);
+            }
+            else if (method == TriangulationMesh.EarClipping)
+            {
+                // Get boundary and build triangulation from there
+                var topology = new Topology(mesh);
+                var boundary = topology.GetBoundary();
+
+                Debug.LogError("Ear clipping simplification not implemented!");
+
+//                mesh = MeshTools.TriangulateEarClipping(boundary.Get(0));
+            }
         }
     }
 

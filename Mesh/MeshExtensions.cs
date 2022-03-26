@@ -23,4 +23,70 @@ static class MeshExtensions
 
         return ret;
     }
+
+    public static bool Raycast(this Mesh src, Vector3 origin, Vector3 dir, float maxDist)
+    {
+        float   t;
+        var     vertices = src.vertices;
+
+        for (int submesh = 0; submesh < src.subMeshCount; submesh++)
+        {
+            var triangles = src.GetTriangles(submesh);
+
+            for (int triIndex = 0; triIndex < triangles.Length; triIndex+=3)
+            {
+                Triangle tri = new Triangle(vertices[triangles[triIndex]],
+                                            vertices[triangles[triIndex + 1]],
+                                            vertices[triangles[triIndex + 2]]);
+
+                if (tri.Raycast(origin, dir, maxDist, out t))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public static bool Raycast(this Mesh src, Vector3 origin, Vector3 dir, float maxDist, out int submeshId, out int triHit)
+    {
+        float t;
+        var vertices = src.vertices;
+
+        for (int submesh = 0; submesh < src.subMeshCount; submesh++)
+        {
+            var triangles = src.GetTriangles(submesh);
+
+            for (int triIndex = 0; triIndex < triangles.Length; triIndex += 3)
+            {
+                Triangle tri = new Triangle(vertices[triangles[triIndex]],
+                                            vertices[triangles[triIndex + 1]],
+                                            vertices[triangles[triIndex + 2]]);
+
+                if (tri.Raycast(origin, dir, maxDist, out t))
+                {
+                    submeshId = submesh;
+                    triHit = triIndex;
+                    return true;
+                }
+            }
+        }
+
+        submeshId = -1;
+        triHit = -1;
+        return false;
+    }
+
+    public static Triangle GetTriangle(this Mesh src, int submeshIndex, int triIndex)
+    {
+        var vertices = src.vertices;
+        var triangles = src.GetTriangles(submeshIndex);
+
+        Triangle tri = new Triangle(vertices[triangles[triIndex]],
+                                    vertices[triangles[triIndex + 1]],
+                                    vertices[triangles[triIndex + 2]]);
+
+        return tri;
+    }
 }

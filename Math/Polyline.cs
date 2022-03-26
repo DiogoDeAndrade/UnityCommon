@@ -8,6 +8,8 @@ public class Polyline
     [SerializeField]
     List<Vector3>    vertices;
 
+    public List<Vector3> GetVertices() => vertices;
+
     public void Add(Vector3 vertex)
     {
         if (vertices == null) vertices = new List<Vector3>();
@@ -52,5 +54,41 @@ public class Polyline
                 currentError = 0;
             }
         }
+    }
+
+    public bool isCW()
+    {
+        Vector3 v = Vector3.zero;
+        var     count = vertices.Count;
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 p0 = vertices[i];
+            Vector3 p1 = vertices[(i + 1) % count];
+            Vector3 p2 = vertices[(i + 2) % count];
+
+            v += Vector3.Cross(p1 - p0, p2 - p0);
+        }
+        v.Normalize();
+
+        float ma = 0.0f;
+
+        if (Mathf.Abs(v.x) > Mathf.Abs(v.y))
+        {
+            if (Mathf.Abs(v.x) > Mathf.Abs(v.z)) ma = v.x;
+            else ma = v.z;
+        }
+        else
+        {
+            if (Mathf.Abs(v.y) > Mathf.Abs(v.z)) ma = v.y;
+            else ma = v.z;
+        }
+
+        return (ma < 0);
+    }
+
+    public void ReverseOrder()
+    {
+        vertices.Reverse();
     }
 }

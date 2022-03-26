@@ -46,6 +46,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityMeshSimplifier.Internal;
+using UMSTriangle = UnityMeshSimplifier.Internal.Triangle;
 
 namespace UnityMeshSimplifier
 {
@@ -69,7 +70,7 @@ namespace UnityMeshSimplifier
 
         private int subMeshCount = 0;
         private int[] subMeshOffsets = null;
-        private ResizableArray<Triangle> triangles = null;
+        private ResizableArray<UMSTriangle> triangles = null;
         private ResizableArray<Vertex> vertices = null;
         private ResizableArray<Ref> refs = null;
 
@@ -87,8 +88,8 @@ namespace UnityMeshSimplifier
         // Pre-allocated buffers
         private readonly double[] errArr = new double[3];
         private readonly int[] attributeIndexArr = new int[3];
-        private readonly HashSet<Triangle> triangleHashSet1 = new HashSet<Triangle>();
-        private readonly HashSet<Triangle> triangleHashSet2 = new HashSet<Triangle>();
+        private readonly HashSet<UMSTriangle> triangleHashSet1 = new HashSet<UMSTriangle>();
+        private readonly HashSet<UMSTriangle> triangleHashSet2 = new HashSet<UMSTriangle>();
         #endregion
 
         #region Properties
@@ -391,7 +392,7 @@ namespace UnityMeshSimplifier
         /// </summary>
         public MeshSimplifier()
         {
-            triangles = new ResizableArray<Triangle>(0);
+            triangles = new ResizableArray<UMSTriangle>(0);
             vertices = new ResizableArray<Vertex>(0);
             refs = new ResizableArray<Ref>(0);
         }
@@ -638,7 +639,7 @@ namespace UnityMeshSimplifier
             {
                 Ref r = refs[v.tstart + k];
                 int tid = r.tid;
-                Triangle t = triangles[tid];
+                UMSTriangle t = triangles[tid];
                 if (t.deleted)
                     continue;
 
@@ -1382,7 +1383,7 @@ namespace UnityMeshSimplifier
 
         #region Triangle helper functions
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void GetTrianglesContainingVertex(ref Vertex vert, HashSet<Triangle> tris)
+        private void GetTrianglesContainingVertex(ref Vertex vert, HashSet<UMSTriangle> tris)
         {
             int trianglesCount = vert.tcount;
             int startIndex = vert.tstart;
@@ -1394,7 +1395,7 @@ namespace UnityMeshSimplifier
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void GetTrianglesContainingBothVertices(ref Vertex vert0, ref Vertex vert1, HashSet<Triangle> tris)
+        private void GetTrianglesContainingBothVertices(ref Vertex vert0, ref Vertex vert1, HashSet<UMSTriangle> tris)
         {
             int triangleCount = vert0.tcount;
             int startIndex = vert0.tstart;
@@ -1402,7 +1403,7 @@ namespace UnityMeshSimplifier
             for (int refIndex = startIndex; refIndex < (startIndex + triangleCount); refIndex++)
             {
                 int tid = refs[refIndex].tid;
-                Triangle tri = triangles[tid];
+                UMSTriangle tri = triangles[tid];
 
                 if (vertices[tri.v0].index == vert1.index ||
                     vertices[tri.v1].index == vert1.index ||
@@ -1514,7 +1515,7 @@ namespace UnityMeshSimplifier
                 int v1 = triangles[offset + 1];
                 int v2 = triangles[offset + 2];
                 int triangleIndex = triangleIndexStart + i;
-                trisArr[triangleIndex] = new Triangle(triangleIndex, v0, v1, v2, subMeshIndex);
+                trisArr[triangleIndex] = new UMSTriangle(triangleIndex, v0, v1, v2, subMeshIndex);
             }
         }
 
@@ -1554,7 +1555,7 @@ namespace UnityMeshSimplifier
                     int v1 = subMeshTriangles[offset + 1];
                     int v2 = subMeshTriangles[offset + 2];
                     int triangleIndex = triangleIndexStart + j;
-                    trisArr[triangleIndex] = new Triangle(triangleIndex, v0, v1, v2, subMeshIndex);
+                    trisArr[triangleIndex] = new UMSTriangle(triangleIndex, v0, v1, v2, subMeshIndex);
                 }
 
                 triangleIndexStart += subMeshTriangleCount;
