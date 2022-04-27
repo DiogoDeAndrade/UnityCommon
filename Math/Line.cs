@@ -40,6 +40,35 @@ public static class Line
         }
     }
 
+    public static bool Raycast(Vector3 origin, Vector3 dir, float range, Vector3 p0, Vector3 p1, out Vector3 intersection, out float t)
+    {
+        Vector3 da = dir * range;  // Unnormalized direction of the ray
+        Vector3 db = p1 - p0;
+        Vector3 dc = p0 - origin;
+
+        intersection = origin;
+        t = float.MaxValue;
+
+        if (Mathf.Abs(Vector3.Dot(dc, Vector3.Cross(da, db))) >= 0.01f) // Lines are not coplanar
+            return false;
+
+        float s = Vector3.Dot(Vector3.Cross(dc, db), Vector3.Cross(da, db)) / Vector3.Cross(da, db).sqrMagnitude;
+
+        if (s >= 0.0 && s <= 1.0)   // Means we have an intersection
+        {
+            intersection = origin + s * da;
+            t = s * range;
+
+            // See if this lies on the segment
+            if ((intersection - p0).sqrMagnitude + (intersection - p1).sqrMagnitude <= (p0 - p1).sqrMagnitude + 1e-3)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static float Distance(Vector3 p0, Vector3 p1, Vector3 p)
     {
         Vector3 ab = p1 - p0;
@@ -56,5 +85,13 @@ public static class Line
         }
 
         return Vector3.Cross(ab, av).magnitude / ab.magnitude;
+    }
+
+    public static Vector3 GetClosestPoint(Vector3 p0, Vector3 p1, Vector3 p)
+    {
+        Vector3 dp = (p1 - p0).normalized;
+        float   t = Vector3.Dot(dp, p - p0);
+
+        return p0 + dp * t;
     }
 }

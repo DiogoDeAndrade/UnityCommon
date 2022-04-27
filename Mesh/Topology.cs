@@ -34,13 +34,25 @@ public class Topology
         {
             return (i1 == index) || (i2 == index);
         }
+
+        public Vector3 GetNormal()
+        {
+            Vector3 ret = Vector3.zero;
+            foreach (var tri in triangles)
+            {
+                ret += tri.normal;
+            }
+
+            return ret / triangles.Count;
+        }
     }
 
     public class Triangle
     {
-        public int  id;
-        public int  v1, v2, v3;
-        public Edge e1, e2, e3;
+        public int      id;
+        public int      v1, v2, v3;
+        public Edge     e1, e2, e3;
+        public Vector3  normal;
     }
 
     public List<Vector3>    vertices;
@@ -79,6 +91,19 @@ public class Topology
                 nTriangles++;
             }
         }
+    }
+
+    public (Vector3, Vector3) GetEdge(int index)
+    {
+        var edge = edges[index];
+
+        return (vertices[edge.i1], vertices[edge.i2]);
+    }
+    public Vector3 GetEdgeNormal(int index)
+    {
+        var edge = edges[index];
+
+        return edge.GetNormal();
     }
 
     public Edge FindEdge(int i1, int i2)
@@ -324,12 +349,16 @@ public class Topology
 
                             initialVertex = nextVertex = e1.GetOtherVertex(e2);
 
-                            edgeLoop.Add(vertices[nextVertex]);
-                            edgeLoop.Add(vertices[sharedVertex]);
+                            Vector3 normal = e1.GetNormal();
+
+                            edgeLoop.Add(vertices[nextVertex], normal);
+                            edgeLoop.Add(vertices[sharedVertex], normal);
 
                             nextVertex = e2.GetOtherVertex(e1);
 
-                            edgeLoop.Add(vertices[nextVertex]);
+                            normal = e2.GetNormal();
+
+                            edgeLoop.Add(vertices[nextVertex], normal);
                             break;
                         }
                     }
@@ -347,7 +376,9 @@ public class Topology
                                 closed = true;
                                 break;
                             }
-                            edgeLoop.Add(vertices[nextVertex]);
+                            Vector3 normal = e2.GetNormal();
+
+                            edgeLoop.Add(vertices[nextVertex], normal);
                             
                             break;
                         }
@@ -496,6 +527,18 @@ public class Topology
             }
         }//*/
     }
+
+    public void ComputeTriangleNormals()
+    {
+        foreach (var tri in triangles)
+        {
+            var p0 = vertices[tri.v1];
+            var p1 = vertices[tri.v2];
+            var p2 = vertices[tri.v3];
+
+            tri.normal = Vector3.Cross(p1 - p0, p2 - p0).normalized;
+        }
+    }
 }
 
 [System.Serializable]
@@ -531,3 +574,4 @@ public class Boundary
         }
     }
 }
+

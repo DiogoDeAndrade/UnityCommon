@@ -6,7 +6,8 @@ using UnityEngine;
 public class Polyline
 {
     [SerializeField]
-    List<Vector3>    vertices;
+    List<Vector3>   vertices;
+    List<Vector3>   normals;
 
     public List<Vector3> GetVertices() => vertices;
 
@@ -15,6 +16,14 @@ public class Polyline
         if (vertices == null) vertices = new List<Vector3>();
 
         vertices.Add(vertex);
+    }
+    public void Add(Vector3 vertex, Vector3 normal)
+    {
+        if (vertices == null) vertices = new List<Vector3>();
+        if (normals == null) normals = new List<Vector3>();
+
+        vertices.Add(vertex);
+        normals.Add(normal);
     }
 
     public int Count
@@ -26,6 +35,11 @@ public class Polyline
     {
         get => vertices[idx];
         set => vertices[idx] = value;
+    }
+
+    public Vector3 GetNormal(int idx)
+    {
+        return normals[idx];
     }
         
     public void Simplify(float maxDistance)
@@ -46,6 +60,7 @@ public class Polyline
             if ((error + currentError ) <= maxDistance)
             {
                 vertices.RemoveAt(i1);
+                normals?.RemoveAt(i1);
                 currentError += error;
             }
             else
