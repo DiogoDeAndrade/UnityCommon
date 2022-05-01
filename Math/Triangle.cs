@@ -6,6 +6,10 @@ public class Triangle
 
     Vector3[] v;
 
+    public Triangle()
+    {
+        v = new Vector3[3] { Vector3.zero, Vector3.zero, Vector3.zero };
+    }
     public Triangle(Vector3 p1, Vector3 p2, Vector3 p3)
     {
         v = new Vector3[3] { p1, p2, p3 };
@@ -69,5 +73,12 @@ public class Triangle
         if (t > maxDist) return false;
 
         return true; // this ray hits the triangle 
+    }
+
+    public void DrawGizmo()
+    {
+        Gizmos.DrawLine(v[0], v[1]);
+        Gizmos.DrawLine(v[1], v[2]);
+        Gizmos.DrawLine(v[2], v[0]);
     }
 }

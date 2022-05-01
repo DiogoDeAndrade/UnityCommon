@@ -68,7 +68,7 @@ static class MeshExtensions
                 if (tri.Raycast(origin, dir, maxDist, out t))
                 {
                     submeshId = submesh;
-                    triHit = triIndex;
+                    triHit = triIndex / 3;
                     return true;
                 }
             }
@@ -104,7 +104,7 @@ static class MeshExtensions
                     if (out_t > t)
                     {
                         submeshId = submesh;
-                        triHit = triIndex;
+                        triHit = triIndex / 3;
                         out_t = t;
                     }
                 }
@@ -119,10 +119,34 @@ static class MeshExtensions
         var vertices = src.vertices;
         var triangles = src.GetTriangles(submeshIndex);
 
-        Triangle tri = new Triangle(vertices[triangles[triIndex]],
-                                    vertices[triangles[triIndex + 1]],
-                                    vertices[triangles[triIndex + 2]]);
+        Triangle tri = new Triangle(vertices[triangles[triIndex * 3]],
+                                    vertices[triangles[triIndex * 3 + 1]],
+                                    vertices[triangles[triIndex * 3 + 2]]);
 
         return tri;
+    }
+
+    public static MeshOctree GetOctree(this Mesh src, int levels = 4)
+    {
+        var vertices = src.vertices;
+        var bounds = src.bounds;
+        var ret = new MeshOctree(bounds.min, bounds.max, levels);
+        ret.sharedMesh = src;
+
+        for (int submeshIndex = 0; submeshIndex < src.subMeshCount; submeshIndex++)
+        {
+            var triangles = src.GetTriangles(submeshIndex);
+
+            for (int i = 0; i < triangles.Length; i+=3)
+            {
+                Triangle tri = new Triangle(vertices[triangles[i]],
+                                            vertices[triangles[i + 1]],
+                                            vertices[triangles[i + 2]]);
+
+                ret.AddTriangle(tri);
+            }
+        }
+
+        return ret;
     }
 }

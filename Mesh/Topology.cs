@@ -55,17 +55,19 @@ public class Topology
         public Vector3  normal;
     }
 
-    public List<Vector3>    vertices;
-    public int              nEdges;
-    public List<Edge>       edges;
-    public int              nTriangles;
-    public List<Triangle>   triangles;
+    public List<Vector3>                vertices;
+    public int                          nEdges;
+    public List<Edge>                   edges;
+    public Dictionary<(int, int), int>  edgesDictionary;
+    public int                          nTriangles;
+    public List<Triangle>               triangles;
 
     public Topology(Mesh mesh)
     {
         vertices = new List<Vector3>(mesh.vertices);
         triangles = new List<Triangle>();
         edges = new List<Edge>();
+        edgesDictionary = new Dictionary<(int, int), int>();
         nEdges = 0;
         nTriangles = 0;
 
@@ -99,6 +101,18 @@ public class Topology
 
         return (vertices[edge.i1], vertices[edge.i2]);
     }
+    public Edge GetEdgeStruct(int index)
+    {
+        var edge = edges[index];
+
+        return edge;
+    }
+    public (int, Vector3, int, Vector3) GetEdgeWithIndices(int index)
+    {
+        var edge = edges[index];
+
+        return (edge.i1, vertices[edge.i1], edge.i2, vertices[edge.i2]);
+    }
     public Vector3 GetEdgeNormal(int index)
     {
         var edge = edges[index];
@@ -108,29 +122,28 @@ public class Topology
 
     public Edge FindEdge(int i1, int i2)
     {
-        foreach (var edge in edges)
+        if (edgesDictionary.ContainsKey((i1, i2)))
         {
-            if (edge == null) continue;
-            if (((edge.i1 == i1) && (edge.i2 == i2)) ||
-                ((edge.i2 == i1) && (edge.i1 == i2)))
-            {
-                return edge;
-            }
+            return edges[edgesDictionary[(i1, i2)]];
+        }
+        if (edgesDictionary.ContainsKey((i2, i1)))
+        {
+            return edges[edgesDictionary[(i2, i1)]];
         }
 
         return null;
     }
     public Edge FindEdgeExcluding(int i1, int i2, Edge excludedEdge)
     {
-        foreach (var edge in edges)
+        if (edgesDictionary.ContainsKey((i1, i2)))
         {
-            if (edge == null) continue;
-            if (edge == excludedEdge) continue;
-            if (((edge.i1 == i1) && (edge.i2 == i2)) ||
-                ((edge.i2 == i1) && (edge.i1 == i2)))
-            {
-                return edge;
-            }
+            var edge = edges[edgesDictionary[(i1, i2)]];
+            if (excludedEdge != edge) return edge;
+        }
+        if (edgesDictionary.ContainsKey((i2, i1)))
+        {
+            var edge = edges[edgesDictionary[(i2, i1)]];
+            if (excludedEdge != edge) return edge;
         }
 
         return null;
@@ -143,6 +156,7 @@ public class Topology
         {
             edge = new Edge() { id = edges.Count, i1 = i1, i2 = i2, triangles = new List<Triangle>() };
             edges.Add(edge);
+            edgesDictionary.Add((i1, i2), edges.Count - 1);
 
             nEdges++;
         }
@@ -538,6 +552,60 @@ public class Topology
 
             tri.normal = Vector3.Cross(p1 - p0, p2 - p0).normalized;
         }
+    }
+
+    public delegate bool TriangleFilter(Triangle triangle);
+
+    public void FilterTriangles(TriangleFilter filter)
+    {
+        int triIndex = 0;
+        while (triIndex < nTriangles)
+        {
+            var triangle = triangles[triIndex];
+            
+            if (filter(triangle))
+            {
+                RemoveTriangle(triangle);
+            }
+            else
+            {
+                triIndex++;
+            }
+        }
+    }
+
+    void RemoveTriangle(Triangle triangle)
+    {
+        // Remove this triangle from edges
+        triangle.e1.triangles.Remove(triangle);
+        if (triangle.e1.triangles.Count == 0)
+        {
+            // Remove this edge
+            RemoveEdge(triangle.e1);
+        }
+        triangle.e2.triangles.Remove(triangle);
+        if (triangle.e2.triangles.Count == 0)
+        {
+            // Remove this edge
+            RemoveEdge(triangle.e2);
+        }
+        triangle.e3.triangles.Remove(triangle);
+        if (triangle.e3.triangles.Count == 0)
+        {
+            // Remove this edge
+            RemoveEdge(triangle.e3);
+        }
+        // Remove this triangle
+        triangles.Remove(triangle);
+        nTriangles--;
+    }
+
+    void RemoveEdge(Edge edge)
+    {
+        if (edgesDictionary.ContainsKey((edge.i1, edge.i2))) edgesDictionary.Remove((edge.i1, edge.i2));
+        if (edgesDictionary.ContainsKey((edge.i2, edge.i1))) edgesDictionary.Remove((edge.i2, edge.i1));
+        edges.Remove(edge);
+        nEdges--;
     }
 }
 

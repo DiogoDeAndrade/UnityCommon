@@ -32,4 +32,38 @@ public static class BoundsExtensions
 
         return localBounds;
     }
+
+    public static bool ContainsMinInclusive(this Bounds b, Vector3 p)
+    {
+        return ((b.min.x <= p.x) && (b.max.x > p.x) &&
+                (b.min.y <= p.y) && (b.max.y > p.y) &&
+                (b.min.z <= p.z) && (b.max.z > p.z));
+    }
+
+    public static bool IntersectTriangle(this Bounds b, Triangle triangle)
+    {
+        return AABB.Intersects(b.min, b.max, triangle.GetVertex(0), triangle.GetVertex(1), triangle.GetVertex(2));
+    }
+
+    public static void DrawGizmo(this Bounds b)
+    {
+        Vector3[] p = new Vector3[8];
+
+        for (int i = 0; i < 8; i++) p[i] = b.GetCorner(i);
+
+        Gizmos.DrawLine(p[0], p[1]);
+        Gizmos.DrawLine(p[1], p[3]);
+        Gizmos.DrawLine(p[3], p[2]);
+        Gizmos.DrawLine(p[2], p[0]);
+
+        Gizmos.DrawLine(p[4], p[5]);
+        Gizmos.DrawLine(p[5], p[7]);
+        Gizmos.DrawLine(p[7], p[6]);
+        Gizmos.DrawLine(p[6], p[4]);
+
+        Gizmos.DrawLine(p[0], p[4]);
+        Gizmos.DrawLine(p[1], p[5]);
+        Gizmos.DrawLine(p[2], p[6]);
+        Gizmos.DrawLine(p[3], p[7]);
+    }
 };

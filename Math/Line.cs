@@ -40,14 +40,14 @@ public static class Line
         }
     }
 
-    public static bool Raycast(Vector3 origin, Vector3 dir, float range, Vector3 p0, Vector3 p1, out Vector3 intersection, out float t)
+    public static bool Raycast(Vector3 origin, Vector3 dir, float range, Vector3 p0, Vector3 p1, out Vector3 intersection, out float tRay)
     {
         Vector3 da = dir * range;  // Unnormalized direction of the ray
         Vector3 db = p1 - p0;
         Vector3 dc = p0 - origin;
 
         intersection = origin;
-        t = float.MaxValue;
+        tRay = float.MaxValue;
 
         if (Mathf.Abs(Vector3.Dot(dc, Vector3.Cross(da, db))) >= 0.01f) // Lines are not coplanar
             return false;
@@ -57,10 +57,40 @@ public static class Line
         if (s >= 0.0 && s <= 1.0)   // Means we have an intersection
         {
             intersection = origin + s * da;
-            t = s * range;
+            tRay = s * range;
 
             // See if this lies on the segment
             if ((intersection - p0).sqrMagnitude + (intersection - p1).sqrMagnitude <= (p0 - p1).sqrMagnitude + 1e-3)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+    public static bool Raycast(Vector3 origin, Vector3 dir, float range, Vector3 p0, Vector3 p1, out Vector3 intersection, out float tRay, out float tLine)
+    {
+        Vector3 da = dir * range;  // Unnormalized direction of the ray
+        Vector3 db = p1 - p0;
+        Vector3 dc = p0 - origin;
+
+        intersection = origin;
+        tRay = float.MaxValue;
+        tLine = float.MaxValue;
+
+        if (Mathf.Abs(Vector3.Dot(dc, Vector3.Cross(da, db))) >= 0.01f) // Lines are not coplanar
+            return false;
+
+        float s = Vector3.Dot(Vector3.Cross(dc, db), Vector3.Cross(da, db)) / Vector3.Cross(da, db).sqrMagnitude;
+
+        if (s >= 0.0 && s <= 1.0)   // Means we have an intersection
+        {
+            intersection = origin + s * da;
+            tRay = s * range;
+
+            // See if this lies on the segment
+            tLine = Vector3.Dot(intersection - p0, db.normalized) / db.magnitude;
+            if ((tLine >= 0) && (tLine <= 1))
             {
                 return true;
             }
