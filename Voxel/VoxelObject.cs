@@ -9,46 +9,42 @@ public class VoxelObject : MonoBehaviour
     [Serializable]
     public enum MaterialMode { Single, Palette, Multi };
 
-    [SerializeField] Vector3Int             _gridSize = Vector3Int.zero;
-    [SerializeField] Vector3                _voxelSize = Vector3.one;
-    [SerializeField] Vector3                _offset = Vector3.zero;
-    [SerializeField] Vector3                _uvScale = Vector3.one;
-                     byte[]                 _data;
-                     Mesh                   _mesh;
-    [SerializeField] MaterialMode           _materialMode;
-    [SerializeField] Dictionary<int, int>   _voxelValueToMaterialId;
+    [SerializeField] private VoxelData              voxelData;
+                     private Mesh                   _mesh;
+    [SerializeField] private MaterialMode           _materialMode;
+    [SerializeField] private Dictionary<int, int>   _voxelValueToMaterialId;
 
     public Vector3Int gridSize
     {
-        get => _gridSize;
+        get => voxelData.gridSize;
         set
         {
-            if (_gridSize != value) _mesh = null;
+            if (voxelData.gridSize != value) _mesh = null;
 
-            _gridSize = value;
+            voxelData.gridSize = value;
         }
     }
 
     public Vector3 voxelSize
     {
-        get => _voxelSize;
+        get => voxelData.voxelSize;
         set
         {
-            if (_voxelSize != value) _mesh = null;
+            if (voxelData.voxelSize != value) _mesh = null;
 
-            _voxelSize = value;
+            voxelData.voxelSize = value;
         }
     }
 
     public byte[] data
     {
-        get => _data;
+        get => voxelData.data;
         set
         {
-            _data = value;
-            if (_data != null)
+            voxelData.data = value;
+            if (voxelData.data != null)
             {
-                if (_data.Length != _gridSize.x * _gridSize.y * _gridSize.z)
+                if (voxelData.data.Length != voxelData.gridSize.x * voxelData.gridSize.y * voxelData.gridSize.z)
                 {
                     Debug.LogWarning("Voxel grid size incompatible with provided data: set grid size first!");
                 }
@@ -59,24 +55,24 @@ public class VoxelObject : MonoBehaviour
 
     public Vector3 offset
     {
-        get => _offset;
+        get => voxelData.offset;
         set
         {
-            if (_offset != value) _mesh = null;
+            if (voxelData.offset != value) _mesh = null;
 
-            _offset = value;
+            voxelData.offset = value;
         }
     }
 
     public Vector3 uvScale
     {
-        get => _uvScale;
+        get => voxelData.uvScale;
         set
         {
-            if (_uvScale != value)
+            if (voxelData.uvScale != value)
             {
                 _mesh = null;
-                _uvScale = value;
+                voxelData.uvScale = value;
             }
         }
     }
@@ -101,14 +97,14 @@ public class VoxelObject : MonoBehaviour
 
     public void AllocateData()
     {
-        _data = new byte[_gridSize.x * _gridSize.y * _gridSize.z];
+        voxelData.data = new byte[voxelData.gridSize.x * voxelData.gridSize.y * voxelData.gridSize.z];
         _mesh = null;
     }
 
     public Mesh GetMesh()
     {
         if (_mesh) return _mesh;
-        if (_data == null) return null;
+        if (voxelData.data == null) return null;
 
         _voxelValueToMaterialId = new Dictionary<int, int>();
 
@@ -117,9 +113,9 @@ public class VoxelObject : MonoBehaviour
         if (_materialMode == MaterialMode.Multi)
         {
             // Count materials in use
-            for (int i = 0; i < _gridSize.x * _gridSize.y * _gridSize.z; i++)
+            for (int i = 0; i < voxelData.gridSize.x * voxelData.gridSize.y * voxelData.gridSize.z; i++)
             {
-                var tmp = _data[i];
+                var tmp = voxelData.data[i];
                 if (tmp > 0)
                 {
                     if (!voxelValueToMaterialId.ContainsKey(tmp))
@@ -141,29 +137,29 @@ public class VoxelObject : MonoBehaviour
 
         int     index = 0;
         Vector3 center = Vector3.zero;
-        Vector3 half_size = _voxelSize * 0.5f;
+        Vector3 half_size = voxelData.voxelSize * 0.5f;
         Vector3 p1, p2, p3, p4, n;
         Vector2 uv1, uv2, uv3, uv4;
         int     incX = 1;
-        int     incY = _gridSize.x;
-        int     incZ = _gridSize.x * _gridSize.y;
-        Vector3 o = _offset + _voxelSize * 0.5f;
+        int     incY = voxelData.gridSize.x;
+        int     incZ = voxelData.gridSize.x * voxelData.gridSize.y;
+        Vector3 o = voxelData.offset + voxelData.voxelSize * 0.5f;
         byte    value;
         float   uvPaletteScale = 1.0f / 16.0f;
         float   uvPaletteOffset = 0.5f / 16.0f;
 
         uv1 = uv2 = uv3 = uv4 = Vector2.zero;
 
-        for (int z = 0; z < _gridSize.z; z++)
+        for (int z = 0; z < voxelData.gridSize.z; z++)
         {
-            center.z = o.z + z * _voxelSize.z;
-            for (int y = 0; y < _gridSize.y; y++)
+            center.z = o.z + z * voxelData.voxelSize.z;
+            for (int y = 0; y < voxelData.gridSize.y; y++)
             {
-                center.y = o.y + y * _voxelSize.y;
-                for (int x = 0; x < _gridSize.x; x++)
+                center.y = o.y + y * voxelData.voxelSize.y;
+                for (int x = 0; x < voxelData.gridSize.x; x++)
                 {
-                    center.x = o.x + x * _voxelSize.x;
-                    value = _data[index];
+                    center.x = o.x + x * voxelData.voxelSize.x;
+                    value = voxelData.data[index];
                     if (value > 0)
                     {
                         List<int> targetIndices = null;
@@ -184,7 +180,7 @@ public class VoxelObject : MonoBehaviour
                         }
                         // Add the 6 quads that compose the cube
                         // -Z
-                        if ((z == 0) || (_data[index - incZ] == 0))
+                        if ((z == 0) || (voxelData.data[index - incZ] == 0))
                         {
                             p1 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
                             p2 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
@@ -201,7 +197,7 @@ public class VoxelObject : MonoBehaviour
                             GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
                         }
                         // +X
-                        if ((x == _gridSize.x - 1) || (_data[index + incX] == 0))
+                        if ((x == voxelData.gridSize.x - 1) || (voxelData.data[index + incX] == 0))
                         {
                             p1 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
                             p2 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
@@ -218,7 +214,7 @@ public class VoxelObject : MonoBehaviour
                             GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
                         }
                         // +Z
-                        if ((z == _gridSize.z - 1) || (_data[index + incZ] == 0))
+                        if ((z == voxelData.gridSize.z - 1) || (voxelData.data[index + incZ] == 0))
                         {
                             p1 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
                             p2 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
@@ -235,7 +231,7 @@ public class VoxelObject : MonoBehaviour
                             GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
                         }
                         // -X
-                        if ((x == 0) || (_data[index - incX] == 0))
+                        if ((x == 0) || (voxelData.data[index - incX] == 0))
                         {
                             p1 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
                             p2 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
@@ -252,7 +248,7 @@ public class VoxelObject : MonoBehaviour
                             GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
                         }
                         // +Y
-                        if ((y == _gridSize.y - 1) || (_data[index + incY] == 0))
+                        if ((y == voxelData.gridSize.y - 1) || (voxelData.data[index + incY] == 0))
                         {
                             p1 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
                             p2 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
@@ -269,7 +265,7 @@ public class VoxelObject : MonoBehaviour
                             GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
                         }
                         // -Y
-                        if ((y == 0) || (_data[index - incY] == 0))
+                        if ((y == 0) || (voxelData.data[index - incY] == 0))
                         {
                             p1 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
                             p2 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
@@ -324,12 +320,18 @@ public class VoxelObject : MonoBehaviour
 
     public void Set(int x, int y, int z, byte val)
     {
-        _data[x + (y * _gridSize.x) + (z * _gridSize.x * _gridSize.y)] = val;
+        voxelData.data[x + (y * voxelData.gridSize.x) + (z * voxelData.gridSize.x * voxelData.gridSize.y)] = val;
+    }
+
+    public void Set(VoxelData data)
+    {
+        voxelData = data;
+        _mesh = null;
     }
 
     public byte Get(int x, int y, int z)
     {
-        return _data[x + (y * _gridSize.x) + (z * _gridSize.x * _gridSize.y)];
+        return voxelData.data[x + (y * voxelData.gridSize.x) + (z * voxelData.gridSize.x * voxelData.gridSize.y)];
     }
 
     public int GetMaterialId(int value)
@@ -350,5 +352,14 @@ public class VoxelObject : MonoBehaviour
         Vector3 aabb_max = aabb_min + voxelSize.x * transform.right + voxelSize.y * transform.up + voxelSize.z * transform.forward;
 
         return (aabb_min, aabb_max);
+    }
+
+    public void UpdateMesh()
+    {
+        var meshFilter = GetComponent<MeshFilter>();
+        if (meshFilter != null)
+        {
+            meshFilter.sharedMesh = GetMesh();
+        }
     }
 }
