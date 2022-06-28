@@ -3,11 +3,15 @@
 This is just a collection of scripts, assets, plugins, etc, that I use on my projects.
 This is very dynamic and can/will change in the future
 
+## Requirements
+
+UnityCommon now requires the following packages installed
+* [NaughtyAttributes] by Denis Rizov available through the [MIT] license: https://github.com/dbrizov/NaughtyAttributes.git#upm
+* [UnityUIExtensions] by Simon Jackson available through the [BSD3] license: https://bitbucket.org/UnityUIExtensions/unity-ui-extensions.git
+
 ## Credits
 
 * Code (except noted) by Diogo de Andrade
-* [NaughtyAttributes] by Denis Rizov (not a fork because I want to be able to use this easily as a submodule)
-* [UnityUIExtensions] available through the [BSD3] license.
 * [UnityMeshSimplifier] available through the [MIT] license.
 
 ## Licenses
