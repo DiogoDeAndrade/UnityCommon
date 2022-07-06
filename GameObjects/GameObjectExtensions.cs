@@ -1,6 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public static class GameObjectExtensions
 {
@@ -37,6 +40,37 @@ public static class GameObjectExtensions
         }
     }
 
+    public static GameObject FindByInstanceID(this GameObject go, int instanceID)
+    {
+        // Get all subobjects
+        var allTransforms = go.GetComponentsInChildren<Transform>();
+        foreach (var transform in allTransforms)
+        {
+            if (transform.gameObject.GetInstanceID() == instanceID)
+            {
+                return transform.gameObject;
+            }
+        }
+
+        return null;
+    }
+
+    public static GameObject FindByName(this GameObject go, string name)
+    {
+        // Get all subobjects
+        var allTransforms = go.GetComponentsInChildren<Transform>();
+        foreach (var transform in allTransforms)
+        {
+            if (transform.gameObject.name == name)
+            {
+                return transform.gameObject;
+            }
+        }
+
+        return null;
+    }
+
+    [System.Obsolete]
     public static void Delete(this GameObject go)
     {
         if (Application.isPlaying)
@@ -45,6 +79,32 @@ public static class GameObjectExtensions
         }
         else
         {
+#if UNITY_EDITOR
+            // Check if this is part of a prefab
+            if (PrefabUtility.IsPartOfPrefabInstance(go))
+            {
+                var prefab = PrefabUtility.GetCorrespondingObjectFromSource(go);
+                string  assetPath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(prefab);
+
+                if (assetPath == "")
+                {
+                    Debug.LogWarning("Can't delete object, can't find asset path!");
+                    return;
+                }
+
+                // Load the contents of the Prefab Asset.
+                GameObject contentsRoot = PrefabUtility.LoadPrefabContents(assetPath);
+
+                // Modify Prefab contents.
+                GameObject objectToDelete = contentsRoot.FindByName(go.name);
+                GameObject.DestroyImmediate(objectToDelete);
+
+                // Save contents back to Prefab Asset and unload contents.
+                PrefabUtility.SaveAsPrefabAsset(contentsRoot, assetPath);
+                PrefabUtility.UnloadPrefabContents(contentsRoot);
+                return;
+            }            
+#endif
             GameObject.DestroyImmediate(go);
         }
     }
