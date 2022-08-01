@@ -128,9 +128,28 @@ static class MeshExtensions
 
     public static MeshOctree GetOctree(this Mesh src, int levels = 4)
     {
+        return src.GetOctree(Matrix4x4.identity, levels);
+    }
+
+    public static MeshOctree GetOctree(this Mesh src, Matrix4x4 matrix, int levels = 4)
+    {
         var vertices = src.vertices;
-        var bounds = src.bounds;
-        var ret = new MeshOctree(bounds.min, bounds.max, levels);
+
+        // Transform vertices
+        for (int i = 0; i < src.vertices.Length; i++)
+        {
+            vertices[i] = matrix * new Vector4(vertices[i].x, vertices[i].y, vertices[i].z, 1);
+        }
+
+        var     bounds = src.bounds;
+        Vector3 min = matrix * new Vector4(bounds.min.x, bounds.min.y, bounds.min.z, 1);
+        Vector3 max = matrix * new Vector4(bounds.max.x, bounds.max.y, bounds.max.z, 1);
+
+        if (min.x > max.x) (min.x, max.x) = (max.x, min.x);
+        if (min.y > max.y) (min.y, max.y) = (max.y, min.y);
+        if (min.z > max.z) (min.z, max.z) = (max.z, min.z);
+
+        var ret = new MeshOctree(min, max, levels);
         ret.sharedMesh = src;
 
         for (int submeshIndex = 0; submeshIndex < src.subMeshCount; submeshIndex++)

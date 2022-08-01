@@ -62,9 +62,17 @@ public class Topology
     public int                          nTriangles;
     public List<Triangle>               triangles;
 
-    public Topology(Mesh mesh)
+    public Topology(Mesh mesh, Matrix4x4 matrix)
     {
-        vertices = new List<Vector3>(mesh.vertices);
+        var verts = mesh.vertices;
+
+        // Transform vertices
+        for (int i = 0; i < verts.Length; i++)
+        {
+            verts[i] = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
+        }
+
+        vertices = new List<Vector3>(verts);
         triangles = new List<Triangle>();
         edges = new List<Edge>();
         edgesDictionary = new Dictionary<(int, int), int>();
