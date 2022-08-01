@@ -94,7 +94,7 @@ public class VoxelNavMesh
             else if (method == TriangulationMesh.EarClipping)
             {
                 // Get boundary and build triangulation from there
-                var topology = new Topology(mesh);
+                var topology = new Topology(mesh, Matrix4x4.identity);
                 var boundary = topology.GetBoundary();
 
                 Debug.LogError("Ear clipping simplification not implemented!");

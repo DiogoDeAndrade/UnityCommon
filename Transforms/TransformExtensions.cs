@@ -14,4 +14,9 @@ public static class TransformExtensions
 
         return t.position;
     }
+
+    public static Matrix4x4 GetLocalMatrix(this Transform t)
+    {
+        return Matrix4x4.TRS(t.localPosition, t.localRotation, t.localScale);
+    }
 }

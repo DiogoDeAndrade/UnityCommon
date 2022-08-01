@@ -409,7 +409,7 @@ public static class MeshTools
 
         //System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
         //var t0 = stopwatch.ElapsedMilliseconds;
-        var topology = new Topology(sourceMesh);
+        var topology = new Topology(sourceMesh, Matrix4x4.identity);
         //Debug.Log("Get topology = " + (stopwatch.ElapsedMilliseconds - t0));
 
         //long    accumCollapse = 0;
