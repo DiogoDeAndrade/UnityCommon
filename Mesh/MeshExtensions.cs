@@ -114,6 +114,46 @@ static class MeshExtensions
         return (out_t != float.MaxValue);
     }
 
+    public struct RaycastHit
+    {
+        public int     submeshIndex;
+        public int     triIndex;
+        public float   t;
+    }
+
+    public static RaycastHit[] RaycastAll(this Mesh src, Vector3 origin, Vector3 dir, float maxDist)
+    {
+        List<RaycastHit>    hits = null;
+        float               t;
+        var                 vertices = src.vertices;
+
+        for (int submesh = 0; submesh < src.subMeshCount; submesh++)
+        {
+            var triangles = src.GetTriangles(submesh);
+
+            for (int triIndex = 0; triIndex < triangles.Length; triIndex += 3)
+            {
+                Triangle tri = new Triangle(vertices[triangles[triIndex]],
+                                            vertices[triangles[triIndex + 1]],
+                                            vertices[triangles[triIndex + 2]]);
+
+                if (tri.Raycast(origin, dir, maxDist, out t))
+                {
+                    RaycastHit ri = new RaycastHit
+                    {
+                        submeshIndex = submesh,
+                        triIndex = triIndex / 3,
+                        t = t
+                    };
+                    if (hits == null) hits = new List<RaycastHit>();
+                    hits.Add(ri);
+                }
+            }
+        }
+
+        return hits?.ToArray();
+    }
+
     public static Triangle GetTriangle(this Mesh src, int submeshIndex, int triIndex)
     {
         var vertices = src.vertices;

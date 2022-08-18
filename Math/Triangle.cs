@@ -15,6 +15,12 @@ public class Triangle
         v = new Vector3[3] { p1, p2, p3 };
     }
 
+    public float area => 0.5f * Mathf.Sqrt(Mathf.Pow(((v[1].x * v[0].y) - (v[2].x * v[0].y) - (v[0].x * v[1].y) + (v[2].x * v[1].y) + (v[0].x * v[2].y) - (v[1].x * v[2].y)), 2.0f) +
+                                           Mathf.Pow(((v[1].x * v[0].z) - (v[2].x * v[0].z) - (v[0].x * v[1].z) + (v[2].x * v[1].z) + (v[0].x * v[2].z) - (v[1].x * v[2].z)), 2.0f) +
+                                           Mathf.Pow(((v[1].y * v[0].z) - (v[2].y * v[0].z) - (v[0].y * v[1].z) + (v[2].y * v[1].z) + (v[0].y * v[2].z) - (v[1].y * v[2].z)), 2.0f));
+
+    public static Triangle operator*(Triangle src, Matrix4x4 matrix) => new Triangle(matrix * src.v[0].xyz1(), matrix * src.v[1].xyz1(), matrix * src.v[2].xyz1());
+
     public Vector3 GetVertex(int index)
     {
         return v[index];        
