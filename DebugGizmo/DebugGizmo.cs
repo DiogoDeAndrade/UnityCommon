@@ -286,7 +286,6 @@ public class DebugGizmo : MonoBehaviour
 
                     if ((meshDebugMode != InteractionMode.None) && (!Application.isPlaying) && (e.button == 0) && (e.isMouse))
                     {
-                        // Raycast this mesh
                         var mp = Event.current.mousePosition;
                         mp.y = UnityEditor.SceneView.lastActiveSceneView.camera.pixelHeight - mp.y;
                         Ray ray = UnityEditor.SceneView.lastActiveSceneView.camera.ScreenPointToRay(mp);
@@ -295,6 +294,7 @@ public class DebugGizmo : MonoBehaviour
                         DebugMesh dm = obj as DebugMesh;
                         if ((meshDebugMode == InteractionMode.Triangle) && (dm != null))
                         {
+                            // Raycast this mesh
                             var invMatrix = dm.matrix.inverse;
 
                             ray.origin = invMatrix * new Vector4(ray.origin.x, ray.origin.y, ray.origin.z, 1);

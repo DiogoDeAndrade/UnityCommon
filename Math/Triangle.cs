@@ -26,6 +26,8 @@ public class Triangle
         return v[index];        
     }
 
+    public Vector3 normal => Vector3.Cross(v[1] - v[0], v[2] - v[0]).normalized;
+
     public bool Raycast(Vector3 origin, Vector3 dir, float maxDist, out float t)
     {
         // compute plane's normal
