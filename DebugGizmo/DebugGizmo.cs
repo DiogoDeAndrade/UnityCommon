@@ -210,11 +210,34 @@ public class DebugGizmo : MonoBehaviour
     {
         if (instance == null) return;
         instance.AddObject(new DebugLine()
-                           {
-                               identifier = identifier,
-                               p1 = p1, p2 = p2, 
-                               color = color
-                           });
+        {
+            identifier = identifier,
+            p1 = p1,
+            p2 = p2,
+            color = color
+        });
+    }
+
+    public static void AddTriangle(string identifier, Triangle triangle, Color color)
+    {
+        if (instance == null) return;
+        instance.AddObject(new DebugWireTriangle()
+        {
+            identifier = identifier,
+            triangle = triangle,
+            color = color
+        });
+    }
+
+    public static void AddTriangle(string identifier, Triangle triangle, Color color, Matrix4x4 matrix)
+    {
+        if (instance == null) return;
+        instance.AddObject(new DebugWireTriangle()
+        {
+            identifier = identifier,
+            triangle = triangle * matrix,
+            color = color
+        });
     }
 
     public static void AddLine(string identifier, Vector3 p1, Vector3 p2, Color color, Matrix4x4 matrix)

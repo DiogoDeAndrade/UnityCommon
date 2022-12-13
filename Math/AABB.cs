@@ -10,7 +10,7 @@ public static class AABB
         float p0, p1, p2, r;
 
         Vector3 center = (aabb_min + aabb_max) * 0.5f;
-        Vector3 extents = aabb_max - center;
+        Vector3 extents = aabb_max - center + new Vector3(1e-3f, 1e-3f, 1e-3f);
 
         Vector3 v0 = tri_p1 - center,
                 v1 = tri_p2 - center,
@@ -152,7 +152,7 @@ public static class AABB
     public static bool Intersects(Vector3 aabb_min, Vector3 aabb_max, Vector3 plane_normal, float plane_dist)
     {
         Vector3 center = (aabb_min + aabb_max) * 0.5f,
-                extents = aabb_max - center;
+                extents = aabb_max - center + new Vector3(1e-3f, 1e-3f, 1e-3f);
 
         var r = extents.x * Mathf.Abs(plane_normal.x) + extents.y * Mathf.Abs(plane_normal.y) + extents.z * Mathf.Abs(plane_normal.z);
         var s = Vector3.Dot(plane_normal, center) - plane_dist;

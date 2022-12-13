@@ -12,29 +12,65 @@ public class MeshOctree : Octree<Triangle>
 
     public void AddTriangle(Triangle triangle)
     {
-        AddTriangle(rootNode, triangle);
+        if (!AddTriangle(rootNode, triangle))
+        {
+            Debug.LogError("Can't bin triangle in octree!");
+        }
     }
 
-    void AddTriangle(Node node, Triangle triangle)
+    bool AddTriangle(Node node, Triangle triangle)
     {
         if (node.bounds.IntersectTriangle(triangle))
         {
             if (node.isLeaf)
             {
                 node.objects.Add(triangle);
+                return true;
             }
             else
             {
+                bool b = false;
                 for (int i = 0; i < node.children.Length; i++)
                 {
-                    AddTriangle(node.children[i], triangle);
+                    b |= AddTriangle(node.children[i], triangle);
                 }
+                return b;
             }
         }
+        else
+        {
+            // SANITY CHECK
+            /*var p0 = triangle.GetVertex(0);
+            var p1 = triangle.GetVertex(1);
+            var p2 = triangle.GetVertex(2);
+
+            var m0 = node.bounds.min;
+            var m1 = node.bounds.max;
+
+            if (((p0.x >= m0.x) && (p0.x <= m1.x) && (p0.y >= m0.y) && (p0.y <= m1.y) && (p0.z >= m0.z) && (p0.z <= m1.z)) ||
+                ((p1.x >= m0.x) && (p1.x <= m1.x) && (p1.y >= m0.y) && (p1.y <= m1.y) && (p1.z >= m0.z) && (p1.z <= m1.z)) ||
+                ((p2.x >= m0.x) && (p2.x <= m1.x) && (p2.y >= m0.y) && (p2.y <= m1.y) && (p2.z >= m0.z) && (p2.z <= m1.z)))
+            {
+                int a = 10;
+                a++;
+
+                bool b = node.bounds.IntersectTriangle(triangle);
+            }*/
+        }
+        return false;
     }
+
+    //public bool         addGizmo = false;
+    //public Matrix4x4    gizmoTransform;
 
     public bool Raycast(Vector3 origin, Vector3 dir, float maxDist, ref Triangle triangle, ref float t)
     {
+        /*if (addGizmo)
+        {
+            DebugGizmo.AddSphere("Type=Raycast", origin, 0.05f, Color.magenta, gizmoTransform);
+            DebugGizmo.AddLine("Type=Raycast", origin, origin + dir * maxDist, Color.magenta, gizmoTransform);
+        }*/
+
         t = float.MaxValue;
         return Raycast(rootNode, origin, dir, maxDist, ref triangle, ref t);
     }
@@ -55,14 +91,26 @@ public class MeshOctree : Octree<Triangle>
             {
                 foreach (var tri in node.objects)
                 {
+                    if (tri.normal.y > 0)
+                    {
+                        int a = 10;
+                        a++;
+                    }
+
                     if (tri.Raycast(origin, dir, maxDist, out d))
                     {
+                        //if ((addGizmo) && (tri.normal.y > 0)) DebugGizmo.AddTriangle("Type=Raycast", tri, Color.green, gizmoTransform);
+
                         if (d < t)
                         {
                             ret = true;
                             triangle = tri;
                             t = d;
                         }
+                    }
+                    else
+                    {
+                        //if ((addGizmo) && (tri.normal.y > 0)) DebugGizmo.AddTriangle("Type=Raycast", tri, Color.red, gizmoTransform);
                     }
                 }
             }
