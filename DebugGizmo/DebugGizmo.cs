@@ -279,8 +279,6 @@ public class DebugGizmo : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        bool hasMesh = false;
-
         if (debugObjects != null)
         {
             Event e = Event.current;

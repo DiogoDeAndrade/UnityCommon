@@ -70,7 +70,6 @@ public static class GameObjectExtensions
         return null;
     }
 
-    [System.Obsolete]
     public static void Delete(this GameObject go)
     {
         if (Application.isPlaying)
