@@ -43,7 +43,7 @@ public class Topology
                 ret += tri.normal;
             }
 
-            return ret / triangles.Count;
+            return (ret / triangles.Count).normalized;
         }
     }
 
@@ -62,17 +62,39 @@ public class Topology
     public int                          nTriangles;
     public List<Triangle>               triangles;
 
-    public Topology(Mesh mesh, Matrix4x4 matrix)
+    public Topology(Mesh mesh, Matrix4x4 matrix, float epsilon = 1e-3f)
     {
         var verts = mesh.vertices;
 
-        // Transform vertices
+        vertices = new List<Vector3>();
+        
+        List<int> vertexMatch = new List<int>();
+
+        // Transform vertices and weld mesh
         for (int i = 0; i < verts.Length; i++)
         {
-            verts[i] = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
+            Vector3 tvertex = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
+            int     matchIndex = -1;
+
+            for (int j = 0; j < vertices.Count; j++)
+            {
+                if (Vector3.Distance(tvertex, vertices[j]) < epsilon)
+                {
+                    matchIndex = j;
+                    break;
+                }
+            }
+            if (matchIndex != -1)
+            {
+                vertexMatch.Add(matchIndex);
+            }
+            else
+            {
+                vertices.Add(tvertex);
+                vertexMatch.Add(vertices.Count - 1);
+            }
         }
 
-        vertices = new List<Vector3>(verts);
         triangles = new List<Triangle>();
         edges = new List<Edge>();
         edgesDictionary = new Dictionary<(int, int), int>();
@@ -86,9 +108,9 @@ public class Topology
             {
                 Triangle tri = new Triangle();
                 tri.id = triangles.Count;
-                tri.v1 = indices[i];
-                tri.v2 = indices[i + 1];
-                tri.v3 = indices[i + 2];
+                tri.v1 = vertexMatch[indices[i]];
+                tri.v2 = vertexMatch[indices[i + 1]];
+                tri.v3 = vertexMatch[indices[i + 2]];
                 tri.e1 = FindOrAddEdge(tri.v1, tri.v2);
                 tri.e2 = FindOrAddEdge(tri.v2, tri.v3);
                 tri.e3 = FindOrAddEdge(tri.v3, tri.v1);

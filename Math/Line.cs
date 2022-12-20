@@ -120,7 +120,8 @@ public static class Line
     public static Vector3 GetClosestPoint(Vector3 p0, Vector3 p1, Vector3 p)
     {
         Vector3 dp = (p1 - p0).normalized;
-        float   t = Vector3.Dot(dp, p - p0);
+        float   len = (p1 - p0).magnitude;
+        float t = Mathf.Clamp(Vector3.Dot(dp, p - p0), 0, len);
 
         return p0 + dp * t;
     }
