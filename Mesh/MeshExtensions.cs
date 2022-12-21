@@ -1,28 +1,54 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityMeshSimplifier.Internal;
 
 static class MeshExtensions
 {
     public static Mesh Clone(this Mesh src)
     {
         Mesh ret = new Mesh();
+        ret.name = src.name + "(Clone)";
 
         ret.vertices = src.vertices;
         ret.normals = src.normals;
-        ret.uv = src.uv;
-        ret.uv2 = src.uv2;
-        ret.uv3 = src.uv3;
-        ret.uv4 = src.uv4;
-        ret.uv5 = src.uv5;
-        ret.uv6 = src.uv6;
-        ret.uv7 = src.uv7;
-        ret.uv8 = src.uv8;
+
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord0, 0);
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord1, 1);
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord2, 2);
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord3, 3);
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord4, 4);
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord5, 5);
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord6, 6);
+        ret.CopyUVFrom(src, UnityEngine.Rendering.VertexAttribute.TexCoord7, 7);
         ret.colors = src.colors;
         ret.tangents = src.tangents;
         ret.boneWeights = src.boneWeights;
         ret.triangles = src.triangles;
 
         return ret;
+    }
+
+    public static void CopyUVFrom(this Mesh dest, Mesh src, UnityEngine.Rendering.VertexAttribute attr, int index)
+    {
+        var dim = src.GetVertexAttributeDimension(attr);
+        if (dim == 2)
+        {
+            List<Vector2> uvs = new List<Vector2>();
+            src.GetUVs(index, uvs);
+            dest.SetUVs(index, uvs);
+        }
+        else if (dim == 3)
+        {
+            List<Vector3> uvs = new List<Vector3>();
+            src.GetUVs(index, uvs);
+            dest.SetUVs(index, uvs);
+        }
+        else if (dim == 4)
+        {
+            List<Vector4> uvs = new List<Vector4>();
+            src.GetUVs(index, uvs);
+            dest.SetUVs(index, uvs);
+        }
     }
 
     public static bool Raycast(this Mesh src, Vector3 origin, Vector3 dir, float maxDist)
@@ -205,6 +231,20 @@ static class MeshExtensions
                 ret.AddTriangle(tri);
             }
         }
+
+        return ret;
+    }
+
+
+    public static Mesh BakeTransform(this Mesh srcMesh, Matrix4x4 srcMeshMatrix)
+    {
+        Mesh ret = srcMesh.Clone();
+
+        ret.SetVertices(srcMeshMatrix.TransformPositions(srcMesh.vertices));
+        if (srcMesh.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.Normal)) ret.SetNormals(srcMeshMatrix.TransformDirection(srcMesh.normals));
+        if (srcMesh.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.Tangent)) ret.SetTangents(srcMeshMatrix.TransformTangents(srcMesh.tangents));
+
+        ret.RecalculateBounds();
 
         return ret;
     }

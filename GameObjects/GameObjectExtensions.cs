@@ -107,6 +107,34 @@ public static class GameObjectExtensions
             GameObject.DestroyImmediate(go);
         }
     }
-}
 
-    
+    public static GameObject FindObjectInLayer(this GameObject go, int layer)
+    {
+        var objects = go.FindObjectsInLayer(layer);
+
+        if (objects.Count == 0) return null;
+
+        return objects[0];
+        
+    }
+
+    public static List<GameObject> FindObjectsInLayer(this GameObject go, int layer)
+    {
+        List<GameObject> ret = new List<GameObject>();
+
+        for (int i = 0; i < go.transform.childCount; i++)
+        {
+            var child = go.transform.GetChild(i);
+            if (child == null) continue;
+
+            if (child.gameObject.layer == layer)
+            {
+                ret.Add(child.gameObject);
+            }
+
+            ret.AddRange(child.gameObject.FindObjectsInLayer(layer));
+        }
+
+        return ret;
+    }
+}
