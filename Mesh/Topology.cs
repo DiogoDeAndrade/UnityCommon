@@ -228,7 +228,7 @@ public class Topology
 
                 // Check if this edge intersects the other one
                 Vector3 intersection;
-                if (Line.Intersect(p1, p2, p3, p4, out intersection))
+                if (Line.Intersect2d(p1, p2, p3, p4, out intersection))
                 {
                     return true;
                 }

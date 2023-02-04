@@ -8,5 +8,10 @@ public static class ColorExtensions
     {
         return new Color(c.r, c.g, c.b, a);
     }
+
+    public static Color Clamp(this Color c)
+    {
+        return new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), Mathf.Clamp01(c.a));
+    }
 };
 
