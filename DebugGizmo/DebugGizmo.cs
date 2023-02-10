@@ -424,4 +424,6 @@ public class DebugGizmo : MonoBehaviour
             }
         }
     }
+#endif
+
 }

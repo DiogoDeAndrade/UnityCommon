@@ -190,6 +190,149 @@ public static class MeshTools
         mesh.SetTangents(tangents);
     }
 
+    public static void ComputeNormalsAndTangentSpaceWelded(Mesh mesh, bool area_weight, float tolerance = 0.001f)
+    {
+        var indices = mesh.GetTriangles(0);
+        var originalVertices = mesh.vertices;
+        var uv = mesh.uv;
+
+        var mapping = new Dictionary<int, int>();
+        var weldedVertices = new List<Vector3>();
+
+        for (int i = 0; i < originalVertices.Length; i++)
+        {
+            int idx = -1;
+            for (int j = 0; j < weldedVertices.Count; j++)
+            {
+                if (Vector3.Distance(originalVertices[i], weldedVertices[j]) < tolerance)
+                {
+                    idx = mapping[i] = j;
+                    break;
+                }
+            }
+            if (idx == -1)
+            {
+                weldedVertices.Add(originalVertices[i]);
+                mapping[i] = weldedVertices.Count - 1;
+            }
+        }
+
+
+        List<Vector3> triangle_normals = new List<Vector3>();
+        List<Vector3> triangle_tangents = new List<Vector3>();
+        List<Vector3> triangle_binormals = new List<Vector3>();
+        List<float> triangle_areas = new List<float>();
+        List<List<int>> triangles_per_vertex = new List<List<int>>();
+        for (int i = 0; i < weldedVertices.Count; i++) triangles_per_vertex.Add(new List<int>());
+
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            int i0, i1, i2;
+            i0 = indices[i];
+            i1 = indices[i + 1];
+            i2 = indices[i + 2];
+
+            Vector3 v0, v1, v2;
+            Vector2 uv0, uv1, uv2;
+            v0 = originalVertices[i0]; uv0 = uv[i0];
+            v1 = originalVertices[i1]; uv1 = uv[i1];
+            v2 = originalVertices[i2]; uv2 = uv[i2];
+
+            var side0 = v0 - v1;
+            var side1 = v2 - v1;
+
+            // Normal and triangle area
+            Vector3 normal = Vector3.Cross(side1, side0);
+            triangle_areas.Add(normal.magnitude * 0.5f);
+            normal = normal.normalized;
+            triangle_normals.Add(normal);
+
+            // Tangent space
+            Vector2 delta0 = uv0 - uv1;
+            Vector2 delta1 = uv2 - uv1;
+
+            Vector3 tangent = (delta1.y * side0 - delta0.y * side1).normalized;
+            Vector3 binormal = (delta1.x * side0 - delta0.x * side1).normalized;
+
+            var tangent_cross = Vector3.Cross(tangent, binormal);
+            if (Vector3.Dot(tangent_cross, normal) < 0.0f)
+            {
+                tangent = -tangent;
+                binormal = -binormal;
+            }
+
+            triangle_binormals.Add(binormal);
+            triangle_tangents.Add(tangent);
+
+            triangles_per_vertex[mapping[i0]].Add((int)i / 3);
+            triangles_per_vertex[mapping[i1]].Add((int)i / 3);
+            triangles_per_vertex[mapping[i2]].Add((int)i / 3);
+        }
+
+        List<Vector3> weldedNormals = new List<Vector3>();
+        List<Vector4> weldedTangents = new List<Vector4>();
+        for (int i = 0; i < originalVertices.Length; i++)
+        {
+            weldedNormals.Add(Vector3.zero);
+            weldedTangents.Add(Vector3.zero);
+        }
+
+        if (area_weight)
+        {
+            for (int i = 0; i < weldedVertices.Count; i++)
+            {
+                Vector3 normal = Vector3.zero;
+                Vector3 tangent = Vector3.zero;
+                Vector3 binormal = Vector3.zero;
+                float Length = 0.0f;
+
+                foreach (var index in triangles_per_vertex[i])
+                {
+                    normal += triangle_normals[index] * triangle_areas[index];
+                    tangent += triangle_tangents[index] * triangle_areas[index];
+                    binormal += triangle_binormals[index] * triangle_areas[index];
+                    Length += triangle_areas[index];
+                }
+
+                weldedNormals[i] = normal.normalized;
+                weldedTangents[i] = tangent.normalized;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < weldedVertices.Count; i++)
+            {
+                Vector3 normal = Vector3.zero;
+                Vector3 tangent = Vector3.zero;
+                Vector3 binormal = Vector3.zero;
+                float Length = 0.0f;
+
+                foreach (var index in triangles_per_vertex[i])
+                {
+                    normal += triangle_normals[index];
+                    tangent += triangle_tangents[index];
+                    binormal += triangle_binormals[index];
+                    Length += 1.0f;
+                }
+
+                weldedNormals[i] = normal.normalized;
+                weldedTangents[i] = tangent.normalized;
+            }
+        }
+
+        List<Vector3> normals = new List<Vector3>();
+        List<Vector4> tangents = new List<Vector4>();
+
+        for (int i = 0; i < originalVertices.Length; i++)
+        {
+            normals.Add(weldedNormals[mapping[i]]);
+            tangents.Add(weldedTangents[mapping[i]]);
+        }
+
+        mesh.SetNormals(normals);
+        mesh.SetTangents(tangents);
+    }
+
     public static void Transform(Mesh mesh, Vector3 position, Vector3 rotation, Vector3 scale)
     {
         var vertices = mesh.vertices;
