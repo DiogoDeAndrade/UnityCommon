@@ -94,11 +94,28 @@ public class VoxelTree
         }
     }
     
-    [SerializeField] protected int          maxVoxelsPerLeaf;
-    [SerializeField] protected bool         isOccupancyMap;
-    [SerializeField] protected Vector3      voxelSize;
-    [SerializeField] protected Vector3      baseOffset;
-    [SerializeField] protected List<Node>   nodes;
+    [SerializeField] 
+    protected int          maxVoxelsPerLeaf;
+    [SerializeField] 
+    protected bool         isOccupancyMap;
+    [SerializeField] 
+    protected Vector3      voxelSize;
+    [SerializeField] 
+    protected Vector3      baseOffset;
+    [SerializeField, HideInInspector] 
+    protected List<Node>   nodes;
+
+    public int countNodes
+    {
+        get {
+            int count = 0;
+            foreach (var node in nodes)
+            {
+                if (node != null) count++;
+            }
+            return count; 
+        }
+    }
 
     public VoxelTree(int maxVoxelsPerLeaf, bool isOccupancyMap)
     {
@@ -120,15 +137,65 @@ public class VoxelTree
 
         // Mark full nodes as full
         MarkFull(nodes[0]);
+        // Remove all children from full nodes
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i] != null)
+            {
+                if (nodes[i].isFull)
+                {
+                    // Remove children of this node
+                    if (nodes[i].childrenId != null)
+                    {
+                        foreach (var nodeId in nodes[i].childrenId) RemoveNode(nodeId);
+                        nodes[i].childrenId = null;
+                    }
+                }
+            }
+        }
+
         RemoveEmpty(nodes[0]);
 
         for (int i = 0; i < nodes.Count; i++)
         {
-            if (nodes[i].isNodeEmpty(nodes))
+            if (nodes[i] != null)
             {
-                nodes[i] = null;
+                if (nodes[i].isNodeEmpty(nodes))
+                {
+                    RemoveNode(i);
+                }
             }
         }
+    }
+
+    void RemoveNode(int nodeId)
+    {
+        var thisNode = nodes[nodeId];
+        if (thisNode != null)
+        {
+            // Remove children of this node
+            if (thisNode.childrenId != null)
+            {
+                foreach (var nid in thisNode.childrenId) RemoveNode(nid);
+                thisNode.childrenId = null;
+            }
+            // Remove this node from all parents
+            var parentNode = nodes[thisNode.parentId];
+            if (parentNode != null)
+            {
+                var tmp = new List<int>(parentNode.childrenId);
+                tmp.Remove(nodeId);
+                if (tmp.Count == 0)
+                {
+                    parentNode.childrenId = null;
+                }
+                else
+                {
+                    parentNode.childrenId = tmp.ToArray();
+                }
+            }
+        }
+        nodes[nodeId] = null;
     }
 
     bool MarkFull(Node node)
@@ -443,7 +510,7 @@ public class VoxelTree
                     if (node.voxels[i] != 0)
                     {
                         voxelPos = node.GetVoxelPos(i);
-                        Gizmos.color = new Color(0.0f, 0.8f, 0.0f, 1.0f);
+                        Gizmos.color = new Color(0.8f, 0.8f, 0.0f, 1.0f);
                         Gizmos.DrawWireCube(baseOffset + new Vector3(voxelSize.x * (voxelPos.x + 0.5f), voxelSize.y * (voxelPos.y + 0.5f), voxelSize.z * (voxelPos.z + 0.5f)), voxelSize);
                     }
                 }
@@ -452,13 +519,13 @@ public class VoxelTree
             {
                 if (node.isFull)
                 {
-                    Gizmos.color = Color.green;
-                    Gizmos.DrawWireCube(node.bounds.center, node.bounds.size);
+                    Gizmos.color = new Color(0.0f, 0.8f, 0.0f, 1.0f);
+                    Gizmos.DrawCube(node.bounds.center, node.bounds.size);
                 }
                 else
                 {
                     Gizmos.color = new Color(0.0f, 0.5f, 0.0f, 1.0f);
-                    Gizmos.DrawWireCube(node.bounds.center, node.bounds.size);
+                    Gizmos.DrawCube(node.bounds.center, node.bounds.size);
                 }
             }
 
@@ -512,22 +579,23 @@ public class VoxelTree
         });
     }
     
-    public bool Intersect(Transform transform, VoxelTree otherVoxelTree, Transform otherTransform, ref OBB obb1, ref OBB obb2)
+    public bool Intersect(Transform transform, VoxelTree otherVoxelTree, Transform otherTransform, ref OBB obb1, ref OBB obb2, float scale = 1.0f, float otherScale = 1.0f)
     {
         // Create a new transformation that converts local space of A to world space and then from world space to the local space of B
         var matrix = otherTransform.worldToLocalMatrix * transform.localToWorldMatrix;
 
         // Start running through the nodes
-        return Intersect(nodes[0], otherVoxelTree, matrix, ref obb1, ref obb2);
+        return Intersect(nodes[0], otherVoxelTree, matrix, ref obb1, ref obb2, scale, otherScale);
     }
 
-    bool Intersect(Node node, VoxelTree otherVoxelTree, Matrix4x4 transformMatrix, ref OBB obb1, ref OBB obb2)
+    bool Intersect(Node node, VoxelTree otherVoxelTree, Matrix4x4 transformMatrix, ref OBB obb1, ref OBB obb2, float scale = 1.0f, float otherScale = 1.0f)
     {
         // Check first if this node is intersecting
         OBB nodeOBB = new OBB(node.bounds);
+        nodeOBB.extents *= scale;
         nodeOBB.Transform(transformMatrix);
 
-        if (!otherVoxelTree.Intersect(nodeOBB, ref obb2))
+        if (!otherVoxelTree.Intersect(nodeOBB, ref obb2, otherScale))
         {
             return false;
         }
@@ -554,11 +622,12 @@ public class VoxelTree
                     voxelPos = node.GetVoxelPos(i);
                     localVoxelOBB = new OBB(baseOffset + new Vector3(voxelSize.x * (voxelPos.x + 0.5f), voxelSize.y * (voxelPos.y + 0.5f), voxelSize.z * (voxelPos.z + 0.5f)), voxelSize);
                     voxelOBB = new OBB(localVoxelOBB);
+                    voxelOBB.extents *= scale;
                     voxelOBB.Transform(transformMatrix);
 
-                    if (otherVoxelTree.Intersect(voxelOBB, ref obb2))
+                    if (otherVoxelTree.Intersect(voxelOBB, ref obb2, otherScale))
                     {
-                        obb1 = localVoxelOBB;
+                        obb1 = new OBB(baseOffset + new Vector3(voxelSize.x * (voxelPos.x + 0.5f), voxelSize.y * (voxelPos.y + 0.5f), voxelSize.z * (voxelPos.z + 0.5f)), voxelSize);
                         return true;
                     }
                 }
@@ -570,7 +639,7 @@ public class VoxelTree
             // There are children, so we need to check all the children for an intersection
             foreach (var childId in node.childrenId)
             {
-                if (Intersect(nodes[childId], otherVoxelTree, transformMatrix, ref obb1, ref obb2))
+                if (Intersect(nodes[childId], otherVoxelTree, transformMatrix, ref obb1, ref obb2, scale, otherScale))
                 {
                     return true;
                 }
@@ -579,12 +648,12 @@ public class VoxelTree
         }
     }
 
-    bool Intersect(OBB obb, ref OBB intersectionOBB)
+    bool Intersect(OBB obb, ref OBB intersectionOBB, float scale)
     {
-        return Intersect(nodes[0], obb, ref intersectionOBB);
+        return Intersect(nodes[0], obb, ref intersectionOBB, scale);
     }
 
-    bool Intersect(Node node, OBB obb, ref OBB intersectionOBB)
+    bool Intersect(Node node, OBB obb, ref OBB intersectionOBB, float scale)
     {
         if (node.isLeaf())
         {
@@ -592,10 +661,11 @@ public class VoxelTree
             if (node.isFull)
             {
                 OBB nodeOBB = new OBB(node.bounds);
+                nodeOBB.extents *= scale;
 
                 if (obb.Intersect(nodeOBB))
                 {
-                    intersectionOBB = nodeOBB;
+                    intersectionOBB = new OBB(node.bounds);
                     return true;
                 }
             }
@@ -611,10 +681,11 @@ public class VoxelTree
 
                     voxelPos = node.GetVoxelPos(i);
                     voxelOBB = new OBB(baseOffset + new Vector3(voxelSize.x * (voxelPos.x + 0.5f), voxelSize.y * (voxelPos.y + 0.5f), voxelSize.z * (voxelPos.z + 0.5f)), voxelSize);
+                    voxelOBB.extents *= scale;
 
                     if (obb.Intersect(voxelOBB))
                     {
-                        intersectionOBB = voxelOBB;
+                        intersectionOBB = new OBB(baseOffset + new Vector3(voxelSize.x * (voxelPos.x + 0.5f), voxelSize.y * (voxelPos.y + 0.5f), voxelSize.z * (voxelPos.z + 0.5f)), voxelSize);
                         return true;
                     }
                 }
@@ -626,7 +697,7 @@ public class VoxelTree
             // There are children, so we need to check all the children for an intersection
             foreach (var childId in node.childrenId)
             {
-                if (Intersect(nodes[childId], obb, ref intersectionOBB))
+                if (Intersect(nodes[childId], obb, ref intersectionOBB, scale))
                 {
                     return true;
                 }
@@ -646,6 +717,100 @@ public class VoxelTree
         if (nodes.Count == 0) return false;
 
         return true;
+    }
+
+    public void RemoveLeafVoxels(bool markAsFull)
+    {
+        foreach (var node in nodes)
+        {
+            if (node != null)
+            {
+                if (node.voxels != null)
+                {
+                    if (markAsFull)
+                    {
+                        node.isFull = true;
+                    }
+                    node.voxels = null;
+                }
+            }
+        }
+    }
+
+    public void ClampDepth(int maxDepth)
+    {
+        ClampDepth(nodes[0], maxDepth - 1);
+    }
+
+    void ClampDepth(Node node, int maxDepth)
+    {
+        if (maxDepth == 0)
+        {
+            // Remove the children of this node and mark it as 
+            // full
+            node.isFull = true;
+            if (node.childrenId != null)
+            {
+                foreach (var nodeId in node.childrenId) RemoveNode(nodeId);
+            }
+            return;
+        }
+
+        if (node.childrenId != null)
+        {
+            foreach (var nodeId in node.childrenId)
+            {
+                ClampDepth(nodes[nodeId], maxDepth - 1);
+            }
+        }
+    }
+
+    public int ComputeMaxDepth()
+    {
+        int maxDepth = 0;
+
+        ComputeMaxDepth(nodes[0], 0, ref maxDepth);
+
+        return maxDepth;
+    }
+
+    void ComputeMaxDepth(Node node, int depth, ref int maxDepth)
+    {
+        if (node.isLeaf())
+        {
+            if (depth > maxDepth) { maxDepth = depth; }
+            return;
+        }
+
+        foreach (var nodeId in node.childrenId)
+        {
+            ComputeMaxDepth(nodes[nodeId], depth + 1, ref maxDepth);
+        }
+    }
+
+    public float ComputeAvgDepth()
+    {
+        int totalDepth = 0;
+        int totalLeaf = 0;
+
+        ComputeAvgDepth(nodes[0], 0, ref totalDepth, ref totalLeaf);
+
+        return (float)totalDepth / totalLeaf;
+    }
+
+    void ComputeAvgDepth(Node node, int depth, ref int totalDepth, ref int totalLeaf)
+    {
+        if (node.isLeaf())
+        {
+            totalLeaf++;
+            totalDepth += depth;
+            return;
+        }
+
+        foreach (var nodeId in node.childrenId)
+        {
+            ComputeAvgDepth(nodes[nodeId], depth + 1, ref totalDepth, ref totalLeaf);
+        }
     }
 
     // Debug stuff

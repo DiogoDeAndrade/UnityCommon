@@ -5,25 +5,30 @@ using UnityEngine;
 [System.Serializable]
 public class OBB
 {
-    [SerializeField] Vector3    center;
-    [SerializeField] Vector3    extents;
-    [SerializeField] Vector3[]  axis;
+    [SerializeField] Vector3    _center;
+    [SerializeField] Vector3    _extents;
+    [SerializeField] Vector3[]  _axis;
+
+    public Vector3      center { get => _center; set { _center = value; } }
+    public Vector3      extents { get => _extents; set { _extents = value; } }
+    public Vector3      size { get => _extents * 2.0f; set { _extents = value * 0.5f; } }
+    public Vector3[]    axis { get => _axis; set { _axis= value; } }
 
     public OBB(OBB src)
     {
-        center = src.center;
-        extents = src.extents;
-        axis = src.axis;
+        _center = src._center;
+        _extents = src._extents;
+        _axis = src._axis;
     }
 
     public OBB(Vector3 center, Vector3 size)
     {
-        axis = new Vector3[3];
-        axis[0] = Vector3.right;
-        axis[1] = Vector3.up;
-        axis[2] = Vector3.forward;
-        this.center = center;
-        extents = size * 0.5f;
+        _axis = new Vector3[3];
+        _axis[0] = Vector3.right;
+        _axis[1] = Vector3.up;
+        _axis[2] = Vector3.forward;
+        this._center = center;
+        _extents = size * 0.5f;
     }
 
     public OBB(Bounds bounds) : this(bounds.center, bounds.size)
@@ -33,36 +38,42 @@ public class OBB
 
     public void Transform(Matrix4x4 matrix)
     {
-        center = matrix * new Vector4(center.x, center.y, center.z, 1);
-        for (int i = 0; i < 3; i++) axis[i] = matrix * new Vector4(axis[i].x, axis[i].y, axis[i].z, 0);
+        _center = matrix * new Vector4(_center.x, _center.y, _center.z, 1);
+        for (int i = 0; i < 3; i++)
+        {
+            _axis[i] = matrix * new Vector4(_axis[i].x, _axis[i].y, _axis[i].z, 0);
+            _axis[i].Normalize();
+        }
+        var scale = matrix.lossyScale;
+        _extents = new Vector3(_extents.x * scale.x, _extents.y * scale.y, _extents.z * scale.z);
     }
 
     public Vector3 GetCorner(int i)
     {
         switch (i)
         {
-            case 0: return center - axis[0] * extents.x - axis[1] * extents.y - axis[2] * extents.z;
-            case 1: return center + axis[0] * extents.x - axis[1] * extents.y - axis[2] * extents.z;
-            case 2: return center - axis[0] * extents.x + axis[1] * extents.y - axis[2] * extents.z;
-            case 3: return center + axis[0] * extents.x + axis[1] * extents.y - axis[2] * extents.z;
-            case 4: return center - axis[0] * extents.x - axis[1] * extents.y + axis[2] * extents.z;
-            case 5: return center + axis[0] * extents.x - axis[1] * extents.y + axis[2] * extents.z;
-            case 6: return center - axis[0] * extents.x + axis[1] * extents.y + axis[2] * extents.z;
+            case 0: return _center - _axis[0] * _extents.x - _axis[1] * _extents.y - _axis[2] * _extents.z;
+            case 1: return _center + _axis[0] * _extents.x - _axis[1] * _extents.y - _axis[2] * _extents.z;
+            case 2: return _center - _axis[0] * _extents.x + _axis[1] * _extents.y - _axis[2] * _extents.z;
+            case 3: return _center + _axis[0] * _extents.x + _axis[1] * _extents.y - _axis[2] * _extents.z;
+            case 4: return _center - _axis[0] * _extents.x - _axis[1] * _extents.y + _axis[2] * _extents.z;
+            case 5: return _center + _axis[0] * _extents.x - _axis[1] * _extents.y + _axis[2] * _extents.z;
+            case 6: return _center - _axis[0] * _extents.x + _axis[1] * _extents.y + _axis[2] * _extents.z;
             case 7:
             default:
-                return center + axis[0] * extents.x + axis[1] * extents.y + axis[2] * extents.z;
+                return _center + _axis[0] * _extents.x + _axis[1] * _extents.y + _axis[2] * _extents.z;
         }
     }
 
     public bool Intersect(OBB otherOBB)
     {
         // Convenience variables.
-        Vector3     C0 = center;
-        Vector3[]   A0 = axis;
-        Vector3     E0 = extents;
-        Vector3     C1 = otherOBB.center;
-        Vector3[]   A1 = otherOBB.axis;
-        Vector3     E1 = otherOBB.extents;
+        Vector3     C0 = _center;
+        Vector3[]   A0 = _axis;
+        Vector3     E0 = _extents;
+        Vector3     C1 = otherOBB._center;
+        Vector3[]   A1 = otherOBB._axis;
+        Vector3     E1 = otherOBB._extents;
         float       epsilon = 1e-6f;
         float       cutoff = 1.0f - epsilon;
         bool        existsParallelPair = false;

@@ -17,6 +17,14 @@ public class VoxelCollider : MonoBehaviour
         set { _voxelTree = value; }
     }
 
+    public bool Intersect(VoxelCollider otherVoxelCollider, float scale1 = 1.0f, float scale2 = 1.0f)
+    {
+        OBB obb1 = null;
+        OBB obb2 = null;
+        
+        return _voxelTree.Intersect(transform, otherVoxelCollider._voxelTree, otherVoxelCollider.transform, ref obb1, ref obb2, scale1, scale2);
+    }
+
     private void OnDrawGizmosSelected()
     {
         if (_voxelTree == null) return;

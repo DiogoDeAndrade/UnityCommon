@@ -146,6 +146,22 @@ public class DebugGizmo : MonoBehaviour
         }
     }
 
+    class DebugWireOBB : DebugObject
+    {
+        public OBB          obb;
+        public Color        color;
+        public Matrix4x4    matrix;
+
+        public override void Draw(float s)
+        {
+            var prevMatrix = Gizmos.matrix;
+            Gizmos.color = color;
+            Gizmos.matrix = matrix;
+            obb.DrawGizmo();
+            Gizmos.matrix = prevMatrix;
+        }
+    }
+
     List<DebugObject>   debugObjects;
     List<DebugObject>   highlightObjects;
 
@@ -174,6 +190,13 @@ public class DebugGizmo : MonoBehaviour
     void _Clear()
     {
         debugObjects = new List<DebugObject>();
+    }
+    void _Clear(string identifier)
+    {
+        if (debugObjects == null) return;
+
+        debugObjects.RemoveAll((x) => x == null);
+        debugObjects.RemoveAll((x) => x.identifier == identifier);
     }
 
     void AddObject(DebugObject d)
@@ -240,6 +263,24 @@ public class DebugGizmo : MonoBehaviour
         });
     }
 
+    public static void AddWireOBB(string identifier, OBB obb, Color color)
+    {
+        AddWireOBB(identifier, obb, color, Matrix4x4.identity);
+    }
+
+    public static void AddWireOBB(string identifier, OBB obb, Color color, Matrix4x4 matrix)
+    {
+        if (instance == null) return;
+        
+        instance.AddObject(new DebugWireOBB()
+        {
+            identifier = identifier,
+            obb = obb,
+            matrix = matrix,
+            color = color
+        });
+    }
+
     public static void AddLine(string identifier, Vector3 p1, Vector3 p2, Color color, Matrix4x4 matrix)
     {
         if (instance == null) return;
@@ -275,6 +316,13 @@ public class DebugGizmo : MonoBehaviour
         if (instance == null) return;
 
         instance._Clear();
+    }
+
+    public static void Clear(string identifier)
+    {
+        if (instance == null) return;
+
+        instance._Clear(identifier);
     }
 
     private void OnDrawGizmos()
