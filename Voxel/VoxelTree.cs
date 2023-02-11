@@ -166,6 +166,8 @@ public class VoxelTree
                 }
             }
         }
+
+        Cleanup();
     }
 
     void RemoveNode(int nodeId)
@@ -735,11 +737,13 @@ public class VoxelTree
                 }
             }
         }
+        Cleanup();
     }
 
     public void ClampDepth(int maxDepth)
     {
         ClampDepth(nodes[0], maxDepth - 1);
+        Cleanup();
     }
 
     void ClampDepth(Node node, int maxDepth)
@@ -810,6 +814,34 @@ public class VoxelTree
         foreach (var nodeId in node.childrenId)
         {
             ComputeAvgDepth(nodes[nodeId], depth + 1, ref totalDepth, ref totalLeaf);
+        }
+    }
+
+    void Cleanup()
+    {
+        Dictionary<int, int> remap = new Dictionary<int, int>();
+
+        // Step one, remove empty spaces and create remap dictionary
+        var newNodes = new List<Node>();
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes[i] != null)
+            {
+                newNodes.Add(nodes[i]);
+                remap.Add(i, newNodes.Count - 1);
+            }
+        }
+
+        // Step two, apply remap to IDs
+        nodes = newNodes;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            nodes[i].id = i;
+            nodes[i].parentId = (nodes[i].parentId != -1)?(remap[nodes[i].parentId]):(-1);
+            if (nodes[i].childrenId != null)
+            {
+                for (int j = 0; j < nodes[i].childrenId.Length; j++) nodes[i].childrenId[j] = remap[nodes[i].childrenId[j]];
+            }
         }
     }
 

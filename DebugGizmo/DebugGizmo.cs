@@ -325,6 +325,7 @@ public class DebugGizmo : MonoBehaviour
         instance._Clear(identifier);
     }
 
+#if UNITY_EDITOR
     private void OnDrawGizmos()
     {
         if (debugObjects != null)
