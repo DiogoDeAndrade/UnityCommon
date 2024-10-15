@@ -133,14 +133,14 @@ public class PlayerController : MonoBehaviour
         {
             if (timeScaler) return timeScaler.originalVelocity;
 
-            return rb.velocity;
+            return rb.linearVelocity;
         }
         set
         {
             if (timeScaler)
                 timeScaler.originalVelocity = value;
             else
-                rb.velocity = value;
+                rb.linearVelocity = value;
         }
     }
 

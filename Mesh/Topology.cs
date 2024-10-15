@@ -349,7 +349,7 @@ public class Topology
         return pinnedVertex;
     }
 
-    public Boundary GetBoundary()
+    public Boundary GetBoundaries()
     {
         var ret = new Boundary();
 
@@ -670,6 +670,13 @@ public class Boundary
         {
             poly.Simplify(maxDistance);
         }
+    }
+
+
+    public Polyline this[int idx]
+    {
+        get => polylines[idx];
+        set => polylines[idx] = value;
     }
 }
 

@@ -95,7 +95,7 @@ public class VoxelNavMesh
             {
                 // Get boundary and build triangulation from there
                 var topology = new Topology(mesh, Matrix4x4.identity);
-                var boundary = topology.GetBoundary();
+                var boundary = topology.GetBoundaries();
 
                 Debug.LogError("Ear clipping simplification not implemented!");
 

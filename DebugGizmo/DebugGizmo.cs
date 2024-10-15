@@ -17,7 +17,7 @@ public class DebugGizmo : MonoBehaviour
         {
             if (_instance) return _instance;
 
-            _instance = FindObjectOfType<DebugGizmo>();
+            _instance = FindAnyObjectByType<DebugGizmo>();
             
             return _instance;
 
@@ -324,6 +324,8 @@ public class DebugGizmo : MonoBehaviour
 
         instance._Clear(identifier);
     }
+
+    public static bool isAvailable => (instance != null);
 
 #if UNITY_EDITOR
     private void OnDrawGizmos()

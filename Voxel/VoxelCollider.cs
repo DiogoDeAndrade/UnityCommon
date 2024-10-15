@@ -7,6 +7,7 @@ public class VoxelCollider : MonoBehaviour
 {
     [SerializeField] private VoxelTree  _voxelTree;
 
+    [SerializeField] private bool       displayVoxelCollider = false;
     [SerializeField] private bool       debugRender;
     [SerializeField, ShowIf("debugRender")] 
     private int debugRenderLevel = 0;
@@ -28,6 +29,7 @@ public class VoxelCollider : MonoBehaviour
     private void OnDrawGizmosSelected()
     {
         if (_voxelTree == null) return;
+        if (!displayVoxelCollider) return;
 
         var prevMatrix = Gizmos.matrix;
         Gizmos.matrix = transform.localToWorldMatrix;

@@ -41,11 +41,11 @@ public class TimeScaler2d : MonoBehaviour
     {
         get
         {
-            return rb.velocity / _timeScale;
+            return rb.linearVelocity / _timeScale;
         }
         set
         {
-            rb.velocity = value * _timeScale;
+            rb.linearVelocity = value * _timeScale;
         }
     }
 
@@ -66,11 +66,11 @@ public class TimeScaler2d : MonoBehaviour
 
         _timeScale *= s;
 
-        rb.velocity *= scaleDerivative;
+        rb.linearVelocity *= scaleDerivative;
         rb.angularVelocity *= scaleDerivative;
         rb.gravityScale *= scaleDerivative;
-        rb.drag *= scaleDerivative;
-        rb.angularDrag *= scaleDerivative;
+        rb.linearDamping *= scaleDerivative;
+        rb.angularDamping *= scaleDerivative;
         rb.mass /= scaleDerivative;
 
         foreach (var anim in animators)
@@ -85,11 +85,11 @@ public class TimeScaler2d : MonoBehaviour
 
         _timeScale = s;
 
-        rb.velocity *= scaleDerivative;
+        rb.linearVelocity *= scaleDerivative;
         rb.angularVelocity *= scaleDerivative;
         rb.gravityScale *= scaleDerivative;
-        rb.drag *= scaleDerivative;
-        rb.angularDrag *= scaleDerivative;
+        rb.linearDamping *= scaleDerivative;
+        rb.angularDamping *= scaleDerivative;
         rb.mass /= scaleDerivative;
 
         foreach (var anim in animators)

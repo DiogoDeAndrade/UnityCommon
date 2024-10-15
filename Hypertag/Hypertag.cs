@@ -6,7 +6,7 @@ public class Hypertag : ScriptableObject
 {
     public static T FindObjectWithHypertag<T>(Hypertag tag) where T : Component
     {
-        var objects = FindObjectsOfType<HypertaggedObject>(true);
+        var objects = FindObjectsByType<HypertaggedObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (var obj in objects)
         {
             if (obj.hypertag == tag)
@@ -23,7 +23,7 @@ public class Hypertag : ScriptableObject
     public static List<T> FindObjectsWithHypertag<T>(Hypertag tag) where T : Component
     {
         List<T> ret = new List<T>();
-        var objects = FindObjectsOfType<HypertaggedObject>(true);
+        var objects = FindObjectsByType<HypertaggedObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (var obj in objects)
         {
             if (obj.hypertag == tag)
