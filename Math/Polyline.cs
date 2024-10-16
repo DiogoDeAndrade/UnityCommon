@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor.SearchService;
 using UnityEngine;
 
 [System.Serializable]
@@ -105,5 +106,102 @@ public class Polyline
     public void ReverseOrder()
     {
         vertices.Reverse();
+    }
+
+    public float ComputeArea()
+    {
+        if (vertices == null || vertices.Count < 3)
+        {
+            return 0f; // No area for less than 3 vertices
+        }
+
+        // Step 1: Determine the best projection plane by calculating the normal vector
+        Vector3 normal = CalculateNormal();
+
+        // Step 2: Project the polygon onto the most appropriate 2D plane
+        List<Vector2> projectedVertices = ProjectTo2D(normal);
+
+        // Step 3: Use the Shoelace formula to calculate the area of the 2D polygon
+        return Calculate2DPolygonArea(projectedVertices);
+    }
+
+    Vector3 CalculateNormal()
+    {
+        Vector3 normal = Vector3.zero;
+        if ((normals != null) && (normals.Count == vertices.Count))
+        {
+            foreach (var n in normals)
+            {
+                normal += n;
+            }
+        }
+        else
+        {
+            // Using Newell's method to calculate the normal
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                Vector3 current = vertices[i];
+                Vector3 next = vertices[(i + 1) % vertices.Count];
+
+                normal.x += (current.y - next.y) * (current.z + next.z);
+                normal.y += (current.z - next.z) * (current.x + next.x);
+                normal.z += (current.x - next.x) * (current.y + next.y);
+            }
+        }
+
+        normal.Normalize();
+
+        return normal;
+    }
+
+    private List<Vector2> ProjectTo2D(Vector3 normal)
+    {
+        List<Vector2> projectedVertices = new List<Vector2>();
+
+        // Determine the dominant axis (the largest component in the normal vector)
+        if (Mathf.Abs(normal.x) > Mathf.Abs(normal.y) && Mathf.Abs(normal.x) > Mathf.Abs(normal.z))
+        {
+            // Project onto YZ plane (ignore x component)
+            foreach (var vertex in vertices)
+            {
+                projectedVertices.Add(new Vector2(vertex.y, vertex.z));
+            }
+        }
+        else if (Mathf.Abs(normal.y) > Mathf.Abs(normal.x) && Mathf.Abs(normal.y) > Mathf.Abs(normal.z))
+        {
+            // Project onto XZ plane (ignore y component)
+            foreach (var vertex in vertices)
+            {
+                projectedVertices.Add(new Vector2(vertex.x, vertex.z));
+            }
+        }
+        else
+        {
+            // Project onto XY plane (ignore z component)
+            foreach (var vertex in vertices)
+            {
+                projectedVertices.Add(new Vector2(vertex.x, vertex.y));
+            }
+        }
+
+        return projectedVertices;
+    }
+
+    // Calculate the area of a 2D polygon using the Shoelace formula
+    private float Calculate2DPolygonArea(List<Vector2> vertices2D)
+    {
+        float area = 0f;
+        int count = vertices2D.Count;
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 current = vertices2D[i];
+            Vector2 next = vertices2D[(i + 1) % count]; // Ensure the loop wraps around
+
+            area += current.x * next.y;
+            area -= current.y * next.x;
+        }
+
+        return Mathf.Abs(area) * 0.5f;
     }
 }
