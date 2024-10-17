@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEditor.SearchService;
@@ -25,6 +26,16 @@ public class Polyline
 
         vertices.Add(vertex);
         normals.Add(normal);
+    }
+
+    public void Insert(int index, Vector3 vertex)
+    {
+        vertices.Insert(index, vertex);
+    }
+    public void Insert(int index, Vector3 vertex, Vector3 normal)
+    {
+        vertices.Insert(index, vertex);
+        normals.Insert(index, normal);
     }
 
     public int Count
@@ -203,5 +214,18 @@ public class Polyline
         }
 
         return Mathf.Abs(area) * 0.5f;
+    }
+
+    public Vector3 GetCenter()
+    {
+        Vector3 center = Vector3.zero;
+        if ((vertices == null) || (vertices.Count == 0)) return center;
+
+        foreach (var v in vertices)
+        {
+            center += v;
+        }
+
+        return center / vertices.Count;
     }
 }
