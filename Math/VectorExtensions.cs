@@ -44,6 +44,11 @@ public static class VectorExtensions
         return new Vector2(inV.z, inV.y);
     }
 
+    public static float Random(this Vector2 limits)
+    {
+        return UnityEngine.Random.Range(limits.x, limits.y);
+    }
+
     public static float Random(this Vector2 limits, System.Random random)
     {
         return random.Range(limits.x, limits.y);
