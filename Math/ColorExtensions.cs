@@ -13,5 +13,17 @@ public static class ColorExtensions
     {
         return new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), Mathf.Clamp01(c.a));
     }
+
+    public static Color MoveTowards(this Color current, Color target, float maxDelta)
+    {
+        // Gradually move the Red, Green, Blue, and Alpha channels independently
+        float r = Mathf.MoveTowards(current.r, target.r, maxDelta);
+        float g = Mathf.MoveTowards(current.g, target.g, maxDelta);
+        float b = Mathf.MoveTowards(current.b, target.b, maxDelta);
+        float a = Mathf.MoveTowards(current.a, target.a, maxDelta);
+
+        // Return the new color
+        return new Color(r, g, b, a);
+    }
 };
 

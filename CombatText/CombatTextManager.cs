@@ -28,9 +28,11 @@ public class CombatTextManager : MonoBehaviour
     public Vector2         movementVector;
     public float           fadeRate = 1;
 
+    [SerializeField] private Camera uiCamera;
+
     List<TextElem> textList;
     Canvas         canvas;
-    Camera         uiCamera;
+    RectTransform  rectTransform;
     Vector2        screenToCanvasSizes;
     CanvasScaler   canvasScaler;
 
@@ -47,10 +49,14 @@ public class CombatTextManager : MonoBehaviour
         textList = new List<TextElem>();
         canvas = GetComponentInParent<Canvas>();
         canvasScaler = canvas.GetComponent<CanvasScaler>();
-        uiCamera = canvas.worldCamera;
+        rectTransform = transform as RectTransform;
         if (uiCamera == null)
         {
-            uiCamera = Camera.main;
+            uiCamera = canvas.worldCamera;
+            if (uiCamera == null)
+            {
+                uiCamera = Camera.main;
+            }
         }
 
         screenToCanvasSizes.x = canvasScaler.referenceResolution.x / Screen.width;
@@ -81,7 +87,7 @@ public class CombatTextManager : MonoBehaviour
         textList.RemoveAll((t) => t.elapsedTime >= t.totalTime);    
     }
 
-    TextElem NewText(GameObject ownerObject)
+    TextElem NewText(GameObject ownerObject, Vector2 offset)
     {
         var tmp = new TextElem();
 
@@ -91,18 +97,19 @@ public class CombatTextManager : MonoBehaviour
         tmp.textObject = Instantiate(textPrefab, transform);
         tmp.textTransform = tmp.textObject.GetComponent<RectTransform>();
 
-        Vector3 pos2d = uiCamera.WorldToScreenPoint(ownerObject.transform.position);
-        pos2d.x *= screenToCanvasSizes.x;
-        pos2d.y *= screenToCanvasSizes.y;
+        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(uiCamera, ownerObject.transform.position + offset.xy0());
 
-        tmp.textTransform.anchoredPosition = pos2d;
+        // Convert the screen point to local coordinates in the RectTransform
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, screenPoint, uiCamera, out Vector2 localPoint);
+
+        tmp.textTransform.anchoredPosition = localPoint;
 
         textList.Add(tmp);
 
         return tmp;
     }
 
-    TextElem FindNumberTextOfColor(Color c, GameObject ownerObject)
+    TextElem FindNumberTextOfColor(Color c, GameObject ownerObject, Vector2 offset)
     {
         foreach (var tElem in textList)
         {
@@ -115,12 +122,12 @@ public class CombatTextManager : MonoBehaviour
             }
         }
 
-        return NewText(ownerObject);
+        return NewText(ownerObject, offset);
     }
 
-    void _SpawnText(GameObject ownerObject, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+    void _SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
     {
-        TextElem newText = NewText(ownerObject);
+        TextElem newText = NewText(ownerObject, offset);
         newText.isNumber = false;
         newText.baseText = text;
         newText.startColor = startColor;
@@ -132,10 +139,24 @@ public class CombatTextManager : MonoBehaviour
         newText.textObject.color = startColor;
     }
 
-
     void _SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
     {
-        TextElem newText = FindNumberTextOfColor(startColor, ownerObject);
+        TextElem newText = FindNumberTextOfColor(startColor, ownerObject, Vector2.zero);
+        newText.isNumber = true;
+        newText.number += value;
+        newText.baseText = text;
+        newText.startColor = startColor;
+        newText.endColor = endColor;
+        newText.speedModifier = moveSpeedModifier;
+        newText.totalTime = (time > 0.0f) ? (time) : (defaultTime);
+
+        newText.textObject.text = string.Format(text, newText.number);
+        newText.textObject.color = startColor;
+    }
+
+    void _SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+    {
+        TextElem newText = FindNumberTextOfColor(startColor, ownerObject, offset);
         newText.isNumber = true;
         newText.number += value;
         newText.baseText = text;
@@ -150,11 +171,20 @@ public class CombatTextManager : MonoBehaviour
 
     public static void SpawnText(GameObject ownerObject, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
     {
-        instance._SpawnText(ownerObject, text, startColor, endColor, time, moveSpeedModifier);
+        instance._SpawnText(ownerObject, Vector2.zero, text, startColor, endColor, time, moveSpeedModifier);
+    }
+    public static void SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+    {
+        instance._SpawnText(ownerObject, offset, text, startColor, endColor, time, moveSpeedModifier);
     }
 
     public static void SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
     {
-        instance._SpawnText(ownerObject, value, text, startColor, endColor, time, moveSpeedModifier);
+        instance._SpawnText(ownerObject, Vector2.zero, value, text, startColor, endColor, time, moveSpeedModifier);
+    }
+
+    public static void SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+    {
+        instance._SpawnText(ownerObject, offset, value, text, startColor, endColor, time, moveSpeedModifier);
     }
 }
