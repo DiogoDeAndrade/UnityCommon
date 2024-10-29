@@ -162,18 +162,18 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         totalWeight = 0;
     }
 
-    internal void Set(T element, int count)
+    internal void Set(T element, float weight)
     {
         // Sets a specific element to the given value
         int index = originalElements.IndexOf(element);
         if (index == -1)
         {
-            if (count > 0) Add(element, count);
+            if (weight > 0) Add(element, weight);
             else return;
         } 
         else
         {
-            originalWeights[index] = count;
+            originalWeights[index] = weight;
         }
 
         // Reset to copy
@@ -182,7 +182,7 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
 
     internal void Cleanup()
     {
-        // Remove all elements that have a zero count
+        // Remove all elements that have a zero weight
         int index = 0;
         while (index < originalElements.Count)
         {
@@ -225,5 +225,25 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
             originalWeights[i] = 1.0f / originalWeights[i];
         }
         Reset();
+    }
+
+    internal string ToSimpleString()
+    {
+        string ret = "[ ";
+
+        float w = 0.0f;
+        foreach (float count in originalWeights)
+        {
+            w += count;
+        }
+        for (int i = 0; i < originalElements.Count; i++)
+        {
+            if (i > 0) ret += ", ";
+            ret += $"({originalElements[i].ToString()}: {originalWeights[i] * 100.0f / w}%)";
+        }
+
+        ret += " ]";
+
+        return ret;
     }
 }
