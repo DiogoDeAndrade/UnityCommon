@@ -14,7 +14,7 @@ public class FPSController : MonoBehaviour
     private float pitch; // Vertical rotation (around X axis)
 
     private void Start()
-    {
+    {   
         characterController = GetComponent<CharacterController>();
         if (headTransform == null)
         {
