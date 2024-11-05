@@ -1,3 +1,5 @@
+using NaughtyAttributes;
+using OkapiKit;
 using UnityEngine;
 
 [RequireComponent (typeof(CharacterController))]
@@ -7,11 +9,22 @@ public class FPSController : MonoBehaviour
     [SerializeField] private float      mouseSensitivity = 2f; // Mouse sensitivity
     [SerializeField] private float      pitchLimit = 80f;    // Pitch limit for looking up/down
     [SerializeField] private Transform  headTransform;   // Reference to the head for pitch control
+    [SerializeField] 
+    private AudioClip  stepSound;
+    [SerializeField, ShowIf(nameof(hasStepSound))]
+    private float stepDistance = 1.0f;
+    [SerializeField, ShowIf(nameof(hasStepSound)), MinMaxSlider(0.0f, 1.0f)]
+    private Vector2 stepVolume = Vector2.one;
+    [SerializeField, ShowIf(nameof(hasStepSound)), MinMaxSlider(0.5f, 2.0f)]
+    private Vector2 stepPitch = Vector2.one;
+
+    bool hasStepSound => stepSound != null;
 
     private CharacterController characterController;
     private Vector3 velocity;
     private float yaw;   // Horizontal rotation (around Y axis)
     private float pitch; // Vertical rotation (around X axis)
+    private float currentStepDistance;
 
     private void Start()
     {   
@@ -41,12 +54,21 @@ public class FPSController : MonoBehaviour
         }
 
         // Move the player
-        characterController.Move(velocity * Time.fixedDeltaTime);
+        var stepSize = velocity * Time.fixedDeltaTime;
+        characterController.Move(stepSize);
+
+        currentStepDistance += stepSize.x0z().magnitude;
     }
 
     private void Update()
     {
         HandleMouseLook();
+
+        if ((stepSound != null) && (currentStepDistance > stepDistance))
+        {
+            currentStepDistance -= stepDistance;
+            SoundManager.PlaySound(stepSound, stepVolume.Random(), stepPitch.Random());
+        }
     }
 
     private void HandleMouseLook()

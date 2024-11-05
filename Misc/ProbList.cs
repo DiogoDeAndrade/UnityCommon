@@ -1,29 +1,45 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor.Rendering;
+using UnityEngine;
 
+[Serializable]
 public class ProbList<T> : IEnumerable<(T element, float weight)>
 {
-    private List<T>         elements = new List<T>();              // Current elements for selection
-    private List<float>     weights = new List<float>();             // Current counts for selection
-    private List<T>         originalElements = new List<T>();       // Backup of the original elements
-    private List<float>     originalWeights = new List<float>();     // Backup of the original counts
-    private Random          systemRandom;
-    private bool            withReplacement;
+    [Serializable]
+    class Element
+    {
+        [SerializeField]
+        public T       value;
+        [SerializeField]
+        public float   weight;
+    }
+
+    private List<Element>   elements = new List<Element>();          // Current elements for selection
+    [SerializeField]
+    private List<Element>   originalElements = new List<Element>();       // Backup of the original elements
+    private System.Random   systemRandom;
+    [SerializeField]
+    private bool            withReplacement = true;
+    private bool            resetWhenEmpty = true;
     private float           totalWeight;
+    private bool            init = false;
 
     // Constructor with optional Random generator and option for with/without replacement
-    public ProbList(bool withReplacement = true, Random randomGenerator = null)
+    public ProbList(bool withReplacement = true, bool resetWhenEmpty = true, System.Random randomGenerator = null)
     {
         this.withReplacement = withReplacement;
+        this.resetWhenEmpty = resetWhenEmpty;
         this.systemRandom = randomGenerator; // Default to System.Random if no Unity engine available
     }
 
     // Copy constructor that takes a collection and initializes with default counts
-    public ProbList(ProbList<T> items, bool withReplacement = true, Random randomGenerator = null)
+    public ProbList(ProbList<T> items, bool withReplacement = true, bool resetWhenEmpty = true, System.Random randomGenerator = null)
     {
         this.withReplacement = withReplacement;
-        this.systemRandom = randomGenerator ?? new Random();
+        this.resetWhenEmpty = resetWhenEmpty;
+        this.systemRandom = randomGenerator ?? new System.Random();
 
         foreach (var item in items)
         {
@@ -34,6 +50,7 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     public ProbList(T initialItem)
     {
         this.withReplacement = true;
+        this.resetWhenEmpty = true;
 
         Add(initialItem, 1);
     }
@@ -45,21 +62,16 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     public void Add(T item, float weight)
     {
         if (weight <= 0) throw new ArgumentException("Count must be greater than zero.");
-        if (elements.Count != originalElements.Count) Reset();
 
         // Check if this is a new item, or if it should just be added
-        int index = elements.IndexOf(item);
+        int index = IndexOf(item);
         if (index == -1)
         {
-            elements.Add(item);
-            weights.Add(weight);
-            originalElements.Add(item);
-            originalWeights.Add(weight);
+            originalElements.Add(new Element { value = item, weight = weight });
         }
         else
         {
-            weights[index] += weight;
-            originalWeights[index] += weight;
+            originalElements[index].weight += weight;
         }
         totalWeight += weight;
     }
@@ -75,10 +87,15 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     // Get an element based on probability
     public T Get()
     {
-        if (elements.Count == 0) Reset(); // Reset if all elements were used and we're not using replacement
+        if (!init) Reset();
+        else if (elements.Count == 0)
+        {
+            if (resetWhenEmpty) Reset();
+            else return default(T);
+        }
 
         int index = GetRandomWeightedIndex();
-        T selectedItem = elements[index];
+        T selectedItem = elements[index].value;
 
         // Handle without replacement logic
         if (!withReplacement)
@@ -91,11 +108,21 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
 
     public int IndexOf(T item)
     {
-        return originalElements.IndexOf(item);
+        for (int i = 0; i < originalElements.Count; i++)
+        {
+            if (originalElements[i].value.Equals(item)) return i;
+        }
+        return -1;
     }
     public int CurrentIndexOf(T item)
     {
-        return elements.IndexOf(item);
+        if (!init) Reset();
+
+        for (int i = 0; i < elements.Count; i++)
+        {
+            if (elements[i].value.Equals(item)) return i;
+        }
+        return -1;
     }
 
     // Helper to get a random index based on weights
@@ -108,9 +135,9 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
 
         float cumulativeWeight = 0;
 
-        for (int i = 0; i < weights.Count; i++)
+        for (int i = 0; i < elements.Count; i++)
         {
-            cumulativeWeight += weights[i];
+            cumulativeWeight += elements[i].weight;
             if (randomValue < cumulativeWeight)
             {
                 return i;
@@ -123,28 +150,30 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     // Helper to remove an item at the specified index
     private void RemoveItemAtIndex(int index)
     {
-        totalWeight -= weights[index];
+        totalWeight -= elements[index].weight;
         elements.RemoveAt(index);
-        weights.RemoveAt(index);
     }
 
     // Resets the elements and counts back to their original states
     private void Reset()
     {
-        elements = new List<T>(originalElements);
-        weights = new(originalWeights);
+        elements = new List<Element>(originalElements);
         totalWeight = 0;
-        foreach (var count in weights)
+        foreach (var element in elements)
         {
-            totalWeight += count;
+            totalWeight += element.weight;
         }
+
+        init = true;
     }
 
     public IEnumerator<(T element, float weight)> GetEnumerator()
     {
+        if ((!init) || ((elements.Count == 0) && (originalElements.Count != 0) && (resetWhenEmpty))) Reset();
+
         for (int i = 0; i < elements.Count; i++)
         {
-            yield return (elements[i], weights[i]);
+            yield return (elements[i].value, elements[i].weight);
         }
     }
 
@@ -156,8 +185,6 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     internal void Clear()
     {
         elements.Clear();
-        weights.Clear();
-        originalElements.Clear();
         originalElements.Clear();
         totalWeight = 0;
     }
@@ -165,7 +192,7 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     internal void Set(T element, float weight)
     {
         // Sets a specific element to the given value
-        int index = originalElements.IndexOf(element);
+        int index = IndexOf(element);
         if (index == -1)
         {
             if (weight > 0) Add(element, weight);
@@ -173,7 +200,7 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         } 
         else
         {
-            originalWeights[index] = weight;
+            originalElements[index].weight = weight;
         }
 
         // Reset to copy
@@ -186,10 +213,9 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         int index = 0;
         while (index < originalElements.Count)
         {
-            if (originalWeights[index] == 0)
+            if (originalElements[index].weight == 0)
             {
                 originalElements.RemoveAt(index);
-                originalWeights.RemoveAt(index);
             }
             else
             {
@@ -203,26 +229,26 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
 
     internal float GetWeight(T element)
     {
-        int index = originalElements.IndexOf(element);
+        int index = IndexOf(element);
         if (index == -1) return 0;
 
-        return originalWeights[index];
+        return originalElements[index].weight;
     }
 
     internal void Normalize()
     {        
-        for (int i = 0; i < originalWeights.Count; i++)
+        for (int i = 0; i < originalElements.Count; i++)
         {
-            originalWeights[i] /= totalWeight;
+            originalElements[i].weight /= totalWeight;
         }
         Reset();
     }
 
     internal void ReverseWeights()
     {
-        for (int i = 0; i < originalWeights.Count; i++)
+        for (int i = 0; i < originalElements.Count; i++)
         {
-            originalWeights[i] = 1.0f / originalWeights[i];
+            originalElements[i].weight = 1.0f / originalElements[i].weight;
         }
         Reset();
     }
@@ -232,14 +258,14 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         string ret = "[ ";
 
         float w = 0.0f;
-        foreach (float count in originalWeights)
+        foreach (var element in originalElements)
         {
-            w += count;
+            w += element.weight;
         }
         for (int i = 0; i < originalElements.Count; i++)
         {
             if (i > 0) ret += ", ";
-            ret += $"({originalElements[i].ToString()}: {originalWeights[i] * 100.0f / w}%)";
+            ret += $"({originalElements[i].value.ToString()}: {originalElements[i].weight * 100.0f / w}%)";
         }
 
         ret += " ]";
@@ -247,3 +273,10 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         return ret;
     }
 }
+
+#if UNITY_6000_0_OR_NEWER
+
+[Serializable]
+public class AudioClipProbList : ProbList<AudioClip> { }
+
+#endif
