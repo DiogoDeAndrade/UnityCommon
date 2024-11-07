@@ -1,5 +1,4 @@
 using NaughtyAttributes;
-using OkapiKit;
 using UnityEngine;
 
 [RequireComponent (typeof(CharacterController))]
@@ -67,7 +66,7 @@ public class FPSController : MonoBehaviour
         if ((stepSound != null) && (currentStepDistance > stepDistance))
         {
             currentStepDistance -= stepDistance;
-            SoundManager.PlaySound(stepSound, stepVolume.Random(), stepPitch.Random());
+            SoundManager.PlaySound(SoundType.PrimaryFX, stepSound, stepVolume.Random(), stepPitch.Random());
         }
     }
 
