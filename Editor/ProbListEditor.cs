@@ -85,7 +85,6 @@ public class ProbListPropertyDrawer<T> : PropertyDrawer
 
         // Draw the add and remove buttons at the bottom, within the HelpBox, aligned to the right
         float buttonWidth = 20f;
-        float buttonPadding = 5f;
         Rect addButtonRect = new Rect(innerRect.x + innerRect.width - 2 * (buttonWidth), innerRect.y + 5, buttonWidth, EditorGUIUtility.singleLineHeight);
         if (GUI.Button(addButtonRect, "+"))
         {
