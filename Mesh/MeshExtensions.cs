@@ -216,7 +216,6 @@ static class MeshExtensions
         if (min.z > max.z) (min.z, max.z) = (max.z, min.z);
 
         var ret = new MeshOctree(min, max, levels);
-        ret.sharedMesh = src;
 
         for (int submeshIndex = 0; submeshIndex < src.subMeshCount; submeshIndex++)
         {

@@ -4,8 +4,6 @@ using UnityEngine;
 
 public class MeshOctree : Octree<Triangle>
 {
-    public    Mesh    sharedMesh;
-
     public MeshOctree(Vector3 min, Vector3 max, int nLevels) : base(min, max, nLevels)
     {
     }
