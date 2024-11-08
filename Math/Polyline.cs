@@ -1,8 +1,10 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 [System.Serializable]
-public class Polyline
+public class Polyline : IEnumerable<(Vector3 position, Vector3 normal)>
 {
     [SerializeField]
     List<Vector3>   vertices;
@@ -25,6 +27,18 @@ public class Polyline
         normals.Add(normal);
     }
 
+
+    public void SetNormal(int index, Vector3 normal)
+    {
+        if (normals == null)
+        {
+            normals = new List<Vector3>();
+            normals.Resize(index + 1);
+        }
+
+        normals[index] = normal;
+    }
+
     public void Insert(int index, Vector3 vertex)
     {
         vertices.Insert(index, vertex);
@@ -38,6 +52,20 @@ public class Polyline
     public int Count
     {
         get => (vertices != null) ? (vertices.Count) : (0);
+    }
+
+    public int normalCount
+    {
+        get => (normals != null) ? (normals.Count) : (0);
+        set
+        {
+            if (value == 0) normals = null;
+            else
+            {
+                if (normals == null) normals = new List<Vector3>();
+                normals.Resize(value);
+            }
+        }
     }
 
     public Vector3 this[int idx]
@@ -224,5 +252,32 @@ public class Polyline
         }
 
         return center / vertices.Count;
+    }
+
+    // Implement the IEnumerable interface to allow iteration
+    public IEnumerator<(Vector3 position, Vector3 normal)> GetEnumerator()
+    {
+        if ((normals != null) && (vertices.Count == normals.Count))
+        {
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                Vector3 position = vertices[i];
+                Vector3 normal = normals[i];
+                yield return (position, normal);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                Vector3 position = vertices[i];
+                yield return (position, Vector3.zero);
+            }
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
     }
 }

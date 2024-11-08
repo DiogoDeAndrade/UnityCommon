@@ -16,4 +16,16 @@ public static class GenericExtensions
 
         return ret;
     }
+
+    static public void Resize<T>(this List<T> l, int newSize)
+    {
+        if (newSize > l.Count)
+        {
+            for (int i = l.Count; i < newSize; i++) l.Add(default(T));
+        }
+        else if (newSize < l.Count)
+        {
+            while (l.Count > newSize) l.RemoveAt(l.Count - 1);
+        }
+    }
 }

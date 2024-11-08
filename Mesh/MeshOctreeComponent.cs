@@ -8,10 +8,14 @@ public class MeshOctreeComponent : MonoBehaviour
 
     public bool Raycast(Vector3 origin, Vector3 dir, float maxDist, ref Triangle hitInfo, ref float t)
     {
+        if (meshOctree == null) return false;
+
         return meshOctree.Raycast(origin, dir, maxDist, ref hitInfo, ref t);
     }
     public bool Linecast(Vector3 p1, Vector3 p2, ref Triangle hitInfo, ref float t)
     {
+        if (meshOctree == null) return false;
+
         Vector3 delta = p2 - p1;
         float maxDist = delta.magnitude;
         if (maxDist < 1e-3) return true;
