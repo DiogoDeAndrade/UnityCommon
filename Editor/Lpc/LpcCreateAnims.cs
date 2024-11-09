@@ -198,7 +198,7 @@ public class LpcCreateAnims
     private static bool NewMenuOptionValidation()
     {
         var selectedObject = Selection.activeObject;
-
+        if (selectedObject == null) return false;
         if (selectedObject.GetType() != typeof(Texture2D))
         {
             Debug.LogWarning("Can only create LPC animations from texture!");

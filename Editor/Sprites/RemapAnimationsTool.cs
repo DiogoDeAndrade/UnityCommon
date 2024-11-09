@@ -23,15 +23,20 @@ public class RemapAnimationsTool : MonoBehaviour
     [MenuItem("Assets/Tools/Remap Animations", validate = true)]
     private static bool RemapAnimationsValidation()
     {
-        foreach (var obj in Selection.objects)
+        if (Selection.objects.Length > 0)
         {
-            if (obj.GetType() != typeof(AnimationClip))
+            foreach (var obj in Selection.objects)
             {
-                return false;
+                if (obj.GetType() != typeof(AnimationClip))
+                {
+                    return false;
+                }
             }
+
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     static Dictionary<Sprite, Sprite> ConversionCache;

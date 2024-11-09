@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3cec5c6e63fb42046820f2657f02d040, type: 3}
+  m_Name: SpriteEffectConfig
+  m_EditorClassIdentifier: 
+  shaderToMaterial:
+  - srcMaterial: {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
+    destMaterial: {fileID: 2100000, guid: 19d0aae2b125306439101204002324a6, type: 2}
+  - srcMaterial: {fileID: 2100000, guid: 9dfc825aed78fcd4ba02077103263b40, type: 2}
+    destMaterial: {fileID: 2100000, guid: 424b595fb00c0a84f937990792d64e89, type: 2}

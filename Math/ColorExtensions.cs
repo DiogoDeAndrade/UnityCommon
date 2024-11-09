@@ -25,5 +25,16 @@ public static class ColorExtensions
         // Return the new color
         return new Color(r, g, b, a);
     }
+
+    public static float DistanceRGB(this Color c1, Color c2)
+    {
+        Color cInc = c1 - c2;
+        return Mathf.Sqrt(cInc.r * cInc.r + cInc.g * cInc.g + cInc.b * cInc.b);
+    }
+    public static float DistanceRGBA(this Color c1, Color c2)
+    {
+        Color cInc = c1 - c2;
+        return Mathf.Sqrt(cInc.r * cInc.r + cInc.g * cInc.g + cInc.b * cInc.b + cInc.a * cInc.a);
+    }
 };
 

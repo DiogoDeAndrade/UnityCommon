@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 [Serializable]
@@ -252,6 +253,68 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         Reset();
     }
 
+    public List<(T element, float weight)> GetTopN(int n)
+    {
+        if ((!init) || ((elements.Count == 0) && (originalElements.Count != 0) && (resetWhenEmpty))) Reset();
+
+        if (n <= 0)
+            throw new ArgumentException("N must be greater than zero.");
+
+        if (n > elements.Count)
+            n = elements.Count;
+
+        // Create a list of tuples with elements and their weights
+        return elements
+            .OrderByDescending(e => e.weight)
+            .Take(n)
+            .Select(e => (e.value, e.weight))
+            .ToList();
+    }
+
+    public void RemoveAll(Predicate<T> predicate)
+    {
+        if (predicate == null)
+            throw new ArgumentNullException(nameof(predicate));
+
+        // Keep track of total weight adjustment
+        float weightAdjustment = 0;
+
+        // Remove from original elements
+        int index = 0;
+        while (index < originalElements.Count)
+        {
+            if (predicate(originalElements[index].value))
+            {
+                weightAdjustment += originalElements[index].weight;
+                originalElements.RemoveAt(index);
+            }
+            else
+            {
+                index++;
+            }
+        }
+
+        // Update total weight
+        totalWeight -= weightAdjustment;
+
+        // If we're already initialized, update the current elements list too
+        if (init)
+        {
+            index = 0;
+            while (index < elements.Count)
+            {
+                if (predicate(elements[index].value))
+                {
+                    elements.RemoveAt(index);
+                }
+                else
+                {
+                    index++;
+                }
+            }
+        }
+    }
+
     internal string ToSimpleString()
     {
         string ret = "[ ";
@@ -270,6 +333,108 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         ret += " ]";
 
         return ret;
+    }
+
+    public List<T> KMeans(int n, Func<T, T, float> distanceFunc, int maxIterations = 10)
+    {
+        // Ensure there are at least `n` elements to choose from
+        if (Count < n) throw new ArgumentException("Not enough elements to form the specified number of clusters.");
+
+        // Initialize centroids with random elements from the list of highest-weighted items
+        List<T> centroids = originalElements
+            .OrderByDescending(e => e.weight)
+            .Take(n)
+            .Select(e => e.value)
+            .ToList();
+
+        List<List<(T element, float weight)>> clusters = new List<List<(T, float)>>();
+
+        // Repeat clustering until convergence or for a fixed number of iterations
+        for (int iteration = 0; iteration < maxIterations; iteration++) 
+        {
+            // Initialize clusters for this iteration
+            clusters = Enumerable.Range(0, n).Select(_ => new List<(T, float)>()).ToList();
+
+            // Assign each element to the nearest centroid
+            foreach (var (element, weight) in this)
+            {
+                int closestCentroidIndex = GetClosestCentroid(element, centroids, distanceFunc);
+                clusters[closestCentroidIndex].Add((element, weight));
+            }
+
+            // Update centroids based on the mean of each cluster
+            for (int i = 0; i < n; i++)
+            {
+                if (clusters[i].Count > 0)
+                {
+                    centroids[i] = GetClusterMean(clusters[i], distanceFunc);
+                }
+            }
+        }
+
+        // Select the representative for each cluster based on the highest weight
+        return clusters
+            .Where(cluster => cluster.Count > 0)
+            .Select(cluster => cluster.OrderByDescending(e => e.weight).First().element)
+            .ToList();
+    }
+
+    private int GetClosestCentroid(T element, List<T> centroids, Func<T, T, float> distanceFunc)
+    {
+        return centroids
+            .Select((centroid, index) => (index, distance: distanceFunc(element, centroid)))
+            .OrderBy(result => result.distance)
+            .First().index;
+    }
+
+    private T GetClusterMean(List<(T element, float weight)> cluster, Func<T, T, float> distanceFunc)
+    {
+        // Since T can be any type, we cannot calculate a true "mean."
+        // Instead, choose the element that minimizes the sum of distances to all others in the cluster
+        return cluster
+            .OrderBy(e => cluster.Sum(c => distanceFunc(e.element, c.element) * c.weight))
+            .First().element;
+    }
+
+    public List<T> GetAdaptiveTopN(int n, Func<T, T, float> distanceFunc)
+    {
+        // Ensure there are enough colors in the histogram
+        if (Count < n) throw new ArgumentException("Not enough elements to form the specified number of colors.");
+
+        // Step 1: Start with the color with the highest weight
+        var selectedColors = new List<T>();
+        var sortedElements = originalElements.OrderByDescending(e => e.weight).ToList();
+        selectedColors.Add(sortedElements[0].value);
+
+        // Step 2: Iteratively add the most distinct color
+        while (selectedColors.Count < n)
+        {
+            T bestCandidate = default;
+            float bestScore = float.NegativeInfinity;
+
+            foreach (var candidate in sortedElements)
+            {
+                if (selectedColors.Contains(candidate.value)) continue;
+
+                // Calculate distance from candidate to all selected colors
+                float minDistance = selectedColors.Min(selectedColor => distanceFunc(candidate.value, selectedColor));
+                float score = minDistance * candidate.weight; // Balance diversity and prominence
+
+                // Choose the candidate with the best combined score
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestCandidate = candidate.value;
+                }
+            }
+
+            if (bestCandidate != null)
+            {
+                selectedColors.Add(bestCandidate);
+            }
+        }
+
+        return selectedColors;
     }
 }
 
