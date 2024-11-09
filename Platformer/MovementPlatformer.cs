@@ -1,0 +1,430 @@
+using UnityEngine;
+using NaughtyAttributes;
+
+[RequireComponent(typeof(Rigidbody2D))]
+public class MovementPlatformer : MonoBehaviour
+{
+    public enum InputType { Axis = 0, Button = 1, Key = 2 };
+    public enum FlipBehaviour { None = 0, 
+                                VelocityFlipsSprite = 1, VelocityInvertsScale = 2, 
+                                InputFlipsSprite = 3, InputInvertsScale = 4,
+                                VelocityRotatesSprite = 5, InputRotatesSprite = 6 };
+    public enum JumpBehaviour { None = 0, Fixed = 1, Variable = 2 };
+    public enum GlideBehaviour { None = 0, Enabled = 1, Timer = 2 };
+
+    [SerializeField]
+    private Vector2 speed = new Vector2(100, 100);
+    [SerializeField]
+    private InputType horizontalInputType;
+    [SerializeField, InputAxis]
+    private string horizontalAxis = "Horizontal";
+    [SerializeField]
+    private string horizontalButtonPositive = "Right";
+    [SerializeField]
+    private string horizontalButtonNegative = "Left";
+    [SerializeField]
+    private KeyCode horizontalKeyPositive = KeyCode.RightArrow;
+    [SerializeField]
+    private KeyCode horizontalKeyNegative = KeyCode.LeftArrow;
+    [SerializeField]
+    private float gravityScale = 1.0f;
+    [SerializeField]
+    private bool useTerminalVelocity = false;
+    [SerializeField]
+    private float terminalVelocity = 100.0f;
+    [SerializeField]
+    private float coyoteTime = 0.0f;
+    [SerializeField]
+    private JumpBehaviour jumpBehaviour = JumpBehaviour.None;
+    [SerializeField]
+    private int maxJumpCount = 1;
+    [SerializeField]
+    private float jumpBufferingTime = 0.1f;
+    [SerializeField]
+    private float jumpHoldMaxTime = 0.1f;
+    [SerializeField]
+    private InputType jumpInputType;
+    [SerializeField, InputAxis]
+    private string jumpAxis = "Vertical";
+    [SerializeField]
+    private string jumpButton = "Jump";
+    [SerializeField]
+    private KeyCode jumpKey = KeyCode.Space;
+    [SerializeField]
+    private bool enableAirControl = true;
+    [SerializeField]
+    private Collider2D airCollider;
+    [SerializeField]
+    private Collider2D groundCollider;
+    [SerializeField]
+    private GlideBehaviour glideBehaviour = GlideBehaviour.None;
+    [SerializeField]
+    private float glideMaxTime = float.MaxValue;
+    [SerializeField]
+    private float maxGlideSpeed = 50.0f;
+    [SerializeField]
+    private InputType glideInputType;
+    [SerializeField, InputAxis]
+    private string glideAxis = "Vertical";
+    [SerializeField]
+    private string glideButton = "Jump";
+    [SerializeField]
+    private KeyCode glideKey = KeyCode.Space;
+    [SerializeField]
+    private Collider2D groundCheckCollider;
+    [SerializeField]
+    private LayerMask groundLayerMask;
+    [SerializeField]
+    private FlipBehaviour flipBehaviour = FlipBehaviour.None;
+    [SerializeField]
+    private bool useAnimator = false;
+    [SerializeField]
+    private Animator animator;
+    [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Float)]
+    private string horizontalVelocityParameter;
+    [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Float)]
+    private string absoluteHorizontalVelocityParameter;
+    [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Float)]
+    private string verticalVelocityParameter;
+    [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Float)]
+    private string absoluteVerticalVelocityParameter;
+    [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Bool)]
+    private string isGroundedParameter;
+    [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Bool)]
+    private string isGlidingParameter;
+
+    public bool isGrounded { get; private set; }
+    private SpriteRenderer spriteRenderer;
+    private int currentJumpCount;
+    private bool prevJumpKey = false;
+    private float jumpBufferingTimer = 0.0f;
+    private float jumpTime;
+    private float coyoteTimer;
+    private bool actualIsGrounded;
+    private float glideTimer = 0.0f;
+    public bool isGliding { get; private set; }
+
+    const float epsilonZero = 1e-3f;
+
+    public Vector2 GetSpeed() => speed;
+    public void SetSpeed(Vector2 speed) { this.speed = speed; }
+
+    public void SetGravityScale(float v) { gravityScale = v; }
+    public float GetGravityScale() => gravityScale;
+
+    public void SetMaxJumpCount(int v) { maxJumpCount = v; }
+
+    public void SetJumpHoldTime(float v) { jumpHoldMaxTime = v; }
+    public float GetJumpHoldTime() => jumpHoldMaxTime;
+    public void SetGlideMaxTime(float v) { glideMaxTime = v; }
+    public float GetGlideMaxTime() => glideMaxTime;
+
+    protected Rigidbody2D rb;
+
+    protected void Start()
+    {
+        rb = GetComponent<Rigidbody2D>();
+
+        if (rb)
+        {
+            rb.gravityScale = 0.0f;
+        }
+        if (animator == null)
+        {
+            animator = GetComponentInChildren<Animator>();
+        }
+        if (spriteRenderer == null)
+        {
+            spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        }
+    }
+
+    void FixedUpdate()
+    {
+        UpdateGroundState();
+
+        // Jump buffering
+        if ((jumpBehaviour != JumpBehaviour.None) && (jumpBufferingTimer > 0))
+        {
+            jumpBufferingTimer -= Time.fixedDeltaTime;
+            if (isGrounded)
+            {
+                Jump();
+            }
+        }
+
+        // Fixed height jump
+        if (jumpBehaviour == JumpBehaviour.Fixed)
+        {
+            bool isJumpPressed = GetJumpPressed();
+            if ((isJumpPressed) && (!prevJumpKey))
+            {
+                jumpBufferingTimer = jumpBufferingTime;
+
+                if ((isJumpPressed) && (!prevJumpKey))
+                {
+                    if ((isGrounded) && (currentJumpCount == maxJumpCount))
+                    {
+                        Jump();
+                    }
+                    else if (currentJumpCount > 0)
+                    {
+                        Jump();
+                    }
+                }
+            }
+            prevJumpKey = isJumpPressed;
+        }
+        else
+        {
+            bool isJumpPressed = GetJumpPressed();
+            if (isJumpPressed)
+            {
+                if (!prevJumpKey)
+                {
+                    jumpBufferingTimer = jumpBufferingTime;
+
+                    if ((isGrounded) && (currentJumpCount == maxJumpCount))
+                    {
+                        Jump();
+                    }
+                    else if (currentJumpCount > 0)
+                    {
+                        Jump();
+                    }
+                }
+                else if ((Time.time - jumpTime) < jumpHoldMaxTime)
+                {
+                    rb.linearVelocity = new Vector2(rb.linearVelocity.x, speed.y);
+                }
+            }
+            else
+            {
+                // Jump button was released, so it doesn't count anymore as being pressed
+                jumpTime = -float.MaxValue;
+            }
+            prevJumpKey = isJumpPressed;
+        }
+
+        bool limitFallSpeed = false;
+        float maxFallSpeed = float.MaxValue;
+
+        if (useTerminalVelocity)
+        {
+            limitFallSpeed = true;
+            maxFallSpeed = terminalVelocity;
+        }
+
+        isGliding = false;
+        if (glideBehaviour != GlideBehaviour.None)
+        {
+            if ((GetGlidePressed()) && ((glideTimer >= 0.0f) || (glideBehaviour == GlideBehaviour.Enabled)))
+            {
+                glideTimer -= Time.fixedDeltaTime;
+                limitFallSpeed = true;
+                maxFallSpeed = maxGlideSpeed;
+                isGliding = true;
+            }
+            else
+            {
+                isGliding = false;
+            }
+        }
+        else isGliding = false;
+
+        if (limitFallSpeed)
+        {
+            var currentVelocity = rb.linearVelocity;
+            if (currentVelocity.y < -maxFallSpeed)
+            {
+                currentVelocity.y = -maxFallSpeed;
+                rb.linearVelocity = currentVelocity;
+            }
+        }
+    }
+
+    void Jump()
+    {
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, speed.y);
+        jumpBufferingTimer = 0.0f;
+        coyoteTimer = 0;
+        jumpTime = Time.time;
+        currentJumpCount--;
+    }
+
+    bool GetJumpPressed()
+    {
+        switch (jumpInputType)
+        {
+            case InputType.Axis:
+                if (jumpAxis != "") return Input.GetAxis(jumpAxis) > epsilonZero;
+                break;
+            case InputType.Button:
+                if ((jumpButton != "") && (Input.GetButton(jumpButton))) return true;
+                break;
+            case InputType.Key:
+                if ((jumpKey != KeyCode.None) && (Input.GetKey(jumpKey))) return true;
+                break;
+            default:
+                break;
+        }
+
+        return false;
+    }
+
+    bool GetGlidePressed()
+    {
+        switch (glideInputType)
+        {
+            case InputType.Axis:
+                if (glideAxis != "") return Input.GetAxis(glideAxis) > epsilonZero;
+                break;
+            case InputType.Button:
+                if ((glideButton != "") && (Input.GetButton(glideButton))) return true;
+                break;
+            case InputType.Key:
+                if ((glideKey != KeyCode.None) && (Input.GetKey(glideKey))) return true;
+                break;
+            default:
+                break;
+        }
+
+        return false;
+    }
+    void Update()
+    {
+        if (coyoteTimer > 0)
+        {
+            coyoteTimer -= Time.deltaTime;
+        }
+
+        float deltaX = 0.0f;
+
+        UpdateGroundState();
+
+        if ((enableAirControl) || (isGrounded))
+        {
+            switch (horizontalInputType)
+            {
+                case InputType.Axis:
+                    if (horizontalAxis != "") deltaX = Input.GetAxis(horizontalAxis) * speed.x;
+                    break;
+                case InputType.Button:
+                    if ((horizontalButtonPositive != "") && (Input.GetButton(horizontalButtonPositive))) deltaX = speed.x;
+                    if ((horizontalButtonNegative != "") && (Input.GetButton(horizontalButtonNegative))) deltaX = -speed.x;
+                    break;
+                case InputType.Key:
+                    if ((horizontalKeyPositive != KeyCode.None) && (Input.GetKey(horizontalKeyPositive))) deltaX = speed.x;
+                    if ((horizontalKeyNegative != KeyCode.None) && (Input.GetKey(horizontalKeyNegative))) deltaX = -speed.x;
+                    break;
+                default:
+                    break;
+            }
+
+            rb.linearVelocity = new Vector2(deltaX, rb.linearVelocity.y);
+        }
+
+        // Need to check with actual is grounded or else coyote time will make the jump count reset immediately after flying off
+        if (actualIsGrounded)
+        {
+            rb.gravityScale = 0.0f;
+            currentJumpCount = maxJumpCount;
+            if (airCollider) airCollider.enabled = false;
+            if (groundCollider) groundCollider.enabled = true;
+            glideTimer = glideMaxTime;
+        }
+        else
+        {
+            rb.gravityScale = gravityScale;
+            if (airCollider) airCollider.enabled = true;
+            if (groundCollider) groundCollider.enabled = false;
+        }
+
+        var currentVelocity = rb.linearVelocity;
+
+        if ((useAnimator) && (animator))
+        {
+            if (horizontalVelocityParameter != "") animator.SetFloat(horizontalVelocityParameter, currentVelocity.x);
+            if (absoluteHorizontalVelocityParameter != "") animator.SetFloat(absoluteHorizontalVelocityParameter, Mathf.Abs(currentVelocity.x));
+            if (verticalVelocityParameter != "") animator.SetFloat(verticalVelocityParameter, currentVelocity.y);
+            if (absoluteVerticalVelocityParameter != "") animator.SetFloat(absoluteVerticalVelocityParameter, Mathf.Abs(currentVelocity.y));
+            if (isGroundedParameter != "") animator.SetBool(isGroundedParameter, actualIsGrounded);
+            if (isGlidingParameter != "") animator.SetBool(isGlidingParameter, isGliding);
+        }
+
+        switch (flipBehaviour)
+        {
+            case FlipBehaviour.None:
+                break;
+            case FlipBehaviour.VelocityFlipsSprite:
+                if (currentVelocity.x > epsilonZero) spriteRenderer.flipX = false;
+                else if (currentVelocity.x < -epsilonZero) spriteRenderer.flipX = true;
+                break;
+            case FlipBehaviour.VelocityInvertsScale:
+                if ((currentVelocity.x > epsilonZero) && (transform.localScale.x < 0.0f)) transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                else if ((currentVelocity.x < -epsilonZero) && (transform.localScale.x > 0.0f)) transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                break;
+            case FlipBehaviour.VelocityRotatesSprite:
+                if ((currentVelocity.x > epsilonZero) && (transform.right.x < 0.0f)) transform.rotation *= Quaternion.Euler(0, 180, 0);
+                else if ((currentVelocity.x < -epsilonZero) && (transform.right.x > 0.0f)) transform.rotation *= transform.rotation *= Quaternion.Euler(0, 180, 0); 
+                break;
+            case FlipBehaviour.InputFlipsSprite:
+                if (deltaX > epsilonZero) spriteRenderer.flipX = false;
+                else if (deltaX < -epsilonZero) spriteRenderer.flipX = true;
+                break;
+            case FlipBehaviour.InputInvertsScale:
+                if ((deltaX > epsilonZero) && (transform.localScale.x < 0.0f)) transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                else if ((deltaX < -epsilonZero) && (transform.localScale.x > 0.0f)) transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                break;
+            case FlipBehaviour.InputRotatesSprite:
+                if ((deltaX > epsilonZero) && (transform.right.x < 0.0f)) transform.rotation *= Quaternion.Euler(0, 180, 0);
+                else if ((deltaX < -epsilonZero) && (transform.right.x > 0.0f)) transform.rotation *= transform.rotation *= Quaternion.Euler(0, 180, 0);
+                break;
+            default:
+                break;
+        }
+    }
+
+    void UpdateGroundState()
+    {
+        if (groundCheckCollider)
+        {
+            ContactFilter2D contactFilter = new ContactFilter2D();
+            contactFilter.useLayerMask = true;
+            contactFilter.layerMask = groundLayerMask;
+
+            Collider2D[] results = new Collider2D[128];
+
+            int n = Physics2D.OverlapCollider(groundCheckCollider, contactFilter, results);
+            if (n > 0)
+            {
+                actualIsGrounded = true;
+                isGrounded = true;
+                return;
+            }
+            else
+            {
+                actualIsGrounded = false;
+                if (rb.linearVelocity.y > 0)
+                {
+                    coyoteTimer = 0;
+                }
+            }
+        }
+
+        if (actualIsGrounded)
+        {
+            coyoteTimer = coyoteTime;
+        }
+
+        actualIsGrounded = false;
+
+        if (coyoteTimer > 0)
+        {
+            isGrounded = true;
+            return;
+        }
+
+        isGrounded = false;
+    }
+}

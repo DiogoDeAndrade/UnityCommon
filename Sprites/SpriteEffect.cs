@@ -41,15 +41,14 @@ public class SpriteEffect : MonoBehaviour
 
     private void Update()
     {
-        if (dirty)
-        {
-            ConfigureMaterial();
-        }
+        ConfigureMaterial();
     }
 
     [Button("Update Material")]
     private void ConfigureMaterial()
     {
+        spriteRenderer.GetPropertyBlock(mpb);
+
         if ((palette) && (colorRemapEnable))
         {
             var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
