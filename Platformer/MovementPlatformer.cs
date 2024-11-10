@@ -5,12 +5,13 @@ using NaughtyAttributes;
 public class MovementPlatformer : MonoBehaviour
 {
     public enum InputType { Axis = 0, Button = 1, Key = 2 };
-    public enum FlipBehaviour { None = 0, 
-                                VelocityFlipsSprite = 1, VelocityInvertsScale = 2, 
-                                InputFlipsSprite = 3, InputInvertsScale = 4,
-                                VelocityRotatesSprite = 5, InputRotatesSprite = 6 };
+    public enum FlipBehaviour { None = 0,
+        VelocityFlipsSprite = 1, VelocityInvertsScale = 2,
+        InputFlipsSprite = 3, InputInvertsScale = 4,
+        VelocityRotatesSprite = 5, InputRotatesSprite = 6 };
     public enum JumpBehaviour { None = 0, Fixed = 1, Variable = 2 };
     public enum GlideBehaviour { None = 0, Enabled = 1, Timer = 2 };
+    public enum ClimbBehaviour { None = 0, Enabled = 1 };
 
     [SerializeField]
     private Vector2 speed = new Vector2(100, 100);
@@ -75,6 +76,28 @@ public class MovementPlatformer : MonoBehaviour
     [SerializeField]
     private LayerMask groundLayerMask;
     [SerializeField]
+    private ClimbBehaviour climbBehaviour;
+    [SerializeField]
+    private Collider2D climbCheckCollider;
+    [SerializeField]
+    private LayerMask climbMask;
+    [SerializeField]
+    private float climbSpeed = 200;
+    [SerializeField]
+    private float climbCooldown = 0.0f;
+    [SerializeField]
+    private InputType climbInputType;
+    [SerializeField, InputAxis]
+    private string climbAxis = "Vertical";
+    [SerializeField]
+    private string climbPositiveButton = "Up";
+    [SerializeField]
+    private string climbNegativeButton = "Down";
+    [SerializeField]
+    private KeyCode climbPositiveKey = KeyCode.UpArrow;
+    [SerializeField]
+    private KeyCode climbNegativeKey = KeyCode.DownArrow;
+    [SerializeField]
     private FlipBehaviour flipBehaviour = FlipBehaviour.None;
     [SerializeField]
     private bool useAnimator = false;
@@ -92,6 +115,8 @@ public class MovementPlatformer : MonoBehaviour
     private string isGroundedParameter;
     [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Bool)]
     private string isGlidingParameter;
+    [SerializeField, AnimatorParam("animator", AnimatorControllerParameterType.Bool)]
+    private string isClimbingParameter;
 
     public bool isGrounded { get; private set; }
     private SpriteRenderer spriteRenderer;
@@ -102,9 +127,13 @@ public class MovementPlatformer : MonoBehaviour
     private float coyoteTimer;
     private bool actualIsGrounded;
     private float glideTimer = 0.0f;
+    private bool isClimbing = false;
+    private bool canClimb = false;
     public bool isGliding { get; private set; }
 
     const float epsilonZero = 1e-3f;
+
+    float lastClimbTime = 0.0f;
 
     public Vector2 GetSpeed() => speed;
     public void SetSpeed(Vector2 speed) { this.speed = speed; }
@@ -342,6 +371,61 @@ public class MovementPlatformer : MonoBehaviour
 
         var currentVelocity = rb.linearVelocity;
 
+        if (climbBehaviour == ClimbBehaviour.Enabled)
+        {
+            float climbInput = 0.0f;
+            switch (climbInputType)
+            {
+                case InputType.Axis:
+                    climbInput = Input.GetAxis(climbAxis);
+                    break;
+                case InputType.Button:
+                    if ((climbPositiveButton != "") && (Input.GetButton(climbPositiveButton))) climbInput = 1.0f;
+                    if ((climbNegativeButton != "") && (Input.GetButton(climbNegativeButton))) climbInput = -1.0f;
+                    break;
+                case InputType.Key:
+                    if ((climbPositiveKey != KeyCode.None) && (Input.GetKey(climbPositiveKey))) climbInput = 1.0f;
+                    if ((climbNegativeKey != KeyCode.None) && (Input.GetKey(climbNegativeKey))) climbInput = -1.0f;
+                    break;
+                default:
+                    break;
+            }
+
+            if (isClimbing)
+            {
+                UpdateClimbState();
+                if (!canClimb)
+                {
+                    rb.gravityScale = gravityScale;
+                    isClimbing = false;
+                }
+                else
+                {
+                    rb.gravityScale = 0.0f;
+
+                    currentVelocity.y = climbInput * climbSpeed;
+                    rb.linearVelocity = currentVelocity;
+
+                    if ((climbInput < 0.0f) && (isGrounded))
+                    {
+                        isClimbing = false;
+                    }
+                }
+                lastClimbTime = Time.time;
+            }
+            else
+            {
+                if ((Mathf.Abs(climbInput) > 0.25f) && ((Time.time - lastClimbTime) > climbCooldown))
+                {
+                    UpdateClimbState();
+                    if (canClimb)
+                    {
+                        isClimbing = true;
+                    }
+                }
+            }
+        }
+
         if ((useAnimator) && (animator))
         {
             if (horizontalVelocityParameter != "") animator.SetFloat(horizontalVelocityParameter, currentVelocity.x);
@@ -350,6 +434,7 @@ public class MovementPlatformer : MonoBehaviour
             if (absoluteVerticalVelocityParameter != "") animator.SetFloat(absoluteVerticalVelocityParameter, Mathf.Abs(currentVelocity.y));
             if (isGroundedParameter != "") animator.SetBool(isGroundedParameter, actualIsGrounded);
             if (isGlidingParameter != "") animator.SetBool(isGlidingParameter, isGliding);
+            if (isClimbingParameter!= "") animator.SetBool(isClimbingParameter, isClimbing);
         }
 
         switch (flipBehaviour)
@@ -366,7 +451,7 @@ public class MovementPlatformer : MonoBehaviour
                 break;
             case FlipBehaviour.VelocityRotatesSprite:
                 if ((currentVelocity.x > epsilonZero) && (transform.right.x < 0.0f)) transform.rotation *= Quaternion.Euler(0, 180, 0);
-                else if ((currentVelocity.x < -epsilonZero) && (transform.right.x > 0.0f)) transform.rotation *= transform.rotation *= Quaternion.Euler(0, 180, 0); 
+                else if ((currentVelocity.x < -epsilonZero) && (transform.right.x > 0.0f)) transform.rotation *= transform.rotation *= Quaternion.Euler(0, 180, 0);
                 break;
             case FlipBehaviour.InputFlipsSprite:
                 if (deltaX > epsilonZero) spriteRenderer.flipX = false;
@@ -426,5 +511,26 @@ public class MovementPlatformer : MonoBehaviour
         }
 
         isGrounded = false;
+    }
+    void UpdateClimbState()
+    {
+        if (climbCheckCollider)
+        {
+            ContactFilter2D contactFilter = new ContactFilter2D();
+            contactFilter.useLayerMask = true;
+            contactFilter.layerMask = climbMask;
+            contactFilter.useTriggers = true;
+
+            Collider2D[] results = new Collider2D[128];
+
+            int n = Physics2D.OverlapCollider(climbCheckCollider, contactFilter, results);
+            if (n > 0)
+            {
+                canClimb = true;
+                return;
+            }
+        }
+
+        canClimb = false;
     }
 }

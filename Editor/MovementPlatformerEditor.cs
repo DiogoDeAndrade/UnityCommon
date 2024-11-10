@@ -1,3 +1,4 @@
+using NaughtyAttributes;
 using UnityEditor;
 using UnityEngine;
 
@@ -35,6 +36,17 @@ public class MovementPlatformerEditor : UnityCommonEditor
     SerializedProperty propGlideKey;
     SerializedProperty propGroundCheckCollider;
     SerializedProperty propGroundLayerMask;
+    SerializedProperty propClimbBehaviour;
+    SerializedProperty propClimbCheckCollider;
+    SerializedProperty propClimbSpeed;
+    SerializedProperty propClimbCooldown;
+    SerializedProperty propClimbMask;
+    SerializedProperty propClimbInputType;
+    SerializedProperty propClimbAxis;
+    SerializedProperty propClimbPositiveButton;
+    SerializedProperty propClimbNegativeButton;
+    SerializedProperty propClimbPositiveKey;
+    SerializedProperty propClimbNegativeKey;
     SerializedProperty propFlipBehaviour;
     SerializedProperty propUseAnimator;
     SerializedProperty propAnimator;
@@ -44,6 +56,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
     SerializedProperty propAbsoluteVerticalVelocityParameter;
     SerializedProperty propIsGroundedParameter;
     SerializedProperty propIsGlidingParameter;
+    SerializedProperty propIsClimbingParameter;
 
     protected override void OnEnable()
     {
@@ -80,6 +93,17 @@ public class MovementPlatformerEditor : UnityCommonEditor
         propGlideKey = serializedObject.FindProperty("glideKey");
         propGroundCheckCollider = serializedObject.FindProperty("groundCheckCollider");
         propGroundLayerMask = serializedObject.FindProperty("groundLayerMask");
+        propClimbBehaviour = serializedObject.FindProperty("climbBehaviour");
+        propClimbCheckCollider = serializedObject.FindProperty("climbCheckCollider");
+        propClimbSpeed = serializedObject.FindProperty("climbSpeed");
+        propClimbCooldown = serializedObject.FindProperty("climbCooldown");
+        propClimbMask = serializedObject.FindProperty("climbMask");
+        propClimbInputType = serializedObject.FindProperty("climbInputType");
+        propClimbAxis = serializedObject.FindProperty("climbAxis");
+        propClimbPositiveButton = serializedObject.FindProperty("climbPositiveButton");
+        propClimbNegativeButton = serializedObject.FindProperty("climbNegativeButton");
+        propClimbPositiveKey = serializedObject.FindProperty("climbPositiveKey");
+        propClimbNegativeKey = serializedObject.FindProperty("climbNegativeKey");
         propFlipBehaviour = serializedObject.FindProperty("flipBehaviour");
         propUseAnimator = serializedObject.FindProperty("useAnimator");
         propAnimator = serializedObject.FindProperty("animator");
@@ -89,6 +113,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
         propAbsoluteVerticalVelocityParameter = serializedObject.FindProperty("absoluteVerticalVelocityParameter");
         propIsGroundedParameter = serializedObject.FindProperty("isGroundedParameter");
         propIsGlidingParameter = serializedObject.FindProperty("isGlidingParameter");
+        propIsClimbingParameter = serializedObject.FindProperty("isClimbingParameter");
     }
 
     public override void OnInspectorGUI()
@@ -194,6 +219,37 @@ public class MovementPlatformerEditor : UnityCommonEditor
                 EditorGUILayout.PropertyField(propMaxGlideSpeed, new GUIContent("Max Glide Speed", "This is the maximum fall speed while gliding, in world units (pixels)/second."));
             }
 
+            EditorGUILayout.PropertyField(propClimbBehaviour, new GUIContent("Climb Behaviour", "Climb behaviour.\nNone: No climbing allowed.\nEnabled: Player can climb"));
+            if (propClimbBehaviour.intValue != (int)MovementPlatformer.ClimbBehaviour.None)
+            {
+                EditorGUILayout.PropertyField(propClimbSpeed, new GUIContent("Climb Speed", "Up/Down speed while climbing"));
+                EditorGUILayout.PropertyField(propClimbCooldown, new GUIContent("Climb cooldown", "How much time must pass before we can climb again?\nThis mostly avoids the stutter on the top when we just keep pressing up on top of stairs."));
+                EditorGUILayout.PropertyField(propClimbCheckCollider, new GUIContent("Climb Check Collider", "Collider to use for climb tests"));
+                EditorGUILayout.PropertyField(propClimbMask, new GUIContent("Climbable Layer Mask", "Ladders or ropes must be on this layer"));
+
+                EditorGUILayout.PropertyField(propClimbInputType, new GUIContent("Climb Input Type", "What's the input to climb?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
+
+                var climbInputType = (MovementPlatformer.InputType)propClimbInputType.intValue;
+
+                switch (climbInputType)
+                {
+                    case MovementPlatformer.InputType.Axis:
+                        EditorGUILayout.PropertyField(propClimbAxis, new GUIContent("Climb Axis", "What's the climb axis?\nAs soon as this axis any amount of positive, it's considered triggered."));
+                        break;
+                    case MovementPlatformer.InputType.Button:
+                        EditorGUILayout.PropertyField(propClimbPositiveButton, new GUIContent("Climb Up Button", "Climb up button"));
+                        EditorGUILayout.PropertyField(propClimbNegativeButton, new GUIContent("Climb Down Button", "Climb down button"));
+                        break;
+                    case MovementPlatformer.InputType.Key:
+                        EditorGUILayout.PropertyField(propClimbPositiveKey, new GUIContent("Climb Up Key", "Climb up key"));
+                        EditorGUILayout.PropertyField(propClimbNegativeKey, new GUIContent("Climb Down Key", "Climb down key"));
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+
             // Separator
             Rect separatorRect = GUILayoutUtility.GetLastRect();
             separatorRect.yMin = separatorRect.yMax + 5;
@@ -212,6 +268,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
                 EditorGUILayout.PropertyField(propAbsoluteVerticalVelocityParameter, new GUIContent("Absolute Vertical Velocity Parameter", "What is the parameter to set to the absolute horizontal velocity?"));
                 EditorGUILayout.PropertyField(propIsGroundedParameter, new GUIContent("Is Grounded Parameter", "What is the parameter to set to true/false when the player is grounded?"));
                 EditorGUILayout.PropertyField(propIsGlidingParameter, new GUIContent("Is Glidding Parameter", "What is the parameter to set to true/false when the player is gliding?"));
+                EditorGUILayout.PropertyField(propIsClimbingParameter, new GUIContent("Is Climbing Parameter", "What is the parameter to set to true/false when the player is climbing?"));
             }
 
             EditorGUI.EndChangeCheck();
