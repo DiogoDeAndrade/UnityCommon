@@ -21,7 +21,6 @@ public class SpriteEffect : MonoBehaviour
 
     private MaterialPropertyBlock   mpb;
     private SpriteRenderer          spriteRenderer;
-    private bool                    dirty = true;
 
     private void OnEnable()
     {
@@ -36,7 +35,6 @@ public class SpriteEffect : MonoBehaviour
     public void SetRemap(ColorPalette colorPalette)
     {
         palette = colorPalette;
-        dirty = true;
     }
 
     private void Update()
@@ -70,7 +68,5 @@ public class SpriteEffect : MonoBehaviour
         }
 
         spriteRenderer.SetPropertyBlock(mpb);
-
-        dirty = false;
     }
 }

@@ -215,8 +215,6 @@ public class ColorPalette : ScriptableObject
         {
             throw new NotImplementedException();
         }
-
-        return null;
     }
 
     public void UpdateTexture(Texture2D texture, TextureLayoutMode mode, int sizePerItem)
