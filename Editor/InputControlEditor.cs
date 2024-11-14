@@ -96,9 +96,43 @@ public class InputControlDrawer : PropertyDrawer
                 }
                 else
                 {
-                    EditorGUIUtility.labelWidth = CalcLabelWidth("Input Action");
-                    Rect inputActionRect = new Rect(position.x, position.y + singleLineHeight + spacing, position.width, singleLineHeight);
-                    EditorGUI.PropertyField(inputActionRect, inputActionProp, new GUIContent("Input Action"));
+                    // Get the InputActionAsset from the PlayerInput
+                    var inputActionAsset = playerInput.actions;
+                    if (inputActionAsset == null)
+                    {
+                        Rect warningRect = new Rect(position.x, position.y + singleLineHeight + spacing, position.width, singleLineHeight * 2);
+                        EditorGUI.HelpBox(warningRect, "No InputActionAsset found on the PlayerInput.", MessageType.Warning);
+                    }
+                    else
+                    {
+                        // Collect actions of the appropriate type (Axis or Button)
+                        var actionNames = new List<string>();
+                        foreach (var action in inputActionAsset)
+                        {
+                            if (IsActionOfType(action, (inputButtonAttr == null)))
+                            {
+                                actionNames.Add(action.name);
+                            }
+                        }
+
+                        if (actionNames.Count == 0)
+                        {
+                            // Display a message if no suitable actions are found
+                            Rect noActionsRect = new Rect(position.x, position.y + singleLineHeight + spacing, position.width, singleLineHeight * 2);
+                            EditorGUI.HelpBox(noActionsRect, "No suitable actions found in the PlayerInput.", MessageType.Warning);
+                        }
+                        else
+                        {
+                            // Display a popup with available actions
+                            int selectedIndex = actionNames.IndexOf(inputActionProp.stringValue);
+                            selectedIndex = Mathf.Max(0, selectedIndex); // Ensure a valid index
+                            Rect dropdownRect = new Rect(position.x, position.y + singleLineHeight + spacing, position.width, singleLineHeight);
+                            selectedIndex = EditorGUI.Popup(dropdownRect, "Input Action", selectedIndex, actionNames.ToArray());
+
+                            // Set the selected action name to inputActionProp
+                            inputActionProp.stringValue = actionNames[selectedIndex];
+                        }
+                    }
                 }
                 break;
         }
@@ -108,6 +142,15 @@ public class InputControlDrawer : PropertyDrawer
 
         EditorGUI.indentLevel = indent;
         EditorGUI.EndProperty();
+    }
+
+    // Helper method to check if an action is an Axis or Button type based on the control type
+    private bool IsActionOfType(InputAction action, bool isAxis)
+    {
+        if ((action.type == InputActionType.Value) && (isAxis)) return true;
+        if ((action.type == InputActionType.Button) && (!isAxis)) return true;
+
+        return false;
     }
 
     private InputControl.InputType DrawFilteredEnumPopup(Rect position, SerializedProperty typeProp, AllowInput allowedTypes)

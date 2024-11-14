@@ -3,7 +3,7 @@ using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-[System.Serializable]
+[Serializable]
 public class InputControl
 {
     public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3 };
@@ -23,6 +23,12 @@ public class InputControl
     [SerializeField]
     private string      inputAction = "";
 
+    InputAction action;
+    PlayerInput _playerInput;
+    bool        isVec2;
+
+    public PlayerInput playerInput { get => _playerInput; set { _playerInput = value; } }
+
     public float GetAxis()
     {
         float v = 0.0f;
@@ -41,8 +47,12 @@ public class InputControl
                 if ((keyNegative != KeyCode.None) && (Input.GetKey(keyNegative))) v -= 1.0f;
                 break;
             case InputType.NewInput:
-                                
-                InputAction action = new();
+                if (action == null) RefreshAction();
+                if (action != null)
+                {
+                    if (isVec2) v = action.ReadValue<Vector2>().x;
+                    else v = action.ReadValue<float>();
+                }
                 break;
             default:
                 break;
@@ -67,12 +77,14 @@ public class InputControl
                 if (keyPositive != KeyCode.None) ret = Input.GetKey(keyPositive);
                 break;
             case InputType.NewInput:
+                if (action == null) RefreshAction();
+                if (action != null) ret = action.phase == InputActionPhase.Performed;
                 break;
             default:
                 break;
         }
 
-        return true;
+        return ret;
     }
 
     public bool IsDown()
@@ -91,12 +103,14 @@ public class InputControl
                 if (keyPositive != KeyCode.None) ret = Input.GetKeyDown(keyPositive);
                 break;
             case InputType.NewInput:
+                if (action == null) RefreshAction();
+                if (action != null) ret = action.phase == InputActionPhase.Started;
                 break;
             default:
                 break;
         }
 
-        return true;
+        return ret;
     }
 
     public bool IsUp()
@@ -115,12 +129,38 @@ public class InputControl
                 if (keyPositive != KeyCode.None) ret = Input.GetKeyUp(keyPositive);
                 break;
             case InputType.NewInput:
+                if (action == null) RefreshAction();
+                if (action != null) ret = action.phase == InputActionPhase.Canceled;
                 break;
             default:
                 break;
         }
 
-        return true;
+        return ret;
+    }
+
+    void RefreshAction()
+    {
+        if (_playerInput == null) Debug.LogWarning($"Trying to fetch axis {inputAction}, but player input is not set!");
+        else
+        {
+            if (playerInput.actions == null)
+            {
+                Debug.LogWarning($"Player input has no control set!");
+            }
+            else
+            {
+                action = playerInput.actions.FindAction(inputAction);
+                if (action == null)
+                {
+                    Debug.LogWarning($"Action '{inputAction}' not found in PlayerInput's InputActionAsset {playerInput.actions.name}.");
+                }
+                else
+                {
+                    isVec2 = action.expectedControlType == nameof(Vector2);
+                }
+            }
+        }
     }
 }
 
