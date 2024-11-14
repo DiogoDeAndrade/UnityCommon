@@ -1,7 +1,6 @@
 using NaughtyAttributes;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.UI.Extensions;
 
 [CustomEditor(typeof(MovementPlatformer))]
 public class MovementPlatformerEditor : UnityCommonEditor

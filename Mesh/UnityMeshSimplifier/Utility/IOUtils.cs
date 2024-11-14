@@ -14,7 +14,7 @@ namespace UnityMeshSimplifier
 
             path = path.Replace('\\', '/').Trim('/');
 
-            if (Path.IsPathRooted(path))
+            if (System.IO.Path.IsPathRooted(path))
                 throw new ArgumentException("The path cannot be rooted.", "path");
 
             // Make the path safe
@@ -28,7 +28,7 @@ namespace UnityMeshSimplifier
 
         internal static string MakeSafeFileName(string name)
         {
-            char[] invalidFileNameChars = Path.GetInvalidFileNameChars();
+            char[] invalidFileNameChars = System.IO.Path.GetInvalidFileNameChars();
 
             var sb = new StringBuilder(name.Length);
             bool lastWasInvalid = false;

@@ -53,7 +53,7 @@ public class LpcSpriteProcessor : AssetPostprocessor {
 
 	void OnPreprocessTexture()
 	{
-        string filename = Path.GetFileName(assetPath);
+        string filename = System.IO.Path.GetFileName(assetPath);
         if (filename.Length > 4)
         {
             if (filename.Substring(0, 4) != "LPC_") return;
@@ -83,7 +83,7 @@ public class LpcSpriteProcessor : AssetPostprocessor {
 
 	public void OnPostprocessTexture (Texture2D texture)
 	{
-        string filename = Path.GetFileName(assetPath);
+        string filename = System.IO.Path.GetFileName(assetPath);
         if (filename.Length > 4)
         {
             if (filename.Substring(0, 4) != "LPC_") return;
