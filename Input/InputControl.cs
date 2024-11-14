@@ -9,7 +9,8 @@ public class InputControl
     public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3 };
 
     [SerializeField] 
-    private InputType   type;
+    private InputType   _type;
+    public InputType    type => _type;
     [SerializeField, InputAxis]
     private string      axis = "Horizontal";
     [SerializeField, InputAxis]

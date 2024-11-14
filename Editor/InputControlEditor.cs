@@ -21,7 +21,7 @@ public class InputControlDrawer : PropertyDrawer
         float spacing = EditorGUIUtility.standardVerticalSpacing;
 
         // Get properties
-        var typeProp = property.FindPropertyRelative("type");
+        var typeProp = property.FindPropertyRelative("_type");
         var axisProp = property.FindPropertyRelative("axis");
         var buttonPositiveProp = property.FindPropertyRelative("buttonPositive");
         var buttonNegativeProp = property.FindPropertyRelative("buttonNegative");
@@ -183,7 +183,7 @@ public class InputControlDrawer : PropertyDrawer
 
     public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
     {
-        var typeProp = property.FindPropertyRelative("type");
+        var typeProp = property.FindPropertyRelative("_type");
         InputControl.InputType type = (InputControl.InputType)typeProp.enumValueIndex;
 
         // Check for InputButton attribute to determine if it's button-only

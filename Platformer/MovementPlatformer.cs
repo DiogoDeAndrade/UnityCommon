@@ -1,10 +1,10 @@
 using UnityEngine;
 using NaughtyAttributes;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Rigidbody2D))]
 public class MovementPlatformer : MonoBehaviour
 {
-    public enum InputType { Axis = 0, Button = 1, Key = 2 };
     public enum FlipBehaviour { None = 0,
         VelocityFlipsSprite = 1, VelocityInvertsScale = 2,
         InputFlipsSprite = 3, InputInvertsScale = 4,
@@ -15,18 +15,10 @@ public class MovementPlatformer : MonoBehaviour
 
     [SerializeField]
     private Vector2 speed = new Vector2(100, 100);
-    [SerializeField]
-    private InputType horizontalInputType;
-    [SerializeField, InputAxis]
-    private string horizontalAxis = "Horizontal";
-    [SerializeField]
-    private string horizontalButtonPositive = "Right";
-    [SerializeField]
-    private string horizontalButtonNegative = "Left";
-    [SerializeField]
-    private KeyCode horizontalKeyPositive = KeyCode.RightArrow;
-    [SerializeField]
-    private KeyCode horizontalKeyNegative = KeyCode.LeftArrow;
+    [SerializeField, HideIf("needNewInputSystem")]
+    private PlayerInput playerInput;
+    [SerializeField, InputPlayer(nameof(playerInput))]
+    private InputControl horizontalInput;
     [SerializeField]
     private float gravityScale = 1.0f;
     [SerializeField]
@@ -43,14 +35,8 @@ public class MovementPlatformer : MonoBehaviour
     private float jumpBufferingTime = 0.1f;
     [SerializeField]
     private float jumpHoldMaxTime = 0.1f;
-    [SerializeField]
-    private InputType jumpInputType;
-    [SerializeField, InputAxis]
-    private string jumpAxis = "Vertical";
-    [SerializeField]
-    private string jumpButton = "Jump";
-    [SerializeField]
-    private KeyCode jumpKey = KeyCode.Space;
+    [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
+    private InputControl jumpInput;
     [SerializeField]
     private bool enableAirControl = true;
     [SerializeField]
@@ -63,14 +49,8 @@ public class MovementPlatformer : MonoBehaviour
     private float glideMaxTime = float.MaxValue;
     [SerializeField]
     private float maxGlideSpeed = 50.0f;
-    [SerializeField]
-    private InputType glideInputType;
-    [SerializeField, InputAxis]
-    private string glideAxis = "Vertical";
-    [SerializeField]
-    private string glideButton = "Jump";
-    [SerializeField]
-    private KeyCode glideKey = KeyCode.Space;
+    [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
+    private InputControl glideInput;
     [SerializeField]
     private Collider2D groundCheckCollider;
     [SerializeField]
@@ -85,18 +65,8 @@ public class MovementPlatformer : MonoBehaviour
     private float climbSpeed = 200;
     [SerializeField]
     private float climbCooldown = 0.0f;
-    [SerializeField]
-    private InputType climbInputType;
-    [SerializeField, InputAxis]
-    private string climbAxis = "Vertical";
-    [SerializeField]
-    private string climbPositiveButton = "Up";
-    [SerializeField]
-    private string climbNegativeButton = "Down";
-    [SerializeField]
-    private KeyCode climbPositiveKey = KeyCode.UpArrow;
-    [SerializeField]
-    private KeyCode climbNegativeKey = KeyCode.DownArrow;
+    [SerializeField, InputPlayer(nameof(playerInput))]
+    private InputControl climbInput;
     [SerializeField]
     private FlipBehaviour flipBehaviour = FlipBehaviour.None;
     [SerializeField]
@@ -148,6 +118,8 @@ public class MovementPlatformer : MonoBehaviour
     public void SetGlideMaxTime(float v) { glideMaxTime = v; }
     public float GetGlideMaxTime() => glideMaxTime;
 
+    public bool needNewInputSystem => (horizontalInput.type == InputControl.InputType.NewInput);
+
     protected Rigidbody2D rb;
 
     protected void Start()
@@ -166,6 +138,11 @@ public class MovementPlatformer : MonoBehaviour
         {
             spriteRenderer = GetComponentInChildren<SpriteRenderer>();
         }
+
+        horizontalInput.playerInput = playerInput;
+        climbInput.playerInput = playerInput;
+        jumpInput.playerInput = playerInput;
+        glideInput.playerInput = playerInput;
     }
 
     void FixedUpdate()
@@ -283,43 +260,14 @@ public class MovementPlatformer : MonoBehaviour
 
     bool GetJumpPressed()
     {
-        switch (jumpInputType)
-        {
-            case InputType.Axis:
-                if (jumpAxis != "") return Input.GetAxis(jumpAxis) > epsilonZero;
-                break;
-            case InputType.Button:
-                if ((jumpButton != "") && (Input.GetButton(jumpButton))) return true;
-                break;
-            case InputType.Key:
-                if ((jumpKey != KeyCode.None) && (Input.GetKey(jumpKey))) return true;
-                break;
-            default:
-                break;
-        }
-
-        return false;
+        return jumpInput.IsPressed();
     }
 
     bool GetGlidePressed()
     {
-        switch (glideInputType)
-        {
-            case InputType.Axis:
-                if (glideAxis != "") return Input.GetAxis(glideAxis) > epsilonZero;
-                break;
-            case InputType.Button:
-                if ((glideButton != "") && (Input.GetButton(glideButton))) return true;
-                break;
-            case InputType.Key:
-                if ((glideKey != KeyCode.None) && (Input.GetKey(glideKey))) return true;
-                break;
-            default:
-                break;
-        }
-
-        return false;
+        return glideInput.IsPressed();
     }
+
     void Update()
     {
         if (coyoteTimer > 0)
@@ -333,24 +281,9 @@ public class MovementPlatformer : MonoBehaviour
 
         if ((enableAirControl) || (isGrounded))
         {
-            switch (horizontalInputType)
-            {
-                case InputType.Axis:
-                    if (horizontalAxis != "") deltaX = Input.GetAxis(horizontalAxis) * speed.x;
-                    break;
-                case InputType.Button:
-                    if ((horizontalButtonPositive != "") && (Input.GetButton(horizontalButtonPositive))) deltaX = speed.x;
-                    if ((horizontalButtonNegative != "") && (Input.GetButton(horizontalButtonNegative))) deltaX = -speed.x;
-                    break;
-                case InputType.Key:
-                    if ((horizontalKeyPositive != KeyCode.None) && (Input.GetKey(horizontalKeyPositive))) deltaX = speed.x;
-                    if ((horizontalKeyNegative != KeyCode.None) && (Input.GetKey(horizontalKeyNegative))) deltaX = -speed.x;
-                    break;
-                default:
-                    break;
-            }
+            deltaX = horizontalInput.GetAxis();
 
-            rb.linearVelocity = new Vector2(deltaX, rb.linearVelocity.y);
+            rb.linearVelocity = new Vector2(deltaX * speed.x, rb.linearVelocity.y);
         }
 
         // Need to check with actual is grounded or else coyote time will make the jump count reset immediately after flying off
@@ -373,23 +306,7 @@ public class MovementPlatformer : MonoBehaviour
 
         if (climbBehaviour == ClimbBehaviour.Enabled)
         {
-            float climbInput = 0.0f;
-            switch (climbInputType)
-            {
-                case InputType.Axis:
-                    climbInput = Input.GetAxis(climbAxis);
-                    break;
-                case InputType.Button:
-                    if ((climbPositiveButton != "") && (Input.GetButton(climbPositiveButton))) climbInput = 1.0f;
-                    if ((climbNegativeButton != "") && (Input.GetButton(climbNegativeButton))) climbInput = -1.0f;
-                    break;
-                case InputType.Key:
-                    if ((climbPositiveKey != KeyCode.None) && (Input.GetKey(climbPositiveKey))) climbInput = 1.0f;
-                    if ((climbNegativeKey != KeyCode.None) && (Input.GetKey(climbNegativeKey))) climbInput = -1.0f;
-                    break;
-                default:
-                    break;
-            }
+            float deltaY = climbInput.GetAxis();
 
             if (isClimbing)
             {
@@ -403,10 +320,10 @@ public class MovementPlatformer : MonoBehaviour
                 {
                     rb.gravityScale = 0.0f;
 
-                    currentVelocity.y = climbInput * climbSpeed;
+                    currentVelocity.y = deltaY * climbSpeed;
                     rb.linearVelocity = currentVelocity;
 
-                    if ((climbInput < 0.0f) && (isGrounded))
+                    if ((deltaY < 0.0f) && (isGrounded))
                     {
                         isClimbing = false;
                     }
@@ -415,7 +332,7 @@ public class MovementPlatformer : MonoBehaviour
             }
             else
             {
-                if ((Mathf.Abs(climbInput) > 0.25f) && ((Time.time - lastClimbTime) > climbCooldown))
+                if ((Mathf.Abs(deltaY) > 0.25f) && ((Time.time - lastClimbTime) > climbCooldown))
                 {
                     UpdateClimbState();
                     if (canClimb)
