@@ -101,7 +101,7 @@ public class MovementPlatformer : MonoBehaviour
     private bool canClimb = false;
     public bool isGliding { get; private set; }
 
-    const float epsilonZero = 1e-3f;
+    const float epsilonZero = 0.1f;
 
     float lastClimbTime = 0.0f;
 

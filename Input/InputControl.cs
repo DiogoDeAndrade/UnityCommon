@@ -79,7 +79,7 @@ public class InputControl
                 break;
             case InputType.NewInput:
                 if (action == null) RefreshAction();
-                if (action != null) ret = action.phase == InputActionPhase.Performed;
+                if (action != null) ret = action.IsPressed();
                 break;
             default:
                 break;
@@ -105,7 +105,7 @@ public class InputControl
                 break;
             case InputType.NewInput:
                 if (action == null) RefreshAction();
-                if (action != null) ret = action.phase == InputActionPhase.Started;
+                if (action != null) ret = action.WasPressedThisFrame();
                 break;
             default:
                 break;
@@ -131,7 +131,7 @@ public class InputControl
                 break;
             case InputType.NewInput:
                 if (action == null) RefreshAction();
-                if (action != null) ret = action.phase == InputActionPhase.Canceled;
+                if (action != null) ret = action.WasReleasedThisFrame();
                 break;
             default:
                 break;
@@ -162,6 +162,12 @@ public class InputControl
                 }
             }
         }
+    }
+
+    public void Test()
+    {
+        
+        if (action == null) RefreshAction();
     }
 }
 
