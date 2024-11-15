@@ -18,7 +18,7 @@ public class PathXYEditor : UnityCommonEditor
     SerializedProperty propDisplayColor;
 
     int editPoint = -1;
-    Tool lastTool = Tool.None;
+    UnityEditor.Tool lastTool = UnityEditor.Tool.None;
 
     static int nextPointToSelect = -1;
 
@@ -289,8 +289,8 @@ public class PathXYEditor : UnityCommonEditor
             }
 
             // Disable transform gizmo tool
-            if (Tools.current != Tool.None) lastTool = Tools.current;
-            Tools.current = Tool.None;
+            if (Tools.current != UnityEditor.Tool.None) lastTool = Tools.current;
+            Tools.current = UnityEditor.Tool.None;
 
             if (localSpace)
             {
@@ -418,8 +418,8 @@ public class PathXYEditor : UnityCommonEditor
         }
         else
         {
-            if (lastTool != Tool.None) Tools.current = lastTool;
-            lastTool = Tool.None;    
+            if (lastTool != UnityEditor.Tool.None) Tools.current = lastTool;
+            lastTool = UnityEditor.Tool.None;    
         }
     }
 
