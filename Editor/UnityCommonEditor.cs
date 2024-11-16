@@ -1,8 +1,7 @@
 using UnityEditor;
 using UnityEngine;
-using System.Linq;
 
-public abstract class UnityCommonEditor : UnityEditor.Editor
+public abstract class UnityCommonEditor : Editor
 {
     protected abstract GUIStyle GetTitleSyle();
 

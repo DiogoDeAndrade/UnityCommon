@@ -6,12 +6,8 @@ using UnityEngine;
 public class MovementPlatformerEditor : UnityCommonEditor
 {
     SerializedProperty propSpeed;
-    SerializedProperty propHorizontalInputType;
-    SerializedProperty propHorizontalAxis;
-    SerializedProperty propHorizontalButtonPositive;
-    SerializedProperty propHorizontalButtonNegative;
-    SerializedProperty propHorizontalKeyPositive;
-    SerializedProperty propHorizontalKeyNegative;
+    SerializedProperty propPlayerInput;
+    SerializedProperty propHorizontalInput;
     SerializedProperty propGravityScale;
     SerializedProperty propUseTerminalVelocity;
     SerializedProperty propTerminalVelocity;
@@ -20,20 +16,14 @@ public class MovementPlatformerEditor : UnityCommonEditor
     SerializedProperty propMaxJumpCount;
     SerializedProperty propJumpBufferingTime;
     SerializedProperty propJumpHoldMaxTime;
-    SerializedProperty propJumpInputType;
-    SerializedProperty propJumpAxis;
-    SerializedProperty propJumpButton;
-    SerializedProperty propJumpKey;
+    SerializedProperty propJumpInput;
     SerializedProperty propEnableAirControl;
     SerializedProperty propAirCollider;
     SerializedProperty propGroundCollider;
     SerializedProperty propGlideBehaviour;
     SerializedProperty propGlideMaxTime;
     SerializedProperty propMaxGlideSpeed;
-    SerializedProperty propGlideInputType;
-    SerializedProperty propGlideAxis;
-    SerializedProperty propGlideButton;
-    SerializedProperty propGlideKey;
+    SerializedProperty propGlideInput;
     SerializedProperty propGroundCheckCollider;
     SerializedProperty propGroundLayerMask;
     SerializedProperty propClimbBehaviour;
@@ -41,12 +31,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
     SerializedProperty propClimbSpeed;
     SerializedProperty propClimbCooldown;
     SerializedProperty propClimbMask;
-    SerializedProperty propClimbInputType;
-    SerializedProperty propClimbAxis;
-    SerializedProperty propClimbPositiveButton;
-    SerializedProperty propClimbNegativeButton;
-    SerializedProperty propClimbPositiveKey;
-    SerializedProperty propClimbNegativeKey;
+    SerializedProperty propClimbInput;
     SerializedProperty propFlipBehaviour;
     SerializedProperty propUseAnimator;
     SerializedProperty propAnimator;
@@ -63,12 +48,8 @@ public class MovementPlatformerEditor : UnityCommonEditor
         base.OnEnable();
 
         propSpeed = serializedObject.FindProperty("speed");
-        propHorizontalInputType = serializedObject.FindProperty("horizontalInputType");
-        propHorizontalAxis = serializedObject.FindProperty("horizontalAxis");
-        propHorizontalButtonPositive = serializedObject.FindProperty("horizontalButtonPositive");
-        propHorizontalButtonNegative = serializedObject.FindProperty("horizontalButtonNegative");
-        propHorizontalKeyPositive = serializedObject.FindProperty("horizontalKeyPositive");
-        propHorizontalKeyNegative = serializedObject.FindProperty("horizontalKeyNegative");
+        propPlayerInput = serializedObject.FindProperty("playerInput");
+        propHorizontalInput = serializedObject.FindProperty("horizontalInput");
         propGravityScale = serializedObject.FindProperty("gravityScale");
         propUseTerminalVelocity = serializedObject.FindProperty("useTerminalVelocity");
         propTerminalVelocity = serializedObject.FindProperty("terminalVelocity");
@@ -77,20 +58,14 @@ public class MovementPlatformerEditor : UnityCommonEditor
         propMaxJumpCount = serializedObject.FindProperty("maxJumpCount");
         propJumpBufferingTime = serializedObject.FindProperty("jumpBufferingTime");
         propJumpHoldMaxTime = serializedObject.FindProperty("jumpHoldMaxTime");
-        propJumpInputType = serializedObject.FindProperty("jumpInputType");
-        propJumpAxis = serializedObject.FindProperty("jumpAxis");
-        propJumpButton = serializedObject.FindProperty("jumpButton");
-        propJumpKey = serializedObject.FindProperty("jumpKey");
+        propJumpInput = serializedObject.FindProperty("jumpInput");
         propEnableAirControl = serializedObject.FindProperty("enableAirControl");
         propAirCollider = serializedObject.FindProperty("airCollider");
         propGroundCollider = serializedObject.FindProperty("groundCollider");
         propGlideBehaviour = serializedObject.FindProperty("glideBehaviour");
         propGlideMaxTime = serializedObject.FindProperty("glideMaxTime");
         propMaxGlideSpeed = serializedObject.FindProperty("maxGlideSpeed");
-        propGlideInputType = serializedObject.FindProperty("glideInputType");
-        propGlideAxis = serializedObject.FindProperty("glideAxis");
-        propGlideButton = serializedObject.FindProperty("glideButton");
-        propGlideKey = serializedObject.FindProperty("glideKey");
+        propGlideInput = serializedObject.FindProperty("glideInput");
         propGroundCheckCollider = serializedObject.FindProperty("groundCheckCollider");
         propGroundLayerMask = serializedObject.FindProperty("groundLayerMask");
         propClimbBehaviour = serializedObject.FindProperty("climbBehaviour");
@@ -98,12 +73,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
         propClimbSpeed = serializedObject.FindProperty("climbSpeed");
         propClimbCooldown = serializedObject.FindProperty("climbCooldown");
         propClimbMask = serializedObject.FindProperty("climbMask");
-        propClimbInputType = serializedObject.FindProperty("climbInputType");
-        propClimbAxis = serializedObject.FindProperty("climbAxis");
-        propClimbPositiveButton = serializedObject.FindProperty("climbPositiveButton");
-        propClimbNegativeButton = serializedObject.FindProperty("climbNegativeButton");
-        propClimbPositiveKey = serializedObject.FindProperty("climbPositiveKey");
-        propClimbNegativeKey = serializedObject.FindProperty("climbNegativeKey");
+        propClimbInput = serializedObject.FindProperty("climbInput");
         propFlipBehaviour = serializedObject.FindProperty("flipBehaviour");
         propUseAnimator = serializedObject.FindProperty("useAnimator");
         propAnimator = serializedObject.FindProperty("animator");
@@ -126,26 +96,14 @@ public class MovementPlatformerEditor : UnityCommonEditor
 
             EditorGUILayout.PropertyField(propSpeed, new GUIContent("Speed", "Maximum movement speed.\nX component is the maximum horizontal velocity\nY component is the jump velocity"));
 
-            EditorGUILayout.PropertyField(propHorizontalInputType, new GUIContent("Horizontal Input Type", "Control type for horizontal movement.\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
+            MovementPlatformer movementPlatformer = target as MovementPlatformer;
 
-            var inputType = (MovementPlatformer.InputType)propHorizontalInputType.intValue;
-
-            switch (inputType)
+            if (movementPlatformer.needNewInputSystem)
             {
-                case MovementPlatformer.InputType.Axis:
-                    EditorGUILayout.PropertyField(propHorizontalAxis, new GUIContent("Horizontal Axis", "Horizontal axis name"));
-                    break;
-                case MovementPlatformer.InputType.Button:
-                    EditorGUILayout.PropertyField(propHorizontalButtonPositive, new GUIContent("Horizontal Positive Button", "Positive button, press this to go right"));
-                    EditorGUILayout.PropertyField(propHorizontalButtonNegative, new GUIContent("Horizontal Negative Button", "Negative button, press this to go left"));
-                    break;
-                case MovementPlatformer.InputType.Key:
-                    EditorGUILayout.PropertyField(propHorizontalKeyPositive, new GUIContent("Horizontal Positive Key", "Positive key, press this to go right"));
-                    EditorGUILayout.PropertyField(propHorizontalKeyNegative, new GUIContent("Horizontal Negative Key", "Negative key, press this to go left"));
-                    break;
-                default:
-                    break;
+                EditorGUILayout.PropertyField(propPlayerInput, new GUIContent("Player Input", "Player input component.\nNeeded if we're using the new input system."));
             }
+
+            EditorGUILayout.PropertyField(propHorizontalInput, new GUIContent("Horizontal Input Type", "Control type for horizontal movement.\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
 
             EditorGUILayout.PropertyField(propGroundCheckCollider, new GUIContent("Ground Check Collider", "Link to a collider that identifies the ground.\nCircle or box collider below the player, when it touches ground, the character is grounded and can jump."));
             EditorGUILayout.PropertyField(propGroundLayerMask, new GUIContent("Ground Layer Mask", "In which layers are the objects that are considered ground?"));
@@ -163,24 +121,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
             EditorGUILayout.PropertyField(propJumpBehaviour, new GUIContent("Jump Type", "Type of jump.\nNone: Player can't jump\nFixed: Player always jumps the same height\nVariable: The longer the player holds the jump button, the higher he jumps"));
             if (propJumpBehaviour.intValue != (int)MovementPlatformer.JumpBehaviour.None)
             {
-                EditorGUILayout.PropertyField(propJumpInputType, new GUIContent("Jump Input Type", "What's the input to jump?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
-
-                var jumpInputType = (MovementPlatformer.InputType)propJumpInputType.intValue;
-
-                switch (jumpInputType)
-                {
-                    case MovementPlatformer.InputType.Axis:
-                        EditorGUILayout.PropertyField(propJumpAxis, new GUIContent("Jump Axis", "Axis to jump.\nAs soon as this axis' value is larger than zero, character will jump."));
-                        break;
-                    case MovementPlatformer.InputType.Button:
-                        EditorGUILayout.PropertyField(propJumpButton, new GUIContent("Jump Button", "Jump button."));
-                        break;
-                    case MovementPlatformer.InputType.Key:
-                        EditorGUILayout.PropertyField(propJumpKey, new GUIContent("Jump Key", "Jump key"));
-                        break;
-                    default:
-                        break;
-                }
+                EditorGUILayout.PropertyField(propJumpInput, new GUIContent("Jump Input Type", "What's the input to jump?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
 
                 EditorGUILayout.PropertyField(propMaxJumpCount, new GUIContent("Max Jump Count", "How many jumps can the player do before having to touch the ground?\nFor example, for double jump, use 2.\nIf zero, no jumping allowed."));
                 EditorGUILayout.PropertyField(propJumpBufferingTime, new GUIContent("Jump Buffering Time", "If the player presses the jump key before being on the ground, but hits the ground in less than this time, he will jump automatically.\nThis reduces player frustration and provides tighter controls."));
@@ -192,24 +133,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
             EditorGUILayout.PropertyField(propGlideBehaviour, new GUIContent("Glide Behaviour", "Glide behaviour.\nNone: No gliding allowed.\nEnabled: Player can glide at will\nTimer: Player can glide for a certain amount of time.\nGliding is basically falling slower while pressing the glide input."));
             if (propGlideBehaviour.intValue != (int)MovementPlatformer.GlideBehaviour.None)
             {
-                EditorGUILayout.PropertyField(propGlideInputType, new GUIContent("Glide Input Type", "What's the input to glide?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
-
-                var glideInputType = (MovementPlatformer.InputType)propGlideInputType.intValue;
-
-                switch (glideInputType)
-                {
-                    case MovementPlatformer.InputType.Axis:
-                        EditorGUILayout.PropertyField(propGlideAxis, new GUIContent("Glide Axis", "What's the glide axis?\nAs soon as this axis any amount of positive, it's considered triggered."));
-                        break;
-                    case MovementPlatformer.InputType.Button:
-                        EditorGUILayout.PropertyField(propGlideButton, new GUIContent("Glide Button", "Glide button"));
-                        break;
-                    case MovementPlatformer.InputType.Key:
-                        EditorGUILayout.PropertyField(propGlideKey, new GUIContent("Glide Key", "Glide key"));
-                        break;
-                    default:
-                        break;
-                }
+                EditorGUILayout.PropertyField(propGlideInput, new GUIContent("Glide Input Type", "What's the input to glide?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
 
                 if (propGlideBehaviour.intValue == (int)MovementPlatformer.GlideBehaviour.Timer)
                 {
@@ -227,26 +151,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
                 EditorGUILayout.PropertyField(propClimbCheckCollider, new GUIContent("Climb Check Collider", "Collider to use for climb tests"));
                 EditorGUILayout.PropertyField(propClimbMask, new GUIContent("Climbable Layer Mask", "Ladders or ropes must be on this layer"));
 
-                EditorGUILayout.PropertyField(propClimbInputType, new GUIContent("Climb Input Type", "What's the input to climb?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
-
-                var climbInputType = (MovementPlatformer.InputType)propClimbInputType.intValue;
-
-                switch (climbInputType)
-                {
-                    case MovementPlatformer.InputType.Axis:
-                        EditorGUILayout.PropertyField(propClimbAxis, new GUIContent("Climb Axis", "What's the climb axis?\nAs soon as this axis any amount of positive, it's considered triggered."));
-                        break;
-                    case MovementPlatformer.InputType.Button:
-                        EditorGUILayout.PropertyField(propClimbPositiveButton, new GUIContent("Climb Up Button", "Climb up button"));
-                        EditorGUILayout.PropertyField(propClimbNegativeButton, new GUIContent("Climb Down Button", "Climb down button"));
-                        break;
-                    case MovementPlatformer.InputType.Key:
-                        EditorGUILayout.PropertyField(propClimbPositiveKey, new GUIContent("Climb Up Key", "Climb up key"));
-                        EditorGUILayout.PropertyField(propClimbNegativeKey, new GUIContent("Climb Down Key", "Climb down key"));
-                        break;
-                    default:
-                        break;
-                }
+                EditorGUILayout.PropertyField(propClimbInput, new GUIContent("Climb Input Type", "What's the input to climb?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
             }
 
 

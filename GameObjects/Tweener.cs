@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 
 public class Tweener : MonoBehaviour
 {
@@ -9,6 +10,7 @@ public class Tweener : MonoBehaviour
 
     public class BaseInterpolator
     {
+        public string       name;
         public float        currentTime;
         public float        totalTime;
         public EaseFunction easeFunction;
@@ -73,12 +75,14 @@ public class Tweener : MonoBehaviour
         }
     }
 
-    List<BaseInterpolator> interpolators = new();
+    List<BaseInterpolator>          interpolators = new();
+    Dictionary<string, int>         namedInterpolators = new();
 
-    public BaseInterpolator Interpolate(float sourceValue, float targetValue, float time, Action<float> setAction)
+    public BaseInterpolator Interpolate(float sourceValue, float targetValue, float time, Action<float> setAction, string name = null)
     {
-        interpolators.Add(new FloatInterpolator()
+        return Add(new FloatInterpolator()
         {
+            name = name,
             easeFunction = Linear,
             currentTime = 0.0f,
             totalTime = time,
@@ -86,13 +90,13 @@ public class Tweener : MonoBehaviour
             endValue = targetValue,
             action = setAction,
         });
-        return interpolators[interpolators.Count - 1];
     }
 
-    public BaseInterpolator Interpolate(Vector2 sourceValue, Vector2 targetValue, float time, Action<Vector2> setAction)
+    public BaseInterpolator Interpolate(Vector2 sourceValue, Vector2 targetValue, float time, Action<Vector2> setAction, string name = null)
     {
-        interpolators.Add(new Vec2Interpolator()
+        return Add(new Vec2Interpolator()
         {
+            name = name,
             easeFunction = Linear,
             currentTime = 0.0f,
             totalTime = time,
@@ -100,13 +104,13 @@ public class Tweener : MonoBehaviour
             endValue = targetValue,
             action = setAction,
         });
-        return interpolators[interpolators.Count - 1];
     }
 
-    public BaseInterpolator Interpolate(Vector3 sourceValue, Vector3 targetValue, float time, Action<Vector3> setAction)
+    public BaseInterpolator Interpolate(Vector3 sourceValue, Vector3 targetValue, float time, Action<Vector3> setAction, string name = null)
     {
-        interpolators.Add(new Vec3Interpolator()
+        return Add(new Vec3Interpolator()
         {
+            name = name,
             easeFunction = Linear,
             currentTime = 0.0f,
             totalTime = time,
@@ -114,13 +118,13 @@ public class Tweener : MonoBehaviour
             endValue = targetValue,
             action = setAction,
         });
-        return interpolators[interpolators.Count - 1];
     }
 
-    public BaseInterpolator Interpolate(Color sourceValue, Color targetValue, float time, Action<Color> setAction)
+    public BaseInterpolator Interpolate(Color sourceValue, Color targetValue, float time, Action<Color> setAction, string name = null)
     {
-        interpolators.Add(new ColorInterpolator()
+        return Add(new ColorInterpolator()
         {
+            name = name,
             easeFunction = Linear,
             currentTime = 0.0f,
             totalTime = time,
@@ -128,18 +132,48 @@ public class Tweener : MonoBehaviour
             endValue = targetValue,
             action = setAction,
         });
-        return interpolators[interpolators.Count - 1];
     }
 
     static public float Linear(float t) => t;
 
     private void Update()
     {
-        foreach (var interpolator in interpolators)
+        for (int i = 0; i < interpolators.Count; i++)
         {
-            interpolator.Run(Time.deltaTime);
+            if (interpolators[i] == null) continue;
+            interpolators[i].Run(Time.deltaTime);
+            if (interpolators[i].isFinished)
+            {
+                if (!string.IsNullOrEmpty(interpolators[i].name))
+                {
+                    namedInterpolators.Remove(interpolators[i].name);
+                }
+                interpolators[i] = null;
+            }
+        }        
+    }
+
+    private BaseInterpolator Add(BaseInterpolator interpolator)
+    {
+        if (!string.IsNullOrEmpty(interpolator.name) && namedInterpolators.TryGetValue(interpolator.name, out int foundIndex))
+        {
+            interpolators[foundIndex] = interpolator;
+            return interpolator;
         }
-        interpolators.RemoveAll((interpolator) => interpolator.isFinished);
+
+        for (int i = 0; i < interpolators.Count; i++)
+        {
+            if (interpolators[i] == null)
+            {
+                interpolators[i] = interpolator;
+                if (name != "") namedInterpolators[interpolator.name] = i;
+                return interpolator;
+            }
+        }
+        interpolators.Add(interpolator);
+        if (name != "") namedInterpolators[interpolator.name] = interpolators.Count - 1;
+
+        return interpolator;
     }
 }
 

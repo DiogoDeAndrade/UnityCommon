@@ -79,7 +79,7 @@ public class LpcCreateAnims
 
             int     framesPerSecond = 12;
             string  filename = "";
-            string  path = Path.GetDirectoryName(assetPath);
+            string  path = System.IO.Path.GetDirectoryName(assetPath);
 
             // Create animations
             foreach (var anim in anims)
@@ -156,7 +156,7 @@ public class LpcCreateAnims
 
             controller.ApplyOverrides(overrides);
 
-            filename = path + "/" + Path.GetFileNameWithoutExtension(assetPath) + ".controller";
+            filename = path + "/" + System.IO.Path.GetFileNameWithoutExtension(assetPath) + ".controller";
             AssetUtils.CreateOrReplaceAsset<AnimatorOverrideController>(controller, filename);
 
             AssetDatabase.SaveAssets();
