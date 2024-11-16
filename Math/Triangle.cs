@@ -83,6 +83,128 @@ public class Triangle
         return true; // this ray hits the triangle 
     }
 
+    public Vector3 GetClosestPoint(Vector3 point, Vector3 p1, Vector3 p2, Vector3 p3, out float baryU, out float baryV, out float baryW)
+    {
+        return GetClosestPointInTriangle(point, v[0], v[1], v[2], out baryU, out baryV, out baryW);
+    }
+
+    // Helper function to compute the closest point on a triangle and its barycentric coordinates
+    public static Vector3 GetClosestPointInTriangle(Vector3 point, Vector3 p1, Vector3 p2, Vector3 p3, out float u, out float v, out float w)
+    {
+        // Compute vectors from the triangle vertices
+        Vector3 edge0 = p2 - p1;
+        Vector3 edge1 = p3 - p1;
+        Vector3 v0 = p1 - point;
+
+        // Compute dot products
+        float a = Vector3.Dot(edge0, edge0);
+        float b = Vector3.Dot(edge0, edge1);
+        float c = Vector3.Dot(edge1, edge1);
+        float d = Vector3.Dot(edge0, v0);
+        float e = Vector3.Dot(edge1, v0);
+
+        // Compute the determinant of the matrix
+        float det = a * c - b * b;
+        float s = b * e - c * d;
+        float t = b * d - a * e;
+
+        // Clamp to barycentric coordinates
+        if (s + t <= det)
+        {
+            if (s < 0)
+            {
+                if (t < 0)
+                {
+                    // Region 4
+                    if (d < 0)
+                    {
+                        s = Mathf.Clamp01(-d / a);
+                        t = 0;
+                    }
+                    else
+                    {
+                        s = 0;
+                        t = Mathf.Clamp01(-e / c);
+                    }
+                }
+                else
+                {
+                    // Region 3
+                    s = 0;
+                    t = Mathf.Clamp01(-e / c);
+                }
+            }
+            else if (t < 0)
+            {
+                // Region 5
+                s = Mathf.Clamp01(-d / a);
+                t = 0;
+            }
+            else
+            {
+                // Region 0
+                float invDet = 1.0f / det;
+                s *= invDet;
+                t *= invDet;
+            }
+        }
+        else
+        {
+            if (s < 0)
+            {
+                // Region 2
+                float tmp0 = b + d;
+                float tmp1 = c + e;
+                if (tmp1 > tmp0)
+                {
+                    float numer = tmp1 - tmp0;
+                    float denom = a - 2 * b + c;
+                    s = Mathf.Clamp01(numer / denom);
+                    t = 1 - s;
+                }
+                else
+                {
+                    s = 0;
+                    t = Mathf.Clamp01(-e / c);
+                }
+            }
+            else if (t < 0)
+            {
+                // Region 6
+                float tmp0 = b + e;
+                float tmp1 = a + d;
+                if (tmp1 > tmp0)
+                {
+                    float numer = tmp1 - tmp0;
+                    float denom = a - 2 * b + c;
+                    t = Mathf.Clamp01(numer / denom);
+                    s = 1 - t;
+                }
+                else
+                {
+                    t = 0;
+                    s = Mathf.Clamp01(-d / a);
+                }
+            }
+            else
+            {
+                // Region 1
+                float numer = c + e - b - d;
+                float denom = a - 2 * b + c;
+                s = Mathf.Clamp01(numer / denom);
+                t = 1 - s;
+            }
+        }
+
+        // Compute the barycentric coordinates
+        u = 1 - s - t;
+        v = s;
+        w = t;
+
+        // Compute the closest point
+        return p1 + edge0 * s + edge1 * t;
+    }
+
     public void DrawGizmo()
     {
         Gizmos.DrawLine(v[0], v[1]);

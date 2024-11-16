@@ -28,4 +28,13 @@ public static class GenericExtensions
             while (l.Count > newSize) l.RemoveAt(l.Count - 1);
         }
     }
+
+    static public T PopFirst<T>(this List<T> l)
+    {
+        if (l.Count == 0) return default(T);
+
+        var ret = l[0];
+        l.RemoveAt(0);
+        return ret;
+    }
 }

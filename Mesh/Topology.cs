@@ -30,6 +30,16 @@ public class Topology
             return -1;
         }
 
+        public Triangle GetOtherTriangle(Triangle t)
+        {
+            // Doesn't support non-manifold
+            foreach (var tmp in triangles)
+            {
+                if (tmp != t) return tmp;
+            }
+            return null;
+        }
+
         public bool Contains(int index)
         {
             return (i1 == index) || (i2 == index);
@@ -53,46 +63,70 @@ public class Topology
         public int      v1, v2, v3;
         public Edge     e1, e2, e3;
         public Vector3  normal;
+
+        public List<int> GetNeighbours()
+        {
+            List<int> ret = new();
+
+            var t1 = e1.GetOtherTriangle(this);
+            var t2 = e2.GetOtherTriangle(this);
+            var t3 = e3.GetOtherTriangle(this);
+
+            if (t1 != null) ret.Add(t1.id);
+            if (t2 != null) ret.Add(t2.id);
+            if (t3 != null) ret.Add(t3.id);
+
+            return ret;
+        }
     }
 
     public List<Vector3>                vertices;
+    public List<List<int>>              vertexNeighbour;
     public int                          nEdges;
     public List<Edge>                   edges;
     public Dictionary<(int, int), int>  edgesDictionary;
     public int                          nTriangles;
     public List<Triangle>               triangles;
 
-    public Topology(Mesh mesh, Matrix4x4 matrix, float epsilon = 1e-3f)
+    public Topology(Mesh mesh, Matrix4x4 matrix, float epsilon = 1e-3f, bool weld = true)
     {
         var verts = mesh.vertices;
 
-        vertices = new List<Vector3>();
-        
         List<int> vertexMatch = new List<int>();
 
-        // Transform vertices and weld mesh
-        for (int i = 0; i < verts.Length; i++)
+        if (weld)
         {
-            Vector3 tvertex = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
-            int     matchIndex = -1;
-
-            for (int j = 0; j < vertices.Count; j++)
+            vertices = new List<Vector3>();
+            // Transform vertices and weld mesh
+            for (int i = 0; i < verts.Length; i++)
             {
-                if (Vector3.Distance(tvertex, vertices[j]) < epsilon)
+                Vector3 tvertex = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
+                int matchIndex = -1;
+
+                for (int j = 0; j < vertices.Count; j++)
                 {
-                    matchIndex = j;
-                    break;
+                    if (Vector3.Distance(tvertex, vertices[j]) < epsilon)
+                    {
+                        matchIndex = j;
+                        break;
+                    }
+                }
+                if (matchIndex != -1)
+                {
+                    vertexMatch.Add(matchIndex);
+                }
+                else
+                {
+                    vertices.Add(tvertex);
+                    vertexMatch.Add(vertices.Count - 1);
                 }
             }
-            if (matchIndex != -1)
-            {
-                vertexMatch.Add(matchIndex);
-            }
-            else
-            {
-                vertices.Add(tvertex);
-                vertexMatch.Add(vertices.Count - 1);
-            }
+        }
+        else
+        {
+            vertices = new List<Vector3>(verts);
+            vertexMatch = new List<int>(vertices.Count);
+            for (int i = 0; i < vertices.Count; i++) vertexMatch[i] = i;
         }
 
         triangles = new List<Triangle>();

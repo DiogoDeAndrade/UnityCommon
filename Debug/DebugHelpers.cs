@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public static class DebugHelpers
@@ -30,5 +31,31 @@ public static class DebugHelpers
         // Draw the arrowhead lines
         Gizmos.DrawLine(endPoint, arrowEnd1);
         Gizmos.DrawLine(endPoint, arrowEnd2);
+    }
+
+    static Material triangleMaterial;
+    public static void DrawTriangle(Vector3 p1, Vector3 p2, Vector3 p3)
+    {
+        if (triangleMaterial == null)
+        {
+            // Create a simple unlit material for GL
+            Shader shader = Shader.Find("Hidden/Internal-Colored");
+            triangleMaterial = new Material(shader);
+            triangleMaterial.hideFlags = HideFlags.HideAndDontSave;
+            triangleMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            triangleMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            triangleMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+            triangleMaterial.SetInt("_ZWrite", 0);
+        }
+        triangleMaterial.SetPass(0);
+
+        GL.Begin(GL.TRIANGLES);
+        GL.Color(Gizmos.color);
+
+        GL.Vertex(p1);
+        GL.Vertex(p2);
+        GL.Vertex(p3);
+
+        GL.End();
     }
 }
