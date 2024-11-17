@@ -137,4 +137,21 @@ public static class GameObjectExtensions
 
         return ret;
     }
+
+    public static bool IsChildOf(this Transform child, Transform parent)
+    {
+        if (child == null || parent == null) return false;
+
+        Transform current = child;
+
+        while (current != null)
+        {
+            if (current == parent)
+                return true;
+
+            current = current.parent; // Move up the hierarchy
+        }
+
+        return false;
+    }
 }

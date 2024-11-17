@@ -43,6 +43,9 @@ public class UIImageEffect : MonoBehaviour
         uiImage = GetComponent<Image>();
         rawImage = GetComponent<RawImage>();
         material = (uiImage) ? (uiImage.material) : (rawImage.material);
+        material = new Material(material);
+        if (uiImage) uiImage.material = material;
+        else if (rawImage) rawImage.material = material;
 
         ConfigureMaterial();
     }
