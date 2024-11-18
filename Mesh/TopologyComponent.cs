@@ -124,6 +124,11 @@ public class TopologyComponent : MonoBehaviour
             hoverVertex = null;
             return;
         }    
+        if (_topology.vertices == null)
+        {
+            hoverVertex = null;
+            return;
+        }
 
         // Get mouse position in Scene view
         Event e = Event.current;

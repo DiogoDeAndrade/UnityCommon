@@ -280,4 +280,14 @@ public class Polyline : IEnumerable<(Vector3 position, Vector3 normal)>
     {
         return GetEnumerator();
     }
+
+#if UNITY_EDITOR
+    public void DrawGizmos()
+    {
+        for (int i = 0; i < vertices.Count - 1; i++)
+        {
+            Gizmos.DrawLine(vertices[i], vertices[i + 1]);
+        }
+    }
+#endif
 }

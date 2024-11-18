@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 [System.Serializable]
 public class TopologyStatic
@@ -135,9 +136,16 @@ public class TopologyStatic
             var indices = mesh.GetIndices(submesh);
             for (int i = 0; i < indices.Length; i += 3)
             {
-                int index1 = indices[i];
-                int index2 = indices[i + 1];
-                int index3 = indices[i + 2];
+                int index1 = vertexMatch[indices[i]];
+                int index2 = vertexMatch[indices[i + 1]];
+                int index3 = vertexMatch[indices[i + 2]];
+
+                if ((index1 >= vertices.Count) ||
+                    (index2 >= vertices.Count) ||
+                    (index3 >= vertices.Count))
+                {
+                    int a = 10;
+                }
 
                 int e1 = GetOrAddEdge(index1, index2);
                 int e2 = GetOrAddEdge(index2, index3);
@@ -224,9 +232,9 @@ public class TopologyStatic
         }
     }
 
-    public int vertexCount => _vertices.Count;
-    public int edgeCount => _edges.Count;
-    public int triangleCount => _triangles.Count;
+    public int vertexCount => (_vertices == null) ? 0 : _vertices.Count;
+    public int edgeCount => (_edges == null) ? 0 : _edges.Count;
+    public int triangleCount => (_triangles == null) ? 0 : _triangles.Count;
 
     public Vector3 GetPosition(int vertexId) => _vertices[vertexId].position;
     public SerializedHashSet<int> GetVertexNeighbours(int vertexId) => _vertices[vertexId].neighbourVertex;
@@ -274,6 +282,7 @@ public class TopologyStatic
         int closestTriangleId = -1;
 
         u = v = w = 0; // Default barycentric coordinates
+        if (_triangles == null) return -1;
 
         for (int i = 0; i < _triangles.Count; i++)
         {
