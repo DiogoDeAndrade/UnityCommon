@@ -81,7 +81,7 @@ public class TopologyComponent : MonoBehaviour
                         foreach (var edgeId in vertex.edges)
                         {
                             var edge = _topology.GetEdgeVertex(edgeId);
-                            Gizmos.DrawLine(_topology.GetPosition(edge.i1), _topology.GetPosition(edge.i2));
+                            Gizmos.DrawLine(_topology.GetVertexPosition(edge.i1), _topology.GetVertexPosition(edge.i2));
                         }
                     }
                     if (displayTriangles)
@@ -105,9 +105,9 @@ public class TopologyComponent : MonoBehaviour
                         foreach (var triangleId in vertex.triangles)
                         {
                             var tri = _topology.GetTriangleVertex(triangleId);
-                            GL.Vertex(_topology.GetPosition(tri.i1));
-                            GL.Vertex(_topology.GetPosition(tri.i2));
-                            GL.Vertex(_topology.GetPosition(tri.i3));
+                            GL.Vertex(_topology.GetVertexPosition(tri.i1));
+                            GL.Vertex(_topology.GetVertexPosition(tri.i2));
+                            GL.Vertex(_topology.GetVertexPosition(tri.i3));
                         }
 
                         GL.End();

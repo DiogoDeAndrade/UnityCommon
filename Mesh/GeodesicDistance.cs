@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [Serializable]
-public class GeodesicDistance
+public class GeodesicDistance : ICompareIndices
 {
     [SerializeField] private TopologyStatic _topology;
     [SerializeField] private int _sourcePointId;
@@ -42,13 +42,13 @@ public class GeodesicDistance
 
             // Get current
             var currentId = sortedVertex.PopFirst();
-            var currentPos = _topology.GetPosition(currentId);
+            var currentPos = _topology.GetVertexPosition(currentId);
             var currentDist = _distances[currentId];
 
             // Get neighbours
             foreach (var neiId in _topology.GetVertexNeighbours(currentId))
             {
-                var neiPos = _topology.GetPosition(neiId);
+                var neiPos = _topology.GetVertexPosition(neiId);
                 float newDistance = currentDist + Vector3.Distance(currentPos, neiPos);
 
                 if (newDistance < _distances[neiId])
@@ -88,7 +88,7 @@ public class GeodesicDistance
         return float.MaxValue;
     }
 
-    public List<Polyline> ComputeContour(float refDistance)
+    public List<Polyline> ComputeContours(float refDistance, bool onlySaddle)
     {
         List<Vector3> vertices = new();
         List<int> indices = new();
@@ -114,26 +114,35 @@ public class GeodesicDistance
         }
 
         int triIndex = 0;
-        foreach (var tri in topology.triangles)
+        int saddleVertexId = -1;
+        foreach (var tri in _topology.triangles)
         {
+            bool setSaddleId = false;
+
             float l1 = _distances[tri.vertices.i1];
             float l2 = _distances[tri.vertices.i2];
             float l3 = _distances[tri.vertices.i3];
             float s1 = l1 - refDistance;
             float s2 = l2 - refDistance;
             float s3 = l3 - refDistance;
-            var p1 = topology.GetPosition(tri.vertices.i1);
-            var p2 = topology.GetPosition(tri.vertices.i2);
-            var p3 = topology.GetPosition(tri.vertices.i3);
+            var p1 = topology.GetVertexPosition(tri.vertices.i1);
+            var p2 = topology.GetVertexPosition(tri.vertices.i2);
+            var p3 = topology.GetVertexPosition(tri.vertices.i3);
+
+            Vector3[] p = new Vector3[2] { Vector3.zero, Vector3.zero };
+            int index = 0;
 
             if ((l1 < refDistance) && (l2 < refDistance) && (l3 < refDistance)) { /* Nothing to do, all on one side */ }
             else if ((l1 > refDistance) && (l2 > refDistance) && (l3 > refDistance)) { /* Nothing to do, all on other side */ }
-            else if ((l1 == refDistance) || (l2 == refDistance) || (l3 == refDistance)) { /* One of the vertices is on the contour line */ }
+            else if ((l1 == refDistance) || (l2 == refDistance) || (l3 == refDistance)) 
+            {
+                if ((l1 == refDistance) && ((s2 * s3) < 0.0f)) { p[0] = p1; p[1] = ComputeContourPoint(p2, p3, l2, l3, refDistance); index = 2; }
+                else if ((l2 == refDistance) && ((s1 * s3) < 0.0f)) { p[0] = p2; p[1] = ComputeContourPoint(p1, p3, l1, l3, refDistance); index = 2; }
+                else if ((l3 == refDistance) && ((s1 * s2) < 0.0f)) { p[0] = p3; p[1] = ComputeContourPoint(p1, p2, l1, l2, refDistance); index = 2; }
+                setSaddleId = true;
+            }
             else
             {
-                Vector3[] p = new Vector3[2] { Vector3.zero, Vector3.zero };
-                int index = 0;
-
                 if ((s1 * s2) < 0.0f)
                 {
                     p[index] = ComputeContourPoint(p1, p2, l1, l2, refDistance);
@@ -151,13 +160,19 @@ public class GeodesicDistance
                     p[index] = ComputeContourPoint(p3, p1, l3, l1, refDistance);
                     index++;
                 }
-
-                if (index == 2)
+            }
+            if (index == 2)
+            {
+                int i1 = GetOrAddVertex(p[0]);
+                int i2 = GetOrAddVertex(p[1]);
+                if (i1 != i2)
                 {
-                    int i1 = GetOrAddVertex(p[0]);
-                    int i2 = GetOrAddVertex(p[1]);
-
+                    if (setSaddleId) saddleVertexId = i1;
                     indices.Add(i1); indices.Add(i2);
+                }
+                else
+                {
+                    // Edge is null, probably mathematical imprecision somewhere?
                 }
             }
 
@@ -197,7 +212,12 @@ public class GeodesicDistance
                         polyline.Add(next);
                         MarkSegmentAsUsed(a, b); // Mark the segment as used
                         current = next; // Move forward
+                        // Check if we're back to start, and stop if we're done a chain
                         foundNext = true;
+                        if (current == start)
+                        {
+                            return polyline;
+                        }
                         break;
                     }
                 }
@@ -208,24 +228,71 @@ public class GeodesicDistance
             return polyline;
         }
 
-        // Build polylines until all segments are used
-        for (int i = 0; i < indices.Count; i += 2)
+        if (saddleVertexId != -1)
         {
-            int a = indices[i];
-            int b = indices[i + 1];
+            while (true)
+            {
+                // Start a new polyline
+                List<int> polylineIndices = BuildPolyline(saddleVertexId);
+                // Test with larger than 1 because the polylineIndices always has the initial vertex in it, even
+                // if there's no segment that fits
+                if (polylineIndices.Count > 1)
+                {
+                    var polyline = new Polyline();
+                    foreach (var index in polylineIndices) polyline.Add(vertices[index]);
 
-            // Skip if the segment is already used
-            if (usedSegments.Contains((a, b))) continue;
+                    ret.Add(polyline);
+                }
+                else break;
+            }
+        }
 
-            // Start a new polyline
-            List<int> polylineIndices = BuildPolyline(a);
+        if (!onlySaddle)
+        {
+            // Build remaining chains until all segments are used
+            for (int i = 0; i < indices.Count; i += 2)
+            {
+                int a = indices[i];
+                int b = indices[i + 1];
 
-            var polyline = new Polyline();
-            foreach (var index in polylineIndices) polyline.Add(vertices[index]);
+                // Skip if the segment is already used
+                if (usedSegments.Contains((a, b))) continue;
 
-            ret.Add(polyline);
+                // Start a new polyline
+                List<int> polylineIndices = BuildPolyline(a);
+
+                if (polylineIndices.Count > 0)
+                {
+                    var polyline = new Polyline();
+                    foreach (var index in polylineIndices) polyline.Add(vertices[index]);
+
+                    ret.Add(polyline);
+                }
+            }
         }
 
         return ret;
+    }
+
+    public bool isLess(int index1, int index2)
+    {
+        float d1 = _distances[index1];
+        float d2 = _distances[index2];
+        if (d1 < d2) return true;
+        else if (d1 > d2) return false;
+        else return index1 < index2;
+    }
+    public bool isLess(int index, float value)
+    {
+        float d = _distances[index];
+
+        if (d < value) return true;
+
+        return false;
+    }
+
+    public float GetValue(int index)
+    {
+        return _distances[index];
     }
 }
