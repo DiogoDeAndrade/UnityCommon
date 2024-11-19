@@ -18,21 +18,33 @@ public class ContourLinesComponent : MonoBehaviour
     {
         var geodesicDistanceComponent = GetComponent<GeodesicDistanceComponent>();
         var geodesicDistance = geodesicDistanceComponent.geodesicDistance;
+        var staticTopologyComponent = GetComponent<TopologyComponent>();
+        if (staticTopologyComponent)
+        {
+            var topology = staticTopologyComponent.topology;
+            geodesicDistance.topology = topology;
+        }
 
         float lRef = l * geodesicDistance.GetMaxDistance();
 
+        /*Debug.Log("Forcing vertex 73 distance");
+        lRef = geodesicDistance.GetDistance(73);*/
+
         Debug.Log($"LRef = {lRef}");
 
-        contours = geodesicDistance.ComputeContour(lRef);
+        contours = geodesicDistance.ComputeContours(lRef, false);
     }
+
+    static Color[] ContourLinesColors = { Color.red, Color.yellow, Color.cyan, Color.green, Color.blue, Color.magenta, Color.white, Color.black, Color.grey };
 
     private void OnDrawGizmosSelected()
     {
         if (contours == null) return;
 
-        Gizmos.color = Color.magenta;
-        foreach (var polyline in contours)
+        for (int i = 0; i < contours.Count; i++) 
         {
+            var polyline = contours[i];
+            Gizmos.color = ContourLinesColors[i % ContourLinesColors.Length];
             polyline.DrawGizmos();
         }
     }
