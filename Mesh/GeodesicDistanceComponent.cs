@@ -20,6 +20,8 @@ public class GeodesicDistanceComponent : MonoBehaviour
     private Transform   testPosition;
     [SerializeField]
     private bool        interaction = false;
+    [SerializeField, ShowIf("interaction")]
+    private bool        showPath = false;
 
     [SerializeField, HideInInspector]
     GeodesicDistance _geodesicDistance;
@@ -154,6 +156,21 @@ public class GeodesicDistanceComponent : MonoBehaviour
         {
             float d = _geodesicDistance.GetDistance(hoverVertexId);
             DebugHelpers.DrawTextAt(hoverVertex.position, new Vector3(20, 20, 0), 12, Color.white, $"Vertex={hoverVertexId}, Distance={d}", true);
+
+            if (showPath)
+            {
+                var topology = _geodesicDistance.topology;
+                Vector3 prevVertex = topology.GetVertexPosition(hoverVertexId);
+                int currentVertex = _geodesicDistance.GetClosestVertexToStart(hoverVertexId);
+                Gizmos.color = Color.yellow;
+                while (currentVertex != -1)
+                {
+                    Vector3 currentPos = topology.GetVertexPosition(currentVertex);
+                    Gizmos.DrawLine(prevVertex, currentPos);
+                    prevVertex = currentPos;
+                    currentVertex = _geodesicDistance.GetClosestVertexToStart(currentVertex);
+                }
+            }
         }
     }
 #endif

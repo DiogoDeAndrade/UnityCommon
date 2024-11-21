@@ -1,14 +1,16 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Hierarchy;
 using UnityEngine;
+using UnityEngine.VFX;
 
 public interface ICompareIndices
 {
     public bool             isLess(int index1, int index2);
     public bool             isLess(int index1, float value);
     public float            GetValue(int index);
-    public List<Polyline>   ComputeContours(float refValue, bool onlySaddle);
+    public List<Polyline>   ComputeContours(float refValue, bool onlySaddle, List<List<int>> trianglesPerContour);
 }
 
 [System.Serializable]
@@ -18,17 +20,22 @@ public class LevelSetDiagram
     [SerializeField] private TopologyStatic     _topology;
     public class SingleContour
     {
-        public int      sadleVertex;
-        public Polyline polyline;
-    }
-    public class MultiContour
-    {
-        public float        lRef;
-        public List<int>    contours;
-    }
-    private List<SingleContour> _contourList;
-    private List<MultiContour>  _contours;
-    //private List<float>   _vertexIndexNumber;
+        public int                  sadleVertex;
+        public Polyline             polyline;
+        public SingleContour        parentContour;
+        public List<SingleContour>  children;
+
+        public void AddChild(SingleContour c)
+        {
+            if (children == null) children = new();
+            children.Add(c);
+        }
+    }    
+    private List<SingleContour>     _contourList;
+    private List<float>             _contoursLRef;
+    private List<List<Polyline>>    _contours;
+    private List<int>               vertexContour;
+    private SingleContour           _rootContour;
 
     public ICompareIndices comparisonOperator
     {
@@ -40,27 +47,15 @@ public class LevelSetDiagram
         get { return _topology; }
         set { _topology = value; }
     }
-    public List<MultiContour> contours => _contours;
-    
-    class TreeNode
-    {
-        public TreeNode(Vector3 p) { pos = p; children = null; }
-
-        public bool isLeaf => (children == null);
-        public void AddChild(TreeNode node) { if (children == null) children = new(); children.Add(node); }
-
-        public Vector3          pos;
-        public List<TreeNode>   children;
-    }
+    public List<List<Polyline>> contours => _contours;
+    public SingleContour rootContour => _rootContour;
 
     public void Build()
     {
         if (_comparisonOperator == null) return;
 
-        //ComputeVertexIndexNumbers();
-
-        _contourList = new List<SingleContour>();
-        _contours = new List<MultiContour>();
+        _contourList = new();
+        _contoursLRef = new();
 
         List<int> indices = Enumerable.Range(0, _topology.vertexCount).ToList();
 
@@ -74,22 +69,18 @@ public class LevelSetDiagram
         List<float> d = new(Enumerable.Repeat(float.MaxValue, vertexCount));
         d[indices[0]] = 0;
 
-        Vector3  rootPos = _topology.GetVertexPosition(indices[0]);
-        TreeNode root = new(rootPos);
-        _contourList.Add(new SingleContour
+        Vector3 rootPos = _topology.GetVertexPosition(indices[0]);
+        _rootContour = new SingleContour
         {
             sadleVertex = indices[0],
             polyline = new Polyline(rootPos)
-        });
-        _contours.Add(new MultiContour
-        {
-            lRef = 0,
-            contours = new() { 0 }
-        });
+        };
+        _contourList.Add(_rootContour);
+        _contoursLRef.Add(0.0f);
 
         int nc = 1;
-        List<int> c = new(Enumerable.Repeat(-1, vertexCount));
-        c[indices[0]] = 0;
+        vertexContour = new(Enumerable.Repeat(-1, vertexCount));
+        vertexContour[indices[0]] = 0;
 
         while (Q.Count > 0)
         {
@@ -106,7 +97,7 @@ public class LevelSetDiagram
                 float newDist = d[vIndex] + Vector3.Distance(_topology.GetVertexPosition(vIndex), _topology.GetVertexPosition(n));
                 if (Q.IndexOf(n) == -1)
                 {
-                    c[n] = c[vIndex];
+                    vertexContour[n] = vertexContour[vIndex];
                     d[n] = newDist;
                     Q.Add(n);
                 }
@@ -114,7 +105,7 @@ public class LevelSetDiagram
                 {
                     if (newDist < d[n])
                     {
-                        c[n] = c[vIndex];
+                        vertexContour[n] = vertexContour[vIndex];
                         d[n] = newDist;
                     }
                 }
@@ -123,66 +114,81 @@ public class LevelSetDiagram
             if (vin == 1.0f)
             {
                 // Insert line (CT[c(v)], v) into Ts(P) with v as a leaf
+                _contoursLRef.Add(d[vIndex]);
+
+                int vc = vertexContour[vIndex];
+                var parent = _contourList[vc];
+                _contourList[vc] = new SingleContour
+                {
+                    sadleVertex = vIndex,
+                    polyline = new Polyline(_topology.GetVertexPosition(vIndex)),
+                    parentContour = parent
+                };
+                parent.AddChild(_contourList[vc]);
             }
             else if (vin < 0.0f) 
             {
                 // Insert line (CT[c(v)], v) into Ts(P)
-                var contours = _comparisonOperator.ComputeContours(d[vIndex], true);
+                _contoursLRef.Add(d[vIndex]);
+
+                List<List<int>> triangleListsPerContour = new();
+                var contours = _comparisonOperator.ComputeContours(d[vIndex], true, triangleListsPerContour);
                 // There should be (1 - vin) contours which involve the saddle vertex
-                int vertexContour = c[vIndex];
+                int vc = vertexContour[vIndex];
+
+                var parent = _contourList[vc];
+                _contourList[vc] = new SingleContour
+                {
+                    sadleVertex = vIndex,
+                    polyline = contours[0],
+                    parentContour = parent
+                };
+                parent.AddChild(_contourList[vc]);
+
                 int nBase = _contourList.Count;
                 int nCountours = contours.Count;
-                _contourList[vertexContour].polyline = contours[0];
+
+                _contourList[vc].polyline = contours[0];
                 for (int j = 1; j < nCountours; ++j) 
                 {
-                    _contourList.Add(new SingleContour
+                    var newC = new SingleContour
                     {
                         sadleVertex = vIndex,
-                        polyline = contours[j]
-                    });
+                        polyline = contours[j],
+                        parentContour = parent
+                    };
+                    _contourList.Add(newC);
+                    parent.AddChild(newC);
                 }
-                nc = nc - (int)vin;
 
-                int a = 10;
-            }
-        }
-
-        /*float refValue = 0.0f;
-        int   refIndex = 0;
-        int   actualIndex;
-        float prevValue = -float.MaxValue;
-        while (refIndex < indices.Count)
-        {
-            actualIndex = indices[refIndex];
-            refValue = _comparisonOperator.GetValue(actualIndex);
-            //if (Mathf.Abs(refValue - prevValue) > 1.0f)       // Contour every 1.0f unit of distance
-            if (_vertexIndexNumber[actualIndex] != 0)
-            {
-                var lines = _comparisonOperator.ComputeContour(refValue);
-                if ((refIndex != 0) && (lines.Count == 0)) break;
-
-                _contours.Add(new MultiContour
+                // Update vertexContour
+                for (int i = 0; i < triangleListsPerContour.Count; i++)
                 {
-                    lRef = refValue,
-                    contours = lines
-                });
+                    int newC = (i == 0) ? vc : (nc + i - 1);
+                    var tl = triangleListsPerContour[i];
 
-                prevValue = refValue;
+                    foreach (var triIndex in tl)
+                    {
+                        var tri = topology.triangles[triIndex];
+                        float d1 = _comparisonOperator.GetValue(tri.vertices.i1);
+                        float d2 = _comparisonOperator.GetValue(tri.vertices.i2);
+                        float d3 = _comparisonOperator.GetValue(tri.vertices.i3);
+                        if (d1 > d[vIndex]) vertexContour[tri.vertices.i1] = newC;
+                        if (d2 > d[vIndex]) vertexContour[tri.vertices.i2] = newC;
+                        if (d3 > d[vIndex]) vertexContour[tri.vertices.i3] = newC;
+                    }
+                }
+
+                nc = nc - (int)vin;
             }
-
-            refIndex++;
-        }*/
-    }
-
-    /*public void ComputeVertexIndexNumbers()
-    {
-        _vertexIndexNumber = new List<float>();
-        for (int i = 0; i < topology.vertexCount; i++)
-        {
-            float vertexIndexNumber = ComputeVertexIndexNumber(i);
-            _vertexIndexNumber.Add(vertexIndexNumber);
         }
-    }*/
+
+        _contours = new();
+        foreach (var c in _contoursLRef)
+        {
+            _contours.Add(_comparisonOperator.ComputeContours(c, false, null));
+        }
+    }
 
     public float ComputeVertexIndexNumber(int index)
     {
@@ -217,5 +223,10 @@ public class LevelSetDiagram
         }
 
         return 1.0f - signChanges / 2.0f;
+    }
+
+    public int GetVertexContour(int i)
+    {
+        return vertexContour[i];
     }
 }

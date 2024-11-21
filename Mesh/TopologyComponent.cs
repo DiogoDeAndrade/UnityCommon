@@ -25,6 +25,8 @@ public class TopologyComponent : MonoBehaviour
     Color             edgeColor = Color.yellow;
     [SerializeField] 
     bool              displayTriangles;
+    [SerializeField] 
+    bool              displayTrianglesLabel;
     [SerializeField, ShowIf(EConditionOperator.And, nameof(displayTriangles), nameof(interaction))]
     Color             triangleColor = Color.red;
 
@@ -104,13 +106,28 @@ public class TopologyComponent : MonoBehaviour
 
                         foreach (var triangleId in vertex.triangles)
                         {
-                            var tri = _topology.GetTriangleVertex(triangleId);
-                            GL.Vertex(_topology.GetVertexPosition(tri.i1));
-                            GL.Vertex(_topology.GetVertexPosition(tri.i2));
-                            GL.Vertex(_topology.GetVertexPosition(tri.i3));
+                            (var v1, var v2, var v3) = _topology.GetTriangle(triangleId);
+                            GL.Vertex(v1);
+                            GL.Vertex(v2);
+                            GL.Vertex(v3);
+
+                            if (displayTrianglesLabel)
+                            {
+                                DebugHelpers.DrawTextAt((v1 + v2 + v3) / 3.0f, Vector3.zero, 10, Color.white, $"Tri={triangleId}", true);
+                            }
                         }
 
                         GL.End();
+
+                        if (displayTrianglesLabel)
+                        {
+                            foreach (var triangleId in vertex.triangles)
+                            {
+                                (var v1, var v2, var v3) = _topology.GetTriangle(triangleId);
+
+                                DebugHelpers.DrawTextAt((v1 + v2 + v3) / 3.0f, Vector3.zero, 10, Color.white, $"Tri={triangleId}", true);
+                            }
+                        }
                     }
                 }
             }

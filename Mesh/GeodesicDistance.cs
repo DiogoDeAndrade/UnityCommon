@@ -8,9 +8,10 @@ using UnityEngine.UI;
 public class GeodesicDistance : ICompareIndices
 {
     [SerializeField] private TopologyStatic _topology;
-    [SerializeField] private int _sourcePointId;
-    [SerializeField] private List<float> _distances;
-    [SerializeField] private float _maxDistance;
+    [SerializeField] private int            _sourcePointId;
+    [SerializeField] private List<float>    _distances;
+    [SerializeField] private List<int>      _closestVertexToStart;
+    [SerializeField] private float          _maxDistance;
 
     public TopologyStatic topology
     {
@@ -31,6 +32,7 @@ public class GeodesicDistance : ICompareIndices
         // Start the array at infinity
         _distances = Enumerable.Repeat(float.MaxValue, _topology.vertexCount).ToList();
         _distances[_sourcePointId] = 0.0f;
+        _closestVertexToStart = Enumerable.Repeat(-1, _distances.Count).ToList();
         _maxDistance = 0.0f;
 
         List<int> sortedVertex = new() { _sourcePointId };
@@ -56,6 +58,7 @@ public class GeodesicDistance : ICompareIndices
                     sortedVertex.Remove(neiId);
                     sortedVertex.Add(neiId);
                     _distances[neiId] = newDistance;
+                    _closestVertexToStart[neiId] = currentId;
                 }
                 if (newDistance > _maxDistance)
                 {
@@ -88,10 +91,11 @@ public class GeodesicDistance : ICompareIndices
         return float.MaxValue;
     }
 
-    public List<Polyline> ComputeContours(float refDistance, bool onlySaddle)
+    public List<Polyline> ComputeContours(float refDistance, bool onlySaddle, List<List<int>> trianglesPerContour)
     {
         List<Vector3> vertices = new();
         List<int> indices = new();
+        List<int> triangles = new();
 
         Vector3 ComputeContourPoint(Vector3 p1, Vector3 p2, float l1, float l2, float lRef)
         {
@@ -106,7 +110,7 @@ public class GeodesicDistance : ICompareIndices
         {
             for (int i = 0; i < vertices.Count; i++)
             {
-                if (Vector3.SqrMagnitude(vertices[i] - p) < 1e-3) return i;
+                if (Vector3.SqrMagnitude(vertices[i] - p) < 1e-6) return i;
             }
 
             vertices.Add(p);
@@ -118,6 +122,11 @@ public class GeodesicDistance : ICompareIndices
         foreach (var tri in _topology.triangles)
         {
             bool setSaddleId = false;
+
+            if (triIndex == 688)
+            {
+                int a = 10;
+            }
 
             float l1 = _distances[tri.vertices.i1];
             float l2 = _distances[tri.vertices.i2];
@@ -169,6 +178,7 @@ public class GeodesicDistance : ICompareIndices
                 {
                     if (setSaddleId) saddleVertexId = i1;
                     indices.Add(i1); indices.Add(i2);
+                    triangles.Add(triIndex); triangles.Add(triIndex);
                 }
                 else
                 {
@@ -191,9 +201,10 @@ public class GeodesicDistance : ICompareIndices
         }
 
         // Build a polyline starting from a specific index
-        List<int> BuildPolyline(int start)
+        (List<int> vertexIndex, List<int> triIndex) BuildPolyline(int start)
         {
             var polyline = new List<int> { start };
+            var tris = new List<int>();
             var current = start;
 
             // Traverse forward
@@ -210,13 +221,14 @@ public class GeodesicDistance : ICompareIndices
                     {
                         int next = (a == current) ? b : a; // Determine the next point
                         polyline.Add(next);
+                        tris.Add(triangles[i]);
                         MarkSegmentAsUsed(a, b); // Mark the segment as used
                         current = next; // Move forward
                         // Check if we're back to start, and stop if we're done a chain
                         foundNext = true;
                         if (current == start)
                         {
-                            return polyline;
+                            return (polyline, tris);
                         }
                         break;
                     }
@@ -225,15 +237,15 @@ public class GeodesicDistance : ICompareIndices
                 if (!foundNext) break; // Stop if no more segments connect
             }
 
-            return polyline;
+            return (polyline, tris);
         }
-
+        
         if (saddleVertexId != -1)
         {
             while (true)
             {
                 // Start a new polyline
-                List<int> polylineIndices = BuildPolyline(saddleVertexId);
+                (var polylineIndices, var triIndices) = BuildPolyline(saddleVertexId);
                 // Test with larger than 1 because the polylineIndices always has the initial vertex in it, even
                 // if there's no segment that fits
                 if (polylineIndices.Count > 1)
@@ -242,6 +254,8 @@ public class GeodesicDistance : ICompareIndices
                     foreach (var index in polylineIndices) polyline.Add(vertices[index]);
 
                     ret.Add(polyline);
+
+                    trianglesPerContour?.Add(triIndices);
                 }
                 else break;
             }
@@ -259,7 +273,7 @@ public class GeodesicDistance : ICompareIndices
                 if (usedSegments.Contains((a, b))) continue;
 
                 // Start a new polyline
-                List<int> polylineIndices = BuildPolyline(a);
+                (var polylineIndices, var triIndices) = BuildPolyline(a);
 
                 if (polylineIndices.Count > 0)
                 {
@@ -267,6 +281,7 @@ public class GeodesicDistance : ICompareIndices
                     foreach (var index in polylineIndices) polyline.Add(vertices[index]);
 
                     ret.Add(polyline);
+                    trianglesPerContour?.Add(triIndices);
                 }
             }
         }
@@ -294,5 +309,10 @@ public class GeodesicDistance : ICompareIndices
     public float GetValue(int index)
     {
         return _distances[index];
+    }
+
+    public int GetClosestVertexToStart(int index)
+    {
+        return _closestVertexToStart[index];
     }
 }
