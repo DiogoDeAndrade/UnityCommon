@@ -1,7 +1,8 @@
 using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.InputSystem;
-using System;
+using System.Collections.Generic;
+using Unity.VisualScripting;
 
 [RequireComponent(typeof(Rigidbody2D))]
 public class MovementPlatformer : MonoBehaviour
@@ -16,6 +17,8 @@ public class MovementPlatformer : MonoBehaviour
 
     [SerializeField]
     private Vector2 speed = new Vector2(100, 100);
+    [SerializeField]
+    private bool    useForces = true;
     [SerializeField, HideIf("needNewInputSystem")]
     private PlayerInput playerInput;
     [SerializeField, InputPlayer(nameof(playerInput))]
