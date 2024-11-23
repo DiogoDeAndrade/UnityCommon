@@ -343,7 +343,7 @@ namespace UnityCommon.Legacy
             }
         }
 
-        private void OnHit(float damage)
+        private void OnHit(float damage, Vector3 damagePosition)
         {
             healthSystem.isInvulnerable = true;
 

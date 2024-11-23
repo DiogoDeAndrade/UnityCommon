@@ -7,7 +7,7 @@ public class HealthSystem : MonoBehaviour
 {
     public enum Faction { Neutral, Friendly, Enemy };
 
-    public delegate void OnHit(float damage);
+    public delegate void OnHit(float damage, Vector3 damagePosition);
     public event OnHit  onHit;
 
     public delegate void OnDead();
@@ -104,7 +104,7 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
-    public bool DealDamage(float damage)
+    public bool DealDamage(float damage, Vector3 damagePosition)
     {
         if (isInvulnerable) return false;
         if (_dead) return false;
@@ -119,7 +119,12 @@ public class HealthSystem : MonoBehaviour
         }
         else
         {
-            onHit?.Invoke(damage);
+            onHit?.Invoke(damage, damagePosition);
+
+            if (invulnerabilityTime > 0.0f)
+            {
+                isInvulnerable = true;
+            }
         }
 
         return true;
