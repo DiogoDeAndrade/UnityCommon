@@ -123,11 +123,6 @@ public class GeodesicDistance : ICompareIndices
         {
             bool setSaddleId = false;
 
-            if (triIndex == 688)
-            {
-                int a = 10;
-            }
-
             float l1 = _distances[tri.vertices.i1];
             float l2 = _distances[tri.vertices.i2];
             float l3 = _distances[tri.vertices.i3];
