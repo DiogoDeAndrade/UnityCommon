@@ -281,6 +281,20 @@ public class GeodesicDistance : ICompareIndices
             }
         }
 
+        if (ret.Count == 0)
+        {
+            // No output, check if there's a point at the specified reference distance
+            for (int i = 0; i < _distances.Count; i++)
+            {
+                if (Mathf.Abs(_distances[i] - refDistance) < 1e-6)
+                {
+                    // Create a polyline with just this vertex
+                    var pos = topology.GetVertexPosition(i);
+                    ret.Add(new Polyline(pos));
+                }
+            }
+        }
+
         return ret;
     }
 

@@ -1,7 +1,5 @@
 using NaughtyAttributes;
-using System.ComponentModel;
 using UnityEngine;
-using static LevelSetDiagram;
 
 public class LevelSetDiagramComponent : MonoBehaviour
 {

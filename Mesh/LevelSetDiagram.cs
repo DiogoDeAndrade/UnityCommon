@@ -34,6 +34,7 @@ public class LevelSetDiagram
     private List<SingleContour>     _contourList;
     private List<float>             _contoursLRef;
     private List<List<Polyline>>    _contours;
+    [SerializeField, HideInInspector]
     private List<int>               vertexContour;
     private SingleContour           _rootContour;
 
@@ -114,7 +115,12 @@ public class LevelSetDiagram
             if (vin == 1.0f)
             {
                 // Insert line (CT[c(v)], v) into Ts(P) with v as a leaf
-                _contoursLRef.Add(d[vIndex]);
+                // Check if previous is too close
+                if ((_contoursLRef.Count == 0) ||
+                    ((d[vIndex] - _contoursLRef[_contoursLRef.Count - 1]) > 1e-3))
+                {
+                    _contoursLRef.Add(d[vIndex]);
+                }
 
                 int vc = vertexContour[vIndex];
                 var parent = _contourList[vc];
@@ -129,7 +135,11 @@ public class LevelSetDiagram
             else if (vin < 0.0f) 
             {
                 // Insert line (CT[c(v)], v) into Ts(P)
-                _contoursLRef.Add(d[vIndex]);
+                if ((_contoursLRef.Count == 0) ||
+                    ((d[vIndex] - _contoursLRef[_contoursLRef.Count - 1]) > 1e-3))
+                {
+                    _contoursLRef.Add(d[vIndex]);
+                }
 
                 List<List<int>> triangleListsPerContour = new();
                 var contours = _comparisonOperator.ComputeContours(d[vIndex], true, triangleListsPerContour);
