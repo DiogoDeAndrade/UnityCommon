@@ -27,6 +27,7 @@ public class GeodesicDistanceComponent : MonoBehaviour
     GeodesicDistance _geodesicDistance;
 
     public GeodesicDistance geodesicDistance => _geodesicDistance;
+    public bool             hasSourcePoint => (sourcePoint != null);
 
     [Button("Build")]
     public void Build()
@@ -37,14 +38,19 @@ public class GeodesicDistanceComponent : MonoBehaviour
         var topology = topologyComponent.topology;
         if (topology == null) return;
 
-        int sourcePointId = topology.GetClosestPointId(sourcePoint.position);
+        Build(topology);
+
+        topologyComponent.customColorFunction = CustomColorFunction;
+    }
+
+    public void Build(TopologyStatic topology, Vector3? sourcePos = null)
+    { 
+        int sourcePointId = (sourcePos.HasValue) ? (topology.GetClosestPointId(sourcePos.Value)) : (topology.GetClosestPointId(sourcePoint.position));
 
         _geodesicDistance = new();
         _geodesicDistance.topology = topology;
         _geodesicDistance.sourcePointId = sourcePointId;
         _geodesicDistance.Build();
-
-        topologyComponent.customColorFunction = CustomColorFunction;
     }
 
     Color CustomColorFunction(int index, TopologyStatic.TVertex vertex, Color originalColor)

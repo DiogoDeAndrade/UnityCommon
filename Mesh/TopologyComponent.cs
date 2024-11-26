@@ -16,6 +16,8 @@ public class TopologyComponent : MonoBehaviour
     [SerializeField] 
     bool              displayVertex;
     [SerializeField, ShowIf(nameof(displayVertex))]
+    bool              displayVertexLabel = false;
+    [SerializeField, ShowIf(nameof(displayVertex))]
     Color             vertexColor = Color.green;
     [SerializeField, ShowIf(nameof(displayVertex))]
     float             vertexRadius = 0.1f;
@@ -41,7 +43,14 @@ public class TopologyComponent : MonoBehaviour
     {
         MeshFilter meshFilter = GetComponentInChildren<MeshFilter>();
 
-        _topology = new TopologyStatic(meshFilter.sharedMesh, meshFilter.transform.localToWorldMatrix);
+        Build(meshFilter.sharedMesh, meshFilter.transform.localToWorldMatrix);
+    }
+
+    public void Build(Mesh mesh, Matrix4x4 matrix)
+    {
+        MeshFilter meshFilter = GetComponentInChildren<MeshFilter>();
+
+        _topology = new TopologyStatic(mesh, matrix);
     }
 
 #if UNITY_EDITOR
@@ -77,6 +86,10 @@ public class TopologyComponent : MonoBehaviour
 
                 if (hoverVertex == vertex)
                 {
+                    if (displayVertexLabel)
+                    {
+                        DebugHelpers.DrawTextAt(vertex.position, Vector3.zero, 10, Color.white, $"Vertex={i}", true);
+                    }
                     if (displayEdges)
                     {
                         Gizmos.color = edgeColor;

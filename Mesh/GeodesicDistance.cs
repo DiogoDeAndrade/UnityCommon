@@ -73,7 +73,7 @@ public class GeodesicDistance : ICompareIndices
 
     public float ComputeDistance(int index, float u, float v, float w)
     {
-        var triangle = topology.triangles[index];
+        var triangle = _topology.triangles[index];
         var d1 = _distances[triangle.vertices.i1];
         var d2 = _distances[triangle.vertices.i2];
         var d3 = _distances[triangle.vertices.i3];
@@ -83,7 +83,7 @@ public class GeodesicDistance : ICompareIndices
 
     public float ComputeDistance(Vector3 position)
     {
-        int index = topology.GetClosestTriangle(position, out float u, out float v, out float w);
+        int index = _topology.GetClosestTriangle(position, out float u, out float v, out float w);
         if (index != -1)
         {
             return ComputeDistance(index, u, v, w);
@@ -277,6 +277,20 @@ public class GeodesicDistance : ICompareIndices
 
                     ret.Add(polyline);
                     trianglesPerContour?.Add(triIndices);
+                }
+            }
+        }
+
+        if (ret.Count == 0)
+        {
+            // No output, check if there's a point at the specified reference distance
+            for (int i = 0; i < _distances.Count; i++)
+            {
+                if (Mathf.Abs(_distances[i] - refDistance) < 1e-6)
+                {
+                    // Create a polyline with just this vertex
+                    var pos = topology.GetVertexPosition(i);
+                    ret.Add(new Polyline(pos));
                 }
             }
         }

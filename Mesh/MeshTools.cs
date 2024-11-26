@@ -1,6 +1,9 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using static TopologyStatic;
+using System;
+using NUnit.Framework.Constraints;
 
 public static class MeshTools
 {
@@ -50,7 +53,7 @@ public static class MeshTools
                 float Length = 0.0f;
 
                 foreach (var index in triangles_per_vertex[i])
-                { 
+                {
                     normal += triangle_normals[index] * triangle_areas[index];
                     Length += triangle_areas[index];
                 }
@@ -148,8 +151,8 @@ public static class MeshTools
             for (int i = 0; i < vertices.Length; i++)
             {
                 Vector3 normal = Vector3.zero;
-                Vector3 tangent= Vector3.zero;
-                Vector3 binormal= Vector3.zero;
+                Vector3 tangent = Vector3.zero;
+                Vector3 binormal = Vector3.zero;
                 float Length = 0.0f;
 
                 foreach (var index in triangles_per_vertex[i])
@@ -168,9 +171,9 @@ public static class MeshTools
         {
             for (int i = 0; i < vertices.Length; i++)
             {
-                Vector3 normal= Vector3.zero;
-                Vector3 tangent= Vector3.zero;
-                Vector3 binormal= Vector3.zero;
+                Vector3 normal = Vector3.zero;
+                Vector3 tangent = Vector3.zero;
+                Vector3 binormal = Vector3.zero;
                 float Length = 0.0f;
 
                 foreach (var index in triangles_per_vertex[i])
@@ -338,7 +341,7 @@ public static class MeshTools
         var vertices = mesh.vertices;
         var normals = mesh.normals;
         var tangents = mesh.tangents;
-        var matrix = Matrix4x4.TRS(position, Quaternion.Euler(rotation.x, rotation.y, rotation.z),scale);
+        var matrix = Matrix4x4.TRS(position, Quaternion.Euler(rotation.x, rotation.y, rotation.z), scale);
 
         for (int i = 0; i < vertices.Length; i++)
         {
@@ -446,7 +449,7 @@ public static class MeshTools
             if (srcNormals.Length > 0) { normals.AddRange(srcNormals); }
             if (srcUvs.Length > 0) { uvs.AddRange(srcUvs); }
             if (srcColors.Length > 0) { color0.AddRange(srcColors); }
-            if (srcTangents .Length > 0) { tangents.AddRange(srcTangents); }
+            if (srcTangents.Length > 0) { tangents.AddRange(srcTangents); }
 
             var src_index = meshes[i].triangles;
             foreach (var j in src_index)
@@ -493,7 +496,7 @@ public static class MeshTools
     {
         var normals = mesh.normals;
         var color = new Color[normals.Length];
-            
+
         for (int i = 0; i < normals.Length; i++)
         {
             color[i] = new Color(normals[i].x * 0.5f + 0.5f, normals[i].y * 0.5f + 0.5f, normals[i].z * 0.5f + 0.5f, 1.0f);
@@ -546,67 +549,306 @@ public static class MeshTools
         return mesh;
     }
 
+    public static Mesh FromTopology(TopologyStatic top)
+    {
+        List<int> indices = new List<int>();
+        foreach (var tri in top.triangles)
+        {
+            if (tri == null) continue;
+
+            indices.Add(tri.vertices.i1);
+            indices.Add(tri.vertices.i2);
+            indices.Add(tri.vertices.i3);
+        }
+
+        Mesh mesh = new Mesh();
+
+        mesh.indexFormat = (top.vertices.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
+        mesh.SetVertices(top.GetVertexPositions());
+        mesh.SetTriangles(indices, 0);
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
+        mesh.name = "FromTopology";
+
+        return mesh;
+    }
+
     public static Mesh SimplifyMeshInterior(Mesh sourceMesh, float colinearTolerance = 0.001f)
     {
         float colTol = 1.0f - colinearTolerance;
 
-        //System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        //var t0 = stopwatch.ElapsedMilliseconds;
         var topology = new Topology(sourceMesh, Matrix4x4.identity);
-        //Debug.Log("Get topology = " + (stopwatch.ElapsedMilliseconds - t0));
-
-        //long    accumCollapse = 0;
-        //long    accumCleanup = 0;
-        //long    accumPinned = 0;
-
-        // Build mesh from topology
-        //Debug.Log("Accum collapse = " + accumCollapse + " (avg. " + accumCollapse / (float)iterationCount + ")");
-        //Debug.Log("Accum cleanup = " + accumCleanup + " (avg. " + accumCleanup / (float)iterationCount + ")");
-        //Debug.Log("Accum pinned = " + accumPinned + " (avg. " + accumPinned / (float)iterationCount + ")");
 
         topology.OptimizeInterior();
         topology.OptimizeBoundary(colTol, true);
 
-        //t0 = stopwatch.ElapsedMilliseconds;
         var retMesh = FromTopology(topology);
-        //Debug.Log("Mesh from topology = " + (stopwatch.ElapsedMilliseconds - t0));
 
         return retMesh;
     }
 
-    public static Mesh TriangulateEarClipping(Polyline polyline)
+    public static Mesh ExtrudeMesh(Mesh sourceMesh, Vector3 offsetTop, Vector3 offsetBottom)
     {
-        int PrevVertex(int v, int maxVertex) => (v > 0) ? (v - 1) : (maxVertex - 1);
-        int NextVertex(int v, int maxVertex) => (v + 1) % maxVertex;
-
-        var vertex = polyline.GetVertices();
-
-        List<int> vertexIndex = new List<int>();
-        for (int i = 0; i < polyline.Count; i++) vertexIndex.Add(i);
-        List<int> reflexIndex = new List<int>();
-        List<int> convexIndex = new List<int>();
-
-        for (int i = 0; i < vertex.Count; i++)
+        if ((sourceMesh.boneWeights.Length > 0) ||
+            (sourceMesh.colors.Length > 0) ||
+            (sourceMesh.uv.Length > 0) ||
+            (sourceMesh.uv2.Length > 0) ||
+            (sourceMesh.uv3.Length > 0) ||
+            (sourceMesh.uv4.Length > 0))
         {
-            Vector3 p0 = vertex[PrevVertex(i, vertex.Count)];
-            Vector3 p1 = vertex[i];
-            Vector3 p2 = vertex[NextVertex(i, vertex.Count)];
-            Vector3 pp0 = p1 - p0;
-            Vector3 pp1 = p2 - p0;
+            Debug.LogWarning("ExtrudeMesh doesn't support meshes with other attributes beyond positions: need to implement!");
+            return null;
+        }
 
-            //float s = 0; // Vector3.Cross(pp0, pp1).magnitude / (pp0.magnitude * pp1.magnitude);
+        if (sourceMesh.subMeshCount > 1)
+        {
+            Debug.LogWarning("ExtrudeMesh doesn't support meshes with more than one submesh: need to implement!");
+            return null;
+        }
+
+        // Build topology from mesh
+        TopologyStatic topology = new TopologyStatic(sourceMesh, Matrix4x4.identity, false);
+
+        // From topology, create some vertices and indices corresponding to the top side
+        var vertices = new List<Vector3>();
+        var indices = new List<int>();
+
+        // Top part
+        foreach (var tvertex in topology.vertices)
+        {
+            vertices.Add(tvertex.position + offsetTop);
+        }
+        foreach (var tTriangle in topology.triangles)
+        {
+            indices.Add(tTriangle.vertices.i1);
+            indices.Add(tTriangle.vertices.i2);
+            indices.Add(tTriangle.vertices.i3);
+        }
+        // Bottom part
+        int bottomOffset = vertices.Count;
+        foreach (var tvertex in topology.vertices)
+        {
+            vertices.Add(tvertex.position + offsetBottom);
+        }
+
+        foreach (var tTriangle in topology.triangles)
+        {
+            indices.Add(tTriangle.vertices.i1 + bottomOffset);
+            indices.Add(tTriangle.vertices.i3 + bottomOffset);
+            indices.Add(tTriangle.vertices.i2 + bottomOffset);
+        }
+        // Get all edges that don't share triangles and extrude those
+        foreach (var tEdge in topology.edges)
+        {
+            if (tEdge.triangles.Count() == 1)
+            {
+                indices.Add(tEdge.vertices.i1);
+                indices.Add(tEdge.vertices.i1 + bottomOffset);
+                indices.Add(tEdge.vertices.i2);
+
+                indices.Add(tEdge.vertices.i2);
+                indices.Add(tEdge.vertices.i1 + bottomOffset);
+                indices.Add(tEdge.vertices.i2 + bottomOffset);
+            }
+        }
+
+        Mesh destMesh = new Mesh();
+        destMesh.name = sourceMesh.name + "Shell";
+        destMesh.SetVertices(vertices);
+        destMesh.SetIndices(indices, MeshTopology.Triangles, 0, true, 0);
+        destMesh.RecalculateBounds();
+        destMesh.RecalculateNormals();
+        destMesh.RecalculateTangents();
+        destMesh.UploadMeshData(false);
+
+        return destMesh;
+    }
+
+    public enum MidpointStrategy { Divide3, Divide4 };
+
+    public static Mesh SubdivideMidpoint(Mesh sourceMesh, MidpointStrategy strategy)
+    {
+        List<int> indices = new();
+        List<Vector3> vertices = new(sourceMesh.vertices);
+        var srcIndices = sourceMesh.triangles;
+        int nIndices = srcIndices.Length;
+
+        switch (strategy)
+        {
+            case MidpointStrategy.Divide3:
+                {
+                    // Careful: indices is going to be changed, so sourceMesh.triangles's size is used below!
+                    for (int i = 0; i < nIndices; i += 3)
+                    {
+                        // Subdivide this triangle
+                        // Add vertex
+                        int newVertexId = vertices.Count;
+                        var midpoint = (vertices[srcIndices[i]] + vertices[srcIndices[i + 1]] + vertices[srcIndices[i + 2]]) / 3.0f;
+                        vertices.Add(midpoint);
+
+                        indices.Add(srcIndices[i]);
+                        indices.Add(srcIndices[i + 1]);
+                        indices.Add(newVertexId);
+
+                        indices.Add(srcIndices[i + 1]);
+                        indices.Add(srcIndices[i + 2]);
+                        indices.Add(newVertexId);
+
+                        indices.Add(srcIndices[i + 2]);
+                        indices.Add(srcIndices[i]);
+                        indices.Add(newVertexId);
+                    }
+                }
+                break;
+            case MidpointStrategy.Divide4:
+                // Careful: indices is going to be changed, so sourceMesh.triangles's size is used below!
+                for (int i = 0; i < nIndices; i += 3)
+                {
+                    // Subdivide this triangle
+                    int i1 = srcIndices[i];
+                    int i2 = srcIndices[i + 1];
+                    int i3 = srcIndices[i + 2];
+                    // Add vertices
+                    var midpoint1 = (vertices[srcIndices[i]] + vertices[srcIndices[i + 1]]) * 0.5f;
+                    var midpoint2 = (vertices[srcIndices[i + 1]] + vertices[srcIndices[i + 2]]) * 0.5f;
+                    var midpoint3 = (vertices[srcIndices[i + 2]] + vertices[srcIndices[i]]) * 0.5f;
+                    vertices.Add(midpoint1);
+                    int midpointId1 = vertices.Count - 1;
+                    vertices.Add(midpoint2);
+                    int midpointId2 = vertices.Count - 1;
+                    vertices.Add(midpoint3);
+                    int midpointId3 = vertices.Count - 1;
+
+                    indices.Add(midpointId1);
+                    indices.Add(midpointId2);
+                    indices.Add(midpointId3);
+
+                    indices.Add(i1);
+                    indices.Add(midpointId1);
+                    indices.Add(midpointId3);
+
+                    indices.Add(midpointId1);
+                    indices.Add(i2);
+                    indices.Add(midpointId2);
+
+                    indices.Add(midpointId2);
+                    indices.Add(i3);
+                    indices.Add(midpointId3);
+                }
+                break;
+            default:
+                break;
         }
 
 
         Mesh mesh = new Mesh();
 
-/*        mesh.indexFormat = (vertex.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
-        mesh.SetVertices(vertex);
+        mesh.indexFormat = (vertices.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
+        mesh.SetVertices(vertices);
         mesh.SetTriangles(indices, 0);
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
-        mesh.name = "TriangulateEarClipping";*/
+        if (sourceMesh.name.IndexOf("Subdivide") == -1)
+            mesh.name = sourceMesh.name + " Subdivided";
+        else
+            mesh.name = sourceMesh.name;
+
+        if (strategy == MidpointStrategy.Divide4)
+        {
+            // To cleanup the mesh, get topology from the mesh with weld
+            var topology = new TopologyStatic(mesh, Matrix4x4.identity, true);
+
+            return FromTopology(topology);
+        }
 
         return mesh;
+    }
+
+    public static Mesh SubdivideLongEdges(Mesh sourceMesh, float maxEdgeLength, int maxSplits)
+    {
+        bool restart = true;
+        int  numSplits = 0;
+
+        List<int> indices = new(sourceMesh.triangles);
+        List<Vector3> vertices = new(sourceMesh.vertices);
+
+        while (restart)
+        {
+            if (numSplits >= maxSplits) break;
+
+            restart = false;
+
+            for (int i = 0; i < indices.Count; i += 3)
+            {
+                for (int k = 0; k < 3; k++)
+                {
+                    int i1 = indices[i + k];
+                    int i2 = indices[i + (k + 1) % 3];
+                    int i3 = indices[i + (k + 2) % 3];
+                    Vector3 p1 = vertices[i1];
+                    Vector3 p2 = vertices[i2];
+
+                    float d = Vector3.Distance(p1, p2);
+                    if (d > maxEdgeLength)
+                    {
+                        numSplits++;
+                        restart = true;
+
+                        int newVertexId = vertices.Count;
+                        vertices.Add((p1 + p2) * 0.5f);
+
+                        indices[i + (k + 1) % 3] = newVertexId;
+
+                        indices.Add(newVertexId);
+                        indices.Add(i2);
+                        indices.Add(i3);
+
+                        // Need to split all triangles that share this edge
+                        for (int j = i + 3; j < indices.Count; j += 3)
+                        {
+                            for (int k2 = 0; k2 < 3; k2++)
+                            {
+                                int o1 = indices[j + k2];
+                                int o2 = indices[j + (k2 + 1) % 3];
+                                int o3 = indices[j + (k2 + 2) % 3];
+
+                                if (((o1 == i1) && (o2 == i2)) ||
+                                    ((o1 == i2) && (o2 == i1)))
+                                {
+                                    // Found shared edge
+                                    indices[j + (k2 + 1) % 3] = newVertexId;
+
+                                    indices.Add(newVertexId);
+                                    indices.Add(o2);
+                                    indices.Add(o3);
+                                }
+                            }
+                        }
+                        if (numSplits >= maxSplits) break;
+                    }
+                }
+
+                if (numSplits >= maxSplits) break;
+            }
+        }
+
+        Mesh mesh = new Mesh();
+
+        mesh.indexFormat = (vertices.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(indices, 0);
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
+        if (sourceMesh.name.IndexOf("Subdivide") == -1)
+            mesh.name = sourceMesh.name + " Subdivided";
+        else
+            mesh.name = sourceMesh.name;
+
+        Debug.Log($"Ran {numSplits} splits...");
+
+        // To cleanup the mesh, get topology from the mesh
+        var topology = new TopologyStatic(mesh, Matrix4x4.identity, true);
+
+        return FromTopology(topology);
     }
 }
