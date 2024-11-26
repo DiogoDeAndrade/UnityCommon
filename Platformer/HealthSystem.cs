@@ -129,4 +129,24 @@ public class HealthSystem : MonoBehaviour
 
         return true;
     }
+
+    public static HealthSystem[] FindAll()
+    {
+        return FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
+    }
+
+    public static HealthSystem[] FindAll(Vector3 pos, float range)
+    {
+        List<HealthSystem> ret = new List<HealthSystem>();
+        var healthSystems = FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
+        foreach (var h in healthSystems)
+        {
+            if (Vector3.Distance(h.transform.position, pos) < range)
+            {
+                ret.Add(h);
+            }
+        }
+
+        return ret.ToArray();
+    }
 }

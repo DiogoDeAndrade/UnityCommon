@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Audio;
 
 public static class TransformExtensions
 {
@@ -30,5 +31,14 @@ public static class TransformExtensions
         }
 
         return false;
+    }
+
+    public static Tweener.BaseInterpolator Shake2d(this Transform target, float duration, float strength)
+    {
+        // To avoid getting stuck in shakes, disable any shake that's currently running on this object
+        target.Tween().Stop("ShakeTransform", Tweener.StopBehaviour.Cancel);
+
+        var initialPosition = target.position;
+        return target.Tween().Interpolate(0.0f, 1.0f, duration, (value) => target.position = initialPosition + (Random.insideUnitCircle * strength).xyz(0.0f), "ShakeTransform").Done(() => target.position = initialPosition);
     }
 }

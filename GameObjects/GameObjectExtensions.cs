@@ -154,4 +154,35 @@ public static class GameObjectExtensions
 
         return false;
     }
+
+    public static T[] FindAllInRadius<T>(this GameObject gameObject, Vector3 pos, float range) where T : Component
+    {
+        // Get all objects of type T in the scene
+        T[] allObjects = Object.FindObjectsByType<T>(FindObjectsSortMode.None);
+
+        // List to store objects within the range
+        List<(T component, float distance)> objectsInRange = new List<(T, float)>();
+
+        // Iterate through all objects to check their distance
+        foreach (T obj in allObjects)
+        {
+            // Get the object's position
+            Vector3 objPos = obj.transform.position;
+
+            // Calculate the distance from the given position
+            float distance = Vector3.Distance(pos, objPos);
+
+            // If within range, add to the list
+            if (distance <= range)
+            {
+                objectsInRange.Add((obj, distance));
+            }
+        }
+
+        // Sort the list by distance
+        objectsInRange.Sort((a, b) => a.distance.CompareTo(b.distance));
+
+        // Extract and return the components as an array
+        return objectsInRange.ConvertAll(item => item.component).ToArray();
+    }
 }

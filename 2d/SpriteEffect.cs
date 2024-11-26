@@ -1,6 +1,7 @@
 using UnityEngine;
 using NaughtyAttributes;
 using System;
+using UnityEngine.UI.Extensions.Tweens;
 
 [ExecuteAlways]
 [RequireComponent(typeof(SpriteRenderer))]
@@ -42,6 +43,16 @@ public class SpriteEffect : MonoBehaviour
         return palette;
     }
 
+    public void SetInverseFactor(float factor)
+    {
+        inverseFactor = factor;
+
+        if (factor > 0.0f) effects |= Effects.Inverse;
+        else effects &= ~Effects.Inverse;
+    }
+
+    public float GetInverseFactor() => inverseFactor;
+
     private void Update()
     {
         ConfigureMaterial();
@@ -73,5 +84,21 @@ public class SpriteEffect : MonoBehaviour
         }
 
         spriteRenderer.SetPropertyBlock(mpb);
+    }
+}
+
+public static class SpriteEffectExtensions
+{
+    public static Tweener.BaseInterpolator FlashInvert(this SpriteEffect spriteEffect, float duration)
+    {
+        spriteEffect.Tween().Stop("FlashInvert", Tweener.StopBehaviour.SkipToEnd);
+
+        var current = spriteEffect.GetInverseFactor();
+
+        return spriteEffect.Tween().Interpolate(0.0f, 1.0f, duration, (value) =>
+        {
+            if (value < 0.5f) spriteEffect.SetInverseFactor(value * 2.0f);
+            else spriteEffect.SetInverseFactor(1.0f - (value - 0.5f) * 2.0f);
+        }, "FlashInvert").Done(() => spriteEffect.SetInverseFactor(current));
     }
 }

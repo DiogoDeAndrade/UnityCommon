@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 public class Tweener : MonoBehaviour
 {
@@ -9,10 +10,11 @@ public class Tweener : MonoBehaviour
 
     public class BaseInterpolator
     {
-        public string       name;
-        public float        currentTime;
-        public float        totalTime;
-        public EaseFunction easeFunction;
+        public string           name;
+        public float            currentTime;
+        public float            totalTime;
+        public EaseFunction     easeFunction;
+        public Action           doneAction;
 
         public bool isFinished => currentTime >= totalTime;
 
@@ -24,7 +26,13 @@ public class Tweener : MonoBehaviour
             EvaluateAndSet(t);
         }
 
-        protected virtual void EvaluateAndSet(float t) {;}
+        internal virtual void EvaluateAndSet(float t) {;}
+
+        internal BaseInterpolator Done(Action action)
+        {
+            doneAction = action;
+            return this;
+        }
     }
 
     class Interpolator<T> : BaseInterpolator 
@@ -36,7 +44,7 @@ public class Tweener : MonoBehaviour
 
     class FloatInterpolator : Interpolator<float>
     {
-        protected override void EvaluateAndSet(float t)
+        internal override void EvaluateAndSet(float t)
         {
             var deltaValue = endValue - startValue;
             var currentValue = (startValue + deltaValue * t);
@@ -46,7 +54,7 @@ public class Tweener : MonoBehaviour
 
     class Vec2Interpolator : Interpolator<Vector2>
     {
-        protected override void EvaluateAndSet(float t)
+        internal override void EvaluateAndSet(float t)
         {
             var deltaValue = endValue - startValue;
             var currentValue = (startValue + deltaValue * t);
@@ -56,7 +64,7 @@ public class Tweener : MonoBehaviour
 
     class Vec3Interpolator : Interpolator<Vector3>
     {
-        protected override void EvaluateAndSet(float t)
+        internal override void EvaluateAndSet(float t)
         {
             var deltaValue = endValue - startValue;
             var currentValue = (startValue + deltaValue * t);
@@ -66,7 +74,7 @@ public class Tweener : MonoBehaviour
 
     class ColorInterpolator : Interpolator<Color>
     {
-        protected override void EvaluateAndSet(float t)
+        internal override void EvaluateAndSet(float t)
         {
             var deltaValue = endValue - startValue;
             var currentValue = (startValue + deltaValue * t);
@@ -143,13 +151,19 @@ public class Tweener : MonoBehaviour
             interpolators[i].Run(Time.deltaTime);
             if (interpolators[i].isFinished)
             {
-                if (!string.IsNullOrEmpty(interpolators[i].name))
-                {
-                    namedInterpolators.Remove(interpolators[i].name);
-                }
-                interpolators[i] = null;
+                CompleteAction(i);
             }
         }        
+    }
+
+    private void CompleteAction(int index)
+    {
+        interpolators[index].doneAction?.Invoke();
+        if (!string.IsNullOrEmpty(interpolators[index].name))
+        {
+            namedInterpolators.Remove(interpolators[index].name);
+        }
+        interpolators[index] = null;
     }
 
     private BaseInterpolator Add(BaseInterpolator interpolator)
@@ -165,14 +179,27 @@ public class Tweener : MonoBehaviour
             if (interpolators[i] == null)
             {
                 interpolators[i] = interpolator;
-                if (name != "") namedInterpolators[interpolator.name] = i;
+                if (!string.IsNullOrEmpty(interpolator.name)) namedInterpolators[interpolator.name] = i;
                 return interpolator;
             }
         }
         interpolators.Add(interpolator);
-        if (name != "") namedInterpolators[interpolator.name] = interpolators.Count - 1;
+        if (!string.IsNullOrEmpty(interpolator.name)) namedInterpolators[interpolator.name] = interpolators.Count - 1;
 
         return interpolator;
+    }
+
+    public enum StopBehaviour { SkipToEnd, Cancel };
+    public void Stop(string name, StopBehaviour behaviour)
+    {
+        if (namedInterpolators.TryGetValue(name, out int foundIndex))
+        {
+            if (behaviour == StopBehaviour.SkipToEnd)
+            {
+                interpolators[foundIndex].EvaluateAndSet(1.0f);
+            }
+            CompleteAction(foundIndex);
+        }
     }
 }
 

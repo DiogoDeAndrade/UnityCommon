@@ -72,7 +72,7 @@ Material:
     m_Floats:
     - _EnableExternalAlpha: 0
     - _EnableRemap: 0.869
-    - _InverseFactor: 0
+    - _InverseFactor: 0.126
     - _ZWrite: 0
     m_Colors:
     - _Color: {r: 1.4980388, g: 1.4980388, b: 1.4980388, a: 1}
