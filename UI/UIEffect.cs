@@ -1,10 +1,9 @@
 using UnityEngine;
+using UnityEngine.UI;
 using NaughtyAttributes;
 using System;
 
-[ExecuteAlways]
-[RequireComponent(typeof(SpriteRenderer))]
-public class SpriteEffect : MonoBehaviour
+public class UIImageEffect : MonoBehaviour
 {
     [Flags]
     public enum Effects { None = 0, ColorRemap = 1, Inverse = 2 };
@@ -19,27 +18,18 @@ public class SpriteEffect : MonoBehaviour
     public bool colorRemapEnable => (effects & Effects.ColorRemap) != 0;
     public bool inverseEnable => (effects & Effects.Inverse) != 0;
 
-    private MaterialPropertyBlock   mpb;
-    private SpriteRenderer          spriteRenderer;
+    private Image           uiImage;
+    private RawImage        rawImage;
+    private Material        material;
 
-    private void OnEnable()
+    private void Start()
     {
-        if (mpb == null) mpb = new();
-
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        spriteRenderer.GetPropertyBlock(mpb);
-
-        ConfigureMaterial();
+        SetupMaterials();
     }
 
     public void SetRemap(ColorPalette colorPalette)
     {
         palette = colorPalette;
-    }
-
-    public ColorPalette GetRemap()
-    {
-        return palette;
     }
 
     private void Update()
@@ -48,30 +38,38 @@ public class SpriteEffect : MonoBehaviour
     }
 
     [Button("Update Material")]
+    private void SetupMaterials()
+    {
+        uiImage = GetComponent<Image>();
+        rawImage = GetComponent<RawImage>();
+        material = (uiImage) ? (uiImage.material) : (rawImage.material);
+        material = new Material(material);
+        if (uiImage) uiImage.material = material;
+        else if (rawImage) rawImage.material = material;
+
+        ConfigureMaterial();
+    }
+
     private void ConfigureMaterial()
     {
-        spriteRenderer.GetPropertyBlock(mpb);
-
         if ((palette) && (colorRemapEnable))
         {
             var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
-            mpb.SetTexture("_Colormap", texture);
-            mpb.SetFloat("_EnableRemap", 1.0f);
+            material.SetTexture("_Colormap", texture);
+            material.SetFloat("_EnableRemap", 1.0f);
         }
         else
         {
-            mpb.SetFloat("_EnableRemap", 0.0f);
+            material.SetFloat("_EnableRemap", 0.0f);
         }
 
         if (inverseEnable)
         {
-            mpb.SetFloat("_InverseFactor", inverseFactor);
+            material.SetFloat("_InverseFactor", inverseFactor);
         }
         else
         {
-            mpb.SetFloat("_InverseFactor", 0.0f);
+            material.SetFloat("_InverseFactor", 0.0f);
         }
-
-        spriteRenderer.SetPropertyBlock(mpb);
     }
 }

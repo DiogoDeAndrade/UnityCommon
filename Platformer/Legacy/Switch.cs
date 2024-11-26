@@ -3,78 +3,83 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Switch : Interactable
+namespace UnityCommon.Legacy
 {
-    public bool                 initialState;
-    public bool                 enableToggle = true;
-    public AudioSource          toggleSound;
-    public ActivatedComponent[] activators;
-    [ShowIf("OnlyOneActivator")]
-    public bool                 twoWays;
 
-    bool OnlyOneActivator()
+    public class Switch : Interactable
     {
-        if (activators != null) return activators.Length == 1;
+        public bool initialState;
+        public bool enableToggle = true;
+        public AudioSource toggleSound;
+        public ActivatedComponent[] activators;
+        [ShowIf("OnlyOneActivator")]
+        public bool twoWays;
 
-        return false;
-    }
-
-    bool        state;
-    Animator    anim;
-
-    public void Start()
-    {
-        anim = GetComponent<Animator>();
-
-        state = initialState;
-        if (anim) anim.SetBool("Switch", state);
-    }
-
-    public void Update()
-    {
-        if ((twoWays) && (OnlyOneActivator()))
+        bool OnlyOneActivator()
         {
-            state = activators[0].active;
+            if (activators != null) return activators.Length == 1;
+
+            return false;
+        }
+
+        bool state;
+        Animator anim;
+
+        public void Start()
+        {
+            anim = GetComponent<Animator>();
+
+            state = initialState;
             if (anim) anim.SetBool("Switch", state);
         }
-    }
 
-    override public void Interact()
-    {
-        if (enableToggle)
+        public void Update()
         {
-            state = !state;
-            if (anim) anim.SetBool("Switch", state);
-            foreach (var ac in activators)
+            if ((twoWays) && (OnlyOneActivator()))
             {
-                ac.active = !ac.active;
+                state = activators[0].active;
+                if (anim) anim.SetBool("Switch", state);
             }
-            if (toggleSound) toggleSound.Play();            
         }
-        else
+
+        override public void Interact()
         {
-            if (state == initialState)
+            if (enableToggle)
             {
                 state = !state;
                 if (anim) anim.SetBool("Switch", state);
                 foreach (var ac in activators)
                 {
-                    ac.active = state;
+                    ac.active = !ac.active;
                 }
                 if (toggleSound) toggleSound.Play();
+            }
+            else
+            {
+                if (state == initialState)
+                {
+                    state = !state;
+                    if (anim) anim.SetBool("Switch", state);
+                    foreach (var ac in activators)
+                    {
+                        ac.active = state;
+                    }
+                    if (toggleSound) toggleSound.Play();
+                }
+            }
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            if (activators != null)
+            {
+                Gizmos.color = Color.green;
+                foreach (var ac in activators)
+                {
+                    Gizmos.DrawLine(transform.position, ac.transform.position);
+                }
             }
         }
     }
 
-    private void OnDrawGizmosSelected()
-    {
-        if (activators != null)
-        {
-            Gizmos.color = Color.green;
-            foreach (var ac in activators)
-            {
-                Gizmos.DrawLine(transform.position, ac.transform.position);
-            }
-        }
-    }
 }

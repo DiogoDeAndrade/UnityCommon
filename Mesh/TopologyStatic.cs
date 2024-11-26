@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 [System.Serializable]
 public class TopologyStatic
@@ -49,6 +50,7 @@ public class TopologyStatic
         public TVertex(Vector3 position) { this.position = position; neighbourVertex = new(); edges = new(); triangles = new(); }
 
         public Vector3                  position;
+        public Vector3                  normal;
         public SerializedHashSet<int>   neighbourVertex;
         public SerializedHashSet<int>   edges;
         public SerializedHashSet<int>   triangles;
@@ -69,13 +71,17 @@ public class TopologyStatic
     {
         public TTriangle(int i1, int i2, int i3, int e1, int e2, int e3) { vertices = (i1, i2, i3); edges = (e1, e2, e3); neighbourTriangles = new();  }
 
+        public Vector3                  normal;
         public IdTriplet                vertices;
         public IdTriplet                edges;
         public SerializedHashSet<int>   neighbourTriangles;
     }
 
+    [SerializeField]
     private List<TVertex>     _vertices;
+    [SerializeField]
     private List<TEdge>       _edges;
+    [SerializeField]
     private List<TTriangle>   _triangles;
 
     private Dictionary<IdPair, int>  edgeDic;
@@ -135,15 +141,18 @@ public class TopologyStatic
             var indices = mesh.GetIndices(submesh);
             for (int i = 0; i < indices.Length; i += 3)
             {
-                int index1 = indices[i];
-                int index2 = indices[i + 1];
-                int index3 = indices[i + 2];
+                int index1 = vertexMatch[indices[i]];
+                int index2 = vertexMatch[indices[i + 1]];
+                int index3 = vertexMatch[indices[i + 2]];
 
                 int e1 = GetOrAddEdge(index1, index2);
                 int e2 = GetOrAddEdge(index2, index3);
                 int e3 = GetOrAddEdge(index3, index1);
 
                 TTriangle triangle = new TTriangle(index1, index2, index3, e1, e2, e3);
+                triangle.normal = Vector3.Cross(_vertices[index2].position - _vertices[index1].position,
+                                                _vertices[index3].position - _vertices[index1].position);
+                triangle.normal.SafeNormalize();
 
                 int triIndex = _triangles.Count;
                 _triangles.Add(triangle);
@@ -191,6 +200,16 @@ public class TopologyStatic
             neighbours = _edges[triangle.edges.i3].triangles;
             foreach (var triangleId in neighbours) if (triangleId != i) triangle.neighbourTriangles.Add(triangleId);
         }
+
+        for (int i = 0; i < _vertices.Count; i++)
+        {
+            _vertices[i].normal = Vector3.zero;
+            foreach (var triangle in _vertices[i].triangles)
+            {
+                _vertices[i].normal += _triangles[triangle].normal;
+            }
+            _vertices[i].normal.SafeNormalize();
+        }
     }
 
     int GetOrAddEdge(int index1, int index2)
@@ -224,14 +243,18 @@ public class TopologyStatic
         }
     }
 
-    public int vertexCount => _vertices.Count;
-    public int edgeCount => _edges.Count;
-    public int triangleCount => _triangles.Count;
+    public int vertexCount => (_vertices == null) ? 0 : _vertices.Count;
+    public int edgeCount => (_edges == null) ? 0 : _edges.Count;
+    public int triangleCount => (_triangles == null) ? 0 : _triangles.Count;
 
-    public Vector3 GetPosition(int vertexId) => _vertices[vertexId].position;
+    public Vector3 GetVertexPosition(int vertexId) => _vertices[vertexId].position;
+    public Vector3 GetVertexNormal(int vertexId) => _vertices[vertexId].normal;
     public SerializedHashSet<int> GetVertexNeighbours(int vertexId) => _vertices[vertexId].neighbourVertex;
     public SerializedHashSet<int> GetVertexEdges(int vertexId) => _vertices[vertexId].edges;
     public SerializedHashSet<int> GetVertexTriangles(int vertexId) => _vertices[vertexId].triangles;
+
+    public SerializedHashSet<int> GetTrianglesByEdge(int index1, int index2) => _edges[GetEdgeId(index1, index2)].triangles;
+    public Vector3 GetTriangleNormal(int triangleIndex) => _triangles[triangleIndex].normal;
 
     public IdPair GetEdgeVertex(int edgeId) => _edges[edgeId].vertices;
     public int GetEdgeId(int vertexId1, int vertexId2)
@@ -274,6 +297,7 @@ public class TopologyStatic
         int closestTriangleId = -1;
 
         u = v = w = 0; // Default barycentric coordinates
+        if (_triangles == null) return -1;
 
         for (int i = 0; i < _triangles.Count; i++)
         {

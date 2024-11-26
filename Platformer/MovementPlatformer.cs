@@ -101,9 +101,12 @@ public class MovementPlatformer : MonoBehaviour
     private bool canClimb = false;
     public bool isGliding { get; private set; }
 
-    const float epsilonZero = 0.1f;
+    const float inputEpsilonZero = 0.4f;
+    const float velocityEpsilonZero = 5.0f;
 
     float lastClimbTime = 0.0f;
+
+    Quaternion originalRotation;
 
     public Vector2 GetSpeed() => speed;
     public void SetSpeed(Vector2 speed) { this.speed = speed; }
@@ -143,6 +146,8 @@ public class MovementPlatformer : MonoBehaviour
         climbInput.playerInput = playerInput;
         jumpInput.playerInput = playerInput;
         glideInput.playerInput = playerInput;
+
+        originalRotation = transform.rotation;
     }
 
     void FixedUpdate()
@@ -359,28 +364,34 @@ public class MovementPlatformer : MonoBehaviour
             case FlipBehaviour.None:
                 break;
             case FlipBehaviour.VelocityFlipsSprite:
-                if (currentVelocity.x > epsilonZero) spriteRenderer.flipX = false;
-                else if (currentVelocity.x < -epsilonZero) spriteRenderer.flipX = true;
+                if (currentVelocity.x > velocityEpsilonZero) spriteRenderer.flipX = false;
+                else if (currentVelocity.x < -velocityEpsilonZero) spriteRenderer.flipX = true;
                 break;
             case FlipBehaviour.VelocityInvertsScale:
-                if ((currentVelocity.x > epsilonZero) && (transform.localScale.x < 0.0f)) transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
-                else if ((currentVelocity.x < -epsilonZero) && (transform.localScale.x > 0.0f)) transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                if ((currentVelocity.x > velocityEpsilonZero) && (transform.localScale.x < 0.0f)) transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                else if ((currentVelocity.x < -velocityEpsilonZero) && (transform.localScale.x > 0.0f)) transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
                 break;
             case FlipBehaviour.VelocityRotatesSprite:
-                if ((currentVelocity.x > epsilonZero) && (transform.right.x < 0.0f)) transform.rotation *= Quaternion.Euler(0, 180, 0);
-                else if ((currentVelocity.x < -epsilonZero) && (transform.right.x > 0.0f)) transform.rotation *= transform.rotation *= Quaternion.Euler(0, 180, 0);
+                if ((currentVelocity.x > velocityEpsilonZero) && (transform.right.x < 0.0f))
+                {
+                    transform.rotation = originalRotation;
+                }
+                else if ((currentVelocity.x < -velocityEpsilonZero) && (transform.right.x > 0.0f))
+                {
+                    transform.rotation = originalRotation * Quaternion.Euler(0, 180, 0);
+                }
                 break;
             case FlipBehaviour.InputFlipsSprite:
-                if (deltaX > epsilonZero) spriteRenderer.flipX = false;
-                else if (deltaX < -epsilonZero) spriteRenderer.flipX = true;
+                if (deltaX > inputEpsilonZero) spriteRenderer.flipX = false;
+                else if (deltaX < -inputEpsilonZero) spriteRenderer.flipX = true;
                 break;
             case FlipBehaviour.InputInvertsScale:
-                if ((deltaX > epsilonZero) && (transform.localScale.x < 0.0f)) transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
-                else if ((deltaX < -epsilonZero) && (transform.localScale.x > 0.0f)) transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                if ((deltaX > inputEpsilonZero) && (transform.localScale.x < 0.0f)) transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+                else if ((deltaX < -inputEpsilonZero) && (transform.localScale.x > 0.0f)) transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
                 break;
             case FlipBehaviour.InputRotatesSprite:
-                if ((deltaX > epsilonZero) && (transform.right.x < 0.0f)) transform.rotation *= Quaternion.Euler(0, 180, 0);
-                else if ((deltaX < -epsilonZero) && (transform.right.x > 0.0f)) transform.rotation *= transform.rotation *= Quaternion.Euler(0, 180, 0);
+                if ((deltaX > inputEpsilonZero) && (transform.right.x < 0.0f)) transform.rotation = originalRotation;
+                else if ((deltaX < -inputEpsilonZero) && (transform.right.x > 0.0f)) transform.rotation = originalRotation * Quaternion.Euler(0, 180, 0);
                 break;
             default:
                 break;
@@ -449,5 +460,14 @@ public class MovementPlatformer : MonoBehaviour
         }
 
         canClimb = false;
+    }
+
+    public void SetActive(bool active)
+    {
+        enabled = active;
+        if (!active)
+        {
+            rb.linearVelocity = new Vector2(0.0f, rb.linearVelocity.y);
+        }
     }
 }

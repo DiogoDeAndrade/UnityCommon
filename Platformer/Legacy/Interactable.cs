@@ -2,10 +2,15 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Interactable : MonoBehaviour
+namespace UnityCommon.Legacy
 {
-    public virtual void Interact()
-    {
 
+    public class Interactable : MonoBehaviour
+    {
+        public virtual void Interact()
+        {
+
+        }
     }
+
 }

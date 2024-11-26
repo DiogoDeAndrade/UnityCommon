@@ -3,7 +3,10 @@ using UnityEngine.UI;
 using NaughtyAttributes;
 using UnityEngine.Rendering;
 using static UnityEditor.ShaderGraph.Internal.KeywordDependentCollection;
+using UnityEditor.TerrainTools;
+using UnityEditor;
 
+[ExecuteInEditMode]
 [RequireComponent(typeof(TopologyComponent))]
 public class GeodesicDistanceComponent : MonoBehaviour
 {
@@ -15,6 +18,10 @@ public class GeodesicDistanceComponent : MonoBehaviour
     private bool        testPoint;
     [SerializeField, ShowIf(nameof(testPoint))]
     private Transform   testPosition;
+    [SerializeField]
+    private bool        interaction = false;
+    [SerializeField, ShowIf("interaction")]
+    private bool        showPath = false;
 
     [SerializeField, HideInInspector]
     GeodesicDistance _geodesicDistance;
@@ -30,14 +37,19 @@ public class GeodesicDistanceComponent : MonoBehaviour
         var topology = topologyComponent.topology;
         if (topology == null) return;
 
+        Build(topology);
+
+        topologyComponent.customColorFunction = CustomColorFunction;
+    }
+
+    public void Build(TopologyStatic topology)
+    { 
         int sourcePointId = topology.GetClosestPointId(sourcePoint.position);
 
         _geodesicDistance = new();
         _geodesicDistance.topology = topology;
         _geodesicDistance.sourcePointId = sourcePointId;
         _geodesicDistance.Build();
-
-        topologyComponent.customColorFunction = CustomColorFunction;
     }
 
     Color CustomColorFunction(int index, TopologyStatic.TVertex vertex, Color originalColor)
@@ -55,6 +67,69 @@ public class GeodesicDistanceComponent : MonoBehaviour
         }
 
         return originalColor;
+    }
+
+#if UNITY_EDITOR
+    private void OnEnable()
+    {
+        // Subscribe to the Scene view event
+        SceneView.duringSceneGui += OnSceneGUI;
+    }
+
+    private void OnDisable()
+    {
+        // Unsubscribe when disabled
+        SceneView.duringSceneGui -= OnSceneGUI;
+    }
+
+    private TopologyStatic.TVertex hoverVertex;
+    private int                    hoverVertexId;
+
+    void OnSceneGUI(SceneView view)
+    {
+        if (!interaction)
+        {
+            hoverVertex = null;
+            return;
+        }
+
+        TopologyComponent topologyComponent = GetComponent<TopologyComponent>();
+        if (topologyComponent == null) return;
+
+        var topology = topologyComponent.topology;
+        if (topology == null) return;
+
+        if ((topology == null) || (topology.vertices == null))
+        {
+            hoverVertex = null;
+            return;
+        }
+
+        // Get mouse position in Scene view
+        Event e = Event.current;
+        if (e != null)
+        {
+            // Only proceed if the mouse is moving in the scene view
+            if (e.type == EventType.MouseMove || e.type == EventType.Repaint)
+            {
+                hoverVertex = null;
+                hoverVertexId = -1;
+
+                // Create a ray from the mouse position, and change it to local coordinates
+                Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
+
+                for (int i = 0; i < topology.vertices.Count; i++)
+                {
+                    var vertex = topology.vertices[i];
+                    if (Sphere.Raycast(ray, vertex.position, 0.1f, float.MaxValue, out float dist))
+                    {
+                        hoverVertex = vertex;
+                        hoverVertexId = i;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     private void OnDrawGizmos()
@@ -82,5 +157,26 @@ public class GeodesicDistanceComponent : MonoBehaviour
                 Gizmos.DrawSphere(p1 * u + p2 * v + p3 * w, 0.1f);
             }
         }
+        if ((hoverVertex != null) && (hoverVertexId != -1) && (_geodesicDistance != null) && (_geodesicDistance.isComputed))
+        {
+            float d = _geodesicDistance.GetDistance(hoverVertexId);
+            DebugHelpers.DrawTextAt(hoverVertex.position, new Vector3(20, 20, 0), 12, Color.white, $"Vertex={hoverVertexId}, Distance={d}", true);
+
+            if (showPath)
+            {
+                var topology = _geodesicDistance.topology;
+                Vector3 prevVertex = topology.GetVertexPosition(hoverVertexId);
+                int currentVertex = _geodesicDistance.GetClosestVertexToStart(hoverVertexId);
+                Gizmos.color = Color.yellow;
+                while (currentVertex != -1)
+                {
+                    Vector3 currentPos = topology.GetVertexPosition(currentVertex);
+                    Gizmos.DrawLine(prevVertex, currentPos);
+                    prevVertex = currentPos;
+                    currentVertex = _geodesicDistance.GetClosestVertexToStart(currentVertex);
+                }
+            }
+        }
     }
+#endif
 }

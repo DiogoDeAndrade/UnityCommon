@@ -12,6 +12,10 @@ public class Polyline : IEnumerable<(Vector3 position, Vector3 normal)>
 
     public List<Vector3> GetVertices() => vertices;
 
+    public Polyline() { }
+    public Polyline(Vector3 p) { vertices = new() { p }; }
+    public Polyline(Vector3 p1, Vector3 p2, Vector3 p3) { vertices = new() { p1, p2, p3 }; }
+
     public void Add(Vector3 vertex)
     {
         if (vertices == null) vertices = new List<Vector3>();
@@ -280,4 +284,14 @@ public class Polyline : IEnumerable<(Vector3 position, Vector3 normal)>
     {
         return GetEnumerator();
     }
+
+#if UNITY_EDITOR
+    public void DrawGizmos()
+    {
+        for (int i = 0; i < vertices.Count - 1; i++)
+        {
+            Gizmos.DrawLine(vertices[i], vertices[i + 1]);
+        }
+    }
+#endif
 }

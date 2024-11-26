@@ -27,6 +27,7 @@ public class InputControl
     InputAction action;
     PlayerInput _playerInput;
     bool        isVec2;
+    float       prevValue;
 
     public PlayerInput playerInput { get => _playerInput; set { _playerInput = value; } }
 
@@ -53,6 +54,22 @@ public class InputControl
                 {
                     if (isVec2) v = action.ReadValue<Vector2>().x;
                     else v = action.ReadValue<float>();
+
+                    if (v * prevValue < 0)
+                    {                        
+                        if (Mathf.Abs(v) > 0.5f)
+                        {
+                            prevValue = v;
+                        }
+                        else
+                        {
+                            v = 0.0f;
+                        }
+                    }
+                    else
+                    {
+                        prevValue = v;
+                    }
                 }
                 break;
             default:

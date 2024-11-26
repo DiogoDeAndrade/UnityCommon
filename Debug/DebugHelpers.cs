@@ -1,5 +1,7 @@
 using System;
+using UnityEditor;
 using UnityEngine;
+using static UnityEditor.PlayerSettings;
 
 public static class DebugHelpers
 {
@@ -57,5 +59,28 @@ public static class DebugHelpers
         GL.Vertex(p3);
 
         GL.End();
+    }
+
+    public static void DrawTextAt(Vector3 pos, Vector3 offset, int fontSize, Color color, string text, bool shadow = false)
+    {
+        GUIStyle style = new GUIStyle();
+        style.fontSize = fontSize;
+
+        // Convert the world position to screen space
+        Vector3 screenPos = Camera.current.WorldToScreenPoint(pos);
+
+        // Draw the label at the new world position
+        if (shadow)
+        {
+            style.normal.textColor = Color.black;
+            Vector3 shadowPos = Camera.current.ScreenToWorldPoint(screenPos + offset + new Vector3(1, 1, 0));
+
+            Handles.Label(shadowPos, text, style);
+        }
+
+        // Draw the label at the new world position
+        style.normal.textColor = color;
+        Vector3 offsetPos = Camera.current.ScreenToWorldPoint(screenPos + offset);
+        Handles.Label(offsetPos, text, style);
     }
 }

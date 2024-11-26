@@ -83,5 +83,41 @@ public static class VectorExtensions
     {
         return new Vector4(v.x, v.y, v.z, 1);
     }
+
+    public static void SafeNormalize(this Vector2 v)
+    {
+        if (v.sqrMagnitude > 1e-3)
+        {
+            v.Normalize();
+        }
+        else
+        {
+            v.Set(0, 0);
+        }
+    }
+
+    public static void SafeNormalize(this Vector3 v)
+    {
+        if (v.sqrMagnitude > 1e-3)
+        {
+            v.Normalize();
+        }
+        else
+        {
+            v.Set(0, 0, 0);
+        }
+    }
+
+    public static void SafeNormalize(this Vector4 v)
+    {
+        if (v.sqrMagnitude > 1e-3)
+        {
+            v.Normalize();
+        }
+        else
+        {
+            v.Set(0, 0, 0, 0);
+        }
+    }
 };
 
