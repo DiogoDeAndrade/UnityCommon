@@ -6,7 +6,7 @@ using System;
 [RequireComponent(typeof(GeodesicDistanceComponent))]
 public class ContourLinesComponent : MonoBehaviour
 {
-    [SerializeField, Range(0.0f, 1.0f)]
+    [SerializeField]
     private float l = 0.0f;
     [SerializeField]
     private bool displayTriangles;
@@ -26,15 +26,21 @@ public class ContourLinesComponent : MonoBehaviour
             geodesicDistance.topology = topology;
         }
 
-        float lRef = l * geodesicDistance.GetMaxDistance();
+        float lRef = Mathf.Clamp(l, 0, geodesicDistance.GetMaxDistance());
 
         /*Debug.Log("Forcing vertex 73 distance");
         lRef = geodesicDistance.GetDistance(73);*/
 
-        Debug.Log($"LRef = {lRef}");
-
         triIndices = new();
         contours = geodesicDistance.ComputeContours(lRef, false, triIndices);
+    }
+
+    private void OnValidate()
+    {
+        var geodesicDistanceComponent = GetComponent<GeodesicDistanceComponent>();
+        var geodesicDistance = geodesicDistanceComponent.geodesicDistance;
+
+        if (l > geodesicDistance.GetMaxDistance()) l = geodesicDistance.GetMaxDistance();
     }
 
     static Color[] ContourLinesColors = { Color.red, Color.yellow, Color.cyan, Color.green, Color.blue, Color.magenta, Color.white, Color.black, Color.grey };

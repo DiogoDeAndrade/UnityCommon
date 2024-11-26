@@ -11,6 +11,17 @@ public class SerializedHashSet<T> : IEnumerable<T>
 
     private HashSet<T>  _itemSet;
 
+    public SerializedHashSet()
+    {
+        _itemList = new();
+    }
+
+    public SerializedHashSet(SerializedHashSet<T> src)
+    {
+        _itemList = new(src._itemList);
+        if (src._itemSet != null) _itemSet = new(src._itemSet);
+    }
+
     private HashSet<T>  items
     {
         get
@@ -27,9 +38,17 @@ public class SerializedHashSet<T> : IEnumerable<T>
     public void Add(T value)
     {
         if (items.Contains(value)) return;
-        _itemSet.Add(value);
         _itemList.Add(value);
+        _itemSet.Add(value);
     }
+
+    public void Remove(T value)
+    {
+        _itemList.Remove(value);
+        _itemSet?.Remove(value);
+    }
+
+    public int Count => _itemList.Count;
 
     public IEnumerator<T> GetEnumerator()
     {

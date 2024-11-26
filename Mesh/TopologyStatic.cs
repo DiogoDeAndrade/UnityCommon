@@ -1,9 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.UIElements;
+using static TopologyStatic;
 
 [System.Serializable]
 public class TopologyStatic
@@ -64,17 +67,51 @@ public class TopologyStatic
         public IdPair                   vertices;
         public SerializedHashSet<int>   neighbourEdges;
         public SerializedHashSet<int>   triangles;
+
+        public Vector3 GetMidpoint(List<TVertex> allVertices) => (allVertices[vertices.i1].position + allVertices[vertices.i2].position) * 0.5f;
+        public float GetLength(List<TVertex> allVertices) => Vector3.Distance(allVertices[vertices.i1].position, allVertices[vertices.i2].position);
+
+        internal bool UsesVertex(int index)
+        {
+            return (vertices.i1 == index) || (vertices.i2 == index);
+        }
     }
 
     [System.Serializable]
     public class TTriangle
     {
         public TTriangle(int i1, int i2, int i3, int e1, int e2, int e3) { vertices = (i1, i2, i3); edges = (e1, e2, e3); neighbourTriangles = new();  }
+        public TTriangle(TTriangle src) { vertices = src.vertices; edges = src.edges; neighbourTriangles = new(src.neighbourTriangles); }
 
         public Vector3                  normal;
         public IdTriplet                vertices;
         public IdTriplet                edges;
         public SerializedHashSet<int>   neighbourTriangles;
+
+        internal void ReplaceVertex(int oldVertexId, int newVertexId)
+        {
+            if (vertices.i1 == oldVertexId) vertices = (newVertexId, vertices.i2, vertices.i3);
+            else if (vertices.i2 == oldVertexId) vertices = (vertices.i1, newVertexId,  vertices.i3);
+            else if (vertices.i3 == oldVertexId) vertices = (vertices.i1, vertices.i2, newVertexId);
+        }
+
+        internal void ReplaceEdge(int oldEdgeId, int newEdgeId)
+        {
+            if (edges.i1 == oldEdgeId) edges = (newEdgeId, edges.i2, edges.i3);
+            else if (edges.i2 == oldEdgeId) edges = (edges.i1, newEdgeId, edges.i3);
+            else if (edges.i3 == oldEdgeId) edges = (vertices.i1, edges.i2, newEdgeId);
+        }
+
+        internal int GetVertexIdExcluding(int i1, int i2)
+        {
+            if ((vertices.i1 != i1) && (vertices.i1 != i2)) return vertices.i1;
+            if ((vertices.i2 != i1) && (vertices.i2 != i2)) return vertices.i2;
+            if ((vertices.i3 != i1) && (vertices.i3 != i2)) return vertices.i3;
+
+            // Some sort of degenerate triangle
+            Debug.LogWarning("Degenerate triangle found!");
+            return -1;
+        }
     }
 
     [SerializeField]
@@ -103,33 +140,15 @@ public class TopologyStatic
             for (int i = 0; i < verts.Length; i++)
             {
                 Vector3 tvertex = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
-                int matchIndex = -1;
-
-                for (int j = 0; j < _vertices.Count; j++)
-                {
-                    if (Vector3.Distance(tvertex, _vertices[j].position) < epsilon)
-                    {
-                        matchIndex = j;
-                        break;
-                    }
-                }
-                if (matchIndex != -1)
-                {
-                    vertexMatch.Add(matchIndex);
-                }
-                else
-                {
-                    _vertices.Add(new TVertex(tvertex));
-                    vertexMatch.Add(_vertices.Count - 1);
-                }
+                vertexMatch.Add(GetOrAddVertex(tvertex));
             }
         }
         else
         {
-            _vertices = new List<TVertex>(_vertices.Count);
-            for (int i = 0; i < _vertices.Count; i++) _vertices[i] = new TVertex(verts[i]);
-            vertexMatch = new List<int>(_vertices.Count);
-            for (int i = 0; i < _vertices.Count; i++) vertexMatch[i] = i;
+            _vertices = new List<TVertex>(verts.Length);
+            for (int i = 0; i < verts.Length; i++) _vertices.Add(new TVertex(verts[i]));
+            vertexMatch = new List<int>(verts.Length);
+            for (int i = 0; i < verts.Length; i++) vertexMatch.Add(i);
         }
 
         _triangles = new List<TTriangle>();
@@ -179,20 +198,35 @@ public class TopologyStatic
             }
         }
 
+        UpdateNeighbourEdges();
+        UpdateNeighbourTriangles();
+        UpdateVertexNormals();
+
+    }
+
+    void UpdateNeighbourEdges()
+    {
         // Create neighbour edges
         for (int i = 0; i < _edges.Count; i++)
         {
             var edge = _edges[i];
+            edge.neighbourEdges = new();
+
             var neighbours = _vertices[edge.vertices.i1].edges;
             foreach (var edgeId in neighbours) if (edgeId != i) edge.neighbourEdges.Add(edgeId);
             neighbours = _vertices[edge.vertices.i2].edges;
             foreach (var edgeId in neighbours) if (edgeId != i) edge.neighbourEdges.Add(edgeId);
         }
+    }
 
+    void UpdateNeighbourTriangles()
+    {
         // Create neighbour triangles
         for (int i = 0; i < _triangles.Count; i++)
         {
             var triangle = _triangles[i];
+            triangle.neighbourTriangles = new();
+
             var neighbours = _edges[triangle.edges.i1].triangles;
             foreach (var triangleId in neighbours) if (triangleId != i) triangle.neighbourTriangles.Add(triangleId);
             neighbours = _edges[triangle.edges.i2].triangles;
@@ -200,7 +234,10 @@ public class TopologyStatic
             neighbours = _edges[triangle.edges.i3].triangles;
             foreach (var triangleId in neighbours) if (triangleId != i) triangle.neighbourTriangles.Add(triangleId);
         }
+    }
 
+    void UpdateVertexNormals()
+    {
         for (int i = 0; i < _vertices.Count; i++)
         {
             _vertices[i].normal = Vector3.zero;
@@ -210,6 +247,20 @@ public class TopologyStatic
             }
             _vertices[i].normal.SafeNormalize();
         }
+    }
+
+    int GetOrAddVertex(Vector3 pos, float epsilon = 1e-6f)
+    {
+        for (int j = 0; j < _vertices.Count; j++)
+        {
+            if (Vector3.Distance(pos, _vertices[j].position) < epsilon)
+            {
+                return j;
+            }
+        }
+        _vertices.Add(new TVertex(pos));
+
+        return _vertices.Count - 1;
     }
 
     int GetOrAddEdge(int index1, int index2)
@@ -232,6 +283,17 @@ public class TopologyStatic
         return _edges.Count - 1;
     }
 
+    int FindEdge(int index1, int index2)
+    {
+        for (int i = 0; i < _edges.Count; i++)
+        {
+            if ((_edges[i].UsesVertex(index1)) &&
+                (_edges[i].UsesVertex(index2))) return i;
+        }
+
+        return -1;
+    }
+
     void BuildEdgeDictionary()
     {
         edgeDic = new();
@@ -246,6 +308,14 @@ public class TopologyStatic
     public int vertexCount => (_vertices == null) ? 0 : _vertices.Count;
     public int edgeCount => (_edges == null) ? 0 : _edges.Count;
     public int triangleCount => (_triangles == null) ? 0 : _triangles.Count;
+
+    public List<Vector3> GetVertexPositions()
+    {
+        List<Vector3> ret = new();
+        foreach (var vertex in _vertices) ret.Add(vertex.position);
+
+        return ret;
+    }
 
     public Vector3 GetVertexPosition(int vertexId) => _vertices[vertexId].position;
     public Vector3 GetVertexNormal(int vertexId) => _vertices[vertexId].normal;
@@ -333,4 +403,5 @@ public class TopologyStatic
 
         return (vertices[tri.vertices.i1].position, vertices[tri.vertices.i2].position, vertices[tri.vertices.i3].position);
     }
+
 }

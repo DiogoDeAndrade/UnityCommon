@@ -18,8 +18,10 @@ public class LevelSetDiagram
 {
     [SerializeField] private ICompareIndices    _comparisonOperator;
     [SerializeField] private TopologyStatic     _topology;
+
     public class SingleContour
     {
+        public Vector3              nodePos;
         public int                  sadleVertex;
         public Polyline             polyline;
         public SingleContour        parentContour;
@@ -74,12 +76,12 @@ public class LevelSetDiagram
         _rootContour = new SingleContour
         {
             sadleVertex = indices[0],
+            nodePos = rootPos,
             polyline = new Polyline(rootPos)
         };
         _contourList.Add(_rootContour);
         _contoursLRef.Add(0.0f);
 
-        int nc = 1;
         vertexContour = new(Enumerable.Repeat(-1, vertexCount));
         vertexContour[indices[0]] = 0;
 
@@ -114,6 +116,7 @@ public class LevelSetDiagram
             float vin = ComputeVertexIndexNumber(vIndex);
             if (vin == 1.0f)
             {
+                Debug.Log($"Local minimum (disappear contour) at {d[vIndex]}");
                 // Insert line (CT[c(v)], v) into Ts(P) with v as a leaf
                 // Check if previous is too close
                 if ((_contoursLRef.Count == 0) ||
@@ -123,10 +126,15 @@ public class LevelSetDiagram
                 }
 
                 int vc = vertexContour[vIndex];
+                if ((vc < 0) || (vc >= _contourList.Count))
+                {
+                    Debug.LogError("Something went wrong computing the LSD...");
+                }
                 var parent = _contourList[vc];
                 _contourList[vc] = new SingleContour
                 {
                     sadleVertex = vIndex,
+                    nodePos = _topology.GetVertexPosition(vIndex),
                     polyline = new Polyline(_topology.GetVertexPosition(vIndex)),
                     parentContour = parent
                 };
@@ -134,6 +142,8 @@ public class LevelSetDiagram
             }
             else if (vin < 0.0f) 
             {
+                Debug.Log($"Split at {d[vIndex]}");
+
                 // Insert line (CT[c(v)], v) into Ts(P)
                 if ((_contoursLRef.Count == 0) ||
                     ((d[vIndex] - _contoursLRef[_contoursLRef.Count - 1]) > 1e-3))
@@ -146,35 +156,60 @@ public class LevelSetDiagram
                 // There should be (1 - vin) contours which involve the saddle vertex
                 int vc = vertexContour[vIndex];
 
-                var parent = _contourList[vc];
+                Vector3 averagePos = Vector3.zero;
+                foreach (var contour in contours)
+                {
+                    averagePos += contour.GetCenter();
+                }
+                averagePos /= contours.Count;
+
+                // Create split node - we don't keep track of it, we just use it a parent
+                var splitNode = new SingleContour
+                {
+                    sadleVertex = vIndex,
+                    nodePos = averagePos,
+                    polyline = null,
+                    parentContour = _contourList[vc]
+                };
+                _contourList[vc].AddChild(splitNode);
+
                 _contourList[vc] = new SingleContour
                 {
                     sadleVertex = vIndex,
+                    nodePos = contours[0].GetCenter(),
                     polyline = contours[0],
-                    parentContour = parent
+                    parentContour = splitNode
                 };
-                parent.AddChild(_contourList[vc]);
+                splitNode.AddChild(_contourList[vc]);
 
                 int nBase = _contourList.Count;
                 int nCountours = contours.Count;
 
                 _contourList[vc].polyline = contours[0];
+
+                int currentContourCount = _contourList.Count;
                 for (int j = 1; j < nCountours; ++j) 
                 {
                     var newC = new SingleContour
                     {
                         sadleVertex = vIndex,
+                        nodePos = contours[j].GetCenter(),
                         polyline = contours[j],
-                        parentContour = parent
+                        parentContour = splitNode
                     };
                     _contourList.Add(newC);
-                    parent.AddChild(newC);
+                    splitNode.AddChild(newC);
                 }
 
                 // Update vertexContour
                 for (int i = 0; i < triangleListsPerContour.Count; i++)
                 {
-                    int newC = (i == 0) ? vc : (nc + i - 1);
+                    int newC = (i == 0) ? vc : (currentContourCount + i - 1);
+                    if ((newC < 0) || (newC >= _contourList.Count))
+                    {
+                        Debug.LogError("Something went wrong computing the LSD...");
+                    }
+
                     var tl = triangleListsPerContour[i];
 
                     foreach (var triIndex in tl)
@@ -188,8 +223,6 @@ public class LevelSetDiagram
                         if (d3 > d[vIndex]) vertexContour[tri.vertices.i3] = newC;
                     }
                 }
-
-                nc = nc - (int)vin;
             }
         }
 

@@ -1,6 +1,7 @@
 using NaughtyAttributes;
 using UnityEngine;
 
+[RequireComponent(typeof(GeodesicDistanceComponent))]
 public class LevelSetDiagramComponent : MonoBehaviour
 {
     [SerializeField, HideInInspector] private LevelSetDiagram levelSetDiagram;
@@ -20,7 +21,7 @@ public class LevelSetDiagramComponent : MonoBehaviour
         levelSetDiagram.Build();
     }
 
-    static Color[] ContourLinesColors = { Color.red, Color.yellow, Color.cyan, Color.green, Color.blue, Color.magenta, Color.white, Color.black, Color.grey };
+    static Color[] ContourLinesColors = { Color.red, Color.yellow, Color.cyan, Color.green, Color.blue, Color.magenta, Color.white, Color.grey };
 
     private void OnDrawGizmos()
     {
@@ -36,7 +37,14 @@ public class LevelSetDiagramComponent : MonoBehaviour
             for (int i = 0; i < vertices.Count; i++)
             {
                 int contourId = levelSetDiagram.GetVertexContour(i);
-                Gizmos.color = ContourLinesColors[contourId % ContourLinesColors.Length];
+                if (contourId == -1)
+                {
+                    Gizmos.color = Color.black;
+                }
+                else
+                {
+                    Gizmos.color = ContourLinesColors[contourId % ContourLinesColors.Length];
+                }
                 Gizmos.DrawSphere(vertices[i].position, 0.1f);
             }
         }
@@ -74,7 +82,7 @@ public class LevelSetDiagramComponent : MonoBehaviour
 
     void DrawSkeleton(Vector3 prevPos, LevelSetDiagram.SingleContour contour)
     {
-        Vector3 centerPos = contour.polyline.GetCenter();
+        Vector3 centerPos = contour.nodePos;
 
         if (centerPos != prevPos)
         {
