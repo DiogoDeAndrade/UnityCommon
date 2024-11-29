@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static HealthSystem;
 
 public class HealthSystem : MonoBehaviour
 {
@@ -9,9 +10,13 @@ public class HealthSystem : MonoBehaviour
 
     public delegate void OnHit(float damage, Vector3 damagePosition);
     public event OnHit  onHit;
+    public delegate void OnHeal(float healthGain);
+    public event OnHeal onHeal;
 
     public delegate void OnDead();
     public event OnDead onDead;
+    public delegate void OnRevive();
+    public event OnDead onRevive;
 
     public Faction  faction;
     public float    maxHealth = 100.0f;
@@ -104,6 +109,32 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
+    public bool Heal(float delta, bool reviveIfDeath)
+    {
+        if (reviveIfDeath)
+        {
+            if (_health < maxHealth)
+            {
+                onHeal?.Invoke(delta);
+
+                _health += delta;
+                if ((_health > 0.0f) && (_dead))
+                {
+                    onRevive?.Invoke();
+                    _dead = true;
+                }
+                return true;
+            }
+        }
+        else if (_dead) return false;
+        if (_health < maxHealth)
+        {
+            onHeal?.Invoke(delta);
+
+            _health += delta;
+        }
+        return false;
+    }
     public bool DealDamage(float damage, Vector3 damagePosition)
     {
         if (isInvulnerable) return false;
@@ -148,5 +179,17 @@ public class HealthSystem : MonoBehaviour
         }
 
         return ret.ToArray();
+    }
+
+    [Button("Deal 10% Damage")]
+    void DealOneDamage()
+    {
+        DealDamage(0.1f * maxHealth, Vector3.zero);
+    }
+
+    [Button("Kill")]
+    void Kill()
+    {
+        DealDamage(_health, Vector3.zero);
     }
 }

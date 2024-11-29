@@ -24,7 +24,10 @@ public class BigTextScroll : MonoBehaviour
         foreach (var line in lines)
         {
             var tmp = Instantiate(textPrefab, transform);
-            tmp.text = line;
+            if (line == "")
+                tmp.text = "<color=#FF000000>||||</color>";
+            else 
+                tmp.text = line;
             
             lastRectTransform = tmp.GetComponent<RectTransform>();
         }

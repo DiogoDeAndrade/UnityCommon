@@ -8,7 +8,7 @@ using UnityEngine.UI.Extensions.Tweens;
 public class SpriteEffect : MonoBehaviour
 {
     [Flags]
-    public enum Effects { None = 0, ColorRemap = 1, Inverse = 2 };
+    public enum Effects { None = 0, ColorRemap = 1, Inverse = 2, ColorFlash = 4 };
 
     [SerializeField] 
     private Effects      effects;
@@ -16,9 +16,12 @@ public class SpriteEffect : MonoBehaviour
     private ColorPalette palette;
     [SerializeField, ShowIf(nameof(inverseEnable))] 
     private float        inverseFactor;
+    [SerializeField, ShowIf(nameof(flashEnable))]
+    private Color        flashColor = new Color(1.0f, 1.0f, 1.0f, 0.0f);
 
     public bool colorRemapEnable => (effects & Effects.ColorRemap) != 0;
     public bool inverseEnable => (effects & Effects.Inverse) != 0;
+    public bool flashEnable => (effects & Effects.ColorFlash) != 0;
 
     private MaterialPropertyBlock   mpb;
     private SpriteRenderer          spriteRenderer;
@@ -52,6 +55,20 @@ public class SpriteEffect : MonoBehaviour
     }
 
     public float GetInverseFactor() => inverseFactor;
+    public void SetFlashColor(Color color)
+    {
+        flashColor = color;
+
+        if (color.a > 0.0f) effects |= Effects.ColorFlash;
+        else effects &= ~Effects.ColorFlash;
+    }
+
+    public Color GetFlashColor() => flashColor;
+    public float flashAlpha
+    {
+        get { return flashColor.a; }
+        set { SetFlashColor(flashColor.ChangeAlpha(value)); }
+    }
 
     private void Update()
     {
@@ -83,6 +100,15 @@ public class SpriteEffect : MonoBehaviour
             mpb.SetFloat("_InverseFactor", 0.0f);
         }
 
+        if (flashEnable)
+        {
+            mpb.SetColor("_FlashColor", flashColor);
+        }
+        else
+        {
+            mpb.SetColor("_FlashColor", flashColor.ChangeAlpha(0));
+        }
+
         spriteRenderer.SetPropertyBlock(mpb);
     }
 }
@@ -100,5 +126,16 @@ public static class SpriteEffectExtensions
             if (value < 0.5f) spriteEffect.SetInverseFactor(value * 2.0f);
             else spriteEffect.SetInverseFactor(1.0f - (value - 0.5f) * 2.0f);
         }, "FlashInvert").Done(() => spriteEffect.SetInverseFactor(current));
+    }
+
+    public static Tweener.BaseInterpolator FlashColor(this SpriteEffect spriteEffect, float duration, Color color)
+    {
+        spriteEffect.Tween().Stop("FlashColor", Tweener.StopBehaviour.SkipToEnd);
+        spriteEffect.SetFlashColor(color);
+
+        return spriteEffect.Tween().Interpolate(0.0f, 1.0f, duration, (value) =>
+        {
+            spriteEffect.SetFlashColor(Color.Lerp(color, color.ChangeAlpha(0), value));
+        }, "FlashColor").Done(() => spriteEffect.SetFlashColor(color.ChangeAlpha(0.0f)));
     }
 }
