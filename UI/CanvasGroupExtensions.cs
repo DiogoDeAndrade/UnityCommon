@@ -14,4 +14,11 @@ public static class CanvasGroupExtensions
         if (group.alpha == 0.0f) return;
         group.Tween().Interpolate(group.alpha, 0.0f, time, (value) => group.alpha = value, "CanvasAlpha");
     }
+
+    public static void FadeTo(this CanvasGroup group, float targetAlpha, float time)
+    {
+        if (group.alpha == targetAlpha) return;
+        group.Tween().Interpolate(group.alpha, targetAlpha, time, (value) => group.alpha = value, "CanvasAlpha");
+    }
+
 }
