@@ -89,6 +89,7 @@ public class MovementPlatformer : MonoBehaviour
     private string isClimbingParameter;
 
     public bool isGrounded { get; private set; }
+    public bool isClimbing { get; private set; }
     private SpriteRenderer spriteRenderer;
     private int currentJumpCount;
     private bool prevJumpKey = false;
@@ -97,7 +98,6 @@ public class MovementPlatformer : MonoBehaviour
     private float coyoteTimer;
     private bool actualIsGrounded;
     private float glideTimer = 0.0f;
-    private bool isClimbing = false;
     private bool canClimb = false;
     public bool isGliding { get; private set; }
 

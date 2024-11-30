@@ -1,6 +1,7 @@
 using UnityEngine;
 using NaughtyAttributes;
 using TMPro;
+using UnityEngine.InputSystem;
 
 public class BigTextScroll : MonoBehaviour
 {
@@ -13,13 +14,19 @@ public class BigTextScroll : MonoBehaviour
     private TextMeshProUGUI textPrefab;
     [SerializeField]
     private float           scrollSpeed;
+    [SerializeField]
+    private PlayerInput     playerInput;
+    [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
+    protected InputControl backControl;
 
-    Vector3         originalPosition;
+    Vector3 originalPosition;
     RectTransform   rectTransform;
     RectTransform   lastRectTransform;
 
     void Start()
     {
+        backControl.playerInput = playerInput;
+
         var lines = text.Split('\n', System.StringSplitOptions.None);
         foreach (var line in lines)
         {
@@ -42,7 +49,7 @@ public class BigTextScroll : MonoBehaviour
 
         float maxY = lastRectTransform.anchoredPosition.y;
 
-        if (rectTransform.anchoredPosition.y > (Mathf.Abs(maxY) + 150.0f))
+        if ((rectTransform.anchoredPosition.y > (Mathf.Abs(maxY) + 150.0f)) || (backControl.IsDown()))
         {
             onEndScroll?.Invoke();
         }

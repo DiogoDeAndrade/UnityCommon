@@ -9,15 +9,19 @@ public class SoundManager : MonoBehaviour
 {
     private static SoundManager _instance;
 
+    [SerializeField] private bool dontDestroyOnLoad = false;
     [SerializeField] private AudioMixerGroup defaultMixerOutput;
     [SerializeField] private AudioMixerGroup musicMixerGroup;
     [SerializeField] private AudioMixerGroup fx1MixerGroup;
     [SerializeField] private AudioMixerGroup fx2MixerGroup;
     [SerializeField] private AudioMixerGroup backgroundMixerGroup;
     [SerializeField] private AudioMixerGroup voiceMixerGroup;
+    [SerializeField] private AudioClip       startMusic;
+    [SerializeField] private float           defaultCrossfadeTime = 1.0f;
 
     List<AudioSource> audioSources;
     AudioMixerGroup[] mixerGroups;
+    AudioSource       musicSource;
 
     public static SoundManager instance
     {
@@ -37,6 +41,15 @@ public class SoundManager : MonoBehaviour
         if (_instance == null)
         {
             _instance = this;
+            if (dontDestroyOnLoad)
+            {
+                DontDestroyOnLoad(gameObject);
+            }
+        }
+        else
+        {
+            Destroy(gameObject);
+            return;
         }
         // Find all audio sources
         audioSources = new List<AudioSource>(GetComponentsInChildren<AudioSource>());
@@ -52,6 +65,50 @@ public class SoundManager : MonoBehaviour
         mixerGroups[2] = (fx2MixerGroup != null) ? (fx2MixerGroup) : (defaultMixerOutput);
         mixerGroups[3] = (backgroundMixerGroup != null) ? (backgroundMixerGroup) : (defaultMixerOutput);
         mixerGroups[4] = (voiceMixerGroup != null) ? (voiceMixerGroup) : (defaultMixerOutput);
+
+        if (startMusic)
+        {
+            musicSource = _PlaySound(SoundType.Music, startMusic, 0, 1);
+            musicSource.loop = true;
+            musicSource.FadeTo(1.0f, 1.0f);
+        }
+    }
+    private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
+    {
+        if (musicSource == null)
+        {
+            musicSource = _PlaySound(SoundType.Music, startMusic, 1, 1);
+            musicSource.loop = true;
+
+            return musicSource;
+        }
+
+        if (musicSource.clip == clip) return musicSource;
+
+        // Crossfade
+        var newMusicSource = _PlaySound(SoundType.Music, clip, 0, 1);
+        newMusicSource.loop = true;
+
+        StartCoroutine(CrossfadeMusic(newMusicSource, volume));
+
+        return newMusicSource;
+    }
+
+    IEnumerator CrossfadeMusic(AudioSource newMusicSource, float volume)
+    {
+        musicSource.FadeTo(0.0f, defaultCrossfadeTime);
+
+        var interpolator = newMusicSource.FadeTo(volume, defaultCrossfadeTime);
+
+        while (!interpolator.isFinished)
+        {
+            yield return null;
+        }
+
+        musicSource.loop = false;
+        musicSource.Stop();
+        
+        musicSource = newMusicSource;
     }
 
     private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
@@ -102,6 +159,14 @@ public class SoundManager : MonoBehaviour
 
     static public AudioSource PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
     {
+        if (_instance == null) return null;
         return _instance._PlaySound(type, clip, volume, pitch);
+    }
+
+
+    static public AudioSource PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
+    {
+        if (_instance == null) return null;
+        return _instance._PlayMusic(clip, volume, pitch);
     }
 }
