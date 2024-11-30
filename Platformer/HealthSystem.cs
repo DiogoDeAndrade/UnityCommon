@@ -56,14 +56,8 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
-    public bool isDead
-    {
-        get
-        {
-            return _dead;
-        }
-    }
-
+    public bool isDead => _dead;
+    public bool isAlive => !_dead;
     void Awake()
     {
         _health = maxHealth;
@@ -179,6 +173,12 @@ public class HealthSystem : MonoBehaviour
         }
 
         return ret.ToArray();
+    }
+
+    public void SetHealth(float h)
+    {
+        _health = h;
+        _dead = (_health <= 0.0f);
     }
 
     [Button("Deal 10% Damage")]
