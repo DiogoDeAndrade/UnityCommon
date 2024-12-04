@@ -397,11 +397,17 @@ public class TopologyStatic
         return closestTriangleId;
     }
 
-    internal (Vector3 p1, Vector3 p2, Vector3 p3) GetTriangle(int index)
+    public (Vector3 p1, Vector3 p2, Vector3 p3) GetTriangle(int index)
     {
         var tri = triangles[index];
 
         return (vertices[tri.vertices.i1].position, vertices[tri.vertices.i2].position, vertices[tri.vertices.i3].position);
     }
 
+    public Vector3 GetTriangleCenter(int index)
+    {
+        var tri = triangles[index];
+
+        return (vertices[tri.vertices.i1].position + vertices[tri.vertices.i2].position + vertices[tri.vertices.i3].position) / 3.0f;
+    }
 }

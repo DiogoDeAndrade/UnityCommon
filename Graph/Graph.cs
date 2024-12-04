@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
 [Serializable]
-public class Graph<N> where N : class, IEquatable<N>
+public class Graph<N> where N : IEquatable<N>
 {
     [Serializable]
     public class Edge
@@ -14,12 +13,19 @@ public class Graph<N> where N : class, IEquatable<N>
         public int i2;
         public float weight;
     };
-    [SerializeField] protected List<N> nodes = new();
+
+    [Serializable]
+    public class Node
+    {
+        public N node;
+    };
+    [SerializeField] protected List<Node> nodes = new();
     [SerializeField] protected List<Edge> edges = new();
     [SerializeField] protected bool directed;
 
     public int nodeCount => (nodes != null) ? (nodes.Count) : 0;
-    public N GetNode(int i) => nodes[i];
+    public bool nodeExists(int i) => nodes[i] != null;
+    public N GetNode(int i) => (nodes[i] == null) ? (default(N)) : (nodes[i].node);
 
     public int edgeCount => (edges != null) ? (edges.Count) : 0;
     public Edge GetEdge(int i) => edges[i];
@@ -45,12 +51,12 @@ public class Graph<N> where N : class, IEquatable<N>
         {
             if (nodes[i] == null)
             {
-                nodes[i] = node;
+                nodes[i] = new Node { node = node };
                 return i;
             }
         }
 
-        nodes.Add(node);
+        nodes.Add(new Node { node = node });
         return nodes.Count - 1;
     }
 
@@ -246,7 +252,7 @@ public class Graph<N> where N : class, IEquatable<N>
         var mst = new Graph<N>();
         foreach (var node in nodes)
         {
-            mst.Add(node);
+            mst.Add(node.node);
         }
 
         var parent = Enumerable.Range(0, nodeCount).ToArray();
@@ -270,7 +276,7 @@ public class Graph<N> where N : class, IEquatable<N>
         nodes.Clear();
         foreach (var node in srcGraph.nodes)
         {
-            Add(node);
+            Add(node.node);
         }
     }
 

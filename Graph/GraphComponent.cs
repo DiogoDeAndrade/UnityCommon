@@ -16,17 +16,20 @@ public class GraphComponent : MonoBehaviour
 
     [SerializeField, Header("Data")] 
     private Graph<GraphNodeComponent>  graph;
-    [SerializeField] 
-    private Graph<GraphNodeComponent>  originalGraph;
 
     public bool isDirected => directed;
 
     [Button("Build from components")]
     void BuildFromComponents()
     {
+        graph = BuildGraphFromChildren();
+    }
+
+    Graph<GraphNodeComponent> BuildGraphFromChildren()
+    { 
         var nodes = GetComponentsInChildren<GraphNodeComponent>();
 
-        graph = new(directed);
+        var graph = new Graph<GraphNodeComponent>(directed);
 
         foreach (GraphNodeComponent node in nodes)
         {
@@ -57,111 +60,14 @@ public class GraphComponent : MonoBehaviour
             }
         }
 
-        originalGraph = graph;
+        return graph;
     }
 
-    [Button("Build complete graph from terminals with Dijkstra")]
-    void BuildCompleteFromTerminals()
+    [Button("Build Steiner Tree")]
+    void BuildSteinerTree()
     {
-        Graph<GraphNodeComponent> newGraph = new(false);
-
-        if (graph == null)
-        {
-            Debug.LogWarning("Need a graph to be able to build complete from terminal points");
-            return;
-        }
-        if ((terminalPoints == null) || (terminalPoints.Count== 0))
-        {
-            Debug.LogWarning("Define terminal points!");
-            return;
-        }
-        foreach (var nodeId in terminalPoints)
-        {
-            newGraph.Add(graph.GetNode(nodeId));
-        }
-
-        newGraph.MakeComplete((_, n1, n2) => graph.DijkstraDistance(n1, n2));
-
-        graph = newGraph;
-    }
-
-    [Button("Build MST with Kruskal's algorithm")]
-    void BuildMST_Kruskal()
-    {
-        graph = graph.FindMinimumSpanningTree_Kruskal();
-    }
-
-    [Button("Convert distance links to paths")]
-    void ConvertDistanceLinksToPaths()
-    {
-        // Create a new graph to represent the subgraph G_s
-        Graph<GraphNodeComponent> newGraph = new(directed);
-
-        // Add all nodes from the original graph
-        newGraph.CopyNodesFrom(originalGraph);
-
-        // Process edges in the current MST
-        for (int edgeId = 0; edgeId < graph.edgeCount; edgeId++)
-        {
-            var edge = graph.GetEdge(edgeId);
-            // Get the original nodes connected by this edge
-            var node1 = graph.GetNode(edge.i1);
-            var node2 = graph.GetNode(edge.i2);
-
-            // Use Dijkstra to find the shortest path between these two nodes
-            List<int> path = originalGraph.DijkstraShortestPath(edge.i1, edge.i2);
-
-            if (path != null && path.Count > 1)
-            {
-                // Add each edge in the shortest path to the subgraph
-                for (int i = 0; i < path.Count - 1; i++)
-                {
-                    int u = path[i];
-                    int v = path[i + 1];
-                    float weight = originalGraph.GetEdge(u, v).weight;
-
-                    newGraph.Add(u, v, weight);
-                }
-            }
-        }
-
-        // Replace the current graph with the constructed subgraph
-        graph = newGraph;
-    }
-
-    [Button("Prune Non-Terminal Leaves")]
-    void PruneNonTerminalLeaves()
-    {
-        if (graph == null)
-        {
-            Debug.LogWarning("Graph is null! Build or load the graph first.");
-            return;
-        }
-
-        // Create a set of terminal nodes for quick lookup
-        var terminalSet = new HashSet<int>(terminalPoints);
-
-        // Iterate until no more changes are made
-        bool madeChanges;
-        do
-        {
-            madeChanges = false;
-
-            // Find all leaves in the graph
-            var leaves = graph.GetLeaves();
-
-            foreach (var leaf in leaves)
-            {
-                // If the leaf is not a terminal, mark it for removal
-                if (!terminalSet.Contains(leaf))
-                {
-                    graph.RemoveNode(leaf);
-                    madeChanges = true;
-                }
-            }
-        } while (madeChanges);
-
-        graph.RemoveUnusedNodes();
+        graph = BuildGraphFromChildren();
+        graph = SteinerTree.Build(graph, terminalPoints);
     }
 
     private void OnDrawGizmosSelected()

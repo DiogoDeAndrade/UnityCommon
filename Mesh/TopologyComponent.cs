@@ -21,13 +21,13 @@ public class TopologyComponent : MonoBehaviour
     Color             vertexColor = Color.green;
     [SerializeField, ShowIf(nameof(displayVertex))]
     float             vertexRadius = 0.1f;
-    [SerializeField] 
+    [SerializeField, ShowIf(nameof(interaction))] 
     bool              displayEdges;
     [SerializeField, ShowIf(EConditionOperator.And, nameof(displayEdges), nameof(interaction))]
     Color             edgeColor = Color.yellow;
-    [SerializeField] 
+    [SerializeField, ShowIf(nameof(interaction))] 
     bool              displayTriangles;
-    [SerializeField] 
+    [SerializeField, ShowIf(nameof(interaction))]
     bool              displayTrianglesLabel;
     [SerializeField, ShowIf(EConditionOperator.And, nameof(displayTriangles), nameof(interaction))]
     Color             triangleColor = Color.red;
