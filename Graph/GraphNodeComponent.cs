@@ -1,7 +1,8 @@
 using System;
-using UnityEditor;
-using UnityEditor.ShaderGraph.Internal;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class GraphNodeComponent : MonoBehaviour, IEquatable<GraphNodeComponent>
 {
@@ -21,6 +22,7 @@ public class GraphNodeComponent : MonoBehaviour, IEquatable<GraphNodeComponent>
     public GraphNodeComponent[] GetLinks() => links;
 
 
+#if UNITY_EDITOR
     private void OnDrawGizmosSelected()
     {
         if ((Selection.activeGameObject != gameObject) && (transform.IsChildOf(Selection.activeGameObject.transform))) return;
@@ -84,4 +86,5 @@ public class GraphNodeComponent : MonoBehaviour, IEquatable<GraphNodeComponent>
             }
         }
     }
+#endif
 }

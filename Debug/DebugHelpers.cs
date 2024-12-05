@@ -1,7 +1,7 @@
-using System;
-using UnityEditor;
 using UnityEngine;
-using static UnityEditor.PlayerSettings;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public static class DebugHelpers
 {
@@ -12,6 +12,7 @@ public static class DebugHelpers
 
     public static void DrawArrow(Vector3 position, Vector3 dir, float length, float arrowHeadLength, float arrowHeadAngle, Vector3 upVector)
     {
+#if UNITY_EDITOR
         if (length == 0) return;
         if (dir.magnitude < 1e-3) return;
 
@@ -33,11 +34,13 @@ public static class DebugHelpers
         // Draw the arrowhead lines
         Gizmos.DrawLine(endPoint, arrowEnd1);
         Gizmos.DrawLine(endPoint, arrowEnd2);
+#endif
     }
 
     static Material triangleMaterial;
     public static void DrawTriangle(Vector3 p1, Vector3 p2, Vector3 p3)
     {
+#if UNITY_EDITOR
         if (triangleMaterial == null)
         {
             // Create a simple unlit material for GL
@@ -59,10 +62,12 @@ public static class DebugHelpers
         GL.Vertex(p3);
 
         GL.End();
+#endif
     }
 
     public static void DrawTextAt(Vector3 pos, Vector3 offset, int fontSize, Color color, string text, bool shadow = false)
     {
+#if UNITY_EDITOR
         GUIStyle style = new GUIStyle();
         style.fontSize = fontSize;
 
@@ -82,5 +87,6 @@ public static class DebugHelpers
         style.normal.textColor = color;
         Vector3 offsetPos = Camera.current.ScreenToWorldPoint(screenPos + offset);
         Handles.Label(offsetPos, text, style);
+#endif
     }
 }

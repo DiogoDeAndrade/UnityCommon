@@ -85,6 +85,12 @@ public class SoundManager : MonoBehaviour
 
         if (musicSource.clip == clip) return musicSource;
 
+        if (clip == null)
+        {
+            musicSource.FadeTo(0.0f, defaultCrossfadeTime);
+            return null;
+        }
+
         // Crossfade
         var newMusicSource = _PlaySound(SoundType.Music, clip, 0, 1);
         newMusicSource.loop = true;
@@ -116,6 +122,7 @@ public class SoundManager : MonoBehaviour
         var audioSource = GetSource();
 
         audioSource.clip = clip;
+        audioSource.loop = false;
         audioSource.volume = volume;
         audioSource.pitch = pitch;
         audioSource.outputAudioMixerGroup = mixerGroups[(int)type];

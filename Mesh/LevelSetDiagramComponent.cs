@@ -21,6 +21,7 @@ public class LevelSetDiagramComponent : MonoBehaviour
         levelSetDiagram.Build();
     }
 
+#if UNITY_EDITOR
     static Color[] ContourLinesColors = { Color.red, Color.yellow, Color.cyan, Color.green, Color.blue, Color.magenta, Color.white, Color.grey };
 
     private void OnDrawGizmos()
@@ -97,4 +98,5 @@ public class LevelSetDiagramComponent : MonoBehaviour
             }
         }
     }
+#endif
 }

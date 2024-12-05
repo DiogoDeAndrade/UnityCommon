@@ -1,10 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 using NaughtyAttributes;
-using UnityEngine.Rendering;
-using static UnityEditor.ShaderGraph.Internal.KeywordDependentCollection;
-using UnityEditor.TerrainTools;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 
 [ExecuteInEditMode]
 [RequireComponent(typeof(TopologyComponent))]

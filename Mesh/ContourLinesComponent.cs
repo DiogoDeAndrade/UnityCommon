@@ -35,6 +35,7 @@ public class ContourLinesComponent : MonoBehaviour
         contours = geodesicDistance.ComputeContours(lRef, false, triIndices);
     }
 
+#if UNITY_EDITOR
     private void OnValidate()
     {
         var geodesicDistanceComponent = GetComponent<GeodesicDistanceComponent>();
@@ -74,4 +75,5 @@ public class ContourLinesComponent : MonoBehaviour
             }
         }
     }
+#endif
 }

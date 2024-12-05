@@ -1,10 +1,8 @@
 using NaughtyAttributes;
-using UnityEditor.TerrainTools;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
-using System.Dynamic;
-using UnityEngine.Tilemaps;
-using System;
 
 [ExecuteInEditMode]
 public class TopologyComponent : MonoBehaviour
