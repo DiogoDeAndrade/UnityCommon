@@ -1,7 +1,6 @@
 using UnityEngine;
 using NaughtyAttributes;
 using System;
-using UnityEngine.UI.Extensions.Tweens;
 
 [ExecuteAlways]
 [RequireComponent(typeof(SpriteRenderer))]

@@ -47,6 +47,8 @@ public class UIImageEffect : MonoBehaviour
         if (uiImage) uiImage.material = material;
         else if (rawImage) rawImage.material = material;
 
+        palette?.RefreshCache();
+
         ConfigureMaterial();
     }
 

@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "ColorPalette", menuName = "Unity Common/Palette")]
@@ -17,8 +18,14 @@ public class ColorPalette : ScriptableObject
         Saturation     // Sort by saturation first
     }
 
+    [Serializable]
+    public class ColorEntry
+    {
+        public string  name;
+        public Color   color;
+    }
 
-    public List<Color> colors;
+    [SerializeField] List<ColorEntry> colors;
 
     struct TextureCacheKey
     {
@@ -32,14 +39,20 @@ public class ColorPalette : ScriptableObject
 
     public void Add(Color color)
     {
-        if (colors == null) colors = new List<Color>();
+        if (colors == null) colors = new List<ColorEntry>();
 
-        colors.Add(color);
+        colors.Add(new ColorEntry { name = null, color = color });
+    }
+    public void Add(string name, Color color)
+    {
+        if (colors == null) colors = new List<ColorEntry>();
+
+        colors.Add(new ColorEntry { name = name, color = color });
     }
 
     public void SetColor(int index, Color color)
     {
-        colors[index] = color;
+        colors[index].color = color;
     }
 
     public bool GetColor(Color pixel, float tolerance, bool useAlpha, ref Color color)
@@ -50,9 +63,9 @@ public class ColorPalette : ScriptableObject
         {
             foreach (var c in colors)
             {
-                if (c.DistanceRGBA(pixel) < tolerance)
+                if (c.color.DistanceRGBA(pixel) < tolerance)
                 {
-                    color = c;
+                    color = c.color;
                     return true;
                 }
             }
@@ -61,9 +74,9 @@ public class ColorPalette : ScriptableObject
         {
             foreach (var c in colors)
             {
-                if (c.DistanceRGB(pixel) < tolerance)
+                if (c.color.DistanceRGB(pixel) < tolerance)
                 {
-                    color = c;
+                    color = c.color;
                     return true;
                 }
             }
@@ -72,6 +85,15 @@ public class ColorPalette : ScriptableObject
         return false;
     }
 
+    public List<ColorEntry> GetColors()
+    {
+        return colors;
+    }
+
+    public void SetColors(List<ColorEntry> colors)
+    {
+        this.colors = colors;
+    }
     public void SortColors(SortMode mode = SortMode.Hue)
     {
         if (colors == null || colors.Count == 0) return;
@@ -81,8 +103,8 @@ public class ColorPalette : ScriptableObject
             case SortMode.Hue:
                 colors.Sort((a, b) =>
                 {
-                    Color.RGBToHSV(a, out float h1, out float s1, out float v1);
-                    Color.RGBToHSV(b, out float h2, out float s2, out float v2);
+                    Color.RGBToHSV(a.color, out float h1, out float s1, out float v1);
+                    Color.RGBToHSV(b.color, out float h2, out float s2, out float v2);
 
                     h1 = Mathf.Floor(h1 * 10) / 10.0f;
                     h2 = Mathf.Floor(h2 * 10) / 10.0f;
@@ -107,8 +129,8 @@ public class ColorPalette : ScriptableObject
             case SortMode.Brightness:
                 colors.Sort((a, b) =>
                 {
-                    Color.RGBToHSV(a, out float h1, out float s1, out float v1);
-                    Color.RGBToHSV(b, out float h2, out float s2, out float v2);
+                    Color.RGBToHSV(a.color, out float h1, out float s1, out float v1);
+                    Color.RGBToHSV(b.color, out float h2, out float s2, out float v2);
 
                     h1 = Mathf.Floor(h1 * 10) / 10.0f;
                     h2 = Mathf.Floor(h2 * 10) / 10.0f;
@@ -135,8 +157,8 @@ public class ColorPalette : ScriptableObject
                 {
                     // Calculate color temperature (simplified)
                     // Warmer colors have more red, cooler colors have more blue
-                    float tempA = a.r / (a.b + 0.01f);
-                    float tempB = b.r / (b.b + 0.01f);
+                    float tempA = a.color.r / (a.color.b + 0.01f);
+                    float tempB = b.color.r / (b.color.b + 0.01f);
                     return tempB.CompareTo(tempA); // Sort from warm to cool
                 });
                 break;
@@ -144,8 +166,8 @@ public class ColorPalette : ScriptableObject
             case SortMode.Saturation:
                 colors.Sort((a, b) =>
                 {
-                    Color.RGBToHSV(a, out float h1, out float s1, out float v1);
-                    Color.RGBToHSV(b, out float h2, out float s2, out float v2);
+                    Color.RGBToHSV(a.color, out float h1, out float s1, out float v1);
+                    Color.RGBToHSV(b.color, out float h2, out float s2, out float v2);
 
                     h1 = Mathf.Floor(h1 * 10) / 10.0f;
                     h2 = Mathf.Floor(h2 * 10) / 10.0f;
@@ -169,15 +191,15 @@ public class ColorPalette : ScriptableObject
         }
     }
 
-    public int GetIndexClosestColorRGB(Color pixel)
+    public int GetIndexClosestColorRGB(Color pixel, float inferiorLimit = -1.0f)
     {
-        int ret = 0;
-        float minDist = pixel.DistanceRGB(colors[ret]);
+        int ret = -1;
+        float minDist = float.MaxValue;;
 
-        for (int i = 1; i < colors.Count; i++)
+        for (int i = 0; i < colors.Count; i++)
         {
-            float d = colors[i].DistanceRGB(pixel);
-            if (d < minDist)
+            float d = colors[i].color.DistanceRGB(pixel);
+            if ((d < minDist) && (d > inferiorLimit))
             {
                 minDist = d;
                 ret = i;
@@ -185,6 +207,65 @@ public class ColorPalette : ScriptableObject
         }
 
         return ret;
+    }
+
+    public Color GetClosestColorRGB(Color pixel)
+    {
+        int ret = 0;
+        float minDist = pixel.DistanceRGB(colors[ret].color);
+
+        for (int i = 1; i < colors.Count; i++)
+        {
+            float d = colors[i].color.DistanceRGB(pixel);
+            if (d < minDist)
+            {
+                minDist = d;
+                ret = i;
+            }
+        }
+
+        return colors[ret].color;
+    }
+
+    public Color GetClosestColorRGB_Bayer(Color pixel, int x, int y)
+    {
+        return colors[GetIndexClosestColorRGB_Bayer(pixel, x, y)].color;
+    }
+
+    public int GetIndexClosestColorRGB_Bayer(Color pixel, int x, int y)
+    {
+        // Define a 4x4 Bayer matrix
+        int[,] bayerMatrix = new int[4, 4]
+        {
+        {  0,  8,  2, 10 },
+        { 12,  4, 14,  6 },
+        {  3, 11,  1,  9 },
+        { 15,  7, 13,  5 }
+        };
+
+        // Normalize Bayer value to [0, 1]
+        float bayerThreshold = bayerMatrix[y % 4, x % 4] / 16.0f;
+
+        // Find the closest color
+        int closestIndex = GetIndexClosestColorRGB(pixel);
+        float distToClosest = pixel.DistanceRGB(colors[closestIndex].color);
+        int secondClosestIndex = GetIndexClosestColorRGB(pixel, distToClosest);
+
+        // If there's no second color, return the closest color
+        if (secondClosestIndex == -1)
+            return closestIndex;
+
+        float pixelIntensity = (pixel.r + pixel.g + pixel.b) / 3.0f; // Grayscale intensity of the input pixel
+
+        // Choose based on the Bayer threshold
+        if (pixelIntensity < bayerThreshold)
+        {
+            return closestIndex;
+        }
+        else
+        {
+            return secondClosestIndex;
+        }
     }
 
     public Texture2D GetTexture(TextureLayoutMode mode = TextureLayoutMode.Horizontal, int sizePerItem = 2)
@@ -225,7 +306,7 @@ public class ColorPalette : ScriptableObject
             Color[] bitmap = new Color[pitch * sizePerItem];
             for (int i = 0; i < colors.Count; i++)
             {
-                Color c = colors[i];
+                Color c = colors[i].color;
                 for (int y = 0; y < sizePerItem; y++)
                 {
                     int index = (i * sizePerItem) + y * pitch;
@@ -237,6 +318,11 @@ public class ColorPalette : ScriptableObject
                 }
             }
 
+            if (texture == null)
+            {
+                texture = new Texture2D(sizePerItem * colors.Count, sizePerItem, TextureFormat.ARGB32, false);
+                textureCache[new TextureCacheKey { mode = mode, sizePerItem = sizePerItem }] = texture;
+            }
             texture.SetPixels(bitmap);
             texture.Apply();
         }
@@ -260,7 +346,7 @@ public class ColorPalette : ScriptableObject
     public ColorPalette Clone()
     {
         var ret = ScriptableObject.CreateInstance<ColorPalette>();
-        ret.colors = new List<Color>(colors);
+        ret.colors = new List<ColorEntry>(colors);
 
         return ret;
     }
@@ -277,4 +363,5 @@ public class ColorPalette : ScriptableObject
 
     [Button("Sort by Temperature")]
     void SortByTemperature() { SortColors(SortMode.Temperature); }
+
 }
