@@ -3,16 +3,13 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Xml;
-
 
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.U2D.Sprites;
-
 #endif
+
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using File = System.IO.File;
 

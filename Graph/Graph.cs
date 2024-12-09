@@ -387,4 +387,17 @@ public class Graph<N> where N : IEquatable<N>
         }
         while (changesMade);
     }
+
+    public List<int> FindLinkedNodes(int nodeId)
+    {
+        var ret = new List<int>();
+        foreach (var edge in edges)
+        {
+            if (edge == null) continue;
+
+            if (edge.i1 == nodeId) ret.Add(edge.i2);
+            else if (edge.i2 == nodeId) ret.Add(edge.i1);
+        }
+        return ret;
+    }
 }
