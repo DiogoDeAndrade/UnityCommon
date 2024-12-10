@@ -1,11 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 [Serializable]
 public class Graph<N> where N : IEquatable<N>
 {
+    public delegate int SelectTreeStartPointFunc(Graph<N> graph, List<int> candidates);
+
+    public enum TreeBuildMode { RandomLeaf, HighestDegree };
+
     [Serializable]
     public class Edge
     {
@@ -399,5 +405,135 @@ public class Graph<N> where N : IEquatable<N>
             else if (edge.i2 == nodeId) ret.Add(edge.i1);
         }
         return ret;
+    }
+
+    public List<int> FindOutgoingNodes(int nodeId)
+    {
+        var ret = new List<int>();
+        foreach (var edge in edges)
+        {
+            if (edge == null) continue;
+
+            if (edge.i1 == nodeId) ret.Add(edge.i2);
+        }
+        return ret;
+    }
+
+    public List<Tree<N>> BuildTrees(TreeBuildMode mode, SelectTreeStartPointFunc selectTreeStartPointFunc = null)
+    {
+        var ret = new List<Tree<N>>();
+
+        switch (mode)
+        {
+            case TreeBuildMode.RandomLeaf:
+                {
+                    var visited = Enumerable.Repeat(false, nodes.Count).ToList();
+                    var leafs = GetLeaves();
+                    while (leafs.Count > 0)
+                    {
+                        int startNodeId = leafs.Random(false);
+                        var tree = BuildTreeFromNode(startNodeId, visited);
+                        if (tree != null)
+                        {
+                            ret.Add(tree);
+                        }
+                    }
+                }
+                break;
+            case TreeBuildMode.HighestDegree:
+                {
+                    var visited = Enumerable.Repeat(false, nodes.Count).ToList();
+                    bool allVisited = false;
+                    while (!allVisited)
+                    {
+                        int maxDegree = 0;
+                        List<int> candidates = new List<int>();
+                        for (int i = 0; i < nodes.Count; i++)
+                        {
+                            if (visited[i]) continue;
+                            int degree = Degree(i);
+                            if (degree > maxDegree)
+                            {
+                                maxDegree = degree;
+                                candidates = new List<int>() { i };
+                            }
+                            else if (degree == maxDegree) candidates.Add(i);
+                        }
+
+                        if (candidates.Count == 0) break;
+
+                        int startNodeId = -1;
+                        if (candidates.Count > 1)
+                        {
+                            if (selectTreeStartPointFunc == null) startNodeId = candidates.Random();
+                            else startNodeId = selectTreeStartPointFunc(this, candidates);
+                        }
+                        else startNodeId = candidates[0];
+
+                        var tree = BuildTreeFromNode(startNodeId, visited);
+                        if (tree != null)
+                        {
+                            ret.Add(tree);
+                        }
+
+                        allVisited = visited.All(v => v);
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+
+        return ret;
+    }
+
+    private Tree<N> BuildTreeFromNode(int startNodeId, List<bool> visited)
+    {
+        if (visited[startNodeId]) return null;
+
+        visited[startNodeId] = true;
+
+        Tree<N> tree = new Tree<N>(nodes[startNodeId].node);
+
+        AddTreeNodesFromGraphNodes(tree, startNodeId, tree.rootNodeId, visited);
+
+        return tree;
+    }
+
+    private void AddTreeNodesFromGraphNodes(Tree<N> tree, int graphNodeId, int treeParentNodeId, List<bool> visited)
+    {
+        List<int> neighbours = (directed) ? (FindOutgoingNodes(graphNodeId)) : (FindLinkedNodes(graphNodeId));
+
+        foreach (var n in neighbours)
+        {
+            // Ignore already visited nodes (avoid loops)
+            if (visited[n]) continue;
+            visited[n] = true;
+
+            // Create a node on the tree
+            var newNodeId = tree.AddNode(nodes[n].node, treeParentNodeId);
+            AddTreeNodesFromGraphNodes(tree, n, newNodeId, visited);
+        }
+    }
+
+    public bool HasLink(int i, int j)
+    {
+        if (directed)
+        {
+            foreach (var edge in edges)
+            {
+                if ((edge.i1 == i) && (edge.i2 == j)) return true;
+            }
+        }
+        else
+        {
+            foreach (var edge in edges)
+            {
+                if (((edge.i1 == i) && (edge.i2 == j)) ||
+                    ((edge.i1 == j) && (edge.i2 == i))) return true;
+            }
+        }
+
+        return false;
     }
 }

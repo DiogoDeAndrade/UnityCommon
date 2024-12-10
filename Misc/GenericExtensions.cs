@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 public static class GenericExtensions
@@ -36,5 +37,17 @@ public static class GenericExtensions
         var ret = l[0];
         l.RemoveAt(0);
         return ret;
+    }
+
+    static public void Replace<T>(this List<T> l, T find, T replace) where T : IEquatable<T>
+    {
+        if (l == null) return;
+        for (int i = 0; i < l.Count; i++)
+        {
+            if (l[i].Equals(find))
+            {
+                l[i] = replace;
+            }
+        }
     }
 }
