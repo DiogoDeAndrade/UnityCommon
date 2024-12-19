@@ -211,4 +211,9 @@ public class Tree<N> where N : IEquatable<N>
 
         return ret;
     }
+    
+    public bool IsLeaf(int nodeId)
+    {
+        return nodes[nodeId].isLeaf;
+    }
 }
