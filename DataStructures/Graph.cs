@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml;
+using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -9,8 +10,10 @@ using UnityEngine.UIElements;
 public class Graph<N> where N : IEquatable<N>
 {
     public delegate int SelectTreeStartPointFunc(Graph<N> graph, List<int> candidates);
+    public delegate float BuildTreeCriteria(int nodeId);
 
-    public enum TreeBuildMode { RandomLeaf, HighestDegree };
+    public enum TreeBuildMode { Random, Degree, Centrality };
+    public enum ComputeCentralityMode { Degree, Closeness, Betweenness, Harmonic };
 
     [Serializable]
     public class Edge
@@ -28,6 +31,8 @@ public class Graph<N> where N : IEquatable<N>
     [SerializeField] protected List<Node> nodes = new();
     [SerializeField] protected List<Edge> edges = new();
     [SerializeField] protected bool directed;
+    [SerializeField] protected List<int>    degree;
+    [SerializeField] protected List<float>  centrality;
 
     public int nodeCount => (nodes != null) ? (nodes.Count) : 0;
     public bool nodeExists(int i) => nodes[i] != null;
@@ -307,6 +312,37 @@ public class Graph<N> where N : IEquatable<N>
         return edges.Count(e => (e.i1 == nodeId));
     }
 
+    public float ClosenessCentrality(int nodeId)
+    {
+        float accumReciprocDist = 0.0f;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (i != nodeId)
+            {
+                float d = DijkstraDistance(nodeId, i);
+                if (d != float.MaxValue) accumReciprocDist += 1.0f / d;
+                else accumReciprocDist += d;
+            }
+        }
+
+        return accumReciprocDist;
+    }
+
+    public float HarmonicCentrality(int nodeId)
+    {
+        float accumReciprocDist = 0.0f;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (i != nodeId)
+            {
+                float d = DijkstraDistance(nodeId, i);
+                if (d != float.MaxValue) accumReciprocDist += 1.0f / d;
+            }
+        }
+
+        return accumReciprocDist;
+    }
+
     public List<int> GetLeaves()
     {
         var leaves = new List<int>();
@@ -419,13 +455,62 @@ public class Graph<N> where N : IEquatable<N>
         return ret;
     }
 
+    public void ComputeDegrees()
+    {
+        degree = new();
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            degree.Add(Degree(i));
+        }
+    }
+    bool hasComputedDegree => (degree != null) && (degree.Count != nodes.Count);
+    float GetCachedDegree(int nodeId) => degree[nodeId];
+
+    public void ComputeCentrality(ComputeCentralityMode mode)
+    {
+        centrality = new();
+
+        switch (mode)
+        {
+            case ComputeCentralityMode.Degree:
+                for (int i = 0; i < nodes.Count; i++) centrality.Add(Degree(i));
+                break;
+            case ComputeCentralityMode.Closeness:
+                for (int i = 0; i < nodes.Count; i++) centrality.Add(ClosenessCentrality(i));
+                break;
+            case ComputeCentralityMode.Betweenness:
+                // Set all to 0
+                for (int i = 0; i < nodes.Count; i++) centrality.Add(0.0f);
+                // Compute all shortest paths, and on each node traversed in each one, increase the count of paths by 1
+                for (int n1 = 0; n1 < nodes.Count; n1++)
+                {
+                    for (int n2 = 0; n2 < nodes.Count; n2++)
+                    {
+                        if (n1 == n2) continue;
+                        var path = DijkstraShortestPath(n1, n2);
+                        foreach (var n in path) centrality[n]++;
+                    }
+                }
+                break;
+            case ComputeCentralityMode.Harmonic:
+                for (int i = 0; i < nodes.Count; i++) centrality.Add(HarmonicCentrality(i));
+                break;
+            default:
+                break;
+        }
+    }
+    public void SetCentrality(List<float> data) { centrality = data; }
+    bool hasComputedCentrality => (centrality != null) && (centrality.Count == nodes.Count);
+    float GetCachedCentrality(int nodeId) => centrality[nodeId];
+
+
     public List<Tree<N>> BuildTrees(TreeBuildMode mode, SelectTreeStartPointFunc selectTreeStartPointFunc = null)
     {
         var ret = new List<Tree<N>>();
 
         switch (mode)
         {
-            case TreeBuildMode.RandomLeaf:
+            case TreeBuildMode.Random:
                 {
                     var visited = Enumerable.Repeat(false, nodes.Count).ToList();
                     var leafs = GetLeaves();
@@ -440,24 +525,39 @@ public class Graph<N> where N : IEquatable<N>
                     }
                 }
                 break;
-            case TreeBuildMode.HighestDegree:
+            case TreeBuildMode.Degree:
+            case TreeBuildMode.Centrality:
                 {
+                    BuildTreeCriteria criteria = null;
+
+                    if (mode == TreeBuildMode.Degree)
+                    {
+                        if (!hasComputedDegree) ComputeDegrees();
+
+                        criteria = GetCachedDegree;
+                    }
+                    else if (mode == TreeBuildMode.Centrality)
+                    {
+                        if (!hasComputedCentrality) ComputeCentrality(ComputeCentralityMode.Degree);
+
+                        criteria = GetCachedCentrality;
+                    }
+
                     var visited = Enumerable.Repeat(false, nodes.Count).ToList();
                     bool allVisited = false;
                     while (!allVisited)
                     {
-                        int maxDegree = 0;
+                        float maxValue = 0;
                         List<int> candidates = new List<int>();
                         for (int i = 0; i < nodes.Count; i++)
                         {
                             if (visited[i]) continue;
-                            int degree = Degree(i);
-                            if (degree > maxDegree)
+                            if (criteria(i) > maxValue)
                             {
-                                maxDegree = degree;
+                                maxValue = criteria(i);
                                 candidates = new List<int>() { i };
                             }
-                            else if (degree == maxDegree) candidates.Add(i);
+                            else if (criteria(i) == maxValue) candidates.Add(i);
                         }
 
                         if (candidates.Count == 0) break;
@@ -535,5 +635,26 @@ public class Graph<N> where N : IEquatable<N>
         }
 
         return false;
+    }
+
+    public float GetWeigth(int i, int j)
+    {
+        if (directed)
+        {
+            foreach (var edge in edges)
+            {
+                if ((edge.i1 == i) && (edge.i2 == j)) return edge.weight;
+            }
+        }
+        else
+        {
+            foreach (var edge in edges)
+            {
+                if (((edge.i1 == i) && (edge.i2 == j)) ||
+                    ((edge.i1 == j) && (edge.i2 == i))) return edge.weight;
+            }
+        }
+
+        return 0.0f;
     }
 }
