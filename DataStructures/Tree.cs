@@ -128,4 +128,8 @@ public class Tree<N> where N : IEquatable<N>
         }
     }
 
+    internal bool IsLeaf(int nodeId)
+    {
+        return nodes[nodeId].isLeaf;
+    }
 }
