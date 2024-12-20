@@ -79,6 +79,29 @@ public class InputControl
         return v;
     }
 
+    public Vector2 GetAxis2()
+    {
+        switch (type)
+        {
+            case InputType.Axis:
+            case InputType.Button:
+            case InputType.Key:
+                throw (new NotImplementedException($"GetAxis2D with type={type}"));
+            case InputType.NewInput:
+                if (action == null) RefreshAction();
+                if (action != null)
+                {
+                    if (isVec2) return action.ReadValue<Vector2>();
+                    else return new Vector2(action.ReadValue<float>(), 0.0f);
+                }
+                break;
+            default:
+                break;
+        }
+
+        return Vector2.zero;
+    }
+
     public bool IsPressed()
     {
         bool ret = false;

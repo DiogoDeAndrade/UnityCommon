@@ -8,6 +8,10 @@ public static class VectorExtensions
     {
         return new Vector3(inV.x, 0.0f, inV.z);
     }
+    public static Vector3 xy0(this Vector3 inV)
+    {
+        return new Vector3(inV.x, inV.y, 0.0f);
+    }
 
     public static Vector2 xz(this Vector3 inV)
     {
