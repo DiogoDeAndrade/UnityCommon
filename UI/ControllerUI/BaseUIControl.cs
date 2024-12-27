@@ -1,4 +1,6 @@
+using NaughtyAttributes;
 using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,11 +13,16 @@ public class BaseUIControl : MonoBehaviour
     public delegate void OnUIEnableToggle(bool value, BaseUIControl control);
 
     [SerializeField] protected Image            highlighterImage;
+    [SerializeField] protected TextMeshProUGUI  highlighterText;
+    [SerializeField, ShowIf("needHighlightColor")] protected Color highlightColor;
     [SerializeField] protected BaseUIControl    _navUp;
     [SerializeField] protected BaseUIControl    _navDown;
     [SerializeField] protected AudioClip        changeSnd;
 
     UIGroup parentGroup;
+    Color   defaultTextColor;
+
+    private bool needHighlightColor => highlighterText != null;
 
     public bool isSelected => parentGroup.selectedControl == this;
 
@@ -26,16 +33,28 @@ public class BaseUIControl : MonoBehaviour
     public event OnDeselect onDeselect;
     public event OnChange onChange;
     public event OnInteract onInteract;
-    public event OnUIEnableToggle onUIToggle;
+    public event OnUIEnableToggle onUIToggle;   
 
     protected virtual void Start()
     {
         parentGroup = GetComponentInParent<UIGroup>();
+
+        if (highlighterText)
+        {
+            defaultTextColor = highlighterText.color;
+        }
     }
 
     protected virtual void Update()
     {
-        highlighterImage.enabled = isSelected && parentGroup.uiEnable;
+        if (highlighterImage)
+        {
+            highlighterImage.enabled = isSelected && parentGroup.uiEnable;
+        }
+        if (highlighterText)
+        {
+            highlighterText.color = (isSelected) ? (highlightColor) : (defaultTextColor);
+        }
     }
 
     public virtual void NotifySelect(BaseUIControl prevControl)

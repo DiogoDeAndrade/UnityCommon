@@ -2,13 +2,16 @@ using UnityEngine;
 using NaughtyAttributes;
 using TMPro;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 public class BigTextScroll : MonoBehaviour
 {
     public delegate void OnEndScroll();
     public event OnEndScroll onEndScroll;
 
-    [SerializeField, ResizableTextArea]
+    [SerializeField]
+    TextAsset      textFile;
+    [SerializeField, ResizableTextArea, ShowIf("noFile")]
     private string text;
     [SerializeField]
     private TextMeshProUGUI textPrefab;
@@ -23,9 +26,16 @@ public class BigTextScroll : MonoBehaviour
     RectTransform   rectTransform;
     RectTransform   lastRectTransform;
 
+    bool noFile => textFile == null;
+
     void Start()
     {
         backControl.playerInput = playerInput;
+
+        if (textFile)
+        {
+            text = textFile.text;
+        }
 
         var lines = text.Split('\n', System.StringSplitOptions.None);
         foreach (var line in lines)
@@ -33,14 +43,16 @@ public class BigTextScroll : MonoBehaviour
             var tmp = Instantiate(textPrefab, transform);
             if (line == "")
                 tmp.text = "<color=#FF000000>||||</color>";
-            else 
+            else
                 tmp.text = line;
-            
+
             lastRectTransform = tmp.GetComponent<RectTransform>();
         }
 
         rectTransform = GetComponent<RectTransform>();
         originalPosition = rectTransform.anchoredPosition;
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(transform as RectTransform);
     }
 
     void Update()
