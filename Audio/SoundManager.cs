@@ -36,7 +36,7 @@ public class SoundManager : MonoBehaviour
     }
 
     // Start is called before the first frame update
-    void Start()
+    void Awake()
     {
         if (_instance == null)
         {
@@ -66,6 +66,10 @@ public class SoundManager : MonoBehaviour
         mixerGroups[3] = (backgroundMixerGroup != null) ? (backgroundMixerGroup) : (defaultMixerOutput);
         mixerGroups[4] = (voiceMixerGroup != null) ? (voiceMixerGroup) : (defaultMixerOutput);
 
+    }
+
+    private void Start()
+    {
         if (startMusic)
         {
             musicSource = _PlaySound(SoundType.Music, startMusic, 0, 1);
@@ -77,7 +81,7 @@ public class SoundManager : MonoBehaviour
     {
         if (musicSource == null)
         {
-            musicSource = _PlaySound(SoundType.Music, startMusic, 1, 1);
+            musicSource = _PlaySound(SoundType.Music, clip, 1, 1);
             musicSource.loop = true;
 
             return musicSource;
