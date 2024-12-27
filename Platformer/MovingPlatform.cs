@@ -9,10 +9,12 @@ public class MovingPlatform : ActivatedComponent
 {
     public  float       speed;
     public  Transform[] waypoints;
+    public  int         startWaypoint = -1;
     public  bool        loop;
     public  Collider2D  influenceArea;
     public  LayerMask   carryLayers;
 
+    Rigidbody2D     rb;
     TimeScaler2d    timeScaler;
     Vector3         currentTarget;
     Vector3[]       positions;
@@ -39,14 +41,22 @@ public class MovingPlatform : ActivatedComponent
 
         index = 0;
         inc = 1;
-
         currentTarget = positions[index];
+
+        if (startWaypoint != -1)
+        {
+            transform.position = positions[startWaypoint];
+            index = (startWaypoint + 1) % waypoints.Length;
+            currentTarget = positions[index];
+        }
+
+        rb = GetComponent<Rigidbody2D>();
 
         contactFilter = new ContactFilter2D();
         contactFilter.SetLayerMask(carryLayers);
     }
 
-    void Update()
+    void FixedUpdate()
     {
         if (Vector3.Distance(transform.position, currentTarget) < 0.5f)
         {
@@ -72,28 +82,41 @@ public class MovingPlatform : ActivatedComponent
         }
         else
         {
-            float maxDistanceDelta = speed * ((timeScaler) ? (timeScaler.deltaTime) : (Time.deltaTime));
+            float maxDistanceDelta = speed * ((timeScaler) ? (timeScaler.fixedDeltaTime) : (Time.fixedDeltaTime));
 
-            transform.position = Vector3.MoveTowards(transform.position, currentTarget, maxDistanceDelta);
+            if (rb)
+            {
+                var toTarget = (currentTarget - transform.position).normalized;
+
+                rb.linearVelocity = toTarget * speed;
+            }
+            else
+            {
+                transform.position = Vector3.MoveTowards(transform.position, currentTarget, maxDistanceDelta);
+            }
         }
 
         Vector3 deltaPos = transform.position - prevPos;
 
-        List<Collider2D> results = new List<Collider2D>();
-        if (Physics2D.OverlapCollider(influenceArea, contactFilter, results) > 0)
+        if (influenceArea != null)
         {
-            // Affected object list
-            List<GameObject> affectedObjects = new List<GameObject>();
-
-            foreach (var collider in results)
+            List<Collider2D> results = new List<Collider2D>();
+            if (Physics2D.OverlapCollider(influenceArea, contactFilter, results) > 0)
             {
-                var rootObject = collider.gameObject.GetRootObject();
+                // Affected object list
+                List<Rigidbody2D> affectedObjects = new List<Rigidbody2D>();
 
-                if (affectedObjects.IndexOf(rootObject) != -1) continue;
+                foreach (var collider in results)
+                {
+                    var rootRB = collider.GetComponent<Rigidbody2D>();
+                    if (rootRB == null) rootRB = collider.GetComponentInParent<Rigidbody2D>();
 
-                affectedObjects.Add(rootObject);
+                    if (affectedObjects.IndexOf(rootRB) != -1) continue;
 
-                rootObject.transform.position += deltaPos;
+                    affectedObjects.Add(rootRB);
+
+                    rootRB.transform.position += deltaPos;
+                }
             }
         }
 

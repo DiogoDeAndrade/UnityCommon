@@ -14,13 +14,24 @@ public class TimeScaler2d : MonoBehaviour
         get { return _time; }
     }
 
+    public float fixedTime
+    {
+        get { return _fixedTime; }
+    }
+
     public float deltaTime
     {
         get { return Time.deltaTime * _timeScale; }
     }
 
+    public float fixedDeltaTime
+    {
+        get { return Time.fixedDeltaTime * _timeScale; }
+    }
+
     float _timeScale = 1.0f;
     float _time = 0.0f;
+    float _fixedTime = 0.0f;
 
     Rigidbody2D     rb;
     Animator[]      animators;
@@ -58,6 +69,7 @@ public class TimeScaler2d : MonoBehaviour
     void Update()
     {
         _time += Time.deltaTime * _timeScale;
+        _fixedTime += Time.fixedDeltaTime * _timeScale;
     }
 
     public void ModifyScale(float s)
