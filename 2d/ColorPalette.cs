@@ -351,6 +351,11 @@ public class ColorPalette : ScriptableObject
         return ret;
     }
 
+    [Button("Reverse")]
+    void Reverse() 
+    {
+        colors.Reverse();
+    }
 
     [Button("Sort by Hue")]
     void SortByHue() { SortColors(SortMode.Hue); }
@@ -364,4 +369,46 @@ public class ColorPalette : ScriptableObject
     [Button("Sort by Temperature")]
     void SortByTemperature() { SortColors(SortMode.Temperature); }
 
+    [Button("Export texture")]
+    void ExportTexture()
+    {
+        Texture2D texture = new Texture2D(4 * colors.Count, 4, TextureFormat.ARGB32, false);
+
+        UpdateTexture(texture, TextureLayoutMode.Horizontal, 4);
+
+        // Determine the path of the ScriptableObject asset
+        string path = AssetDatabase.GetAssetPath(this);
+
+        if (!string.IsNullOrEmpty(path))
+        {
+            // Extract directory and ScriptableObject name
+            string directory = System.IO.Path.GetDirectoryName(path);
+            string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(path);
+
+            // Create new texture name
+            string textureName = $"{fileNameWithoutExtension}Texture.png";
+            string texturePath = System.IO.Path.Combine(directory, textureName);
+
+            // Encode the texture to PNG
+            byte[] pngData = texture.EncodeToPNG();
+
+            if (pngData != null)
+            {
+                // Write the PNG to the specified path
+                System.IO.File.WriteAllBytes(texturePath, pngData);
+                Debug.Log($"Texture exported to: {texturePath}");
+
+                // Refresh the AssetDatabase to make the new texture visible in the Editor
+                AssetDatabase.Refresh();
+            }
+            else
+            {
+                Debug.LogError("Failed to encode texture to PNG.");
+            }
+        }
+        else
+        {
+            Debug.LogError("Failed to determine ScriptableObject path.");
+        }
+    }
 }

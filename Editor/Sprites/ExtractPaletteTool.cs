@@ -137,7 +137,7 @@ public class ExtractPaletteTool : MonoBehaviour
 
     static ProbList<Color>  allColors;
 
-    [MenuItem("Assets/Tools/Extract palette")]
+    [MenuItem("Assets/Unity Common Tools/Palette/Extract palette")]
     private static void ExtractPalette()
     {
         PaletteExtractionSettings.ShowWindow((confirmed, settings) =>
@@ -401,7 +401,7 @@ public class ExtractPaletteTool : MonoBehaviour
         }
     }
 
-    [MenuItem("Assets/Tools/Extract palette", validate = true)]
+    [MenuItem("Assets/Unity Common Tools/Palette/Extract palette", validate = true)]
     private static bool ExtractPaletteValidation()
     {
         string[] guids = Selection.assetGUIDs;

@@ -13,14 +13,14 @@ public class RemapAnimationsTool : MonoBehaviour
         SelectFiles
     }
 
-    [MenuItem("Assets/Tools/Remap Animations")]
+    [MenuItem("Assets/Unity Common Tools/Remap Animations")]
     private static void RemapAnimations()
     {
         // Show the modal dialog
         RemapAnimationsDialog.ShowDialog();
     }
 
-    [MenuItem("Assets/Tools/Remap Animations", validate = true)]
+    [MenuItem("Assets/Unity Common Tools/Remap Animations", validate = true)]
     private static bool RemapAnimationsValidation()
     {
         if (Selection.objects.Length > 0)

@@ -128,7 +128,7 @@ public class SetupRecolorTool : MonoBehaviour
         }
     }
 
-    [MenuItem("Assets/Tools/Setup Recolor")]
+    [MenuItem("Assets/Unity Common Tools/Palette/Setup Recolor")]
     private static void ExtractPalette()
     {
         SetupRecolorConfigWindow.ShowWindow((confirmed, settings) =>
@@ -388,7 +388,7 @@ public class SetupRecolorTool : MonoBehaviour
         return null;
     }
 
-    [MenuItem("Assets/Tools/Setup Recolor", validate = true)]
+    [MenuItem("Assets/Unity Common Tools/Palette/Setup Recolor", validate = true)]
     private static bool ExtractPaletteValidation()
     {
         string[] guids = Selection.assetGUIDs;

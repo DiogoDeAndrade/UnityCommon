@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEngine;
 public static class ColorPaletteEditorUtility 
 {
-    [MenuItem("Assets/Create Editable Palette", priority = 2000)]
+    [MenuItem("Assets/Unity Common Tools/Palette/Create Editable Palette", priority = 2000)]
     public static void DuplicateEditablePalette()
     {
         // Get the selected asset
@@ -19,9 +19,13 @@ public static class ColorPaletteEditorUtility
         string newPath = AssetDatabase.GenerateUniqueAssetPath($"{directory}/{selectedObject.name}_Editable.asset");
 
         ColorPalette editableCopy = ScriptableObject.CreateInstance<ColorPalette>();
-        foreach (var c in selectedObject.GetColors())
+        var colors = selectedObject.GetColors();
+        if (colors != null)
         {
-            editableCopy.Add(c.name, c.color);
+            foreach (var c in colors)
+            {
+                editableCopy.Add(c.name, c.color);
+            }
         }
 
         // Save the new asset
@@ -35,7 +39,7 @@ public static class ColorPaletteEditorUtility
         Debug.Log($"Created editable copy of palette at: {newPath}");
     }
 
-    [MenuItem("Assets/Create Editable Palette", true)]
+    [MenuItem("Assets/Unity Common Tools/Palette/Create Editable Palette", true)]
     public static bool ValidateDuplicateEditablePalette()
     {
         var selectedObject = Selection.activeObject as ColorPalette;
