@@ -3,6 +3,8 @@ using UnityEngine.InputSystem;
 
 public class UIGroup : MonoBehaviour
 {
+    [SerializeField]
+    protected bool         enableOnStart = true;
     [SerializeField] 
     protected float        moveCooldown = 0.1f;
     [SerializeField] 
@@ -48,6 +50,8 @@ public class UIGroup : MonoBehaviour
         {
             selectedControl = initialControl;
         }
+
+        _uiEnable = enableOnStart;
     }
 
     void Update()
@@ -107,7 +111,7 @@ public class UIGroup : MonoBehaviour
             }
         }
     }
-    protected void SetUI(bool value)
+    public void SetUI(bool value)
     {
         _uiEnable = value;
         var uiControls = GetComponentsInChildren<BaseUIControl>();
