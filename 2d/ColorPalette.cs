@@ -1,8 +1,9 @@
 using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "ColorPalette", menuName = "Unity Common/Palette")]
@@ -369,6 +370,7 @@ public class ColorPalette : ScriptableObject
     [Button("Sort by Temperature")]
     void SortByTemperature() { SortColors(SortMode.Temperature); }
 
+#if UNITY_EDITOR
     [Button("Export texture")]
     void ExportTexture()
     {
@@ -411,4 +413,5 @@ public class ColorPalette : ScriptableObject
             Debug.LogError("Failed to determine ScriptableObject path.");
         }
     }
+#endif
 }
