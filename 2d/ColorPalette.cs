@@ -20,7 +20,7 @@ public class ColorPalette : ScriptableObject
     }
 
     [Serializable]
-    public class ColorEntry
+    public struct ColorEntry
     {
         public string  name;
         public Color   color;
@@ -53,7 +53,11 @@ public class ColorPalette : ScriptableObject
 
     public void SetColor(int index, Color color)
     {
-        colors[index].color = color;
+        colors[index] = new ColorEntry
+        {
+            name = colors[index].name,
+            color = color
+        };
     }
 
     public bool GetColor(Color pixel, float tolerance, bool useAlpha, ref Color color)
