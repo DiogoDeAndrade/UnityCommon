@@ -67,7 +67,7 @@ public class ColorAdjustmentCtrl: MonoBehaviour
 
         function(value, false);
     }
-    private void SetValue(Mode mode, string key, float value)
+    private void SetValueInPlayerPrefs(Mode mode, string key, float value)
     {
         if (mode == Mode.Manual) return;
 
@@ -81,7 +81,7 @@ public class ColorAdjustmentCtrl: MonoBehaviour
         if (colorAdjustments != null)
         {
             colorAdjustments.postExposure.value = value;
-            if (alsoSet) SetValue(exposureMode, exposureKey, value);
+            if (alsoSet) SetValueInPlayerPrefs(exposureMode, exposureKey, value);
         }
     }
 
@@ -90,7 +90,7 @@ public class ColorAdjustmentCtrl: MonoBehaviour
         if (colorAdjustments != null)
         {
             colorAdjustments.contrast.value = value;
-            if (alsoSet) SetValue(contrastMode, contrastKey, value);
+            if (alsoSet) SetValueInPlayerPrefs(contrastMode, contrastKey, value);
         }
     }
 
@@ -99,7 +99,7 @@ public class ColorAdjustmentCtrl: MonoBehaviour
         if (colorAdjustments != null)
         {
             colorAdjustments.hueShift.value = value;
-            if (alsoSet) SetValue(hueShiftMode, hueShiftKey, value);
+            if (alsoSet) SetValueInPlayerPrefs(hueShiftMode, hueShiftKey, value);
         }
     }
 
@@ -108,7 +108,7 @@ public class ColorAdjustmentCtrl: MonoBehaviour
         if (colorAdjustments != null)
         {
             colorAdjustments.saturation.value = value;
-            if (alsoSet) SetValue(saturationMode, saturationKey, value);
+            if (alsoSet) SetValueInPlayerPrefs(saturationMode, saturationKey, value);
         }
     }
 }

@@ -120,5 +120,10 @@ public class UIGroup : MonoBehaviour
             if (value) uiControl.NotifyEnable();
             else uiControl.NotifyDisable();
         }
+
+        if (value)
+        {
+            selectedControl = initialControl;
+        }
     }
 }
