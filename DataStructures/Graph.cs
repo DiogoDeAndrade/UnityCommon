@@ -547,7 +547,7 @@ public class Graph<N> where N : IEquatable<N>
                     bool allVisited = false;
                     while (!allVisited)
                     {
-                        float maxValue = 0;
+                        float maxValue = -float.MaxValue;
                         List<int> candidates = new List<int>();
                         for (int i = 0; i < nodes.Count; i++)
                         {

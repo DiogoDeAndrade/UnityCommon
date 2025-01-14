@@ -55,6 +55,12 @@ public static class SteinerTree
 
             // Use Dijkstra to find the shortest path between these two nodes
             List<int> path = originalGraph.DijkstraShortestPath(i1, i2);
+            if ((path == null) || (path.Count <= 2))
+            {
+                // Graph can be directed and not support a path from i1 to i2, but support it from i2 to i1, and for
+                // our algorithm, that's good enough
+                path = originalGraph.DijkstraShortestPath(i2, i1);
+            }
 
             if (path != null && path.Count > 1)
             {
