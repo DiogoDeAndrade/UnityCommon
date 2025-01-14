@@ -19,7 +19,7 @@ public class BaseUIControl : MonoBehaviour
     [SerializeField] protected BaseUIControl    _navDown;
     [SerializeField] protected AudioClip        changeSnd;
 
-    UIGroup parentGroup;
+    protected UIGroup parentGroup;
     Color   defaultTextColor;
 
     private bool needHighlightColor => highlighterText != null;

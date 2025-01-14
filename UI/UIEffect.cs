@@ -30,6 +30,10 @@ public class UIImageEffect : MonoBehaviour
     public void SetRemap(ColorPalette colorPalette)
     {
         palette = colorPalette;
+        if (material)
+        {
+            material.name = palette.name + "_Material";
+        }
     }
 
     private void Update()
@@ -44,6 +48,14 @@ public class UIImageEffect : MonoBehaviour
         rawImage = GetComponent<RawImage>();
         material = (uiImage) ? (uiImage.material) : (rawImage.material);
         material = new Material(material);
+        if (palette)
+        {
+            material.name = palette.name + "_Material";
+        }
+        else
+        {
+            material.name = "Material" + UnityEngine.Random.Range(0, 1000000);
+        }
         if (uiImage) uiImage.material = material;
         else if (rawImage) rawImage.material = material;
 

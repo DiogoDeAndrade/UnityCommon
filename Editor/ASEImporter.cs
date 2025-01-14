@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEditor.AssetImporters;
 using System;
 
-[ScriptedImporter(1, "ase")] // 1 is the version, "ase" is the file extension
+[ScriptedImporter(1, "asep")] // 1 is the version, "asep" is the file extension - this should be a .ase importer, but that conflicts with ASE sprite, so we require palette files from Photoshop to have the "asep" extension
 public class ASEImporter : ScriptedImporter
 {
     public override void OnImportAsset(AssetImportContext ctx)
