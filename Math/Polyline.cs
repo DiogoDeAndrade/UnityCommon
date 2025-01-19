@@ -293,5 +293,25 @@ public class Polyline : IEnumerable<(Vector3 position, Vector3 normal)>
             Gizmos.DrawLine(vertices[i], vertices[i + 1]);
         }
     }
+
+    public void DrawGizmosWithNormals(float normalLength, Color normalColor)
+    {
+        if ((normals == null) || (normals.Count != vertices.Count)) DrawGizmos();
+        else
+        {
+            var segmentColor = Gizmos.color;
+            for (int i = 0; i < vertices.Count - 1; i++)
+            {
+                Gizmos.DrawLine(vertices[i], vertices[i + 1]);
+            }
+            Gizmos.color = normalColor;
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                Gizmos.DrawLine(vertices[i], vertices[i] + normals[i] * normalLength);
+            }
+
+            Gizmos.color = segmentColor;
+        }
+    }
 #endif
 }

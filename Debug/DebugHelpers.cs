@@ -1,4 +1,6 @@
 using UnityEngine;
+using System;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -64,6 +66,37 @@ public static class DebugHelpers
         GL.End();
 #endif
     }
+
+    public static void DrawPolygon(Vector3[] poly)
+    {
+#if UNITY_EDITOR
+        if (triangleMaterial == null)
+        {
+            // Create a simple unlit material for GL
+            Shader shader = Shader.Find("Hidden/Internal-Colored");
+            triangleMaterial = new Material(shader);
+            triangleMaterial.hideFlags = HideFlags.HideAndDontSave;
+            triangleMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            triangleMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            triangleMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+            triangleMaterial.SetInt("_ZWrite", 0);
+        }
+        triangleMaterial.SetPass(0);
+
+        GL.Begin(GL.TRIANGLES);
+        GL.Color(Gizmos.color);
+
+        for (int i = 1; i < poly.Length - 1; i++)
+        {
+            GL.Vertex(poly[0]);
+            GL.Vertex(poly[i]);
+            GL.Vertex(poly[i + 1]);
+        }
+
+        GL.End();
+#endif
+    }
+
 
     public static void DrawTextAt(Vector3 pos, Vector3 offset, int fontSize, Color color, string text, bool shadow = false)
     {

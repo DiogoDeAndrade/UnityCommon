@@ -21,7 +21,7 @@ public static class BoundsExtensions
         return b.center;    
     }
 
-    public static Bounds ConvertToLocal(this Bounds b, Transform transform)
+    public static Bounds ToLocal(this Bounds b, Transform transform)
     {
         var corner0 = b.GetCorner(0).xyz1();
         Bounds localBounds = new Bounds(transform.worldToLocalMatrix * corner0, Vector3.zero);
@@ -31,6 +31,22 @@ public static class BoundsExtensions
         }
 
         return localBounds;
+    }
+
+    public static Bounds ToWorld(this Bounds b, Transform transform)
+    {
+        var min = b.min;
+        var max = b.max;
+
+        var corner = b.GetCorner(0);
+        corner = transform.TransformPoint(corner);
+        Bounds worldBounds = worldBounds = new Bounds(corner, Vector3.zero);
+        for (int i = 1; i < 8; i++)
+        {
+            corner = transform.TransformPoint(b.GetCorner(i));
+            worldBounds.Encapsulate(corner);
+        }
+        return worldBounds;
     }
 
     public static bool ContainsMinInclusive(this Bounds b, Vector3 p)
