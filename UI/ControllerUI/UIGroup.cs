@@ -4,6 +4,8 @@ using UnityEngine.InputSystem;
 public class UIGroup : MonoBehaviour
 {
     [SerializeField]
+    protected int          playerId;
+    [SerializeField]
     protected bool         enableOnStart = true;
     [SerializeField] 
     protected float        moveCooldown = 0.1f;
@@ -42,6 +44,8 @@ public class UIGroup : MonoBehaviour
 
     protected virtual void Start()
     {
+        MasterInputManager.SetupInput(playerId, playerInput);
+
         horizontalControl.playerInput = playerInput;
         verticalControl.playerInput = playerInput;
         interactControl.playerInput = playerInput;
