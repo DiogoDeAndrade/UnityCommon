@@ -115,7 +115,7 @@ public class HealthSystem : MonoBehaviour
                 if ((_health > 0.0f) && (_dead))
                 {
                     onRevive?.Invoke();
-                    _dead = true;
+                    _dead = false;
                 }
                 return true;
             }
@@ -126,6 +126,7 @@ public class HealthSystem : MonoBehaviour
             onHeal?.Invoke(delta);
 
             _health += delta;
+            return true;
         }
         return false;
     }

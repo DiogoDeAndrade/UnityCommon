@@ -32,7 +32,6 @@ public class LiftGammaGainCtrl: MonoBehaviour
         // Check if the Volume has a profile and if it contains a ColorAdjustments override
         if (volume != null && volume.profile.TryGet<LiftGammaGain>(out liftGammaGain))
         {
-            Debug.Log("LiftGammaGain found in Volume Profile!");
         }
         else
         {

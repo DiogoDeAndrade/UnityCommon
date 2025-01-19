@@ -41,4 +41,12 @@ public static class TransformExtensions
         var initialPosition = target.position;
         return target.Tween().Interpolate(0.0f, 1.0f, duration, (value) => target.position = initialPosition + (Random.insideUnitCircle * strength).xyz(0.0f), "ShakeTransform").Done(() => target.position = initialPosition);
     }
+
+    public static Tweener.BaseInterpolator Scale(this RectTransform target, Vector2 targetScale, float duration)
+    {
+        // To avoid getting stuck in shakes, disable any shake that's currently running on this object
+        target.Tween().Stop("ScaleRectTransform", Tweener.StopBehaviour.Cancel);
+
+        return target.Tween().Interpolate(target.localScale.xy(), targetScale, duration, (value) => target.localScale = value, "ScaleRectTransform").Done(() => target.localScale = targetScale);
+    }
 }

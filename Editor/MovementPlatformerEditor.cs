@@ -42,6 +42,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
     SerializedProperty propIsGroundedParameter;
     SerializedProperty propIsGlidingParameter;
     SerializedProperty propIsClimbingParameter;
+    SerializedProperty propCanJumpFromClimb;
 
     protected override void OnEnable()
     {
@@ -74,6 +75,7 @@ public class MovementPlatformerEditor : UnityCommonEditor
         propClimbCooldown = serializedObject.FindProperty("climbCooldown");
         propClimbMask = serializedObject.FindProperty("climbMask");
         propClimbInput = serializedObject.FindProperty("climbInput");
+        propCanJumpFromClimb = serializedObject.FindProperty("canJumpFromClimb");
         propFlipBehaviour = serializedObject.FindProperty("flipBehaviour");
         propUseAnimator = serializedObject.FindProperty("useAnimator");
         propAnimator = serializedObject.FindProperty("animator");
@@ -147,9 +149,10 @@ public class MovementPlatformerEditor : UnityCommonEditor
             if (propClimbBehaviour.intValue != (int)MovementPlatformer.ClimbBehaviour.None)
             {
                 EditorGUILayout.PropertyField(propClimbSpeed, new GUIContent("Climb Speed", "Up/Down speed while climbing"));
-                EditorGUILayout.PropertyField(propClimbCooldown, new GUIContent("Climb cooldown", "How much time must pass before we can climb again?\nThis mostly avoids the stutter on the top when we just keep pressing up on top of stairs."));
+                EditorGUILayout.PropertyField(propClimbCooldown, new GUIContent("Climb Cooldown", "How much time must pass before we can climb again?\nThis mostly avoids the stutter on the top when we just keep pressing up on top of stairs."));
                 EditorGUILayout.PropertyField(propClimbCheckCollider, new GUIContent("Climb Check Collider", "Collider to use for climb tests"));
                 EditorGUILayout.PropertyField(propClimbMask, new GUIContent("Climbable Layer Mask", "Ladders or ropes must be on this layer"));
+                EditorGUILayout.PropertyField(propCanJumpFromClimb, new GUIContent("Can Jump From Ladder", "Can the player jump from ladder. If enable, jump is also recharged on ladders"));
 
                 EditorGUILayout.PropertyField(propClimbInput, new GUIContent("Climb Input Type", "What's the input to climb?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
             }
