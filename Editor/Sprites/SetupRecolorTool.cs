@@ -1,22 +1,19 @@
 using UnityEditor;
 using UnityEngine;
 using System.Linq;
-using UnityEditor.Rendering;
+using System.IO;
+using System.Collections.Generic;
 
 public class SetupRecolorTool : MonoBehaviour
 {
-    private const string OUTPUT_FOLDER_PREF = "SetupRecolor_OutputFolder";
-
     private struct Settings
     {
         public Settings(ColorPalette palette)
         {
             this.palette = palette;
-            this.outputFolderPath = "";
         }
 
         public ColorPalette palette;
-        public string       outputFolderPath;
     }
 
     private class SetupRecolorConfigWindow : EditorWindow
@@ -135,18 +132,6 @@ public class SetupRecolorTool : MonoBehaviour
         {
             if (confirmed)
             {
-                // Request output folder
-                string lastOutputFolderPath = EditorPrefs.GetString(OUTPUT_FOLDER_PREF, "");
-
-                settings.outputFolderPath = EditorUtility.OpenFolderPanel("Select Output Folder", lastOutputFolderPath, "");
-                if (string.IsNullOrEmpty(settings.outputFolderPath))
-                {
-                    Debug.LogWarning("No output folder selected. Operation canceled.");
-                    return;
-                }
-
-                EditorPrefs.SetString(OUTPUT_FOLDER_PREF, settings.outputFolderPath);
-
                 // Get the object that was right-clicked
                 string[] guids = Selection.assetGUIDs;
                 if (guids.Length == 0)
@@ -205,6 +190,9 @@ public class SetupRecolorTool : MonoBehaviour
 
         foreach (string assetPath in assetPaths)
         {
+            // Check if this is already a recolor
+            if (assetPath.StartsWith("_recolor_")) continue;
+
             // Convert to Unity path format
             string unityPath = assetPath.Replace('\\', '/');
 
@@ -248,7 +236,7 @@ public class SetupRecolorTool : MonoBehaviour
 
                     // Get the readable texture
                     Texture2D readableTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
-                    newImage = CreateRemap(readableTexture, settings);
+                    newImage = CreateRemap(readableTexture, assetPath, settings);
 
                     // Restore original settings
                     importer.isReadable = originalReadable;
@@ -262,7 +250,7 @@ public class SetupRecolorTool : MonoBehaviour
         }
         else
         {
-            newImage = CreateRemap(originalTexture, settings);
+            newImage = CreateRemap(originalTexture, assetPath, settings);
         }
 
         if (!string.IsNullOrEmpty(newImage))
@@ -275,13 +263,42 @@ public class SetupRecolorTool : MonoBehaviour
 
             if (originalImporter != null && newImporter != null)
             {
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(newImage);
+
                 // Copy settings
                 ApplyImporterSettings(originalImporter, newImporter);
+
+                var otherTextures = originalImporter.secondarySpriteTextures.ToList();
+                AddOrChangeTexture(otherTextures, "_PaletteTexture", texture);
+                originalImporter.secondarySpriteTextures = otherTextures.ToArray();
+
+                originalImporter.SaveAndReimport();
 
                 // Apply the new settings
                 newImporter.SaveAndReimport();
             }
         }
+    }
+
+    private static void AddOrChangeTexture(List<SecondarySpriteTexture> otherTextures, string name, Texture2D texture)
+    {
+        SecondarySpriteTexture secondarySpriteTexture = new SecondarySpriteTexture
+        {
+            name = name, // Name it as needed
+            texture = texture
+        };
+
+        // Check if a secondary texture with the same name already exists
+        for (int i = 0; i < otherTextures.Count; i++)
+        {
+            if (otherTextures[i].name == name)
+            {
+                otherTextures[i] = secondarySpriteTexture;
+                return;
+            }
+        }
+
+        otherTextures.Add(secondarySpriteTexture);
     }
 
     private static void ApplyImporterSettings(TextureImporter originalImporter, TextureImporter newImporter)
@@ -311,7 +328,7 @@ public class SetupRecolorTool : MonoBehaviour
         }
     }
 
-    private static string CreateRemap(Texture2D srcTexture, Settings settings)
+    private static string CreateRemap(Texture2D srcTexture, string srcAssetPath, Settings settings)
     {
         try
         {
@@ -360,10 +377,16 @@ public class SetupRecolorTool : MonoBehaviour
             remappedTexture.SetPixels(remappedColors);
             remappedTexture.Apply();
 
+            string directory = Path.GetDirectoryName(srcAssetPath);
+            string filenameWithoutExtension = Path.GetFileNameWithoutExtension(srcAssetPath);
+            string extension = Path.GetExtension(srcAssetPath);
+
             // Save the remapped texture to the output folder
             byte[] bytes = remappedTexture.EncodeToPNG();
-            string outputPath = System.IO.Path.Combine(settings.outputFolderPath, srcTexture.name + "_remap.png");
-            System.IO.File.WriteAllBytes(outputPath, bytes);
+
+            //string outputPath = Path.Combine(settings.outputFolderPath, srcTexture.name + "_remap.png");
+            string outputPath = Path.Combine(directory, $"_recolor_{filenameWithoutExtension}{extension}");
+            File.WriteAllBytes(outputPath, bytes);
 
             // Clean up
             DestroyImmediate(remappedTexture);
