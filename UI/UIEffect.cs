@@ -18,9 +18,10 @@ public class UIImageEffect : MonoBehaviour
     public bool colorRemapEnable => (effects & Effects.ColorRemap) != 0;
     public bool inverseEnable => (effects & Effects.Inverse) != 0;
 
-    private Image           uiImage;
-    private RawImage        rawImage;
-    private Material        material;
+    private Image                       uiImage;
+    private RawImage                    rawImage;
+    private Material                    material;
+    private SecondarySpriteTexture[]    otherTextures = new SecondarySpriteTexture[16];
 
     private void Start()
     {
@@ -71,6 +72,32 @@ public class UIImageEffect : MonoBehaviour
             var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
             material.SetTexture("_Colormap", texture);
             material.SetFloat("_EnableRemap", 1.0f);
+
+            // Stupid hack required by the UI renderer, because it doesn't process secondary textures
+            if (uiImage)
+            {
+                var sprite = uiImage.sprite;
+                if (sprite)
+                {
+                    int count = sprite.GetSecondaryTextures(otherTextures);
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (otherTextures[i].name == "_PaletteTexture")
+                        {
+                            material.SetTexture("_PaletteTexture", otherTextures[i].texture);
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    material.SetTexture("_PaletteTexture", null);
+                }
+            }
+            else
+            {
+                material.SetTexture("_PaletteTexture", null);
+            }
         }
         else
         {

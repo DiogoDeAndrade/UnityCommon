@@ -191,7 +191,7 @@ public class SetupRecolorTool : MonoBehaviour
         foreach (string assetPath in assetPaths)
         {
             // Check if this is already a recolor
-            if (assetPath.StartsWith("_recolor_")) continue;
+            if (assetPath.IndexOf("_recolor_") != -1) continue;
 
             // Convert to Unity path format
             string unityPath = assetPath.Replace('\\', '/');
