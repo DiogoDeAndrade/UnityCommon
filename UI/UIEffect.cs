@@ -91,16 +91,12 @@ public class UIImageEffect : MonoBehaviour
                     int count = sprite.GetSecondaryTextures(otherTextures);
                     for (int i = 0; i < count; i++)
                     {
-                        if (otherTextures[i].name == "_PaletteTexture")
-                        {
-                            material.SetTexture("_PaletteTexture", otherTextures[i].texture);
-                            break;
-                        }
+                        material.SetTexture(otherTextures[i].name, otherTextures[i].texture);
                     }
                 }
                 else
                 {
-                    material.SetTexture("_PaletteTexture", null);
+                    material.SetTexture("_EffectTexture", null);
                 }
             }
             else

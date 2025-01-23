@@ -161,8 +161,15 @@ public class MasterInputManager : MonoBehaviour
             if (deviceId != -2)
             {
                 var device = GetDeviceById(deviceId);
-                playerInput.SwitchCurrentControlScheme("Gamepad", device);
-                Debug.Log($"Assigned gamepad {device.displayName} (ID = {deviceId}) to player {playerId}");
+                if (device != null)
+                {
+                    playerInput.SwitchCurrentControlScheme("Gamepad", device);
+                    Debug.Log($"Assigned gamepad {device.displayName} (ID = {deviceId}) to player {playerId}");
+                }
+                else
+                {
+                    Debug.Log($"Could not assign device to player {playerId} - device not found!");
+                }
             }
             else
             {

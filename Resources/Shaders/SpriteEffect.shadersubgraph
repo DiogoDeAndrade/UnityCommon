@@ -748,10 +748,10 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": 1337.9998779296875,
-            "y": 499.0,
-            "width": 125.9998779296875,
-            "height": 142.0
+            "x": 1338.0001220703125,
+            "y": 498.0000305175781,
+            "width": 126.0,
+            "height": 142.00003051757813
         }
     },
     "m_Slots": [
@@ -1069,8 +1069,8 @@
     "m_ObjectId": "1df1ce327201432ab88e7fdfbdc84b91",
     "m_Title": "Remap",
     "m_Position": {
-        "x": -1390.0001220703125,
-        "y": -312.0
+        "x": -1390.0,
+        "y": -311.99993896484377
     }
 }
 
@@ -1099,7 +1099,7 @@
     "m_Title": "Outline",
     "m_Position": {
         "x": 165.0,
-        "y": 511.00018310546877
+        "y": 511.00006103515627
     }
 }
 
@@ -1133,8 +1133,8 @@
     "m_ObjectId": "21a968f60f134c21a780ee117ad94f8f",
     "m_Title": "Flash",
     "m_Position": {
-        "x": 535.999755859375,
-        "y": -250.0
+        "x": 536.0001220703125,
+        "y": -249.9999542236328
     }
 }
 
@@ -1342,7 +1342,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Alpha",
     "m_StageCapability": 2,
-    "m_Value": 0.0,
+    "m_Value": 1.0,
     "m_DefaultValue": 0.0,
     "m_Labels": []
 }
@@ -2239,10 +2239,10 @@
     "m_Guid": {
         "m_GuidSerialized": "66867ef4-c721-4dde-9fe6-a240e2ae6fbb"
     },
-    "m_Name": "_PaletteTexture",
+    "m_Name": "_EffectTexture",
     "m_DefaultRefNameVersion": 1,
-    "m_RefNameGeneratedByDisplayName": "_PaletteTexture",
-    "m_DefaultReferenceName": "_PaletteTexture",
+    "m_RefNameGeneratedByDisplayName": "_EffectTexture",
+    "m_DefaultReferenceName": "_EffectTexture",
     "m_OverrideReferenceName": "",
     "m_GeneratePropertyBlock": true,
     "m_UseCustomSlotLabel": false,
@@ -2905,7 +2905,7 @@
     "m_Title": "Vertex Color",
     "m_Position": {
         "x": -678.0,
-        "y": -297.9999084472656
+        "y": -297.9999694824219
     }
 }
 
@@ -2974,7 +2974,7 @@
     "m_Type": "UnityEditor.ShaderGraph.Texture2DMaterialSlot",
     "m_ObjectId": "c3311cbf2c6c4c7bad42147dbd521f71",
     "m_Id": 0,
-    "m_DisplayName": "_PaletteTexture",
+    "m_DisplayName": "_EffectTexture",
     "m_SlotType": 1,
     "m_Hidden": false,
     "m_ShaderOutputName": "Out",
@@ -3107,7 +3107,7 @@
     "m_Title": "Invert",
     "m_Position": {
         "x": 170.0,
-        "y": -475.0
+        "y": -474.9999694824219
     }
 }
 
@@ -3594,10 +3594,10 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": 1662.0,
-            "y": -2.0,
-            "width": 86.0,
-            "height": 101.0
+            "x": 1581.0001220703125,
+            "y": 392.9999694824219,
+            "width": 85.999755859375,
+            "height": 100.99996948242188
         }
     },
     "m_Slots": [

@@ -1,6 +1,9 @@
 using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Unity.VisualScripting;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -341,9 +344,10 @@ public class ColorPalette : ScriptableObject
     {
         if (textureCache != null)
         {
-            foreach ((var key, var value) in textureCache)
+            var allKeys = textureCache.Keys.ToList();
+            foreach (var key in allKeys)
             {
-                UpdateTexture(value, key.mode, key.sizePerItem);
+                UpdateTexture(textureCache[key], key.mode, key.sizePerItem);
             }
         }
     }

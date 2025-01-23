@@ -445,10 +445,10 @@
     "m_Guid": {
         "m_GuidSerialized": "b494e82b-1b6a-4852-887b-b411c674b113"
     },
-    "m_Name": "_PaletteTexture",
+    "m_Name": "_EffectTexture",
     "m_DefaultRefNameVersion": 1,
-    "m_RefNameGeneratedByDisplayName": "_PaletteTexture",
-    "m_DefaultReferenceName": "_PaletteTexture",
+    "m_RefNameGeneratedByDisplayName": "_EffectTexture",
+    "m_DefaultReferenceName": "_EffectTexture",
     "m_OverrideReferenceName": "",
     "m_GeneratePropertyBlock": true,
     "m_UseCustomSlotLabel": false,
@@ -555,10 +555,10 @@
     "m_Type": "UnityEditor.ShaderGraph.Texture2DInputMaterialSlot",
     "m_ObjectId": "12fa6d0eb8e34ce9b6cfab332fc69704",
     "m_Id": -795479640,
-    "m_DisplayName": "_PaletteTexture",
+    "m_DisplayName": "_EffectTexture",
     "m_SlotType": 0,
     "m_Hidden": false,
-    "m_ShaderOutputName": "_PaletteTexture",
+    "m_ShaderOutputName": "_EffectTexture",
     "m_StageCapability": 2,
     "m_BareResource": false,
     "m_Texture": {
@@ -1632,9 +1632,9 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -808.0,
+            "x": -803.0,
             "y": 21.0,
-            "width": 164.0,
+            "width": 159.0,
             "height": 34.0
         }
     },
@@ -2788,7 +2788,7 @@
     "m_Type": "UnityEditor.ShaderGraph.Texture2DMaterialSlot",
     "m_ObjectId": "fcbd90e5eba2495c86c5b1933cb96266",
     "m_Id": 0,
-    "m_DisplayName": "_PaletteTexture",
+    "m_DisplayName": "_EffectTexture",
     "m_SlotType": 1,
     "m_Hidden": false,
     "m_ShaderOutputName": "Out",
