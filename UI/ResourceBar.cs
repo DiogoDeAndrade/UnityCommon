@@ -27,6 +27,9 @@ public class ResourceBar : MonoBehaviour
     [ShowIf("fadeAfterTime")]
     public float            timeOfFadeOut = 1.0f;
     public bool             respectRotation = false;
+    public bool             preserveRelativePositon = false;
+    [ShowIf("preserveRelativePositon")]
+    public Transform        relativeTransform;
     public bool             zeroResourceZeroAlpha = false;
 
     public bool NeedSpeedVar() { return (updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed); }
@@ -46,6 +49,7 @@ public class ResourceBar : MonoBehaviour
 
     // Keep vars
     Quaternion      initialRotation;
+    Vector3         deltaPos;
 
     void Start()
     {
@@ -68,6 +72,15 @@ public class ResourceBar : MonoBehaviour
                 changeTimer = 0.0f;
             }
             canvasGroup.alpha = alpha;
+        }
+
+        if (preserveRelativePositon)
+        {
+            if (relativeTransform)
+            {
+                deltaPos = transform.position - relativeTransform.transform.position;
+            }
+            else preserveRelativePositon = false;
         }
 
         UpdateGfx();
@@ -116,6 +129,10 @@ public class ResourceBar : MonoBehaviour
         if (!respectRotation)
         {
             transform.rotation = initialRotation;
+        }
+        if (preserveRelativePositon)
+        {
+            transform.position = relativeTransform.position + deltaPos;
         }
     }
 

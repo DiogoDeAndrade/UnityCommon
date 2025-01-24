@@ -101,6 +101,8 @@ public class MasterInputManager : MonoBehaviour
         if (lastUpdateFrame == Time.frameCount) return;
         lastUpdateFrame = Time.frameCount;
 
+        Debug.Log("Refreshing input systems...");
+
         playerDevices = new();
 
         // Find the gamepad input with smaller ID, fallback to keyboard if gamepad is not found
@@ -154,7 +156,9 @@ public class MasterInputManager : MonoBehaviour
     }
 
     bool ActualSetupInput(int playerId, PlayerInput playerInput)
-    { 
+    {
+        playerInput.user.UnpairDevices();
+
         // Assign devices
         if (playerDevices.TryGetValue(playerId, out int deviceId))
         {

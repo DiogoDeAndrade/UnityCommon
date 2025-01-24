@@ -88,7 +88,7 @@ public class SpriteEffect : MonoBehaviour
         if ((palette) && (colorRemapEnable))
         {
             var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
-            mpb.SetTexture("_Colormap", texture);
+            if (texture != null) mpb.SetTexture("_Colormap", texture);
             mpb.SetFloat("_EnableRemap", 1.0f);
         }
         else
