@@ -3,8 +3,6 @@ using UnityEngine;
 using System.Linq;
 using System.IO;
 using System.Collections.Generic;
-using Unity.VisualScripting;
-using UnityEditor.Overlays;
 
 public class SetupEffectsTools : MonoBehaviour
 {
