@@ -3,6 +3,8 @@ using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using UnityEditor.U2D.Sprites;
 
 #if UNITY_EDITOR
 public class LpcSpriteProcessor : AssetPostprocessor {
@@ -81,19 +83,19 @@ public class LpcSpriteProcessor : AssetPostprocessor {
         textureImporter.textureCompression = TextureImporterCompression.Uncompressed;
     }
 
-	public void OnPostprocessTexture (Texture2D texture)
+	public void OnPostprocessTexture(Texture2D texture)
 	{
-        string filename = System.IO.Path.GetFileName(assetPath);
-        if (filename.Length > 4)
-        {
-            if (filename.Substring(0, 4) != "LPC_") return;
-        }
+		string filename = System.IO.Path.GetFileName(assetPath);
+		if (filename.Length > 4)
+		{
+			if (filename.Substring(0, 4) != "LPC_") return;
+		}
 
-        // Do nothing if it not a LPC Based Sprite
-        if (!IsLpcSpriteSheet (texture))
+		// Do nothing if it not a LPC Based Sprite
+		if (!IsLpcSpriteSheet(texture))
 			return;
 
-		Debug.Log ("Importing LPC Character Sheet");
+		Debug.Log("Importing LPC Character Sheet");
 		List<SpriteMetaData> metas = new List<SpriteMetaData>();
 		for (int row = 0; row < m_RowCount; ++row)
 		{
@@ -101,12 +103,13 @@ public class LpcSpriteProcessor : AssetPostprocessor {
 			{
 				SpriteMetaData meta = new SpriteMetaData();
 				meta.rect = new Rect(col * LPC_SPRITE_SIZE, row * LPC_SPRITE_SIZE, LPC_SPRITE_SIZE, LPC_SPRITE_SIZE);
-                meta.alignment = (int)SpriteAlignment.Custom;
-                meta.pivot = new Vector2(0.5f, 0.0f);
+				meta.alignment = (int)SpriteAlignment.Custom;
+				meta.pivot = new Vector2(0.5f, 0.0f);
 
-                LpcAnimationState animState = GetAnimationState (row);
+				LpcAnimationState animState = GetAnimationState(row);
 
-				if (!m_ImportEmptySprites) {
+				if (!m_ImportEmptySprites)
+				{
 					if ((animState == LpcAnimationState.Hurt && col >= m_HuFrames))
 						break;
 					if ((animState == LpcAnimationState.Shoot && col >= m_ShFrames))
@@ -121,14 +124,41 @@ public class LpcSpriteProcessor : AssetPostprocessor {
 						break;
 				}
 
-				string namePrefix = ResolveLpcNamePrefix (row);
+				string namePrefix = ResolveLpcNamePrefix(row);
 				meta.name = namePrefix + col;
 				metas.Add(meta);
 			}
 		}
-		TextureImporter textureImporter = (TextureImporter)assetImporter;
-		textureImporter.spritesheet = metas.ToArray();
-    }
+		var spriteImporter = assetImporter as TextureImporter;
+		if (spriteImporter != null)
+		{
+			spriteImporter.isReadable = true; // Ensure the texture is readable
+			spriteImporter.spriteImportMode = SpriteImportMode.Multiple;
+
+            var factory = new SpriteDataProviderFactories();
+            factory.Init();
+            var dataProvider = factory.GetSpriteEditorDataProviderFromObject(assetImporter);
+            dataProvider.InitSpriteEditorDataProvider();
+
+
+			if (dataProvider != null)
+			{
+                dataProvider.SetSpriteRects(metas.Select(meta =>
+				{
+					var spriteRect = new SpriteRect
+					{
+						name = meta.name,
+						rect = meta.rect,
+						alignment = (SpriteAlignment)meta.alignment,
+						pivot = meta.pivot
+					};
+					return spriteRect;
+				}).ToArray());
+			}
+
+            dataProvider.Apply();
+        }
+	}
 
 	public void OnPostprocessSprites(Texture2D texture, Sprite[] sprites)
 	{

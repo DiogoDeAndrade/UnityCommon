@@ -45,10 +45,10 @@ public class ASEImporter : ScriptedImporter
 
     public static int SwapInt32(int value)
     {
-        return (int)(((value & 0x000000FF) << 24) |
-                     ((value & 0x0000FF00) << 8) |
-                     ((value & 0x00FF0000) >> 8) |
-                     ((value & 0xFF000000) >> 24));
+        return (int)(((uint)(value & 0x000000FF) << 24) |
+                     ((uint)(value & 0x0000FF00) << 8) |
+                     ((uint)(value & 0x00FF0000) >> 8) |
+                     ((uint)(value & 0xFF000000) >> 24));
     }
 
     public static float SwapFloat(float value)
