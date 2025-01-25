@@ -75,6 +75,14 @@ public class SpriteEffect : MonoBehaviour
         set { SetFlashColor(flashColor.ChangeAlpha(value)); }
     }
 
+    public void SetOutline(float width, Color color)
+    {
+        outlineColor = color;
+        outlineWidth = width;
+        if (width > 0.0f) effects |= Effects.Outline;
+        else effects &= ~Effects.Outline;
+    }
+
     private void Update()
     {
         ConfigureMaterial();
