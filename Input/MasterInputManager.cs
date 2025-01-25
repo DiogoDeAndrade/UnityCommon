@@ -1,8 +1,8 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Users;
 
 public class MasterInputManager : MonoBehaviour
 {
@@ -157,32 +157,43 @@ public class MasterInputManager : MonoBehaviour
 
     bool ActualSetupInput(int playerId, PlayerInput playerInput)
     {
-        playerInput.user.UnpairDevices();
+        int deviceId = -1;
 
-        // Assign devices
-        if (playerDevices.TryGetValue(playerId, out int deviceId))
+        try
         {
-            if (deviceId != -2)
+            playerInput.user.UnpairDevices();
+
+            // Assign devices
+            if (playerDevices.TryGetValue(playerId, out deviceId))
             {
-                var device = GetDeviceById(deviceId);
-                if (device != null)
+                if (deviceId != -2)
                 {
-                    playerInput.SwitchCurrentControlScheme("Gamepad", device);
-                    Debug.Log($"Assigned gamepad {device.displayName} (ID = {deviceId}) to player {playerId}");
+                    var device = GetDeviceById(deviceId);
+                    if (device != null)
+                    {
+                        playerInput.SwitchCurrentControlScheme("Gamepad", device);
+                        Debug.Log($"Assigned gamepad {device.displayName} (ID = {deviceId}) to player {playerId}");
+                    }
+                    else
+                    {
+                        Debug.Log($"Could not assign device to player {playerId} - device not found!");
+                    }
                 }
                 else
                 {
-                    Debug.Log($"Could not assign device to player {playerId} - device not found!");
+                    playerInput.SwitchCurrentControlScheme("Keyboard&Mouse", GetKBAndMouseDevices());
+                    Debug.Log($"Assigned keyboard & mouse to player {playerId}");
                 }
-            }
-            else
-            {
-                playerInput.SwitchCurrentControlScheme("Keyboard&Mouse", InputSystem.devices.ToArray());
-                Debug.Log($"Assigned keyboard & mouse to player {playerId}");
-            }
 
-            playerInputs[playerId] = playerInput;
+                playerInputs[playerId] = playerInput;
+            }
         }
+        catch(Exception e)
+        {
+            Debug.LogError($"Failed to setup input for player {playerId}, device = {deviceId}: {e.Message}");
+            return false;
+        }
+
 
         return true;
     }
@@ -222,6 +233,23 @@ public class MasterInputManager : MonoBehaviour
         }
         return null;
     }
+
+    InputDevice[] GetKBAndMouseDevices()
+    {
+        var devices = InputSystem.devices;
+        var ret = new List<InputDevice>();
+        foreach (var d in devices)
+        {
+            if ((d.name.IndexOf("keyboard", StringComparison.OrdinalIgnoreCase) != -1) ||
+                (d.name.IndexOf("mouse", StringComparison.OrdinalIgnoreCase) != -1))
+            {
+                ret.Add(d);
+            }
+        }
+
+        return ret.ToArray();
+    }
+
 
     int GetPlayerByDeviceId(int deviceId)
     {

@@ -254,6 +254,8 @@ public static class Ease
     static public float Linear(float t) => t;
     static public float Sqr(float t) => t * t;
 
+    static public float Sqrt(float t) => Mathf.Sqrt(t);
+
     const float c1 = 1.70158f;
     const float c3 = c1 + 1;
 

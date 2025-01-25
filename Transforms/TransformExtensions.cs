@@ -49,4 +49,10 @@ public static class TransformExtensions
 
         return target.Tween().Interpolate(target.localScale.xy(), targetScale, duration, (value) => target.localScale = value, "ScaleRectTransform").Done(() => target.localScale = targetScale);
     }
+
+    public static Tweener.BaseInterpolator ScaleTo(this Transform transform, Vector3 targetScale, float time, string name = null)
+    {
+        return transform.Tween().Interpolate(transform.localScale, targetScale, time, (currentValue) => transform.localScale = currentValue, name);
+    }
+
 }
