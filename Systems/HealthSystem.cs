@@ -4,7 +4,9 @@ using UnityEngine;
 
 public class HealthSystem : MonoBehaviour
 {
-    public delegate void OnHit(float damage, Vector3 damagePosition, Vector3 damageNormal);
+    public enum DamageType { Burst, OverTime };
+
+    public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 damageNormal);
     public event OnHit  onHit;
     public delegate void OnHeal(float healthGain);
     public event OnHeal onHeal;
@@ -135,7 +137,7 @@ public class HealthSystem : MonoBehaviour
         }
         return false;
     }
-    public bool DealDamage(float damage, Vector3 damagePosition, Vector3 damageNormal)
+    public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 damageNormal)
     {
         if (isInvulnerable) return false;
         if (_dead) return false;
@@ -150,11 +152,14 @@ public class HealthSystem : MonoBehaviour
         }
         else
         {
-            onHit?.Invoke(damage, damagePosition, damageNormal);
+            onHit?.Invoke(damageType, damage, damagePosition, damageNormal);
 
-            if (invulnerabilityTime > 0.0f)
+            if (damageType != DamageType.OverTime)
             {
-                isInvulnerable = true;
+                if (invulnerabilityTime > 0.0f)
+                {
+                    isInvulnerable = true;
+                }
             }
         }
 
@@ -190,12 +195,12 @@ public class HealthSystem : MonoBehaviour
     [Button("Deal 10% Damage")]
     void DealOneDamage()
     {
-        DealDamage(0.1f * maxHealth, Vector3.zero, Vector3.up);
+        DealDamage(DamageType.Burst, 0.1f * maxHealth, Vector3.zero, Vector3.up);
     }
 
     [Button("Kill")]
     void Kill()
     {
-        DealDamage(_health, Vector3.zero, Vector3.up);
+        DealDamage(DamageType.Burst, _health, Vector3.zero, Vector3.up);
     }
 }
