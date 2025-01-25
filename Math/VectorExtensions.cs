@@ -136,6 +136,10 @@ public static class VectorExtensions
         return new Vector3(x, y, v.z);
     }
 
+    public static Vector2 Perpendicular(this Vector2 v)
+    {
+        return new Vector2(-v.y, v.x);
+    }
     public static Vector3 PerpendicularXY(this Vector3 v)
     {
         return new Vector3(-v.y, v.x, v.z);
