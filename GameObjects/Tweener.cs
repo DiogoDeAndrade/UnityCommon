@@ -17,7 +17,7 @@ public class Tweener : MonoBehaviour
         public EaseFunction     easeFunction;
         public List<Action>     doneActions;
 
-        public bool isFinished => currentTime >= totalTime;
+        public bool isFinished => (currentTime >= totalTime);
 
         public void Run(float elapsedTime)
         {
