@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using NaughtyAttributes;
 
 public class CameraFollow : MonoBehaviour
@@ -19,11 +17,11 @@ public class CameraFollow : MonoBehaviour
     bool NeedFollowSpeed() { return mode == Mode.SimpleFeedbackLoop; }
     bool NeedBox() { return mode == Mode.Box; }
 
-    new Camera camera;
+    Camera mainCamera;
 
     void Start()
     {
-        camera = GetComponent<Camera>();
+        mainCamera = GetComponent<Camera>();
 
         if (mode == Mode.Box)
         {
@@ -93,8 +91,8 @@ public class CameraFollow : MonoBehaviour
 
         Bounds r = bounds.bounds;
 
-        float halfHeight = camera.orthographicSize;
-        float halfWidth = camera.aspect * halfHeight;
+        float halfHeight = mainCamera.orthographicSize;
+        float halfWidth = mainCamera.aspect * halfHeight;
 
         float xMin = transform.position.x - halfWidth;
         float xMax = transform.position.x + halfWidth;
