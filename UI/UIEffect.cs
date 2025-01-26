@@ -76,6 +76,8 @@ public class UIImageEffect : MonoBehaviour
 
     private void ConfigureMaterial()
     {
+        if (material == null) return;
+
         if ((palette) && (colorRemapEnable))
         {
             var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
