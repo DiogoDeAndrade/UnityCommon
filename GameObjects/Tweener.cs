@@ -261,3 +261,24 @@ public static class Ease
 
     static public float OutBack(float t) => 1 + c3 * Mathf.Pow(t - 1, 3) + c1 * Mathf.Pow(t - 1, 2);
 }
+
+
+public class WaitForTween : CustomYieldInstruction
+{
+    private Tweener.BaseInterpolator tween;
+
+    public WaitForTween(Tweener.BaseInterpolator tween)
+    {
+        this.tween = tween;
+    }
+
+    public override bool keepWaiting
+    {
+        get
+        {
+            // Wait until the tween is done
+            if (tween  == null) return false;
+            return !tween.isFinished;
+        }
+    }
+}

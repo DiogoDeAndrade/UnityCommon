@@ -55,4 +55,9 @@ public static class TransformExtensions
         return transform.Tween().Interpolate(transform.localScale, targetScale, time, (currentValue) => transform.localScale = currentValue, name);
     }
 
+    public static Tweener.BaseInterpolator Move(this Transform transform, Vector3 moveDelta, float time, string name = null)
+    {
+        return transform.Tween().Interpolate(transform.localPosition, transform.localPosition + moveDelta, time, (currentValue) => transform.localPosition = currentValue, name);
+    }
+
 }

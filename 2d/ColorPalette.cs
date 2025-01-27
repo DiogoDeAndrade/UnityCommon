@@ -53,6 +53,12 @@ public class ColorPalette : ScriptableObject
         colors.Add(new ColorEntry { name = name, color = color });
     }
 
+    public void SetColor(string name, Color color)
+    {
+        int index = FindIndexByName(name);
+        if (index != -1) SetColor(index, color);
+    }
+
     public void SetColor(int index, Color color)
     {
         colors[index] = new ColorEntry
@@ -60,6 +66,18 @@ public class ColorPalette : ScriptableObject
             name = colors[index].name,
             color = color
         };
+    }
+
+    public int FindIndexByName(string name)
+    {
+        if (colors == null) return -1;
+
+        for (int i = 0; i < colors.Count; i++)
+        {
+            if (colors[i].name == name) return i;
+        }
+
+        return -1;
     }
 
     public bool GetColor(Color pixel, float tolerance, bool useAlpha, ref Color color)
