@@ -1,6 +1,7 @@
 using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.InputSystem;
+using System;
 
 [RequireComponent(typeof(Rigidbody2D))]
 public class MovementPlatformer : MonoBehaviour
@@ -67,6 +68,8 @@ public class MovementPlatformer : MonoBehaviour
     private float climbCooldown = 0.0f;
     [SerializeField, InputPlayer(nameof(playerInput))]
     private InputControl climbInput;
+    [SerializeField]
+    private bool        canJumpFromClimb = false;
     [SerializeField]
     private FlipBehaviour flipBehaviour = FlipBehaviour.None;
     [SerializeField]
@@ -199,7 +202,11 @@ public class MovementPlatformer : MonoBehaviour
                     {
                         Jump();
                     }
-                    else if (currentJumpCount > 0)
+                    else if ((currentJumpCount > 0) && (currentJumpCount != maxJumpCount))
+                    {
+                        Jump();
+                    }
+                    else if ((climbBehaviour == ClimbBehaviour.Enabled) && (canJumpFromClimb) && (canClimb))
                     {
                         Jump();
                     }
@@ -469,5 +476,11 @@ public class MovementPlatformer : MonoBehaviour
         {
             rb.linearVelocity = new Vector2(0.0f, rb.linearVelocity.y);
         }
+    }
+
+    public void EnableColliders(bool v)
+    {
+        if (airCollider) airCollider.enabled = v;
+        if (groundCollider) groundCollider.enabled = v;
     }
 }

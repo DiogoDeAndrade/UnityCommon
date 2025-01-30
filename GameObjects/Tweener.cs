@@ -13,13 +13,23 @@ public class Tweener : MonoBehaviour
         public string           name;
         public float            currentTime;
         public float            totalTime;
+        public float            delayStartTime;
         public EaseFunction     easeFunction;
-        public Action           doneAction;
+        public List<Action>     doneActions;
 
-        public bool isFinished => currentTime >= totalTime;
+        public bool isFinished => (currentTime >= totalTime);
 
         public void Run(float elapsedTime)
         {
+            if (delayStartTime > 0.0f)
+            {
+                delayStartTime -= elapsedTime;
+                if (delayStartTime < 0.0f)
+                {
+                    elapsedTime = -elapsedTime;
+                }
+                else return;
+            }
             currentTime += elapsedTime;
             float t = Mathf.Clamp01(currentTime / totalTime);
             t = easeFunction(t);
@@ -28,9 +38,22 @@ public class Tweener : MonoBehaviour
 
         internal virtual void EvaluateAndSet(float t) {;}
 
-        internal BaseInterpolator Done(Action action)
+        public BaseInterpolator EaseFunction(EaseFunction f)
         {
-            doneAction = action;
+            easeFunction = f;
+            return this;
+        }
+
+        public BaseInterpolator Done(Action action)
+        {
+            if (doneActions == null) doneActions = new();
+            doneActions.Add(action);
+            return this;
+        }
+
+        public BaseInterpolator DelayStart(float time)
+        {
+            delayStartTime = time;
             return this;
         }
     }
@@ -90,7 +113,7 @@ public class Tweener : MonoBehaviour
         return Add(new FloatInterpolator()
         {
             name = name,
-            easeFunction = Linear,
+            easeFunction = Ease.Linear,
             currentTime = 0.0f,
             totalTime = time,
             startValue = sourceValue,
@@ -104,7 +127,7 @@ public class Tweener : MonoBehaviour
         return Add(new Vec2Interpolator()
         {
             name = name,
-            easeFunction = Linear,
+            easeFunction = Ease.Linear,
             currentTime = 0.0f,
             totalTime = time,
             startValue = sourceValue,
@@ -118,7 +141,7 @@ public class Tweener : MonoBehaviour
         return Add(new Vec3Interpolator()
         {
             name = name,
-            easeFunction = Linear,
+            easeFunction = Ease.Linear,
             currentTime = 0.0f,
             totalTime = time,
             startValue = sourceValue,
@@ -132,7 +155,7 @@ public class Tweener : MonoBehaviour
         return Add(new ColorInterpolator()
         {
             name = name,
-            easeFunction = Linear,
+            easeFunction = Ease.Linear,
             currentTime = 0.0f,
             totalTime = time,
             startValue = sourceValue,
@@ -140,8 +163,6 @@ public class Tweener : MonoBehaviour
             action = setAction,
         });
     }
-
-    static public float Linear(float t) => t;
 
     private void Update()
     {
@@ -158,12 +179,20 @@ public class Tweener : MonoBehaviour
 
     private void CompleteAction(int index)
     {
-        interpolators[index].doneAction?.Invoke();
+        var doneActions = interpolators[index].doneActions;
         if (!string.IsNullOrEmpty(interpolators[index].name))
         {
             namedInterpolators.Remove(interpolators[index].name);
         }
         interpolators[index] = null;
+
+        if (doneActions != null)
+        {
+            foreach (var a in doneActions)
+            {
+                a.Invoke();
+            }
+        }
     }
 
     private BaseInterpolator Add(BaseInterpolator interpolator)
@@ -217,5 +246,39 @@ public static class TweenerExtension
         var tmp = go.GetComponent<Tweener>();
         if (tmp) return tmp;
         return go.gameObject.AddComponent<Tweener>();
+    }
+}
+
+public static class Ease
+{
+    static public float Linear(float t) => t;
+    static public float Sqr(float t) => t * t;
+
+    static public float Sqrt(float t) => Mathf.Sqrt(t);
+
+    const float c1 = 1.70158f;
+    const float c3 = c1 + 1;
+
+    static public float OutBack(float t) => 1 + c3 * Mathf.Pow(t - 1, 3) + c1 * Mathf.Pow(t - 1, 2);
+}
+
+
+public class WaitForTween : CustomYieldInstruction
+{
+    private Tweener.BaseInterpolator tween;
+
+    public WaitForTween(Tweener.BaseInterpolator tween)
+    {
+        this.tween = tween;
+    }
+
+    public override bool keepWaiting
+    {
+        get
+        {
+            // Wait until the tween is done
+            if (tween  == null) return false;
+            return !tween.isFinished;
+        }
     }
 }

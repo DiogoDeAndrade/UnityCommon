@@ -123,5 +123,26 @@ public static class VectorExtensions
             v.Set(0, 0, 0, 0);
         }
     }
+
+    public static Vector3 RotateZ(this Vector3 v, float angle)
+    {
+        float a = Mathf.Deg2Rad * angle;
+        float c = Mathf.Cos(a);
+        float s = Mathf.Sin(a);
+
+        var x = c * v.x - s * v.y;
+        var y = s * v.x + c * v.y;
+
+        return new Vector3(x, y, v.z);
+    }
+
+    public static Vector2 Perpendicular(this Vector2 v)
+    {
+        return new Vector2(-v.y, v.x);
+    }
+    public static Vector3 PerpendicularXY(this Vector3 v)
+    {
+        return new Vector3(-v.y, v.x, v.z);
+    }
 };
 

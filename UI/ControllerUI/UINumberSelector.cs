@@ -6,6 +6,7 @@ using TMPro;
 public class UIFloatSelector : UIControl<float>
 {
     public enum AutoEvent { None, SetPlayerPref };
+    public enum ValueType { Float, Vec4_W };
 
     [SerializeField] protected Image            leftArrow;
     [SerializeField] protected Image            rightArrow;
@@ -15,6 +16,7 @@ public class UIFloatSelector : UIControl<float>
     [SerializeField] protected float            changeCooldown = 0.1f;
     [SerializeField] protected TextMeshProUGUI  valueIndicator;
     [SerializeField] private AutoEvent          valueChangeEvent;
+    [SerializeField, ShowIf("needKey")] private ValueType valueType;
     [SerializeField, ShowIf("needKey")] private string key;
 
     bool needKey => valueChangeEvent == AutoEvent.SetPlayerPref;
@@ -27,7 +29,19 @@ public class UIFloatSelector : UIControl<float>
     {
         if ((valueChangeEvent == AutoEvent.SetPlayerPref) && (!string.IsNullOrEmpty(key)))
         {
-            _value = _prevValue = PlayerPrefs.GetFloat(key, defaultValue);
+            switch (valueType)
+            {
+                case ValueType.Float:
+                    _value = _prevValue = PlayerPrefs.GetFloat(key, defaultValue);
+                    break;
+                case ValueType.Vec4_W:
+                    {
+                        _value = _prevValue = PlayerPrefsHelpers.GetVector4(key, new Vector4(0.0f, 0.0f, 0.0f, defaultValue)).w;
+                    }
+                    break;
+                default:
+                    break;
+            }
         }
         else
         {
@@ -80,7 +94,7 @@ public class UIFloatSelector : UIControl<float>
 
             cooldownTimer = changeCooldown;
 
-            if ((valueChangeEvent == AutoEvent.SetPlayerPref) && (!string.IsNullOrEmpty(key))) PlayerPrefs.SetFloat(key, value);
+            UpdatePlayerPref();
         }
         else if (dz < 0.0f) 
         {
@@ -90,7 +104,27 @@ public class UIFloatSelector : UIControl<float>
 
             cooldownTimer = changeCooldown;
 
-            if ((valueChangeEvent == AutoEvent.SetPlayerPref) && (!string.IsNullOrEmpty(key))) PlayerPrefs.SetFloat(key, value);
+            UpdatePlayerPref();
+        }
+    }
+
+    void UpdatePlayerPref()
+    {
+        if ((valueChangeEvent == AutoEvent.SetPlayerPref) && (!string.IsNullOrEmpty(key)))
+        {
+            switch (valueType)
+            {
+                case ValueType.Float:
+                    PlayerPrefs.SetFloat(key, value);
+                    break;
+                case ValueType.Vec4_W:
+                    PlayerPrefs.SetString(key, $"1.0;1.0;1.0;{value}");
+                    break;
+                default:
+                    break;
+            }
+
+            PlayerPrefs.Save();
         }
     }
 }

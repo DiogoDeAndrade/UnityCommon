@@ -4,18 +4,21 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class ResourceBar : MonoBehaviour
+public abstract class ResourceBar : MonoBehaviour
 {
-    public enum DisplayMode { ScaleImage };
+    public enum DisplayMode { ScaleImage, DiscreteItems };
     public enum UpdateMode { Direct, FeedbackLoop, ConstantSpeed };
 
-    public UpdateMode       updateMode;
-    [ShowIf("NeedSpeedVar")]
-    public float            speed = 1.0f;
     public DisplayMode      displayMode;
+    [ShowIf(nameof(isBar))]
+    public UpdateMode       updateMode;
+    [ShowIf(nameof(needSpeedVar))]
+    public float            speed = 1.0f;
+    [ShowIf(nameof(isBar))]
     public RectTransform    bar;
+    [ShowIf(nameof(isBar))]
     public bool             colorChange;
-    [ShowIf("colorChange")]
+    [ShowIf(nameof(needColor))]
     public Gradient         color;
     public bool             fadeAfterTime;
     [ShowIf("fadeAfterTime")]
@@ -27,9 +30,14 @@ public class ResourceBar : MonoBehaviour
     [ShowIf("fadeAfterTime")]
     public float            timeOfFadeOut = 1.0f;
     public bool             respectRotation = false;
+    public bool             preserveRelativePositon = false;
+    [ShowIf("preserveRelativePositon")]
+    public Transform        relativeTransform;
     public bool             zeroResourceZeroAlpha = false;
 
-    public bool NeedSpeedVar() { return (updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed); }
+    bool isBar => displayMode == DisplayMode.ScaleImage;
+    bool needSpeedVar() { return (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed)); }
+    bool needColor() => (isBar) && (colorChange);
 
     // For alpha change
     CanvasGroup     canvasGroup;
@@ -39,19 +47,36 @@ public class ResourceBar : MonoBehaviour
     SpriteRenderer  spriteImage;
 
     // Updating
-    float           currentT;
-    float           prevT;
-    float           alpha;
-    float           changeTimer;
+    float               currentT;
+    float               prevT;
+    float               alpha;
+    float               changeTimer;
+    List<GameObject>    discreteElements;
 
     // Keep vars
     Quaternion      initialRotation;
+    Vector3         deltaPos;
 
     void Start()
     {
-        uiImage = bar.GetComponent<Image>();
-        spriteImage = bar.GetComponent<SpriteRenderer>();
-        prevT = currentT = GetNormalizedResource();
+        if (isBar)
+        {
+            uiImage = bar.GetComponent<Image>();
+            spriteImage = bar.GetComponent<SpriteRenderer>();
+            prevT = currentT = GetNormalizedResource();
+        }
+        else if (displayMode == DisplayMode.DiscreteItems)
+        {
+            discreteElements = new();
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                var go = transform.GetChild(i).gameObject;
+                go.SetActive(false);
+                discreteElements.Add(go);
+            }
+            prevT = currentT = GetResourceCount();
+        }
+
         canvasGroup = GetComponent<CanvasGroup>();
         changeTimer = 0.0f;
         initialRotation = transform.rotation;
@@ -70,29 +95,45 @@ public class ResourceBar : MonoBehaviour
             canvasGroup.alpha = alpha;
         }
 
+        if (preserveRelativePositon)
+        {
+            if (relativeTransform)
+            {
+                deltaPos = transform.position - relativeTransform.transform.position;
+            }
+            else preserveRelativePositon = false;
+        }        
+
         UpdateGfx();
     }
 
     void Update()
     {
-        float tt = GetNormalizedResource();
-
-        switch (updateMode)
+        if (isBar)
         {
-            case UpdateMode.Direct:
-                currentT = tt;
-                break;
-            case UpdateMode.FeedbackLoop:
-                currentT = currentT + (tt - currentT) * speed;
-                break;
-            case UpdateMode.ConstantSpeed:
-                float dist = tt - currentT;
-                float inc = Mathf.Sign(dist) * speed * Time.deltaTime;
-                if (Mathf.Abs(dist) < Mathf.Abs(inc)) currentT = tt;
-                else currentT = currentT + inc;
-                break;
-            default:
-                break;
+            float tt = GetNormalizedResource();
+
+            switch (updateMode)
+            {
+                case UpdateMode.Direct:
+                    currentT = tt;
+                    break;
+                case UpdateMode.FeedbackLoop:
+                    currentT = currentT + (tt - currentT) * speed;
+                    break;
+                case UpdateMode.ConstantSpeed:
+                    float dist = tt - currentT;
+                    float inc = Mathf.Sign(dist) * speed * Time.deltaTime;
+                    if (Mathf.Abs(dist) < Mathf.Abs(inc)) currentT = tt;
+                    else currentT = currentT + inc;
+                    break;
+                default:
+                    break;
+            }            
+        }
+        else if (displayMode == DisplayMode.DiscreteItems)
+        {
+            currentT = GetResourceCount();
         }
 
         if (currentT != prevT)
@@ -117,17 +158,27 @@ public class ResourceBar : MonoBehaviour
         {
             transform.rotation = initialRotation;
         }
+        if (preserveRelativePositon)
+        {
+            transform.position = relativeTransform.position + deltaPos;
+        }
     }
 
-    protected virtual float GetNormalizedResource()
-    {
-        return 0.0f;
-    }
+    protected abstract float GetNormalizedResource();
+    protected abstract float GetResourceCount();
 
     void UpdateGfx()
     {
         switch (displayMode)
         {
+            case DisplayMode.DiscreteItems:
+                {
+                    for (int i = 0; i < discreteElements.Count; i++)
+                    {
+                        discreteElements[i].SetActive(i < currentT);
+                    }
+                }
+                break;
             case DisplayMode.ScaleImage:
                 bar.localScale = new Vector3(currentT, 1.0f, 1.0f);
                 break;
@@ -135,7 +186,7 @@ public class ResourceBar : MonoBehaviour
                 break;
         }
 
-        if (colorChange)
+        if (needColor())
         {
             Color c = color.Evaluate(currentT);
 

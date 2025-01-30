@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[CreateAssetMenu(menuName = "Hypertag")]
+[CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Hypertag")]
 public class Hypertag : ScriptableObject
 {
     public static T FindObjectWithHypertag<T>(Hypertag tag) where T : Component

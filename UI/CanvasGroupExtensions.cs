@@ -3,22 +3,20 @@ using UnityEngine;
 
 public static class CanvasGroupExtensions
 {
-    public static void FadeIn(this CanvasGroup group, float time)
+    public static Tweener.BaseInterpolator FadeIn(this CanvasGroup group, float time)
     {
-        if (group.alpha == 1.0f) return;
-        group.Tween().Interpolate(group.alpha, 1.0f, time, (value) => group.alpha = value, "CanvasAlpha");
+        return group.FadeTo(1.0f, time);
     }
 
-    public static void FadeOut(this CanvasGroup group, float time)
+    public static Tweener.BaseInterpolator FadeOut(this CanvasGroup group, float time)
     {
-        if (group.alpha == 0.0f) return;
-        group.Tween().Interpolate(group.alpha, 0.0f, time, (value) => group.alpha = value, "CanvasAlpha");
+        return group.FadeTo(0.0f, time);
     }
 
-    public static void FadeTo(this CanvasGroup group, float targetAlpha, float time)
+    public static Tweener.BaseInterpolator FadeTo(this CanvasGroup group, float targetAlpha, float time)
     {
-        if (group.alpha == targetAlpha) return;
-        group.Tween().Interpolate(group.alpha, targetAlpha, time, (value) => group.alpha = value, "CanvasAlpha");
+        if (group.alpha == targetAlpha) return null;
+        return group.Tween().Interpolate(group.alpha, targetAlpha, time, (value) => group.alpha = value, "CanvasAlpha");
     }
 
 }

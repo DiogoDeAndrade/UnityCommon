@@ -1,14 +1,12 @@
 ﻿using NaughtyAttributes;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using static HealthSystem;
 
 public class HealthSystem : MonoBehaviour
 {
-    public enum Faction { Neutral, Friendly, Enemy };
+    public enum DamageType { Burst, OverTime };
 
-    public delegate void OnHit(float damage, Vector3 damagePosition);
+    public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 damageNormal);
     public event OnHit  onHit;
     public delegate void OnHeal(float healthGain);
     public event OnHeal onHeal;
@@ -22,19 +20,20 @@ public class HealthSystem : MonoBehaviour
     public float    maxHealth = 100.0f;
     public float    invulnerabilityTime = 2.0f;
     public bool     invulnerabilityBlink = true;
-    [ShowIf("invulnerabilityBlink")]
+    [ShowIf(nameof(invulnerabilityBlink))]
     public bool     useAnimatorForBlink = true;
-    [HideIf("useAnimatorForBlink")]
+    [ShowIf(nameof(needBlinkTime))]
     public float    blinkTime = 0.1f;
 
     protected float _health = 100.0f;
     protected bool  _dead;
     protected float invulnerabilityTimer;
 
-    TimeScaler2d        timeScaler;
     Animator            animator;
     float               blinkTimer;
     SpriteRenderer      spriteRenderer;
+
+    bool needBlinkTime => invulnerabilityBlink && (!useAnimatorForBlink);
 
     public float health
     {
@@ -63,7 +62,6 @@ public class HealthSystem : MonoBehaviour
         _health = maxHealth;
         _dead = false;
 
-        timeScaler = GetComponent<TimeScaler2d>();
         animator = GetComponent<Animator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
     }
@@ -78,28 +76,37 @@ public class HealthSystem : MonoBehaviour
             if (invulnerabilityTimer <= 0.0f)
             {
                 invulnerabilityTimer = 0.0f;
-                if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
-                else spriteRenderer.enabled = true;
+                if (invulnerabilityBlink)
+                {
+                    if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
+                    else spriteRenderer.enabled = true;
+                }
             }
             else
             {
-                if (useAnimatorForBlink) animator.SetBool("Invulnerable", true);
-                else
+                if (invulnerabilityBlink)
                 {
-                    blinkTimer -= Time.deltaTime;
-                    if (blinkTimer < 0)
+                    if (useAnimatorForBlink) animator.SetBool("Invulnerable", true);
+                    else
                     {
-                        blinkTimer = blinkTime;
+                        blinkTimer -= Time.deltaTime;
+                        if (blinkTimer < 0)
+                        {
+                            blinkTimer = blinkTime;
 
-                        spriteRenderer.enabled = !spriteRenderer.enabled;
+                            spriteRenderer.enabled = !spriteRenderer.enabled;
+                        }
                     }
                 }
             }
         }
         else
         {
-            if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
-            else if (!spriteRenderer.enabled) spriteRenderer.enabled = true;
+            if ((invulnerabilityBlink) && (!isDead))
+            {
+                if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
+                else if (!spriteRenderer.enabled) spriteRenderer.enabled = true;
+            }
         }
     }
 
@@ -115,7 +122,7 @@ public class HealthSystem : MonoBehaviour
                 if ((_health > 0.0f) && (_dead))
                 {
                     onRevive?.Invoke();
-                    _dead = true;
+                    _dead = false;
                 }
                 return true;
             }
@@ -126,10 +133,11 @@ public class HealthSystem : MonoBehaviour
             onHeal?.Invoke(delta);
 
             _health += delta;
+            return true;
         }
         return false;
     }
-    public bool DealDamage(float damage, Vector3 damagePosition)
+    public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 damageNormal)
     {
         if (isInvulnerable) return false;
         if (_dead) return false;
@@ -144,11 +152,14 @@ public class HealthSystem : MonoBehaviour
         }
         else
         {
-            onHit?.Invoke(damage, damagePosition);
+            onHit?.Invoke(damageType, damage, damagePosition, damageNormal);
 
-            if (invulnerabilityTime > 0.0f)
+            if (damageType != DamageType.OverTime)
             {
-                isInvulnerable = true;
+                if (invulnerabilityTime > 0.0f)
+                {
+                    isInvulnerable = true;
+                }
             }
         }
 
@@ -184,12 +195,12 @@ public class HealthSystem : MonoBehaviour
     [Button("Deal 10% Damage")]
     void DealOneDamage()
     {
-        DealDamage(0.1f * maxHealth, Vector3.zero);
+        DealDamage(DamageType.Burst, 0.1f * maxHealth, Vector3.zero, Vector3.up);
     }
 
     [Button("Kill")]
     void Kill()
     {
-        DealDamage(_health, Vector3.zero);
+        DealDamage(DamageType.Burst, _health, Vector3.zero, Vector3.up);
     }
 }

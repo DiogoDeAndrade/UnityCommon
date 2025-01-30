@@ -1,27 +1,24 @@
 using UnityEditor;
 using UnityEngine;
 using System.Linq;
-using UnityEditor.Rendering;
+using System.IO;
+using System.Collections.Generic;
 
-public class SetupRecolorTool : MonoBehaviour
+public class SetupEffectsTools : MonoBehaviour
 {
-    private const string OUTPUT_FOLDER_PREF = "SetupRecolor_OutputFolder";
-
     private struct Settings
     {
         public Settings(ColorPalette palette)
         {
             this.palette = palette;
-            this.outputFolderPath = "";
         }
 
         public ColorPalette palette;
-        public string       outputFolderPath;
     }
 
-    private class SetupRecolorConfigWindow : EditorWindow
+    private class SetupEffectsConfigWindow : EditorWindow
     {
-        private const string PALETTE_PREF = "SetupRecolor_Palette";
+        private const string PALETTE_PREF = "SetupEffects_Palette";
 
         private Settings settings;
         private bool initialized = false;
@@ -29,7 +26,7 @@ public class SetupRecolorTool : MonoBehaviour
 
         public static void ShowWindow(System.Action<bool, Settings> onComplete)
         {
-            var window = GetWindow<SetupRecolorConfigWindow>(true, "Recolor Setup Settings");
+            var window = GetWindow<SetupEffectsConfigWindow>(true, "Effects Setup Settings");
             window.onComplete = onComplete;
             window.minSize = new Vector2(300, 150);
             window.maxSize = new Vector2(400, 200);
@@ -128,25 +125,13 @@ public class SetupRecolorTool : MonoBehaviour
         }
     }
 
-    [MenuItem("Assets/Unity Common Tools/Palette/Setup Recolor")]
+    [MenuItem("Assets/Unity Common Tools/Setup Effects")]
     private static void ExtractPalette()
     {
-        SetupRecolorConfigWindow.ShowWindow((confirmed, settings) =>
+        SetupEffectsConfigWindow.ShowWindow((confirmed, settings) =>
         {
             if (confirmed)
             {
-                // Request output folder
-                string lastOutputFolderPath = EditorPrefs.GetString(OUTPUT_FOLDER_PREF, "");
-
-                settings.outputFolderPath = EditorUtility.OpenFolderPanel("Select Output Folder", lastOutputFolderPath, "");
-                if (string.IsNullOrEmpty(settings.outputFolderPath))
-                {
-                    Debug.LogWarning("No output folder selected. Operation canceled.");
-                    return;
-                }
-
-                EditorPrefs.SetString(OUTPUT_FOLDER_PREF, settings.outputFolderPath);
-
                 // Get the object that was right-clicked
                 string[] guids = Selection.assetGUIDs;
                 if (guids.Length == 0)
@@ -205,6 +190,9 @@ public class SetupRecolorTool : MonoBehaviour
 
         foreach (string assetPath in assetPaths)
         {
+            // Check if this is already a recolor
+            if (assetPath.IndexOf("_effects_") != -1) continue;
+
             // Convert to Unity path format
             string unityPath = assetPath.Replace('\\', '/');
 
@@ -248,7 +236,7 @@ public class SetupRecolorTool : MonoBehaviour
 
                     // Get the readable texture
                     Texture2D readableTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
-                    newImage = CreateRemap(readableTexture, settings);
+                    newImage = CreateEffectTexture(readableTexture, assetPath, settings);
 
                     // Restore original settings
                     importer.isReadable = originalReadable;
@@ -262,7 +250,7 @@ public class SetupRecolorTool : MonoBehaviour
         }
         else
         {
-            newImage = CreateRemap(originalTexture, settings);
+            newImage = CreateEffectTexture(originalTexture, assetPath, settings);
         }
 
         if (!string.IsNullOrEmpty(newImage))
@@ -275,13 +263,42 @@ public class SetupRecolorTool : MonoBehaviour
 
             if (originalImporter != null && newImporter != null)
             {
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(newImage);
+
                 // Copy settings
                 ApplyImporterSettings(originalImporter, newImporter);
+
+                var otherTextures = originalImporter.secondarySpriteTextures.ToList();
+                AddOrChangeTexture(otherTextures, "_EffectTexture", texture);
+                originalImporter.secondarySpriteTextures = otherTextures.ToArray();
+
+                originalImporter.SaveAndReimport();
 
                 // Apply the new settings
                 newImporter.SaveAndReimport();
             }
         }
+    }
+
+    private static void AddOrChangeTexture(List<SecondarySpriteTexture> otherTextures, string name, Texture2D texture)
+    {
+        SecondarySpriteTexture secondarySpriteTexture = new SecondarySpriteTexture
+        {
+            name = name, // Name it as needed
+            texture = texture
+        };
+
+        // Check if a secondary texture with the same name already exists
+        for (int i = 0; i < otherTextures.Count; i++)
+        {
+            if ((otherTextures[i].name == name) || (otherTextures[i].name == "_PaletteTexture"))
+            {
+                otherTextures[i] = secondarySpriteTexture;
+                return;
+            }
+        }
+
+        otherTextures.Add(secondarySpriteTexture);
     }
 
     private static void ApplyImporterSettings(TextureImporter originalImporter, TextureImporter newImporter)
@@ -311,7 +328,7 @@ public class SetupRecolorTool : MonoBehaviour
         }
     }
 
-    private static string CreateRemap(Texture2D srcTexture, Settings settings)
+    private static string CreateEffectTexture(Texture2D srcTexture, string srcAssetPath, Settings settings)
     {
         try
         {
@@ -342,11 +359,12 @@ public class SetupRecolorTool : MonoBehaviour
             // and set the RGB of the pixel in the new texture as (ID/ColorCount, 0, 0, Alpha).
             // Then save the texture to a file of the same name, but on the settings.outputfolder.
             // Assuming settings.palette has a List<Color> or similar to access colors by index
-            Color[] remappedColors = new Color[pixels.Length];
+            Color[] effectColors = new Color[pixels.Length];
 
             int colorCount = settings.palette.Count;
-            Texture2D remappedTexture = new Texture2D(srcTexture.width, srcTexture.height, TextureFormat.ARGB32, false);
+            Texture2D effectTexture = new Texture2D(srcTexture.width, srcTexture.height, TextureFormat.ARGB32, false);
 
+            // Palette remapping
             for (int i = 0; i < pixels.Length; i++)
             {
                 Color pixel = pixels[i];
@@ -354,19 +372,140 @@ public class SetupRecolorTool : MonoBehaviour
                 float encodedID = (closestColorID + 0.5f) / (float)colorCount;
 
                 // Set remapped pixel to the new texture
-                remappedColors[i] = new Color(encodedID, 0, 0, pixel.a);
+                effectColors[i] = new Color(encodedID, 0, 0, 1/*pixel.a*/);
             }
 
-            remappedTexture.SetPixels(remappedColors);
-            remappedTexture.Apply();
+            // Distance mask - Setup border
+            // FAILED EXPERIMENT, MAYBE ANOTHER DAY
+            /*var valueSet = new bool[pixels.Length];
+            for (int i = 0; i < pixels.Length; i++) valueSet[i] = false;
+            for (int y = 0; y < srcTexture.height; y++)
+            {
+                for (int x = 0; x < srcTexture.width; x++)
+                {
+                    int index = x + y * srcTexture.width;
+                    var srcColor = pixels[index];
+                    // Is this an interior pixel
+                    if (srcColor.a > 0.0f)
+                    {
+                        // Check if this pixel is on the edge (if any pixel nearby has alpha = 0)
+                        bool edge = (x == 0) || (x == srcTexture.width - 1) || (y == 0) || (y == srcTexture.height - 1);
+                        if (!edge)
+                        {
+                            if ((x > 0) && (pixels[index - 1].a == 0.0f)) edge = true;
+                            else if ((x < srcTexture.width - 1) && (pixels[index + 1].a == 0.0f)) edge = true;
+                            else if ((y > 0) && (pixels[index - srcTexture.width].a == 0.0f)) edge = true;
+                            else if ((y < srcTexture.height - 1) && (pixels[index + srcTexture.width].a == 0.0f)) edge = true;
+                        }
+
+                        if (edge)
+                        {
+                            float u = x / (float)srcTexture.width;
+                            float v = y / (float)srcTexture.height;
+
+                            valueSet[index] = true;
+                            var c = effectColors[index];
+                            c.g = 0;// u;
+                            //c.b = v;
+                            effectColors[index] = c;
+                        }
+                    }
+                }
+            }
+
+            for (int y = 0; y < srcTexture.height; y++)
+            {
+                for (int x = 0; x < srcTexture.width; x++)
+                {
+                    int index = x + y * srcTexture.width;
+                    int closestIndex = -1;
+                    float closestDist = float.MaxValue;
+                    var c = effectColors[index];
+
+                    for (int dy = 0; dy < srcTexture.height; dy++)
+                    {
+                        for (int dx = 0; dx < srcTexture.width; dx++)
+                        {
+                            int testIndex = dx + dy * srcTexture.width;
+                            if (valueSet[testIndex])
+                            {
+                                float d = (dx - x) * (dx - x) + (dy - y) * (dy - y);
+                                if (d < closestDist)
+                                {
+                                    closestIndex = testIndex;
+                                    closestDist = d;
+
+                                    c.g = Mathf.Sqrt(closestDist); //dx / (float)srcTexture.width;
+                                    c.g = c.g - Mathf.Floor(c.g);
+                                    //c.b = dy / (float)srcTexture.height;
+                                    effectColors[index] = c;
+                                }
+                            }
+                        }
+                    }
+                }
+            }*/
+
+            /*int nIterations = 0;
+            int maxIterations = Mathf.Max(srcTexture.width, srcTexture.height);
+            bool repeat = true;
+            List<int> indexesToSet = new();
+            while ((repeat) && (nIterations < maxIterations))
+            {
+                nIterations++;
+                repeat = false;
+                indexesToSet.Clear();
+
+                for (int y = 0; y < srcTexture.height; y++)
+                {
+                    for (int x = 0; x < srcTexture.width; x++)
+                    {
+                        int index = x + y * srcTexture.width;
+                        if (!valueSet[index])
+                        {
+                            var c = effectColors[index];
+                            int closestIndex = -1;
+
+                            if ((x > 0) && (valueSet[index - 1])) closestIndex = index - 1;
+                            else if ((x < srcTexture.width - 1) && (valueSet[index + 1])) closestIndex = index + 1;
+                            else if ((y > 0) && (valueSet[index - srcTexture.width])) closestIndex = index - srcTexture.width;
+                            else if ((y < srcTexture.height - 1) && (valueSet[index + srcTexture.width])) closestIndex = index + srcTexture.width;
+
+                            if (closestIndex != -1)
+                            {
+                                indexesToSet.Add(index);
+                                c.g = effectColors[closestIndex].g;
+                                c.b = effectColors[closestIndex].b;
+
+                                effectColors[index] = c;
+                            }
+                            else repeat = true;
+                        }
+                    }
+                }
+
+                foreach (var index in indexesToSet)
+                {
+                    valueSet[index] = true;
+                }
+            }*/
+
+            effectTexture.SetPixels(effectColors);
+            effectTexture.Apply();
+
+            string directory = Path.GetDirectoryName(srcAssetPath);
+            string filenameWithoutExtension = Path.GetFileNameWithoutExtension(srcAssetPath);
+            string extension = Path.GetExtension(srcAssetPath);
 
             // Save the remapped texture to the output folder
-            byte[] bytes = remappedTexture.EncodeToPNG();
-            string outputPath = System.IO.Path.Combine(settings.outputFolderPath, srcTexture.name + "_remap.png");
-            System.IO.File.WriteAllBytes(outputPath, bytes);
+            byte[] bytes = effectTexture.EncodeToPNG();
+
+            //string outputPath = Path.Combine(settings.outputFolderPath, srcTexture.name + "_remap.png");
+            string outputPath = Path.Combine(directory, $"_effects_{filenameWithoutExtension}{extension}");
+            File.WriteAllBytes(outputPath, bytes);
 
             // Clean up
-            DestroyImmediate(remappedTexture);
+            DestroyImmediate(effectTexture);
             DestroyImmediate(readableTexture);
 
             // Ensure the absolute path starts with the Assets directory path
@@ -388,7 +527,7 @@ public class SetupRecolorTool : MonoBehaviour
         return null;
     }
 
-    [MenuItem("Assets/Unity Common Tools/Palette/Setup Recolor", validate = true)]
+    [MenuItem("Assets/Unity Common Tools/Setup Effects", validate = true)]
     private static bool ExtractPaletteValidation()
     {
         string[] guids = Selection.assetGUIDs;

@@ -399,7 +399,7 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     public List<T> GetAdaptiveTopN(int n, Func<T, T, float> distanceFunc)
     {
         // Ensure there are enough colors in the histogram
-        if (Count < n) throw new ArgumentException("Not enough elements to form the specified number of colors.");
+        if (Count < n) throw new ArgumentException($"Not enough elements to form the specified number of colors (Count = {Count}, n = {n}).");
 
         // Step 1: Start with the color with the highest weight
         var selectedColors = new List<T>();

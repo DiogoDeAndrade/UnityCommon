@@ -7,20 +7,26 @@ using System;
 public class SpriteEffect : MonoBehaviour
 {
     [Flags]
-    public enum Effects { None = 0, ColorRemap = 1, Inverse = 2, ColorFlash = 4 };
+    public enum Effects { None = 0, ColorRemap = 1, Inverse = 2, ColorFlash = 4, Outline = 8 };
 
     [SerializeField] 
-    private Effects      effects;
+    private Effects         effects;
     [SerializeField, ShowIf(nameof(colorRemapEnable))] 
-    private ColorPalette palette;
-    [SerializeField, ShowIf(nameof(inverseEnable))] 
-    private float        inverseFactor;
+    private ColorPalette    palette;
+    [SerializeField, ShowIf(nameof(inverseEnable)), Range(0.0f, 1.0f)] 
+    private float           inverseFactor;
     [SerializeField, ShowIf(nameof(flashEnable))]
-    private Color        flashColor = new Color(1.0f, 1.0f, 1.0f, 0.0f);
+    private Color           flashColor = new Color(1.0f, 1.0f, 1.0f, 0.0f);
+    [SerializeField, ShowIf(nameof(outlineEnable))]
+    private float           outlineWidth = 1.0f;
+    [SerializeField, ShowIf(nameof(outlineEnable))]
+    private Color           outlineColor = new Color(1.0f, 1.0f, 1.0f, 1.0f);
 
     public bool colorRemapEnable => (effects & Effects.ColorRemap) != 0;
     public bool inverseEnable => (effects & Effects.Inverse) != 0;
     public bool flashEnable => (effects & Effects.ColorFlash) != 0;
+    public bool outlineEnable => (effects & Effects.Outline) != 0;
+    
 
     private MaterialPropertyBlock   mpb;
     private SpriteRenderer          spriteRenderer;
@@ -69,6 +75,14 @@ public class SpriteEffect : MonoBehaviour
         set { SetFlashColor(flashColor.ChangeAlpha(value)); }
     }
 
+    public void SetOutline(float width, Color color)
+    {
+        outlineColor = color;
+        outlineWidth = width;
+        if (width > 0.0f) effects |= Effects.Outline;
+        else effects &= ~Effects.Outline;
+    }
+
     private void Update()
     {
         ConfigureMaterial();
@@ -82,7 +96,7 @@ public class SpriteEffect : MonoBehaviour
         if ((palette) && (colorRemapEnable))
         {
             var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
-            mpb.SetTexture("_Colormap", texture);
+            if (texture != null) mpb.SetTexture("_Colormap", texture);
             mpb.SetFloat("_EnableRemap", 1.0f);
         }
         else
@@ -106,6 +120,25 @@ public class SpriteEffect : MonoBehaviour
         else
         {
             mpb.SetColor("_FlashColor", flashColor.ChangeAlpha(0));
+        }
+
+        if (outlineEnable)
+        {
+            Vector2 texelSize = Vector2.zero;
+            if ((spriteRenderer) && (spriteRenderer.sprite) && (spriteRenderer.sprite.texture))
+            {
+                var texture = spriteRenderer.sprite.texture;
+                texelSize = new Vector2(1.0f / texture.width, 1.0f / texture.height);
+            }
+
+            mpb.SetColor("_OutlineColor", outlineColor);
+            mpb.SetFloat("_OutlineWidth", outlineWidth);
+            mpb.SetVector("_OutlineTexelSize", texelSize);
+            mpb.SetFloat("_OutlineEnable", 1.0f);
+        }
+        else
+        {
+            mpb.SetFloat("_OutlineEnable", 0.0f);
         }
 
         spriteRenderer.SetPropertyBlock(mpb);
