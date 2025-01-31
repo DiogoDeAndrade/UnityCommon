@@ -6,7 +6,7 @@ public class HealthSystem : MonoBehaviour
 {
     public enum DamageType { Burst, OverTime };
 
-    public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 damageNormal);
+    public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection);
     public event OnHit  onHit;
     public delegate void OnHeal(float healthGain);
     public event OnHeal onHeal;
@@ -137,7 +137,7 @@ public class HealthSystem : MonoBehaviour
         }
         return false;
     }
-    public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 damageNormal)
+    public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection)
     {
         if (isInvulnerable) return false;
         if (_dead) return false;
@@ -152,7 +152,7 @@ public class HealthSystem : MonoBehaviour
         }
         else
         {
-            onHit?.Invoke(damageType, damage, damagePosition, damageNormal);
+            onHit?.Invoke(damageType, damage, damagePosition, hitDirection);
 
             if (damageType != DamageType.OverTime)
             {
