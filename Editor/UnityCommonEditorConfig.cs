@@ -31,9 +31,12 @@ public class UnityCommonEditorConfig : ScriptableObject
         if (textureMap == null)
         {
             textureMap = new();
-            foreach (var t in textures)
+            if (textures != null)
             {
-                textureMap.Add(t.name, t);
+                foreach (var t in textures)
+                {
+                    textureMap.Add(t.name, t);
+                }
             }
         }
 
