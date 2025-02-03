@@ -68,6 +68,29 @@ public class Graph<N> where N : IEquatable<N>
         return nodes.Count - 1;
     }
 
+    public void Add(Tree<N> tree)
+    {
+        // Add a tree as a component of this graph
+        Dictionary<int, int> nodeIds = new();
+        for (int i = 0; i < tree.nodeCount; i++)
+        {
+            var parentNodeId = tree.GetParent(i);
+            if ((parentNodeId == -1) && (i != tree.rootNodeId)) continue;
+            nodeIds.Add(i, Add(tree.GetNode(i)));
+        }
+
+        AddEdgesFromTree(tree, tree.rootNodeId, nodeIds);
+    }
+
+    private void AddEdgesFromTree(Tree<N> tree, int nodeId, Dictionary<int, int> nodeIds)
+    {
+        foreach (var children in tree.GetChildren(nodeId))
+        {
+            Add(nodeIds[nodeId], nodeIds[children]);
+            AddEdgesFromTree(tree, children, nodeIds);
+        }
+    }
+
     public int Add(int i1, int i2, float w = 1.0f)
     {
         int edgeId = FindEdge(i1, i2);
@@ -485,7 +508,10 @@ public class Graph<N> where N : IEquatable<N>
                     {
                         if (n1 == n2) continue;
                         var path = DijkstraShortestPath(n1, n2);
-                        foreach (var n in path) centrality[n]++;
+                        if (path != null)
+                        {
+                            foreach (var n in path) centrality[n]++;
+                        }
                     }
                 }
                 break;
@@ -498,8 +524,8 @@ public class Graph<N> where N : IEquatable<N>
     }
     public void SetCentrality(List<float> data) { centrality = data; }
     bool hasComputedCentrality => (centrality != null) && (centrality.Count == nodes.Count);
-    float GetCachedCentrality(int nodeId) => centrality[nodeId];
 
+    public float GetCentrality(int nodeId) => centrality[nodeId];
 
     public List<Tree<N>> BuildTrees(TreeBuildMode mode, SelectTreeStartPointFunc selectTreeStartPointFunc = null)
     {
@@ -537,7 +563,7 @@ public class Graph<N> where N : IEquatable<N>
                     {
                         if (!hasComputedCentrality) ComputeCentrality(ComputeCentralityMode.Degree);
 
-                        criteria = GetCachedCentrality;
+                        criteria = GetCentrality;
                     }
 
                     var visited = Enumerable.Repeat(false, nodes.Count).ToList();

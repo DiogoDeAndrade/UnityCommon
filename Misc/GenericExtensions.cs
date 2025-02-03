@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public static class GenericExtensions
 {
@@ -8,6 +9,21 @@ public static class GenericExtensions
         if ((l == null) || (l.Count == 0)) return default(T);
 
         var idx = UnityEngine.Random.Range(0, l.Count);
+        var ret = l[idx];
+
+        if (!withReplacement)
+        {
+            l.RemoveAt(idx);
+        }
+
+        return ret;
+    }
+
+    static public T Random<T>(this List<T> l, System.Random rnd, bool withReplacement = true)
+    {
+        if ((l == null) || (l.Count == 0)) return default(T);
+
+        var idx = rnd.Next() % l.Count;
         var ret = l[idx];
 
         if (!withReplacement)
@@ -48,6 +64,21 @@ public static class GenericExtensions
             {
                 l[i] = replace;
             }
+        }
+    }
+
+    static public void RemoveAll<K, V>(this Dictionary<K, V> dictionary, Func<KeyValuePair<K, V>, bool> criteria)
+    {
+        // First, create a list of keys whose values are null.
+        List<K> keysToRemove = dictionary
+            .Where(criteria)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        // Now, remove each key from the dictionary.
+        foreach (K key in keysToRemove)
+        {
+            dictionary.Remove(key);
         }
     }
 }

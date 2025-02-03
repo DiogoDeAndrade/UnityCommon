@@ -63,6 +63,11 @@ public class Tree<N> where N : IEquatable<N>
         return nodes[nodeId].data;
     }
 
+    public int GetParent(int nodeId)
+    {
+        return nodes[nodeId].parent;
+    }
+
     public IEnumerable<int> GetChildren(int nodeId)
     {
         if (nodes[nodeId].children == null) return Enumerable.Empty<int>();
@@ -110,12 +115,16 @@ public class Tree<N> where N : IEquatable<N>
                 {
                     anyChange = true;
 
-                    nodes[nodeId].RemoveChild(childId);
+                    // Add grandchildren to grandparent
                     foreach (var grandchildId in nodes[childId].children)
                     {
                         nodes[nodeId].AddChild(grandchildId);
                         nodes[grandchildId].parent = nodeId;
                     }
+                    // Remove child from parent
+                    nodes[nodeId].RemoveChild(childId);
+                    nodes[childId].parent = -1;
+                    nodes[childId].children = null;
                     break;
                 }
             }
