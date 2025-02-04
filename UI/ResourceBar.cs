@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 public abstract class ResourceBar : MonoBehaviour
 {
-    public enum DisplayMode { ScaleImage, DiscreteItems };
+    public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY };
     public enum UpdateMode { Direct, FeedbackLoop, ConstantSpeed };
 
     public DisplayMode      displayMode;
@@ -35,7 +35,7 @@ public abstract class ResourceBar : MonoBehaviour
     public Transform        relativeTransform;
     public bool             zeroResourceZeroAlpha = false;
 
-    bool isBar => displayMode == DisplayMode.ScaleImage;
+    bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY);
     bool needSpeedVar() { return (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed)); }
     bool needColor() => (isBar) && (colorChange);
 
@@ -179,8 +179,11 @@ public abstract class ResourceBar : MonoBehaviour
                     }
                 }
                 break;
-            case DisplayMode.ScaleImage:
+            case DisplayMode.ScaleImageX:
                 bar.localScale = new Vector3(currentT, 1.0f, 1.0f);
+                break;
+            case DisplayMode.ScaleImageY:
+                bar.localScale = new Vector3(1.0f, currentT, 1.0f);
                 break;
             default:
                 break;
