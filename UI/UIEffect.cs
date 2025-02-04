@@ -21,11 +21,14 @@ public class UIImageEffect : MonoBehaviour
     private float outlineWidth = 1.0f;
     [SerializeField, ShowIf(nameof(outlineEnable))]
     private Color outlineColor = new Color(1.0f, 1.0f, 1.0f, 1.0f);
+    [SerializeField, ShowIf(nameof(isRawImage)), Tooltip("RawImage doesn't use sprites, so we don't have secondary textures, need to set it up manually")]
+    private Sprite sprite;
 
     public bool colorRemapEnable => (effects & Effects.ColorRemap) != 0;
     public bool inverseEnable => (effects & Effects.Inverse) != 0;
     public bool flashEnable => (effects & Effects.ColorFlash) != 0;
     public bool outlineEnable => (effects & Effects.Outline) != 0;
+    public bool isRawImage => GetComponent<RawImage>() != null;
 
     private Image                       uiImage;
     private RawImage                    rawImage;
@@ -74,6 +77,12 @@ public class UIImageEffect : MonoBehaviour
         ConfigureMaterial();
     }
 
+    Sprite GetSprite()
+    {
+        if (uiImage) return uiImage.sprite;
+        else return sprite;
+    }
+
     private void ConfigureMaterial()
     {
         if (material == null) return;
@@ -85,25 +94,18 @@ public class UIImageEffect : MonoBehaviour
             material.SetFloat("_EnableRemap", 1.0f);
 
             // Stupid hack required by the UI renderer, because it doesn't process secondary textures
-            if (uiImage)
+            var sprite = GetSprite();
+            if (sprite)
             {
-                var sprite = uiImage.sprite;
-                if (sprite)
+                int count = sprite.GetSecondaryTextures(otherTextures);
+                for (int i = 0; i < count; i++)
                 {
-                    int count = sprite.GetSecondaryTextures(otherTextures);
-                    for (int i = 0; i < count; i++)
-                    {
-                        material.SetTexture(otherTextures[i].name, otherTextures[i].texture);
-                    }
-                }
-                else
-                {
-                    material.SetTexture("_EffectTexture", null);
+                    material.SetTexture(otherTextures[i].name, otherTextures[i].texture);
                 }
             }
             else
             {
-                material.SetTexture("_PaletteTexture", null);
+                material.SetTexture("_EffectTexture", null);
             }
         }
         else
@@ -134,6 +136,11 @@ public class UIImageEffect : MonoBehaviour
             if ((uiImage) && (uiImage.sprite) && (uiImage.sprite.texture))
             {
                 var texture = uiImage.sprite.texture;
+                texelSize = new Vector2(1.0f / texture.width, 1.0f / texture.height);
+            }
+            else if ((rawImage) && (rawImage.texture))
+            {
+                var texture = rawImage.texture;
                 texelSize = new Vector2(1.0f / texture.width, 1.0f / texture.height);
             }
 
