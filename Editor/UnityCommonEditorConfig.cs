@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "UnityCommonEditorConfig", menuName = "Unity Common/Editor Config")]
@@ -16,11 +17,22 @@ public class UnityCommonEditorConfig : ScriptableObject
         {
             if (_instance == null)
             {
-                _instance = Resources.Load<UnityCommonEditorConfig>("UnityCommonEditorConfig");
+#if UNITY_EDITOR
+                string[] guids = AssetDatabase.FindAssets("t:UnityCommonEditorConfig"); // Find all assets of this type
+
+                if (guids.Length > 0)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guids[0]); // Convert GUID to asset path
+                    _instance = AssetDatabase.LoadAssetAtPath<UnityCommonEditorConfig>(path);
+                }
+
                 if (_instance == null)
                 {
-                    Debug.LogError("UnityCommonEditorConfig instance not found. Make sure it is located in a 'Resources' folder and named 'UnityCommonEditorConfig'.");
+                    Debug.LogError("UnityCommonEditorConfig instance not found. Ensure it's correctly created.");
                 }
+#else
+                Debug.LogError("UnityCommonEditorConfig should only be accessed in the Editor.");
+#endif
             }
             return _instance;
         }
@@ -31,9 +43,12 @@ public class UnityCommonEditorConfig : ScriptableObject
         if (textureMap == null)
         {
             textureMap = new();
-            foreach (var t in textures)
+            if (textures != null)
             {
-                textureMap.Add(t.name, t);
+                foreach (var t in textures)
+                {
+                    textureMap.Add(t.name, t);
+                }
             }
         }
 

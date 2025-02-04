@@ -1,5 +1,4 @@
 using NaughtyAttributes;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class PlaySound : MonoBehaviour
