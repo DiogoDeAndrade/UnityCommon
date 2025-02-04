@@ -24,8 +24,7 @@ public class BaseUIControl : MonoBehaviour
 
     private bool needHighlightColor => highlighterText != null;
 
-    public bool isSelected => parentGroup.selectedControl == this;
-
+    public bool isSelected => (parentGroup.uiEnable) && (parentGroup.selectedControl == this);
     public BaseUIControl navUp => _navUp;
     public BaseUIControl navDown => _navDown;
 

@@ -5,6 +5,7 @@ using TMPro;
 
 public class UIFloatSelector : UIControl<float>
 {
+    public enum DisplayMode { Text, ScaleX, ScaleY };
     public enum AutoEvent { None, SetPlayerPref };
     public enum ValueType { Float, Vec4_W };
 
@@ -14,7 +15,9 @@ public class UIFloatSelector : UIControl<float>
     [SerializeField] protected Vector2          minMaxValue = new Vector2(-1.0f, 1.0f);
     [SerializeField] protected float            defaultValue = 0.0f;
     [SerializeField] protected float            changeCooldown = 0.1f;
-    [SerializeField] protected TextMeshProUGUI  valueIndicator;
+    [SerializeField] protected DisplayMode      displayMode;
+    [SerializeField] protected TextMeshProUGUI  valueIndicatorText;
+    [SerializeField] protected RectTransform    valueIndicatorTransform;
     [SerializeField] private AutoEvent          valueChangeEvent;
     [SerializeField, ShowIf("needKey")] private ValueType valueType;
     [SerializeField, ShowIf("needKey")] private string key;
@@ -48,16 +51,35 @@ public class UIFloatSelector : UIControl<float>
             _value = _prevValue = defaultValue;
         }
 
-        if (valueIndicator) originalText = valueIndicator.text;
+        if (valueIndicatorText) originalText = valueIndicatorText.text;
     }
 
     protected override void Update()
     {
         base.Update();
 
-        if (valueIndicator)
+        switch (displayMode)
         {
-            valueIndicator.text = string.Format(originalText, value);
+            case DisplayMode.Text:
+                if (valueIndicatorText)
+                {
+                    valueIndicatorText.text = string.Format(originalText, value);
+                }
+                break;
+            case DisplayMode.ScaleX:
+                if (valueIndicatorTransform)
+                {
+                    valueIndicatorTransform.localScale = new Vector3(Mathf.Clamp01((value - minMaxValue.x) / (minMaxValue.y - minMaxValue.x)), 1, 1);
+                }
+                break;
+            case DisplayMode.ScaleY:
+                if (valueIndicatorTransform)
+                {
+                    valueIndicatorTransform.localScale = new Vector3(1, Mathf.Clamp01((value - minMaxValue.x) / (minMaxValue.y - minMaxValue.x)), 1);
+                }
+                break;
+            default:
+                break;
         }
 
         if (cooldownTimer > 0.0f)
