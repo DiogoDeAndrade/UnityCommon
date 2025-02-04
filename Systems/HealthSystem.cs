@@ -6,14 +6,14 @@ public class HealthSystem : MonoBehaviour
 {
     public enum DamageType { Burst, OverTime };
 
-    public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection);
+    public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource);
     public event OnHit  onHit;
-    public delegate void OnHeal(float healthGain);
+    public delegate void OnHeal(float healthGain, GameObject healSource);
     public event OnHeal onHeal;
 
-    public delegate void OnDead();
+    public delegate void OnDead(GameObject damageSource);
     public event OnDead onDead;
-    public delegate void OnRevive();
+    public delegate void OnRevive(GameObject healSource);
     public event OnDead onRevive;
 
     public Faction  faction;
@@ -59,11 +59,14 @@ public class HealthSystem : MonoBehaviour
     public bool isAlive => !_dead;
     void Awake()
     {
-        _health = maxHealth;
-        _dead = false;
-
         animator = GetComponent<Animator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
+    }
+
+    void Start()
+    {
+        _health = maxHealth;
+        _dead = false;
     }
 
     // Update is called once per frame
@@ -110,18 +113,18 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
-    public bool Heal(float delta, bool reviveIfDeath)
+    public bool Heal(float delta, bool reviveIfDeath, GameObject healSource)
     {
         if (reviveIfDeath)
         {
             if (_health < maxHealth)
             {
-                onHeal?.Invoke(delta);
+                onHeal?.Invoke(delta, healSource);
 
                 _health += delta;
                 if ((_health > 0.0f) && (_dead))
                 {
-                    onRevive?.Invoke();
+                    onRevive?.Invoke(healSource);
                     _dead = false;
                 }
                 return true;
@@ -130,14 +133,14 @@ public class HealthSystem : MonoBehaviour
         else if (_dead) return false;
         if (_health < maxHealth)
         {
-            onHeal?.Invoke(delta);
+            onHeal?.Invoke(delta, healSource);
 
             _health += delta;
             return true;
         }
         return false;
     }
-    public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection)
+    public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource)
     {
         if (isInvulnerable) return false;
         if (_dead) return false;
@@ -148,11 +151,11 @@ public class HealthSystem : MonoBehaviour
             _health = 0.0f;
             _dead = true;
 
-            onDead?.Invoke();
+            onDead?.Invoke(damageSource);
         }
         else
         {
-            onHit?.Invoke(damageType, damage, damagePosition, hitDirection);
+            onHit?.Invoke(damageType, damage, damagePosition, hitDirection, damageSource);
 
             if (damageType != DamageType.OverTime)
             {
@@ -195,12 +198,12 @@ public class HealthSystem : MonoBehaviour
     [Button("Deal 10% Damage")]
     void DealOneDamage()
     {
-        DealDamage(DamageType.Burst, 0.1f * maxHealth, Vector3.zero, Vector3.up);
+        DealDamage(DamageType.Burst, 0.1f * maxHealth, Vector3.zero, Vector3.up, null);
     }
 
     [Button("Kill")]
     void Kill()
     {
-        DealDamage(DamageType.Burst, _health, Vector3.zero, Vector3.up);
+        DealDamage(DamageType.Burst, _health, Vector3.zero, Vector3.up, null);
     }
 }

@@ -329,7 +329,7 @@ namespace UnityCommon.Legacy
             return followTarget;
         }
 
-        private void OnDead()
+        private void OnDead(GameObject damageSource)
         {
             movementDir = Vector2.zero;
 
@@ -343,7 +343,7 @@ namespace UnityCommon.Legacy
             }
         }
 
-        private void OnHit(HealthSystem.DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection)
+        private void OnHit(HealthSystem.DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource)
         {
             healthSystem.isInvulnerable = true;
 
