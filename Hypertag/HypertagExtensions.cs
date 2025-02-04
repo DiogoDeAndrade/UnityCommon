@@ -42,6 +42,15 @@ public static class HypertaggedExtension
 
         return ret;
     }
+    public static void FindObjectsOfTypeWithHypertag<T>(this Object go, Hypertag tag, List<T> ret) where T : Component
+    {
+        var objects = Object.FindObjectsByType<T>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        foreach (var obj in objects)
+        {
+            if (obj.HasHypertag(tag)) ret.Add(obj);
+        }
+    }
+
     public static T FindObjectOfTypeWithHypertag<T>(this MonoBehaviour go, Hypertag tag) where T : Component
     {
         var objects = Object.FindObjectsByType<HypertaggedObject>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);

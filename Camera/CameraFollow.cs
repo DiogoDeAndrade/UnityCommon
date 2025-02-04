@@ -1,32 +1,39 @@
-﻿using UnityEngine;
-using NaughtyAttributes;
+﻿using NaughtyAttributes;
+using System.Collections.Generic;
+using UnityEngine;
 
 public class CameraFollow : MonoBehaviour
 {
-    public enum Mode { SimpleFeedbackLoop, Box };
+    public enum Mode { SimpleFeedbackLoop = 0, CameraTrap = 1, ExponentialDecay = 2 };
+    public enum TagMode { Closest = 0, Furthest = 1, Average = 2 };
 
-    public Mode         mode = Mode.SimpleFeedbackLoop;
-    public Transform    targetObject;
-    [ShowIf("NeedFollowSpeed")]
-    public float        followSpeed = 0.9f;
-    [ShowIf("NeedBox")]
-    public Rect         rect = new Rect(-100.0f, -100.0f, 200.0f, 200.0f);
-    [ShowIf("NeedBox")]
-    public BoxCollider2D bounds;
+    [SerializeField] Mode mode = Mode.SimpleFeedbackLoop;
+    [SerializeField] Hypertag targetTag;
+    [SerializeField] TagMode tagMode = TagMode.Closest;
+    [SerializeField] bool allowZoom;
+    [SerializeField] float zoomMargin = 1.1f;
+    [SerializeField] Vector2 minMaxSize = new Vector2(180.0f, 360.0f);
+    [SerializeField, ShowIf(nameof(needObject))] Transform targetObject;
+    [SerializeField, ShowIf(nameof(needFollowSpeed))] float followSpeed = 0.9f;
+    [SerializeField, ShowIf(nameof(needRect))] Rect rect = new Rect(-100.0f, -100.0f, 200.0f, 200.0f);
+    [SerializeField] BoxCollider2D cameraLimits;
 
-    bool NeedFollowSpeed() { return mode == Mode.SimpleFeedbackLoop; }
-    bool NeedBox() { return mode == Mode.Box; }
+    private new Camera camera;
+    private Bounds allObjectsBound;
+    private List<Transform> potentialTransforms = new();
 
-    Camera mainCamera;
+    bool needObject => targetTag == null;
+    bool needFollowSpeed => (mode == Mode.SimpleFeedbackLoop) || (mode == Mode.ExponentialDecay);
+    bool needRect => (mode == Mode.CameraTrap);
 
     void Start()
     {
-        mainCamera = GetComponent<Camera>();
+        camera = GetComponent<Camera>();
 
-        if (mode == Mode.Box)
+        if (mode == Mode.CameraTrap)
         {
             float currentZ = transform.position.z;
-            Vector3 targetPos = targetObject.transform.position;
+            Vector3 targetPos = GetTargetPos();
             transform.position = new Vector3(targetPos.x, targetPos.y, currentZ);
 
             CheckBounds();
@@ -35,17 +42,17 @@ public class CameraFollow : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (targetObject)
+        switch (mode)
         {
-            switch (mode)
-            {
-                case Mode.SimpleFeedbackLoop:
-                    FixedUpdate_SimpleFeedbackLoop();
-                    break;
-                case Mode.Box:
-                    FixedUpdate_Box();
-                    break;
-            }
+            case Mode.SimpleFeedbackLoop:
+                FixedUpdate_SimpleFeedbackLoop();
+                break;
+            case Mode.CameraTrap:
+                FixedUpdate_Box();
+                break;
+            case Mode.ExponentialDecay:
+                FixedUpdate_ExponentialDecay();
+                break;
         }
     }
 
@@ -53,20 +60,37 @@ public class CameraFollow : MonoBehaviour
     {
         float currentZ = transform.position.z;
 
-        Vector3 err = targetObject.transform.position - transform.position;
+        Vector3 err = GetTargetPos() - transform.position;
 
         Vector3 newPos = transform.position + err * followSpeed;
         newPos.z = currentZ;
 
         transform.position = newPos;
+
+        RunZoom();
+        CheckBounds();
+    }
+    void FixedUpdate_ExponentialDecay()
+    {
+        // Nice explanation of this: https://www.youtube.com/watch?v=LSNQuFEDOyQ&ab_channel=FreyaHolm%C3%A9r
+        Vector3 targetPos = GetTargetPos();
+
+        Vector3 newPos = targetPos + (transform.position - targetPos) * Mathf.Pow((1.0f - followSpeed), Time.fixedDeltaTime);
+        newPos.z = transform.position.z;
+
+        transform.position = newPos;
+
+        RunZoom();
+        CheckBounds();
     }
 
     void FixedUpdate_Box()
     {
-        float   currentZ = transform.position.z;
-        Vector3 targetPos = targetObject.transform.position;
-        Rect    r = rect;
-        r.position += transform.position.xy();
+        float currentZ = transform.position.z;
+        Vector3 targetPos = GetTargetPos();
+        Vector2 delta = transform.position;
+        Rect r = rect;
+        r.position += delta;
 
         if (targetPos.x > r.xMax) r.position += new Vector2(targetPos.x - r.xMax, 0);
         if (targetPos.x < r.xMin) r.position += new Vector2(targetPos.x - r.xMin, 0);
@@ -75,24 +99,30 @@ public class CameraFollow : MonoBehaviour
 
         transform.position = new Vector3(r.center.x, r.center.y, currentZ);
 
+        RunZoom();
         CheckBounds();
     }
 
-    public Vector3 GetTargetPos()
+    void RunZoom()
     {
-        if (targetObject == null) return transform.position;
+        if ((targetTag != null) && (tagMode == TagMode.Average) && (allowZoom))
+        {
+            float height1 = Mathf.Clamp(allObjectsBound.extents.y * zoomMargin, minMaxSize.x, minMaxSize.y);
+            float height2 = Mathf.Clamp(allObjectsBound.extents.x * zoomMargin, camera.aspect * minMaxSize.x, camera.aspect * minMaxSize.y) / camera.aspect;
 
-        return targetObject.position;
+            float height = Mathf.Max(height1, height2);
+            camera.orthographicSize = height;
+        }
     }
 
-    public void CheckBounds()
+    void CheckBounds()
     {
-        if (bounds == null) return;
+        if (cameraLimits == null) return;
 
-        Bounds r = bounds.bounds;
+        Bounds r = cameraLimits.bounds;
 
-        float halfHeight = mainCamera.orthographicSize;
-        float halfWidth = mainCamera.aspect * halfHeight;
+        float halfHeight = camera.orthographicSize;
+        float halfWidth = camera.aspect * halfHeight;
 
         float xMin = transform.position.x - halfWidth;
         float xMax = transform.position.x + halfWidth;
@@ -109,18 +139,73 @@ public class CameraFollow : MonoBehaviour
         transform.position = position;
     }
 
-    private void OnDrawGizmos()
+    public Vector3 GetTargetPos()
     {
-        if (targetObject)
+        if (targetObject != null) return targetObject.transform.position;
+        else if (targetTag)
         {
-            Gizmos.color = Color.red;
-            Gizmos.DrawSphere(targetObject.position, 0.5f);
+            Vector3 selectedPosition = transform.position;
+
+            potentialTransforms.Clear();
+            gameObject.FindObjectsOfTypeWithHypertag(targetTag, potentialTransforms);
+            if (tagMode == TagMode.Closest)
+            {
+                var minDist = float.MaxValue;
+                foreach (var obj in potentialTransforms)
+                {
+                    var d = Vector3.Distance(obj.position, transform.position);
+                    if (d < minDist)
+                    {
+                        minDist = d;
+                        selectedPosition = obj.position;
+                    }
+                }
+            }
+            else if (tagMode == TagMode.Furthest)
+            {
+                var maxDist = 0.0f;
+                foreach (var obj in potentialTransforms)
+                {
+                    var d = Vector3.Distance(obj.position, transform.position);
+                    if (d > maxDist)
+                    {
+                        maxDist = d;
+                        selectedPosition = obj.position;
+                    }
+                }
+            }
+            else if (tagMode == TagMode.Average)
+            {
+                if (potentialTransforms.Count > 0)
+                {
+                    allObjectsBound = new Bounds(potentialTransforms[0].position, Vector3.zero);
+                    selectedPosition = Vector3.zero;
+                    foreach (var obj in potentialTransforms)
+                    {
+                        var d = Vector3.Distance(obj.position, transform.position);
+                        selectedPosition += obj.position;
+                        allObjectsBound.Encapsulate(obj.position);
+                    }
+                    selectedPosition /= potentialTransforms.Count;
+                }
+            }
+
+            return selectedPosition;
         }
 
-        if (mode == Mode.Box)
+        return transform.position;
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawSphere(GetTargetPos(), 0.5f);
+
+        if (mode == Mode.CameraTrap)
         {
+            Vector2 delta = transform.position;
             Rect r = rect;
-            r.position += transform.position.xy();
+            r.position += delta;
 
             Gizmos.color = Color.magenta;
             Gizmos.DrawLine(new Vector2(r.xMin, r.yMin), new Vector2(r.xMax, r.yMin));
@@ -129,9 +214,9 @@ public class CameraFollow : MonoBehaviour
             Gizmos.DrawLine(new Vector2(r.xMin, r.yMax), new Vector2(r.xMin, r.yMin));
         }
 
-        if (bounds)
+        if (cameraLimits)
         {
-            Bounds r = bounds.bounds;
+            Bounds r = cameraLimits.bounds;
 
             Gizmos.color = Color.green;
             Gizmos.DrawLine(new Vector2(r.min.x, r.min.y), new Vector2(r.max.x, r.min.y));
@@ -140,4 +225,5 @@ public class CameraFollow : MonoBehaviour
             Gizmos.DrawLine(new Vector2(r.min.x, r.max.y), new Vector2(r.min.x, r.min.y));
         }
     }
+
 }
