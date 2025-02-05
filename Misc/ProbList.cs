@@ -106,6 +106,28 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
         return selectedItem;
     }
 
+    // Get an element based on probability
+    public T Get(System.Random randomGenerator)
+    {
+        if (!init) Reset();
+        else if (elements.Count == 0)
+        {
+            if (resetWhenEmpty) Reset();
+            else return default(T);
+        }
+
+        int index = GetRandomWeightedIndex(randomGenerator);
+        T selectedItem = elements[index].value;
+
+        // Handle without replacement logic
+        if (!withReplacement)
+        {
+            RemoveItemAtIndex(index);
+        }
+
+        return selectedItem;
+    }
+
     public int IndexOf(T item)
     {
         for (int i = 0; i < originalElements.Count; i++)
@@ -129,9 +151,27 @@ public class ProbList<T> : IEnumerable<(T element, float weight)>
     private int GetRandomWeightedIndex()
     {
         // Generate random number in range of total weight
-        float randomValue;
-        if (systemRandom == null) randomValue = UnityEngine.Random.Range(0, totalWeight);
-        else randomValue = (float)systemRandom.NextDouble() * totalWeight;
+        float randomValue = UnityEngine.Random.Range(0, totalWeight);
+        
+
+        float cumulativeWeight = 0;
+
+        for (int i = 0; i < elements.Count; i++)
+        {
+            cumulativeWeight += elements[i].weight;
+            if (randomValue < cumulativeWeight)
+            {
+                return i;
+            }
+        }
+
+        throw new InvalidOperationException("Should never reach here.");
+    }
+
+    private int GetRandomWeightedIndex(System.Random randomGenerator)
+    {
+        // Generate random number in range of total weight
+        float randomValue = systemRandom.Range(0, totalWeight);
 
         float cumulativeWeight = 0;
 

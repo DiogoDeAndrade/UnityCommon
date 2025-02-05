@@ -18,7 +18,7 @@ public class CameraFollow : MonoBehaviour
     [SerializeField, ShowIf(nameof(needRect))] Rect rect = new Rect(-100.0f, -100.0f, 200.0f, 200.0f);
     [SerializeField] BoxCollider2D cameraLimits;
 
-    private new Camera camera;
+    private Camera mainCamera;
     private Bounds allObjectsBound;
     private List<Transform> potentialTransforms = new();
 
@@ -28,7 +28,7 @@ public class CameraFollow : MonoBehaviour
 
     void Start()
     {
-        camera = GetComponent<Camera>();
+        mainCamera = GetComponent<Camera>();
 
         if (mode == Mode.CameraTrap)
         {
@@ -108,10 +108,10 @@ public class CameraFollow : MonoBehaviour
         if ((targetTag != null) && (tagMode == TagMode.Average) && (allowZoom))
         {
             float height1 = Mathf.Clamp(allObjectsBound.extents.y * zoomMargin, minMaxSize.x, minMaxSize.y);
-            float height2 = Mathf.Clamp(allObjectsBound.extents.x * zoomMargin, camera.aspect * minMaxSize.x, camera.aspect * minMaxSize.y) / camera.aspect;
+            float height2 = Mathf.Clamp(allObjectsBound.extents.x * zoomMargin, mainCamera.aspect * minMaxSize.x, mainCamera.aspect * minMaxSize.y) / mainCamera.aspect;
 
             float height = Mathf.Max(height1, height2);
-            camera.orthographicSize = height;
+            mainCamera.orthographicSize = height;
         }
     }
 
@@ -121,8 +121,8 @@ public class CameraFollow : MonoBehaviour
 
         Bounds r = cameraLimits.bounds;
 
-        float halfHeight = camera.orthographicSize;
-        float halfWidth = camera.aspect * halfHeight;
+        float halfHeight = mainCamera.orthographicSize;
+        float halfWidth = mainCamera.aspect * halfHeight;
 
         float xMin = transform.position.x - halfWidth;
         float xMax = transform.position.x + halfWidth;
