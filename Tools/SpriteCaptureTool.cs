@@ -1,3 +1,6 @@
+// Must enable this if we want it - can't always have because the Sprite2d package might not be present and this
+// code won't compile without it
+#if UNITY_2D_SPRITE_AVAILABLE
 using NaughtyAttributes;
 using System.Collections;
 using System.Collections.Generic;
@@ -544,3 +547,4 @@ public class SpriteCaptureTool : MonoBehaviour
     }
 #endif
 }
+#endif

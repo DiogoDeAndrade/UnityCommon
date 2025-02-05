@@ -1,11 +1,13 @@
-﻿using System.Collections;
+﻿// Must enable this if we want it - can't always have because the Sprite2d package might not be present and this
+// code won't compile without it
+#if UNITY_2D_SPRITE_AVAILABLE
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-#if UNITY_EDITOR
 public class LpcCreateAnims
 {
     struct AnimKey
