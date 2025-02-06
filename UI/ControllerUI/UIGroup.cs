@@ -128,6 +128,7 @@ public class UIGroup : MonoBehaviour
         if (value)
         {
             selectedControl = initialControl;
+            cooldownTimer = moveCooldown;
         }
     }
 }
