@@ -6,7 +6,7 @@ public class UIButton : BaseUIControl
     public enum AutoEvent { None, SwitchPanel, CloseThisPanel };
 
     [SerializeField] private AutoEvent interactEvent;
-    [SerializeField, ShowIf("needPanel")] private UIGroup panel;
+    [SerializeField, ShowIf(nameof(needPanel))] private UIGroup panel;
 
     bool needPanel => interactEvent == AutoEvent.SwitchPanel;
 

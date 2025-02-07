@@ -1,6 +1,7 @@
 ﻿using NaughtyAttributes;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI.Extensions.Tweens;
 
 public class CameraFollow : MonoBehaviour
 {
@@ -11,7 +12,8 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] Hypertag targetTag;
     [SerializeField] TagMode tagMode = TagMode.Closest;
     [SerializeField] bool allowZoom;
-    [SerializeField] float zoomMargin = 1.1f;
+    [SerializeField, ShowIf(nameof(allowZoom))] float zoomMargin = 1.1f;
+    [SerializeField, ShowIf(nameof(allowZoom))] float zoomSpeed = 1.0f;
     [SerializeField] Vector2 minMaxSize = new Vector2(180.0f, 360.0f);
     [SerializeField, ShowIf(nameof(needObject))] Transform targetObject;
     [SerializeField, ShowIf(nameof(needFollowSpeed))] float followSpeed = 0.9f;
@@ -107,11 +109,15 @@ public class CameraFollow : MonoBehaviour
     {
         if ((targetTag != null) && (tagMode == TagMode.Average) && (allowZoom))
         {
-            float height1 = Mathf.Clamp(allObjectsBound.extents.y * zoomMargin, minMaxSize.x, minMaxSize.y);
-            float height2 = Mathf.Clamp(allObjectsBound.extents.x * zoomMargin, mainCamera.aspect * minMaxSize.x, mainCamera.aspect * minMaxSize.y) / mainCamera.aspect;
+            float height1 = Mathf.Clamp(allObjectsBound.extents.y + zoomMargin, minMaxSize.x, minMaxSize.y);
+            float height2 = Mathf.Clamp(allObjectsBound.extents.x + zoomMargin, mainCamera.aspect * minMaxSize.x, mainCamera.aspect * minMaxSize.y) / mainCamera.aspect;
 
-            float height = Mathf.Max(height1, height2);
-            mainCamera.orthographicSize = height;
+            float oldHeight = mainCamera.orthographicSize;
+            float targetHeight = Mathf.Max(height1, height2);
+
+            float newHeight = targetHeight + (oldHeight - targetHeight) * Mathf.Pow((1.0f - zoomSpeed), Time.fixedDeltaTime);
+
+            mainCamera.orthographicSize = newHeight;
         }
     }
 
@@ -141,7 +147,15 @@ public class CameraFollow : MonoBehaviour
 
     public Vector3 GetTargetPos()
     {
-        if (targetObject != null) return targetObject.transform.position;
+        CameraFollowTarget cft = null;
+
+        if (targetObject != null)
+        {
+            cft = targetObject.GetComponent<CameraFollowTarget>();
+            if (cft) return cft.followPos;
+
+            return targetObject.transform.position;
+        }
         else if (targetTag)
         {
             Vector3 selectedPosition = transform.position;
@@ -157,7 +171,9 @@ public class CameraFollow : MonoBehaviour
                     if (d < minDist)
                     {
                         minDist = d;
-                        selectedPosition = obj.position;
+                        cft = targetObject.GetComponent<CameraFollowTarget>();
+                        if (cft) selectedPosition = cft.followPos;
+                        else selectedPosition = obj.position;
                     }
                 }
             }
@@ -170,7 +186,9 @@ public class CameraFollow : MonoBehaviour
                     if (d > maxDist)
                     {
                         maxDist = d;
-                        selectedPosition = obj.position;
+                        cft = targetObject.GetComponent<CameraFollowTarget>();
+                        if (cft) selectedPosition = cft.followPos;
+                        else selectedPosition = obj.position;
                     }
                 }
             }
@@ -178,12 +196,16 @@ public class CameraFollow : MonoBehaviour
             {
                 if (potentialTransforms.Count > 0)
                 {
-                    allObjectsBound = new Bounds(potentialTransforms[0].position, Vector3.zero);
+                    cft = potentialTransforms[0].GetComponent<CameraFollowTarget>();
+                    if (cft) allObjectsBound = new Bounds(cft.followPos, Vector3.zero);
+                    else allObjectsBound = new Bounds(potentialTransforms[0].position, Vector3.zero);
                     selectedPosition = Vector3.zero;
                     foreach (var obj in potentialTransforms)
                     {
                         var d = Vector3.Distance(obj.position, transform.position);
-                        selectedPosition += obj.position;
+                        cft = obj.GetComponent<CameraFollowTarget>();
+                        if (cft) selectedPosition += cft.followPos;
+                        else selectedPosition += obj.position;
                         allObjectsBound.Encapsulate(obj.position);
                     }
                     selectedPosition /= potentialTransforms.Count;
@@ -192,6 +214,9 @@ public class CameraFollow : MonoBehaviour
 
             return selectedPosition;
         }
+
+        cft = GetComponent<CameraFollowTarget>();
+        if (cft) return cft.followPos;
 
         return transform.position;
     }
@@ -212,6 +237,27 @@ public class CameraFollow : MonoBehaviour
             Gizmos.DrawLine(new Vector2(r.xMax, r.yMin), new Vector2(r.xMax, r.yMax));
             Gizmos.DrawLine(new Vector2(r.xMax, r.yMax), new Vector2(r.xMin, r.yMax));
             Gizmos.DrawLine(new Vector2(r.xMin, r.yMax), new Vector2(r.xMin, r.yMin));
+        }
+
+        if ((allowZoom) && (allObjectsBound.size.magnitude > 0))
+        {
+            Bounds extraBounds = allObjectsBound;
+            extraBounds.extents *= zoomMargin;
+            // Force the correct aspect ratio now
+            float desiredAspectXOverY = mainCamera.aspect;
+            float desiredAspectYOverX = 1.0f / desiredAspectXOverY;
+            float aspect = extraBounds.size.x / extraBounds.size.y;
+            if (aspect > 1)
+            {
+                extraBounds.size = new Vector3(extraBounds.size.x, extraBounds.size.x * desiredAspectYOverX, extraBounds.size.z);
+            }
+            else
+            {
+                extraBounds.size = new Vector3(extraBounds.size.y * desiredAspectXOverY, extraBounds.size.y, extraBounds.size.z);
+            }
+
+            Gizmos.color = Color.yellow;
+            DebugHelpers.DrawBox(extraBounds);
         }
 
         if (cameraLimits)

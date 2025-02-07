@@ -122,4 +122,12 @@ public static class DebugHelpers
         Handles.Label(offsetPos, text, style);
 #endif
     }
+
+    public static void DrawBox(Bounds r)
+    {
+        Gizmos.DrawLine(new Vector2(r.min.x, r.min.y), new Vector2(r.max.x, r.min.y));
+        Gizmos.DrawLine(new Vector2(r.max.x, r.min.y), new Vector2(r.max.x, r.max.y));
+        Gizmos.DrawLine(new Vector2(r.max.x, r.max.y), new Vector2(r.min.x, r.max.y));
+        Gizmos.DrawLine(new Vector2(r.min.x, r.max.y), new Vector2(r.min.x, r.min.y));
+    }
 }
