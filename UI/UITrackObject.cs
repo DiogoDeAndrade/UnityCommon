@@ -46,7 +46,7 @@ public class UITrackObject : MonoBehaviour
             }
             else
             {
-                mainCamera = Hypertag.FindObjectWithHypertag<Camera>(cameraTag);
+                mainCamera = Hypertag.FindFirstObjectWithHypertag<Camera>(cameraTag);
             }
         }
         if (mainCanvas == null)
@@ -57,7 +57,7 @@ public class UITrackObject : MonoBehaviour
             }
             else
             {
-                mainCanvas = Hypertag.FindObjectWithHypertag<Canvas>(canvasTag);
+                mainCanvas = Hypertag.FindFirstObjectWithHypertag<Canvas>(canvasTag);
             }
         }
 

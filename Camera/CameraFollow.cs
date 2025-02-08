@@ -1,5 +1,6 @@
 ﻿using NaughtyAttributes;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI.Extensions.Tweens;
 
@@ -22,7 +23,6 @@ public class CameraFollow : MonoBehaviour
 
     private Camera mainCamera;
     private Bounds allObjectsBound;
-    private List<Transform> potentialTransforms = new();
 
     bool needObject => targetTag == null;
     bool needFollowSpeed => (mode == Mode.SimpleFeedbackLoop) || (mode == Mode.ExponentialDecay);
@@ -160,8 +160,7 @@ public class CameraFollow : MonoBehaviour
         {
             Vector3 selectedPosition = transform.position;
 
-            potentialTransforms.Clear();
-            gameObject.FindObjectsOfTypeWithHypertag(targetTag, potentialTransforms);
+            var potentialTransforms = HypertaggedObject.Get<Transform>(targetTag).ToList();
             if (tagMode == TagMode.Closest)
             {
                 var minDist = float.MaxValue;

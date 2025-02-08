@@ -4,16 +4,17 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Hypertag")]
 public class Hypertag : ScriptableObject
 {
-    public static T FindObjectWithHypertag<T>(Hypertag tag) where T : Component
+    public static T FindFirstObjectWithHypertag<T>(Hypertag tag) where T : Component
     {
-        var objects = FindObjectsByType<HypertaggedObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        List<T> ret = new List<T>();
+
+        var objects = HypertaggedObject.Get(tag);
         foreach (var obj in objects)
         {
-            if (obj.hypertag == tag)
+            var c = obj.GetComponent<T>();
+            if (c)
             {
-                var ret = obj.GetComponent<T>();
-
-                return ret;
+                return c;
             }
         }
 
@@ -23,16 +24,31 @@ public class Hypertag : ScriptableObject
     public static List<T> FindObjectsWithHypertag<T>(Hypertag tag) where T : Component
     {
         List<T> ret = new List<T>();
-        var objects = FindObjectsByType<HypertaggedObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        var objects = HypertaggedObject.Get(tag);
         foreach (var obj in objects)
         {
-            if (obj.hypertag == tag)
+            var c = obj.GetComponent<T>();
+            if (c)
             {
-                var c = obj.GetComponent<T>();
-                if (c)
-                {
-                    ret.Add(c);
-                }
+                ret.Add(c);
+            }
+        }
+
+        return ret;
+    }
+
+    public static List<T> FindObjectsWithHypertag<T>(Hypertag[] tags) where T : Component
+    {
+        List<T> ret = new List<T>();
+
+        var objects = HypertaggedObject.Get(tags);
+        foreach (var obj in objects)
+        {
+            var c = obj.GetComponent<T>();
+            if (c)
+            {
+                ret.Add(c);
             }
         }
 
