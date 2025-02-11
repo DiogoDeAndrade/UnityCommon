@@ -118,4 +118,35 @@ public class HypertaggedObject : MonoBehaviour
             }
         }
     }
+
+    public static IEnumerable<T> GetInRadius<T>(Hypertag tag, Vector3 position, float radius) where T : Component
+    {
+        if (allHypertagObjects.TryGetValue(tag, out var l))
+        {
+            foreach (var obj in l)
+            {
+                if (Vector3.Distance(position, obj.transform.position) < radius)
+                {
+                    var c = obj.GetComponent<T>();
+                    if (c) yield return c;
+                }
+            }
+        }
+    }
+
+    public static IEnumerable<T> GetInRadius<T>(Hypertag tag, Vector2 position, float radius) where T : Component
+    {
+        if (allHypertagObjects.TryGetValue(tag, out var l))
+        {
+            foreach (var obj in l)
+            {
+                if (Vector2.Distance(position, obj.transform.position) < radius)
+                {
+                    var c = obj.GetComponent<T>();
+                    if (c) yield return c;
+                }
+            }
+        }
+    }
+
 }
