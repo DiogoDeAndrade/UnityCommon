@@ -17,6 +17,8 @@ public class BaseUIControl : MonoBehaviour
     [SerializeField, ShowIf("needHighlightColor")] protected Color highlightColor;
     [SerializeField] protected BaseUIControl    _navUp;
     [SerializeField] protected BaseUIControl    _navDown;
+    [SerializeField] protected BaseUIControl    _navLeft;
+    [SerializeField] protected BaseUIControl    _navRight;
     [SerializeField] protected AudioClip        changeSnd;
 
     protected UIGroup parentGroup;
@@ -27,6 +29,8 @@ public class BaseUIControl : MonoBehaviour
     public bool isSelected => (parentGroup.uiEnable) && (parentGroup.selectedControl == this);
     public BaseUIControl navUp => _navUp;
     public BaseUIControl navDown => _navDown;
+    public BaseUIControl navLeft => _navLeft;
+    public BaseUIControl navRight => _navRight;
 
     public event OnSelect onSelect;
     public event OnDeselect onDeselect;
@@ -93,13 +97,25 @@ public class BaseUIControl : MonoBehaviour
 
     public virtual void MoveHorizontal(float dz, bool isDown)
     {
-
+        if (isDown)
+        {
+            if ((dz < -0.1f) && (_navLeft)) parentGroup.SetControl(_navLeft);
+            else if ((dz > 0.1f) && (_navRight)) parentGroup.SetControl(_navRight);
+        }
     }
 
     public virtual void Interact()
     {
         NotifyInteract();
     }
+
+    public void SetNav(BaseUIControl up, BaseUIControl down, BaseUIControl left, BaseUIControl right) { _navLeft = left; _navRight = right; _navUp = up; _navDown = down; }
+
+    public void SetNavLeft(BaseUIControl control) {  _navLeft = control; }
+    public void SetNavRight(BaseUIControl control) { _navRight = control; }
+    public void SetNavUp(BaseUIControl control) { _navUp = control; }
+    public void SetNavDown(BaseUIControl control) { _navDown = control; }
+
 }
 
 public class UIControl<T> : BaseUIControl where T : IEquatable<T>

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -81,14 +82,16 @@ public class UIGroup : MonoBehaviour
                     {
                         if (dy < -0.5f)
                         {
-                            _selectedControl = _selectedControl.navDown;
+                            var next = _selectedControl.navDown;
+                            _selectedControl = (next) ? (next) : (_selectedControl);
                             cooldownTimer = moveCooldown;
                             _verticalReset = false;
                             if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
                         }
                         else if (dy > 0.5f)
                         {
-                            _selectedControl = _selectedControl.navUp;
+                            var next = _selectedControl.navUp;
+                            _selectedControl = (next) ? (next) : (_selectedControl);
                             cooldownTimer = moveCooldown;
                             _verticalReset = false;
                             if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
@@ -102,7 +105,7 @@ public class UIGroup : MonoBehaviour
                     if (Mathf.Abs(dx) < 0.1f) _horizontalReset = true;
                     else
                     {
-                        _selectedControl?.MoveHorizontal(horizontalControl.GetAxis(), _horizontalReset);
+                        _selectedControl?.MoveHorizontal(dx, _horizontalReset);
                         _horizontalReset = false;
                     }
                 }
@@ -111,10 +114,20 @@ public class UIGroup : MonoBehaviour
                 {
                     if (selectSnd) SoundManager.PlaySound(SoundType.SecondaryFX, selectSnd);
                     _selectedControl?.Interact();
+                    OnSelect();
                 }
             }
         }
     }
+
+    internal void SetControl(BaseUIControl control)
+    {
+        _selectedControl = control;
+        cooldownTimer = moveCooldown;
+        _verticalReset = false;
+        if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
+    }
+
     public void SetUI(bool value)
     {
         _uiEnable = value;
@@ -131,4 +144,10 @@ public class UIGroup : MonoBehaviour
             cooldownTimer = moveCooldown;
         }
     }
+
+    protected virtual void OnSelect()
+    {
+
+    }
+
 }
