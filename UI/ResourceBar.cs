@@ -107,7 +107,7 @@ public abstract class ResourceBar : MonoBehaviour
         UpdateGfx();
     }
 
-    void Update()
+    protected virtual void Update()
     {
         if (isBar)
         {

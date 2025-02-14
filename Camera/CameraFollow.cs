@@ -20,6 +20,10 @@ public class CameraFollow : MonoBehaviour
     [SerializeField, ShowIf(nameof(needFollowSpeed))] float followSpeed = 0.9f;
     [SerializeField, ShowIf(nameof(needRect))] Rect rect = new Rect(-100.0f, -100.0f, 200.0f, 200.0f);
     [SerializeField] BoxCollider2D cameraLimits;
+    [SerializeField, Header("Debug")]
+    private bool displayTargetPos;
+    [SerializeField, ShowIf(nameof(displayTargetPos))]
+    private float displayTargetPosRadius = 0.5f;
 
     private Camera mainCamera;
     private Bounds allObjectsBound;
@@ -77,7 +81,8 @@ public class CameraFollow : MonoBehaviour
         // Nice explanation of this: https://www.youtube.com/watch?v=LSNQuFEDOyQ&ab_channel=FreyaHolm%C3%A9r
         Vector3 targetPos = GetTargetPos();
 
-        Vector3 newPos = targetPos + (transform.position - targetPos) * Mathf.Pow((1.0f - followSpeed), Time.fixedDeltaTime);
+        float factor = Mathf.Clamp01(Mathf.Pow((1.0f - followSpeed), Time.fixedDeltaTime));
+        Vector3 newPos = targetPos + (transform.position - targetPos) * factor;
         newPos.z = transform.position.z;
 
         transform.position = newPos;
@@ -109,8 +114,18 @@ public class CameraFollow : MonoBehaviour
     {
         if ((targetTag != null) && (tagMode == TagMode.Average) && (allowZoom))
         {
-            float height1 = Mathf.Clamp(allObjectsBound.extents.y + zoomMargin, minMaxSize.x, minMaxSize.y);
-            float height2 = Mathf.Clamp(allObjectsBound.extents.x + zoomMargin, mainCamera.aspect * minMaxSize.x, mainCamera.aspect * minMaxSize.y) / mainCamera.aspect;
+            Vector2 zoomLimits = minMaxSize;
+            if (cameraLimits != null)
+            {
+                float lim1 = cameraLimits.size.y * 0.5f;
+                float lim2 = cameraLimits.size.x * 0.5f / mainCamera.aspect;
+                float lim = Mathf.Min(lim1, lim2);
+
+                zoomLimits.y = Mathf.Min(lim, zoomLimits.y);
+            }
+
+            float height1 = Mathf.Clamp(allObjectsBound.extents.y + zoomMargin, zoomLimits.x, zoomLimits.y);
+            float height2 = Mathf.Clamp(allObjectsBound.extents.x + zoomMargin, mainCamera.aspect * zoomLimits.x, mainCamera.aspect * zoomLimits.y) / mainCamera.aspect;
 
             float oldHeight = mainCamera.orthographicSize;
             float targetHeight = Mathf.Max(height1, height2);
@@ -222,8 +237,11 @@ public class CameraFollow : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        Gizmos.color = Color.red;
-        Gizmos.DrawSphere(GetTargetPos(), 0.5f);
+        if (displayTargetPos)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawSphere(GetTargetPos(), displayTargetPosRadius);
+        }
 
         if (mode == Mode.CameraTrap)
         {
