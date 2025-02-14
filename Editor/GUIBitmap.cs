@@ -84,7 +84,7 @@ public class GUIBitmap
         }
     }
 
-    [MenuItem("Assets/Unity Common/Code From Texture")]
+    [MenuItem("Assets/Unity Common Tools/Code From Texture")]
     private static void CodeFromTexture()
     {
         // Get all sprites
@@ -135,7 +135,7 @@ public class GUIBitmap
         AssetDatabase.Refresh();
     }
 
-    [MenuItem("Assets/Unity Common/Code From Texture", validate = true)]
+    [MenuItem("Assets/Unity Common Tools/Code From Texture", validate = true)]
     private static bool CodeFromTextureValidation()
     {
         var selectedObject = Selection.activeObject;

@@ -39,8 +39,17 @@ public class SpriteEffect : MonoBehaviour
         spriteRenderer.GetPropertyBlock(mpb);
 
         ConfigureMaterial();
-    }
 
+#if UNITY_EDITOR
+        // Check if material has the right shader (a bit hard coded)
+        string shaderName = spriteRenderer.sharedMaterial.shader.name;
+        if (shaderName.IndexOf("Effect", StringComparison.InvariantCultureIgnoreCase) == -1)
+        {
+            Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
+        }
+#endif
+    }
+     
     public void SetRemap(ColorPalette colorPalette)
     {
         palette = colorPalette;
