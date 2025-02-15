@@ -19,12 +19,7 @@ public class HypertaggedObject : MonoBehaviour
         RemoveFromHypertagList(this);
     }
 
-    public bool HasAnyHypertag(List<Hypertag> hypertags)
-    {
-        return hypertags.IndexOf(hypertag) != -1;
-    }
-
-    public bool HasAnyHypertag(Hypertag[] hypertags)
+    public bool HasAnyHypertag(IEnumerable<Hypertag> hypertags)
     {
         foreach (var t in hypertags)
             if (hypertag == t) return true;
@@ -80,35 +75,7 @@ public class HypertaggedObject : MonoBehaviour
         }       
     }
 
-    public static IEnumerable<HypertaggedObject> Get(List<Hypertag> tags)
-    {
-#if UNITY_EDITOR
-        if (!EditorApplication.isPlaying)
-        {
-            var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
-            foreach (var obj in editorL)
-            {
-                if (!obj.HasAnyHypertag(tags)) continue;
-
-                yield return obj;
-            }
-            yield break;
-        }
-#endif
-
-        foreach (var tag in tags)
-        {
-            if (allHypertagObjects.TryGetValue(tag, out var l))
-            {
-                foreach (var obj in l)
-                {
-                    yield return obj;
-                }
-            }
-        }
-    }
-
-    public static IEnumerable<HypertaggedObject> Get(Hypertag[] tags)
+    public static IEnumerable<HypertaggedObject> Get(IEnumerable<Hypertag> tags)
     {
 #if UNITY_EDITOR
         if (!EditorApplication.isPlaying)
@@ -163,7 +130,7 @@ public class HypertaggedObject : MonoBehaviour
         }
     }
 
-    public static IEnumerable<T> Get<T>(List<Hypertag> tags) where T : Component
+    public static IEnumerable<T> Get<T>(IEnumerable<Hypertag> tags) where T : Component
     {
         foreach (var tag in tags)
         {
@@ -171,35 +138,6 @@ public class HypertaggedObject : MonoBehaviour
             {
                 var c = obj.GetComponent<T>();
                 if (c) yield return c;
-            }
-        }
-    }
-    public static IEnumerable<T> Get<T>(Hypertag[] tags) where T : Component
-    {
-#if UNITY_EDITOR
-        if (!EditorApplication.isPlaying)
-        {
-            var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
-            foreach (var obj in editorL)
-            {
-                if (!obj.HasAnyHypertag(tags)) continue;
-
-                var c = obj.GetComponent<T>();
-                if (c) yield return c;
-            }
-            yield break;
-        }
-#endif
-
-        foreach (var tag in tags)
-        {
-            if (allHypertagObjects.TryGetValue(tag, out var l))
-            {
-                foreach (var obj in l)
-                {
-                    var c = obj.GetComponent<T>();
-                    if (c) yield return c;
-                }
             }
         }
     }
@@ -219,6 +157,7 @@ public class HypertaggedObject : MonoBehaviour
                     if (c) yield return c;
                 }
             }
+            yield break;
         }
 #endif
 
@@ -250,6 +189,7 @@ public class HypertaggedObject : MonoBehaviour
                     if (c) yield return c;
                 }
             }
+            yield break;
         }
 #endif
         if (allHypertagObjects.TryGetValue(tag, out var l))
@@ -260,6 +200,76 @@ public class HypertaggedObject : MonoBehaviour
                 {
                     var c = obj.GetComponent<T>();
                     if (c) yield return c;
+                }
+            }
+        }
+    }
+
+    public static IEnumerable<T> GetInRadius<T>(IEnumerable<Hypertag> tags, Vector2 position, float radius) where T : Component
+    {
+#if UNITY_EDITOR
+        if (!EditorApplication.isPlaying)
+        {
+            var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+            foreach (var obj in editorL)
+            {
+                if (!obj.HasAnyHypertag(tags)) continue;
+                if (Vector2.Distance(position, obj.transform.position) < radius)
+                {
+                    var c = obj.GetComponent<T>();
+                    if (c) yield return c;
+                }
+            }
+            yield break;
+        }
+#endif
+
+        foreach (var tag in tags)
+        {
+            if (allHypertagObjects.TryGetValue(tag, out var l))
+            {
+                foreach (var obj in l)
+                {
+                    if (Vector2.Distance(position, obj.transform.position) < radius)
+                    {
+                        var c = obj.GetComponent<T>();
+                        if (c) yield return c;
+                    }
+                }
+            }
+        }
+    }
+
+    public static IEnumerable<T> GetInRadius<T>(IEnumerable<Hypertag> tags, Vector3 position, float radius) where T : Component
+    {
+#if UNITY_EDITOR
+        if (!EditorApplication.isPlaying)
+        {
+            var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+            foreach (var obj in editorL)
+            {
+                if (!obj.HasAnyHypertag(tags)) continue;
+                if (Vector3.Distance(position, obj.transform.position) < radius)
+                {
+                    var c = obj.GetComponent<T>();
+                    if (c) yield return c;
+                }
+            }
+            yield break;
+        }
+#endif
+
+        foreach (var tag in tags)
+        {
+            if (allHypertagObjects.TryGetValue(tag, out var l))
+            {
+                foreach (var obj in l)
+                {
+                    if (Vector3.Distance(position, obj.transform.position) < radius)
+                    {
+                        var c = obj.GetComponent<T>();
+                        if (c) yield return c;
+                    }
                 }
             }
         }
