@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public static class BoundsExtensions
 {
@@ -59,6 +57,13 @@ public static class BoundsExtensions
     public static bool IntersectTriangle(this Bounds b, Triangle triangle)
     {
         return AABB.Intersects(b.min, b.max, triangle.GetVertex(0), triangle.GetVertex(1), triangle.GetVertex(2));
+    }
+
+    public static Vector3 Random(this Bounds b)
+    {
+        return Vector3.right * UnityEngine.Random.Range(b.min.x, b.max.x) +
+               Vector3.up * UnityEngine.Random.Range(b.min.y, b.max.y) +
+               Vector3.forward * UnityEngine.Random.Range(b.min.z, b.max.z);
     }
 
     public static void DrawGizmo(this Bounds b)
