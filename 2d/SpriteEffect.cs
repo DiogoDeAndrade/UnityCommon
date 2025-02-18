@@ -1,6 +1,7 @@
 using UnityEngine;
 using NaughtyAttributes;
 using System;
+using UnityEditor;
 
 [ExecuteAlways]
 [RequireComponent(typeof(SpriteRenderer))]
@@ -21,6 +22,8 @@ public class SpriteEffect : MonoBehaviour
     private float           outlineWidth = 1.0f;
     [SerializeField, ShowIf(nameof(outlineEnable))]
     private Color           outlineColor = new Color(1.0f, 1.0f, 1.0f, 1.0f);
+    [SerializeField]
+    private bool            createMaterialCopy = true;
 
     public bool colorRemapEnable => (effects & Effects.ColorRemap) != 0;
     public bool inverseEnable => (effects & Effects.Inverse) != 0;
@@ -36,18 +39,30 @@ public class SpriteEffect : MonoBehaviour
         if (mpb == null) mpb = new();
 
         spriteRenderer = GetComponent<SpriteRenderer>();
+
+        if (createMaterialCopy)
+        {
+#if UNITY_EDITOR
+            if (EditorApplication.isPlaying)
+            {
+#endif
+                spriteRenderer.material = new Material(spriteRenderer.material);
+#if UNITY_EDITOR
+            }
+#endif
+        }
+#if UNITY_EDITOR
+            // Check if material has the right shader (a bit hard coded)
+            string shaderName = spriteRenderer.sharedMaterial.shader.name;
+            if (shaderName.IndexOf("Effect", StringComparison.InvariantCultureIgnoreCase) == -1)
+            {
+                Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
+            }
+#endif
+
         spriteRenderer.GetPropertyBlock(mpb);
 
         ConfigureMaterial();
-
-#if UNITY_EDITOR
-        // Check if material has the right shader (a bit hard coded)
-        string shaderName = spriteRenderer.sharedMaterial.shader.name;
-        if (shaderName.IndexOf("Effect", StringComparison.InvariantCultureIgnoreCase) == -1)
-        {
-            Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
-        }
-#endif
     }
      
     public void SetRemap(ColorPalette colorPalette)
