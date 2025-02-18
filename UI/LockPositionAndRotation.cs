@@ -3,40 +3,68 @@ using NaughtyAttributes;
 
 public class LockPositionAndRotation : MonoBehaviour
 {
-    public bool respectRotation = false;
-    public bool preserveRelativePositon = false;
-    [ShowIf("preserveRelativePositon")]
-    public Transform relativeTransform;
+    public enum RotationBehaviour { None, PreserveInitial, Zero };
+    public enum PositionBehaviour { None, RelativeTo, ParentPosition };
+
+    public RotationBehaviour    rotationBehaviour = RotationBehaviour.PreserveInitial;
+    public PositionBehaviour    positionBehaviour = PositionBehaviour.None;
+
+    [ShowIf(nameof(needRelative))]
+    public Transform    relativeTransform;
+    [ShowIf(nameof(needOffset))]
+    public Vector3      offset;
+
+    bool needRelative => positionBehaviour == PositionBehaviour.RelativeTo;
+    bool needOffset => positionBehaviour != PositionBehaviour.None;
 
     // Keep vars
     Quaternion initialRotation;
-    Vector3 deltaPos;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         initialRotation = transform.rotation;
 
-        if (preserveRelativePositon)
-        {
-            if (relativeTransform)
-            {
-                deltaPos = transform.position - relativeTransform.transform.position;
-            }
-            else preserveRelativePositon = false;
-        }
-
+        RunRotationBehaviour();
     }
 
     private void LateUpdate()
     {
-        if (!respectRotation)
+        RunRotationBehaviour();
+        RunPositionBehaviour();
+    }
+
+    private void RunRotationBehaviour()
+    {
+        switch (rotationBehaviour)
         {
-            transform.rotation = initialRotation;
+            case RotationBehaviour.None:
+                break;
+            case RotationBehaviour.PreserveInitial:
+                transform.rotation = initialRotation;
+                break;
+            case RotationBehaviour.Zero:
+                transform.rotation = Quaternion.identity;
+                break;
+            default:
+                break;
         }
-        if (preserveRelativePositon)
+    }
+
+    void RunPositionBehaviour()
+    {
+        switch (positionBehaviour)
         {
-            transform.position = relativeTransform.position + deltaPos;
+            case PositionBehaviour.None:
+                break;
+            case PositionBehaviour.RelativeTo:
+                transform.position = relativeTransform.position + offset; 
+                break;
+            case PositionBehaviour.ParentPosition:
+                transform.position = transform.parent.position + offset;
+                break;
+            default:
+                break;
         }
     }
 }

@@ -261,7 +261,7 @@ public class CameraFollow : MonoBehaviour
             Bounds extraBounds = allObjectsBound;
             extraBounds.extents *= zoomMargin;
             // Force the correct aspect ratio now
-            float desiredAspectXOverY = mainCamera.aspect;
+            float desiredAspectXOverY = (mainCamera) ? (mainCamera.aspect) : (16.0f / 9.0f);
             float desiredAspectYOverX = 1.0f / desiredAspectXOverY;
             float aspect = extraBounds.size.x / extraBounds.size.y;
             if (aspect > 1)
