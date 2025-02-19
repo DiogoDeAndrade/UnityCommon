@@ -36,5 +36,15 @@ public static class ColorExtensions
         Color cInc = c1 - c2;
         return Mathf.Sqrt(cInc.r * cInc.r + cInc.g * cInc.g + cInc.b * cInc.b + cInc.a * cInc.a);
     }
+
+    public static Color EvaluateLinear(this Gradient gradient, float t)
+    {
+        if (gradient.colorSpace != ColorSpace.Linear)
+        {
+            return gradient.Evaluate(t).linear;
+        }
+
+        return gradient.Evaluate(t);
+    }
 };
 
