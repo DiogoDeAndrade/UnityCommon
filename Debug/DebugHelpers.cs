@@ -130,4 +130,20 @@ public static class DebugHelpers
         Gizmos.DrawLine(new Vector2(r.max.x, r.max.y), new Vector2(r.min.x, r.max.y));
         Gizmos.DrawLine(new Vector2(r.min.x, r.max.y), new Vector2(r.min.x, r.min.y));
     }
+
+    public static void DrawHemisphere(Vector3 position, Vector3 right, Vector3 up, float radius, int divs = 20)
+    {
+        float angleInc = Mathf.PI / (float)(divs);
+
+        Vector3 prevPos = position + radius * right;
+        float   angle = angleInc;
+        for (int i = 0; i < divs; i++)
+        {
+            Vector3 p = position + radius * Mathf.Cos(angle) * right + radius * Mathf.Sin(angle) * up;
+            Gizmos.DrawLine(prevPos, p);
+            prevPos = p;
+            angle += angleInc;
+        }
+        Gizmos.DrawLine(prevPos, position + radius * right);
+    }
 }
