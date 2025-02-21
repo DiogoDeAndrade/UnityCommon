@@ -195,6 +195,12 @@ public class HealthSystem : MonoBehaviour
         _dead = (_health <= 0.0f);
     }
 
+    public void ResetHealth()
+    {
+        _health = maxHealth;
+        _dead = false;
+    }
+
     [Button("Deal 10% Damage")]
     void DealOneDamage()
     {
