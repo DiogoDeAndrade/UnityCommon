@@ -59,5 +59,13 @@ public static class TransformExtensions
     {
         return transform.Tween().Interpolate(transform.localPosition, transform.localPosition + moveDelta, time, (currentValue) => transform.localPosition = currentValue, name);
     }
+    public static Tweener.BaseInterpolator MoveTo(this Transform transform, Vector3 targetPos, float time, string name = null)
+    {
+        return transform.Tween().Interpolate(transform.localPosition, targetPos, time, (currentValue) => transform.localPosition = currentValue, name);
+    }
+    public static Tweener.BaseInterpolator MoveToWorld(this Transform transform, Vector3 targetPosWorld, float time, string name = null)
+    {
+        return transform.Tween().Interpolate(transform.position, targetPosWorld, time, (currentValue) => transform.position = currentValue, name);
+    }
 
 }
