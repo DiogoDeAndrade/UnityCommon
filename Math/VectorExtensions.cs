@@ -58,10 +58,22 @@ public static class VectorExtensions
         return UnityEngine.Random.Range(limits.x, limits.y);
     }
 
+    public static Vector2 RandomXY(this Vector2 v)
+    {
+        return new Vector2(UnityEngine.Random.Range(0.0f, v.x), UnityEngine.Random.Range(0.0f, v.y));
+    }
+
+
     public static float Random(this Vector2 limits, System.Random random)
     {
         return random.Range(limits.x, limits.y);
     }
+
+    public static Vector2 RandomXY(this Vector2 v, System.Random randomGenerator)
+    {
+        return new Vector2(randomGenerator.Range(0.0f, v.x), randomGenerator.Range(0.0f, v.y));
+    }
+
 
     public static int Random(this Vector2Int limits)
     {
