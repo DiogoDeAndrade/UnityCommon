@@ -68,4 +68,10 @@ public static class TransformExtensions
         return transform.Tween().Interpolate(transform.position, targetPosWorld, time, (currentValue) => transform.position = currentValue, name);
     }
 
+    public static Tweener.BaseInterpolator RotateTo(this Transform transform, Quaternion targetRotation, float time, string name = null)
+    {
+        Quaternion srcRotation = transform.rotation;
+
+        return transform.Tween().Interpolate(0.0f, 1.0f, time, (currentValue) => transform.rotation = Quaternion.Slerp(srcRotation, targetRotation, currentValue), name);
+    }
 }
