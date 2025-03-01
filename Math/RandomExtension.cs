@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Linq;
 
 public static class RandomExtension
 {
@@ -13,6 +9,8 @@ public static class RandomExtension
 
     public static int Range(this System.Random rnd, int valMin, int valMax)
     {
+        if (valMin == valMax) return valMin;
+
         return rnd.Next() % (valMax - valMin) + valMin;
     }
 
