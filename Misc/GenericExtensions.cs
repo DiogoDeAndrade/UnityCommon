@@ -46,6 +46,15 @@ public static class GenericExtensions
         }
     }
 
+    static public T PopLast<T>(this List<T> l)
+    {
+        if (l.Count == 0) return default(T);
+
+        var ret = l[l.Count - 1];
+        l.RemoveAt(l.Count - 1);
+        return ret;
+    }
+
     static public T PopFirst<T>(this List<T> l)
     {
         if (l.Count == 0) return default(T);
