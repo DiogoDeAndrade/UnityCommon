@@ -53,7 +53,8 @@ public class BuildTool : EditorWindow
         {
             EditorGUI.BeginChangeCheck();
 
-            buildDefs.username = EditorGUILayout.TextField("Itch.io Username", buildDefs.username);
+            if (buildDefs.projectName == "") buildDefs.projectName = PlayerSettings.productName.ToLower().Replace(" ", "");
+
             buildDefs.buildWindows = EditorGUILayout.Toggle("Build for Windows", buildDefs.buildWindows);
             buildDefs.buildWeb = EditorGUILayout.Toggle("Build for Web", buildDefs.buildWeb);
             if (buildDefs.anyBuilds)
@@ -63,6 +64,11 @@ public class BuildTool : EditorWindow
             if (buildDefs.createZipFiles)
             {
                 buildDefs.uploadToItch = EditorGUILayout.Toggle("Upload to Itch", buildDefs.uploadToItch);
+            }
+            if (buildDefs.uploadToItch)
+            {
+                buildDefs.username = EditorGUILayout.TextField("Itch.io Username", buildDefs.username);
+                buildDefs.projectName = EditorGUILayout.TextField("Itch.io Project Name", buildDefs.projectName);
             }
 
             if (EditorGUI.EndChangeCheck())
@@ -255,7 +261,7 @@ public class BuildTool : EditorWindow
             return;
         }
 
-        string productName = Application.productName.ToLower();
+        string productName = buildDefs.projectName;
         string command = $"\"{butlerPath}\" push \"{zipFilePath}\" {buildDefs.username}/{productName}:{channel} --userversion {buildDefs.version}";
         Log("Executing: " + command);
 
