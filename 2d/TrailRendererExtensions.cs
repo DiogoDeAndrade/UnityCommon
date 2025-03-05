@@ -9,8 +9,11 @@ public static class TrailRendererExtensions
         
         return trailRenderer.Tween().Interpolate(0.0f, 1.0f, time, (currentValue) =>
         {
-            trailRenderer.startColor = Color.Lerp(startColor, startColor.ChangeAlpha(targetAlphaStartPoint), currentValue);
-            trailRenderer.endColor = Color.Lerp(endColor, endColor.ChangeAlpha(targetAlphaStartPoint), currentValue);
+            if (trailRenderer)
+            {
+                trailRenderer.startColor = Color.Lerp(startColor, startColor.ChangeAlpha(targetAlphaStartPoint), currentValue);
+                trailRenderer.endColor = Color.Lerp(endColor, endColor.ChangeAlpha(targetAlphaStartPoint), currentValue);
+            }
         }, name);
     }
 }

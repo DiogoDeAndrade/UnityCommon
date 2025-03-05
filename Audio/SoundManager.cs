@@ -72,9 +72,7 @@ public class SoundManager : MonoBehaviour
     {
         if (startMusic)
         {
-            musicSource = _PlaySound(SoundType.Music, startMusic, 0, 1);
-            musicSource.loop = true;
-            musicSource.FadeTo(1.0f, 1.0f);
+            musicSource = _PlayMusic(startMusic, 1.0f, 1.0f);
         }
     }
     private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
@@ -87,7 +85,10 @@ public class SoundManager : MonoBehaviour
             return musicSource;
         }
 
-        if (musicSource.clip == clip) return musicSource;
+        if (musicSource.clip == clip)
+        {
+            return musicSource;
+        }
 
         if (clip == null)
         {
@@ -99,26 +100,18 @@ public class SoundManager : MonoBehaviour
         var newMusicSource = _PlaySound(SoundType.Music, clip, 0, 1);
         newMusicSource.loop = true;
 
-        StartCoroutine(CrossfadeMusic(newMusicSource, volume));
+        newMusicSource.FadeTo(volume, defaultCrossfadeTime);
+        var oldMusicSource = musicSource;
+        musicSource.FadeTo(0.0f, defaultCrossfadeTime).Done(
+            () =>
+            {
+                oldMusicSource.Stop();
+                oldMusicSource.loop = false;
+            });
+
+        musicSource = newMusicSource;        
 
         return newMusicSource;
-    }
-
-    IEnumerator CrossfadeMusic(AudioSource newMusicSource, float volume)
-    {
-        musicSource.FadeTo(0.0f, defaultCrossfadeTime);
-
-        var interpolator = newMusicSource.FadeTo(volume, defaultCrossfadeTime);
-
-        while (!interpolator.isFinished)
-        {
-            yield return null;
-        }
-
-        musicSource.loop = false;
-        musicSource.Stop();
-        
-        musicSource = newMusicSource;
     }
 
     private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f)

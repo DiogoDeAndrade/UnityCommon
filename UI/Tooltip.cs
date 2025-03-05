@@ -8,14 +8,17 @@ public class Tooltip : MonoBehaviour
     Canvas          parentCanvas;
     RectTransform   rectTransform;
 
-    void Start()
+    private void Awake()
     {
         text = GetComponentInChildren<TextMeshProUGUI>();
         canvasGroup = GetComponent<CanvasGroup>();
         parentCanvas = GetComponentInParent<Canvas>();
         rectTransform = transform as RectTransform;
         canvasGroup.alpha = 0.0f;
+    }
 
+    void Start()
+    {
         if (parentCanvas.renderMode != RenderMode.WorldSpace)
         {
             if ((parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ||

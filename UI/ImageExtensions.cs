@@ -17,7 +17,7 @@ public static class ImageExtensions
     public static Tweener.BaseInterpolator FadeTo(this Image image, float targetAlpha, float time)
     {
         if (image.color.a == targetAlpha) return null;
-        return image.Tween().Interpolate(image.color.a, targetAlpha, time, (value) => image.color = image.color.ChangeAlpha(value), "ImageColor");
+        return image.Tween().Interpolate(image.color.a, targetAlpha, time, (value) => { if (image) image.color = image.color.ChangeAlpha(value); }, "ImageColor");
     }
 
 }

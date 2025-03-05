@@ -16,7 +16,7 @@ public static class CanvasGroupExtensions
     public static Tweener.BaseInterpolator FadeTo(this CanvasGroup group, float targetAlpha, float time)
     {
         if (group.alpha == targetAlpha) return null;
-        return group.Tween().Interpolate(group.alpha, targetAlpha, time, (value) => group.alpha = value, "CanvasAlpha");
+        return group.Tween().Interpolate(group.alpha, targetAlpha, time, (value) => { if (group) group.alpha = value; }, "CanvasAlpha");
     }
 
 }

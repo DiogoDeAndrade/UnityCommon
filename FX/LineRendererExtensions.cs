@@ -16,8 +16,11 @@ public static class LineRendererExtensions
 
         return lineRenderer.Tween().Interpolate(0.0f, 1.0f, time, (value) =>
         {
-            lineRenderer.startColor = Color.Lerp(cStart, cStart.ChangeAlpha(targetAlpha), value);
-            lineRenderer.endColor = Color.Lerp(cEnd, cEnd.ChangeAlpha(targetAlpha), value);
+            if (lineRenderer)
+            {
+                lineRenderer.startColor = Color.Lerp(cStart, cStart.ChangeAlpha(targetAlpha), value);
+                lineRenderer.endColor = Color.Lerp(cEnd, cEnd.ChangeAlpha(targetAlpha), value);
+            }
         }, "LRFade");
     }
 }
