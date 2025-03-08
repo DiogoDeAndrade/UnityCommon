@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public static class VectorExtensions
@@ -165,6 +166,25 @@ public static class VectorExtensions
     public static Vector3 PerpendicularXY(this Vector3 v)
     {
         return new Vector3(-v.y, v.x, v.z);
+    }
+
+    public static Vector2Int xy(this Vector3Int v)
+    {
+        return new Vector2Int(v.x, v.y);
+    }
+
+    public static Vector3Int xy0(this Vector2Int v)
+    {
+        return new Vector3Int(v.x, v.y, 0);
+    }
+
+    public static Vector2Int toInt(this Vector2 v)
+    {
+        return new Vector2Int((int)v.x, (int)v.y);
+    }
+    public static Vector3Int toInt(this Vector3 v)
+    {
+        return new Vector3Int((int)v.x, (int)v.y, (int)v.z);
     }
 };
 

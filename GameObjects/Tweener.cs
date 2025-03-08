@@ -21,6 +21,8 @@ public class Tweener : MonoBehaviour
 
         public void Run(float elapsedTime)
         {
+            if (currentTime >= totalTime) return;
+
             if (delayStartTime > 0.0f)
             {
                 delayStartTime -= elapsedTime;
@@ -55,6 +57,26 @@ public class Tweener : MonoBehaviour
         {
             delayStartTime = time;
             return this;
+        }
+
+        public void Complete(bool runToEnd = true, bool runDone = true)
+        {
+            currentTime = totalTime;
+            if (runToEnd)
+            {
+                float t = Mathf.Clamp01(currentTime / totalTime);
+                t = easeFunction(t);
+                EvaluateAndSet(t);
+            }
+            if (!runDone)
+            {
+                doneActions = null;
+            }
+        }
+
+        public void Interrupt(bool runDone = true)
+        {
+            Complete(false, runDone);
         }
     }
 
@@ -169,6 +191,7 @@ public class Tweener : MonoBehaviour
         for (int i = 0; i < interpolators.Count; i++)
         {
             if (interpolators[i] == null) continue;
+
             interpolators[i].Run(Time.deltaTime);
             if (interpolators[i].isFinished)
             {
