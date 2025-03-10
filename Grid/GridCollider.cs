@@ -11,7 +11,7 @@ public class GridCollider : MonoBehaviour
     void OnEnable()
     {
         gridSystem = GetComponentInParent<GridSystem>();
-        gridSystem.Register(this);
+        gridSystem?.Register(this);
         spriteRenderer = GetComponent<SpriteRenderer>();
         tilemapRenderer = GetComponent<TilemapRenderer>();
     }
@@ -19,6 +19,6 @@ public class GridCollider : MonoBehaviour
     void OnDisable()
     {
         gridSystem = GetComponentInParent<GridSystem>();
-        gridSystem.Unregister(this);
+        gridSystem?.Unregister(this);
     }
 }
