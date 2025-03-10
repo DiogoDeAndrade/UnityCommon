@@ -1,11 +1,10 @@
-using System;
 using UnityEngine;
-using UnityEngine.EventSystems;
-
 public class GridObject : MonoBehaviour
 {
+    public delegate void OnMove(Vector2Int sourcePos, Vector2Int destPos);
+    public event OnMove onMove;
+
     private Grid        grid;
-    private Vector2     originalPos;
     private Vector3     gridOffset;
     
     private Tweener.BaseInterpolator    moveInterpolator;
@@ -28,10 +27,6 @@ public class GridObject : MonoBehaviour
     void ClampToGrid()
     {
         transform.position = Snap(transform.position);
-    }
-
-    void Update()
-    {
     }
 
     public Vector2Int WorldToGrid(Vector3 position)
@@ -77,9 +72,11 @@ public class GridObject : MonoBehaviour
             deltaPos.y = Mathf.Clamp(deltaPos.y, -1.0f, 1.0f);
         }
 
-        float moveTime = deltaPos.magnitude / speed.magnitude;
+        var endPosGrid = originalGridPos + deltaPos.toInt();
+        Vector3 endPos = GridToWorld(endPosGrid);
+        deltaPos = endPos - transform.position;
 
-        Vector3 endPos = GridToWorld(originalGridPos + deltaPos.toInt());
+        float moveTime = deltaPos.magnitude / speed.magnitude;
 
         moveInterpolator = transform.MoveToWorld(endPos, moveTime, "Move").EaseFunction(Ease.OutBack).Done(
             () =>
@@ -87,14 +84,18 @@ public class GridObject : MonoBehaviour
                 moveInterpolator = null;
             });
 
+        onMove(originalGridPos, endPosGrid);
+
         return true;
     }
 
-    internal void TeleportTo(Vector2 target)
+    public void TeleportTo(Vector2 target)
     {
-        originalPos = transform.position;
+        var originalPos = WorldToGrid(transform.position);
         transform.position = Snap(target);
         moveInterpolator.Interrupt();
         moveInterpolator = null;
+
+        onMove(originalPos, WorldToGrid(target));
     }
 }
