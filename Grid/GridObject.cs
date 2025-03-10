@@ -1,27 +1,33 @@
+using System;
 using UnityEngine;
+
 public class GridObject : MonoBehaviour
 {
     public delegate void OnMove(Vector2Int sourcePos, Vector2Int destPos);
     public event OnMove onMove;
 
-    private Grid        grid;
-    private Vector3     gridOffset;
+    private GridSystem  gridSystem;
     
     private Tweener.BaseInterpolator    moveInterpolator;
 
     public bool isMoving => (moveInterpolator != null) && (!moveInterpolator.isFinished);
     public Vector2 lastDelta { get; private set; }
 
-    private void Awake()
+    private void Start()
     {
-        grid = GetComponentInParent<Grid>();
-        if (grid == null)
-        {
-            grid = FindFirstObjectByType<Grid>();
-        }
-        gridOffset = new Vector3(grid.cellSize.x * 0.5f, grid.cellSize.y * 0.5f, 0.0f);
-
         ClampToGrid();
+    }
+
+    private void OnEnable()
+    {
+        gridSystem = GetComponentInParent<GridSystem>();
+        gridSystem?.Register(this);
+    }
+
+    private void OnDisable()
+    {
+        gridSystem = GetComponentInParent<GridSystem>();
+        gridSystem?.Unregister(this);
     }
 
     void ClampToGrid()
@@ -29,54 +35,30 @@ public class GridObject : MonoBehaviour
         transform.position = Snap(transform.position);
     }
 
-    public Vector2Int WorldToGrid(Vector3 position)
-    {
-        return grid.WorldToCell(position).xy();
-    }
-
-    public Vector3 GridToWorld(Vector3Int gridPos)
-    {
-        return grid.CellToWorld(gridPos) + gridOffset;
-    }
-
-    public Vector3 GridToWorld(Vector2Int gridPos)
-    {
-        return grid.CellToWorld(gridPos.xy0()) + gridOffset;
-    }
-
-    public Vector2 Snap(Vector3 position)
-    {
-        // Set to grid
-        var gridPos = grid.WorldToCell(position);
-
-        return GridToWorld(gridPos);
-    }
+    public Vector3 Snap(Vector3 position) => gridSystem.Snap(position);
+    public  Vector2Int WorldToGrid(Vector3 worldPosition) => gridSystem.WorldToGrid(worldPosition);
+    public Vector2 GridToWorld(Vector3Int gridPosition) => gridSystem.GridToWorld(gridPosition);
+    public Vector2 GridToWorld(Vector2Int gridPosition) => gridSystem.GridToWorld(gridPosition);
 
     public bool MoveToGrid(Vector2Int gridPos, Vector2 speed)
     {
+        // This only moves one tile in any direction, and doesn't allow for diagonals
+
         // Check if object can move to this position
         var targetWorldPos = GridToWorld(gridPos.xy0());
         var originalGridPos = WorldToGrid(transform.position);
 
-        Vector2 deltaPos = targetWorldPos - transform.position;
-        deltaPos.x = Mathf.Floor(deltaPos.x / grid.cellSize.x);
-        deltaPos.y = Mathf.Floor(deltaPos.y / grid.cellSize.y);
+        Vector2Int deltaPos = Vector2Int.zero;
+        if (gridPos.x < originalGridPos.x) deltaPos.x = -1;
+        else if (gridPos.x > originalGridPos.x) deltaPos.x = 1;
+        else if (gridPos.y < originalGridPos.y) deltaPos.y = -1;
+        else if (gridPos.y > originalGridPos.y) deltaPos.y = 1;
 
-        if (deltaPos.x != 0)
-        {
-            deltaPos.x = Mathf.Clamp(deltaPos.x , - 1.0f, 1.0f);
-            deltaPos.y = 0.0f;            
-        }
-        else if (deltaPos.y != 0)
-        {
-            deltaPos.y = Mathf.Clamp(deltaPos.y, -1.0f, 1.0f);
-        }
-
-        var endPosGrid = originalGridPos + deltaPos.toInt();
+        var endPosGrid = originalGridPos + deltaPos;
         Vector3 endPos = GridToWorld(endPosGrid);
-        deltaPos = endPos - transform.position;
 
-        float moveTime = deltaPos.magnitude / speed.magnitude;
+        var worldDistance = (endPos - transform.position).magnitude;
+        float moveTime = worldDistance / speed.magnitude;
 
         moveInterpolator = transform.MoveToWorld(endPos, moveTime, "Move").EaseFunction(Ease.OutBack).Done(
             () =>
@@ -88,6 +70,7 @@ public class GridObject : MonoBehaviour
 
         return true;
     }
+
 
     public void TeleportTo(Vector2 target)
     {
