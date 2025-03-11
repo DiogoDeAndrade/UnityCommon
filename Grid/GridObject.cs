@@ -25,6 +25,7 @@ public class GridObject : MonoBehaviour
 
     public bool isMoving => (moveInterpolator != null) && (!moveInterpolator.isFinished);
     public Vector2 lastDelta { get; private set; }
+    public Vector2 cellSize => gridSystem.cellSize;
 
     private void Awake()
     {
