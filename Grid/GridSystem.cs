@@ -83,4 +83,16 @@ public class GridSystem : MonoBehaviour
 
         return false;
     }
+
+    public List<GridAction> GetActions(GridObject subject, Vector2Int position)
+    {
+        var ret = new List<GridAction>();
+
+        foreach (var obj in gridObjects)
+        {
+            obj.GatherActions(subject, position, ret);
+        }
+
+        return ret;
+    }
 }

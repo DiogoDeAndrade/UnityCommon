@@ -23,32 +23,7 @@ public class MovementGrid_SpriteChange : MonoBehaviour
 
     private void ChangeSprite(Vector2Int sourcePos, Vector2Int destPos)
     {
-        int currentDir = -1;
-        Vector2 currentDelta = destPos - sourcePos;
-
-        if (Mathf.Abs(currentDelta.x) < Mathf.Abs(currentDelta.y))
-        {
-            // More movement in Y than X
-            if (currentDelta.y > 0.0f)
-            {
-                currentDir = 2;
-            }
-            else if (currentDelta.y < 0.0f)
-            {
-                currentDir = 0;
-            }
-        }
-        else
-        {
-            if (currentDelta.x > 0.0f)
-            {
-                currentDir = 3;
-            }
-            else if (currentDelta.x < 0.0f)
-            {
-                currentDir = 1;
-            }
-        }
+        int currentDir = gridObject.GetFacingDirection();
 
         switch (currentDir)
         {

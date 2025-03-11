@@ -1,6 +1,6 @@
 using NaughtyAttributes;
 using System;
-using UnityEditor.ShaderKeywordFilter;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -18,12 +18,18 @@ public class GridObject : MonoBehaviour
     public delegate void OnTurnTo(Vector2Int sourcePos, Vector2Int destPos);
     public event OnTurnTo onTurnTo;
 
-    private GridSystem  gridSystem;
-    
+    private GridSystem                  gridSystem;
+    private Tilemap                     tilemap;
+    private int                         facingDirection;    
     private Tweener.BaseInterpolator    moveInterpolator;
 
     public bool isMoving => (moveInterpolator != null) && (!moveInterpolator.isFinished);
     public Vector2 lastDelta { get; private set; }
+
+    private void Awake()
+    {
+        tilemap = GetComponent<Tilemap>();
+    }
 
     private void Start()
     {
@@ -31,6 +37,8 @@ public class GridObject : MonoBehaviour
         {
             ClampToGrid();
         }
+
+        facingDirection = 0;
     }
 
     private void OnEnable()
@@ -91,6 +99,8 @@ public class GridObject : MonoBehaviour
                     });
                 }
 
+                ComputeFacingFromVector(deltaPos);
+
                 onTurnTo?.Invoke(originalGridPos, endPosGrid);
                 return false;
             }
@@ -101,6 +111,10 @@ public class GridObject : MonoBehaviour
             {
                 moveInterpolator = null;
             });
+
+        ComputeFacingFromVector(deltaPos);
+
+        lastDelta = endPos - transform.position;
 
         onTurnTo?.Invoke(originalGridPos, endPosGrid);
         onMove?.Invoke(originalGridPos, endPosGrid);
@@ -122,5 +136,72 @@ public class GridObject : MonoBehaviour
         moveInterpolator = null;
 
         onMove(originalPos, WorldToGrid(target));
+    }
+
+    void ComputeFacingFromVector(Vector2 deltaPos)
+    {
+        facingDirection = -1;
+
+        if (Mathf.Abs(deltaPos.x) < Mathf.Abs(deltaPos.y))
+        {
+            // More movement in Y than X
+            if (deltaPos.y > 0.0f)
+            {
+                facingDirection = 2;
+            }
+            else if (deltaPos.y < 0.0f)
+            {
+                facingDirection = 0;
+            }
+        }
+        else
+        {
+            if (deltaPos.x > 0.0f)
+            {
+                facingDirection = 3;
+            }
+            else if (deltaPos.x < 0.0f)
+            {
+                facingDirection = 1;
+            }
+        }
+    }
+
+    public Vector2Int GetPositionFacing()
+    {
+        return WorldToGrid(transform.position) + GetFacingDirection2i();
+    }
+
+    public int GetFacingDirection() => facingDirection;
+    public Vector2Int GetFacingDirection2i()
+    {
+        if (facingDirection == 0) return new Vector2Int(0, -1);
+        if (facingDirection == 1) return new Vector2Int(-1, 0);
+        if (facingDirection == 2) return new Vector2Int(0, 1);
+        if (facingDirection == 3) return new Vector2Int(1, 0);
+
+        return Vector2Int.zero;
+    }
+
+    public void GatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
+    {
+        if (tilemap == null)
+        {
+            // Not a tilemap, just a single grid cell
+            if (gridSystem.WorldToGrid(transform.position) == position)
+            {
+                var objActions = GetComponents<GridAction>();
+                foreach (var action in objActions)
+                {
+                    if (action.CanRunAction(subject))
+                    {
+                        actions.Add(action);
+                    }
+                }
+                return;
+            }
+        }
+
+        // Tilemaps always intersect, get all actions and see if they redirect to something
     }
 }

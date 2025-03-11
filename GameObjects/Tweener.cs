@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using static UnityEngine.InputSystem.OnScreen.OnScreenStick;
 
 public class Tweener : MonoBehaviour
 {
@@ -80,7 +81,7 @@ public class Tweener : MonoBehaviour
         }
     }
 
-    class Interpolator<T> : BaseInterpolator 
+    public class Interpolator<T> : BaseInterpolator 
     {
         public Action<T>       action;
         public T               startValue;
@@ -252,6 +253,16 @@ public class Tweener : MonoBehaviour
             }
             CompleteAction(foundIndex);
         }
+    }
+
+    public BaseInterpolator GetInterpolator(string name)
+    {
+        if (namedInterpolators.TryGetValue(name, out int foundIndex))
+        {
+            return interpolators[foundIndex];
+        }
+
+        return null;
     }
 }
 
