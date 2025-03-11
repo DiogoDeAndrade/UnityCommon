@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -65,5 +66,21 @@ public class GridSystem : MonoBehaviour
         var gridPos = grid.WorldToCell(position);
 
         return GridToWorld(gridPos);
+    }
+
+    public bool CheckCollision(Vector2Int endPosGrid, GridObject gridObject)
+    {
+        foreach (var collider in gridColliders)
+        {
+            // Check if this collider is on the same object as the given object
+            if (collider.transform.IsChildOf(gridObject.transform)) continue;
+
+            if (collider.IsIntersecting(endPosGrid))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

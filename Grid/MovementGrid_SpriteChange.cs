@@ -18,7 +18,7 @@ public class MovementGrid_SpriteChange : MonoBehaviour
         spriteRenderer = GetComponent<SpriteRenderer>();
         gridObject = GetComponent<GridObject>();
 
-        gridObject.onMove += ChangeSprite;
+        gridObject.onTurnTo += ChangeSprite;
     }
 
     private void ChangeSprite(Vector2Int sourcePos, Vector2Int destPos)

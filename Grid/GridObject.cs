@@ -1,10 +1,22 @@
+using NaughtyAttributes;
 using System;
+using UnityEditor.ShaderKeywordFilter;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 public class GridObject : MonoBehaviour
 {
+    [SerializeField] 
+    private bool snapOnStart = false;
+    [SerializeField] 
+    private bool checkCollisionOnMove = true;
+    [SerializeField, Range(-1.0f, 1.0f), ShowIf(nameof(checkCollisionOnMove))]
+    private float moveAnimationOnCollision = 0.0f;
+
     public delegate void OnMove(Vector2Int sourcePos, Vector2Int destPos);
     public event OnMove onMove;
+    public delegate void OnTurnTo(Vector2Int sourcePos, Vector2Int destPos);
+    public event OnTurnTo onTurnTo;
 
     private GridSystem  gridSystem;
     
@@ -15,7 +27,10 @@ public class GridObject : MonoBehaviour
 
     private void Start()
     {
-        ClampToGrid();
+        if (snapOnStart)
+        {
+            ClampToGrid();
+        }
     }
 
     private void OnEnable()
@@ -44,7 +59,6 @@ public class GridObject : MonoBehaviour
     {
         // This only moves one tile in any direction, and doesn't allow for diagonals
 
-        // Check if object can move to this position
         var targetWorldPos = GridToWorld(gridPos.xy0());
         var originalGridPos = WorldToGrid(transform.position);
 
@@ -57,8 +71,30 @@ public class GridObject : MonoBehaviour
         var endPosGrid = originalGridPos + deltaPos;
         Vector3 endPos = GridToWorld(endPosGrid);
 
+        // Check if player can move to this position
         var worldDistance = (endPos - transform.position).magnitude;
         float moveTime = worldDistance / speed.magnitude;
+
+        if (checkCollisionOnMove)
+        {
+            if (gridSystem.CheckCollision(endPosGrid, this))
+            {
+                if (moveAnimationOnCollision > 0.0f)
+                {
+                    // Midway to the position
+                    endPos = transform.position + (endPos - transform.position) * moveAnimationOnCollision;
+
+                    moveInterpolator = transform.MoveToWorld(endPos, moveTime, "Move").EaseFunction(HalfwayInAndOut).Done(
+                    () =>
+                    {
+                        moveInterpolator = null;
+                    });
+                }
+
+                onTurnTo?.Invoke(originalGridPos, endPosGrid);
+                return false;
+            }
+        }
 
         moveInterpolator = transform.MoveToWorld(endPos, moveTime, "Move").EaseFunction(Ease.OutBack).Done(
             () =>
@@ -66,11 +102,17 @@ public class GridObject : MonoBehaviour
                 moveInterpolator = null;
             });
 
-        onMove(originalGridPos, endPosGrid);
+        onTurnTo?.Invoke(originalGridPos, endPosGrid);
+        onMove?.Invoke(originalGridPos, endPosGrid);
 
         return true;
     }
 
+    private float HalfwayInAndOut(float t)
+    {
+        if (t > 0.5f) return (1.0f - t);
+        return t;
+    }
 
     public void TeleportTo(Vector2 target)
     {
