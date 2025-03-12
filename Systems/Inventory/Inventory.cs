@@ -106,4 +106,16 @@ public class Inventory : MonoBehaviour
 
         return items.Count - 1;
     }
+
+    public bool HasItem(Item item)
+    {
+        if (items == null) return false;
+
+        foreach (var i in items)
+        {
+            if ((i.item == item) && (i.count > 0)) return true;
+        }
+
+        return false;
+    }
 }

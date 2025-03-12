@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public abstract class ResourceBar : MonoBehaviour
+public class ResourceBar : MonoBehaviour
 {
     public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY };
     public enum UpdateMode { Direct, FeedbackLoop, ConstantSpeed };
@@ -21,23 +21,24 @@ public abstract class ResourceBar : MonoBehaviour
     [ShowIf(nameof(needColor))]
     public Gradient         color;
     public bool             fadeAfterTime;
-    [ShowIf("fadeAfterTime")]
+    [ShowIf(nameof(fadeAfterTime))]
     public bool             startDisabled;
-    [ShowIf("fadeAfterTime")]
+    [ShowIf(nameof(fadeAfterTime))]
     public float            timeToFade = 2.0f;
-    [ShowIf("fadeAfterTime")]
+    [ShowIf(nameof(fadeAfterTime))]
     public float            timeOfFadeIn = 0.5f;
-    [ShowIf("fadeAfterTime")]
+    [ShowIf(nameof(fadeAfterTime))]
     public float            timeOfFadeOut = 1.0f;
     public bool             respectRotation = false;
     public bool             preserveRelativePositon = false;
-    [ShowIf("preserveRelativePositon")]
+    [ShowIf(nameof(preserveRelativePositon))]
     public Transform        relativeTransform;
     public bool             zeroResourceZeroAlpha = false;
+    public Image            displayIcon;
 
     bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY);
-    bool needSpeedVar() { return (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed)); }
-    bool needColor() => (isBar) && (colorChange);
+    bool needSpeedVar => (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed));
+    bool needColor => (isBar) && (colorChange);
 
     // For alpha change
     CanvasGroup     canvasGroup;
@@ -56,6 +57,8 @@ public abstract class ResourceBar : MonoBehaviour
     // Keep vars
     Quaternion      initialRotation;
     Vector3         deltaPos;
+
+    ResourceHandler targetResource;
 
     void Start()
     {
@@ -164,8 +167,25 @@ public abstract class ResourceBar : MonoBehaviour
         }
     }
 
-    protected abstract float GetNormalizedResource();
-    protected abstract float GetResourceCount();
+    protected virtual float GetNormalizedResource()
+    {
+        if (targetResource)
+        {
+            return targetResource.normalizedResource;
+        }
+
+        return 0.0f;
+    }
+
+    protected virtual float GetResourceCount()
+    {
+        if (targetResource)
+        {
+            return targetResource.resource;
+        }
+
+        return 0.0f;
+    }
 
     void UpdateGfx()
     {
@@ -189,12 +209,26 @@ public abstract class ResourceBar : MonoBehaviour
                 break;
         }
 
-        if (needColor())
+        if (needColor)
         {
             Color c = color.Evaluate(currentT);
 
             if (uiImage) uiImage.color = c;
             if (spriteImage) spriteImage.color = c;
+        }
+        else
+        {
+            if (targetResource)
+            {
+                if (uiImage) uiImage.color = targetResource.type.displayBarColor;
+                if (spriteImage) spriteImage.color = targetResource.type.displaySpriteColor;
+            }
+        }
+
+        if ((displayIcon) && (targetResource))
+        {
+            displayIcon.sprite = targetResource.type.displaySprite;
+            displayIcon.color = targetResource.type.displaySpriteColor;
         }
     }
 
@@ -229,5 +263,12 @@ public abstract class ResourceBar : MonoBehaviour
             alpha = 0.0f;
             canvasGroup.alpha = 0.0f;
         }
+    }
+
+    public void SetTarget(ResourceHandler target)
+    {
+        targetResource = target;
+
+        UpdateGfx();
     }
 }
