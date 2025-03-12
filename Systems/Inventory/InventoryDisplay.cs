@@ -7,7 +7,7 @@ public class InventoryDisplay : MonoBehaviour
     Inventory     inventory;
     ItemDisplay[] itemDisplays;
 
-    void Start()
+    void Awake()
     {
         itemDisplays = GetComponentsInChildren<ItemDisplay>(true);
         ClearDisplay();
