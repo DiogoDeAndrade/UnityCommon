@@ -8,7 +8,9 @@ public class GridCollider : MonoBehaviour
     GridSystem          gridSystem;
     SpriteRenderer      spriteRenderer;
     TilemapCollider2D   tilemapCollider;
+    CompositeCollider2D compositeCollider;
 
+    bool            isTilemapCollider = false;
     Vector3         tolerance = new Vector3(1.0f, 1.0f, 0.0f);
 
     void OnEnable()
@@ -16,7 +18,13 @@ public class GridCollider : MonoBehaviour
         gridSystem = GetComponentInParent<GridSystem>();
         gridSystem?.Register(this);
         spriteRenderer = GetComponent<SpriteRenderer>();
-        tilemapCollider = GetComponent<TilemapCollider2D>();
+
+        if (GetComponent<Tilemap>())
+        {
+            isTilemapCollider = true;
+            tilemapCollider = GetComponent<TilemapCollider2D>();
+            compositeCollider = GetComponent<CompositeCollider2D>();
+        }
     }
 
     void OnDisable()
@@ -38,10 +46,18 @@ public class GridCollider : MonoBehaviour
                 return true;
             }
         }
-        if (tilemapCollider)
+        if (isTilemapCollider)
         {
-            var worldPoint = gridSystem.GridToWorld(endPosGrid);
-            return tilemapCollider.OverlapPoint(worldPoint);
+            if (compositeCollider)
+            {
+                var worldPoint = gridSystem.GridToWorld(endPosGrid);
+                return compositeCollider.OverlapPoint(worldPoint);
+            }
+            else if (tilemapCollider)
+            {
+                var worldPoint = gridSystem.GridToWorld(endPosGrid);
+                return tilemapCollider.OverlapPoint(worldPoint);
+            }
         }
 
         return false;
