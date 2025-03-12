@@ -7,8 +7,10 @@ public abstract class GridAction : MonoBehaviour
     [SerializeField, Header("Action")] 
     protected string  _verb;
     [SerializeField]
-    protected bool    combatText = false;
-    [SerializeField, ShowIf(nameof(combatText))]
+    protected bool    enableCombatText = false;
+    [SerializeField, ShowIf(nameof(enableCombatText))]
+    protected string  combatText = "";
+    [SerializeField, ShowIf(nameof(enableCombatText))]
     protected Color   combatTextColor = Color.white;
 
     public string verb => _verb;
