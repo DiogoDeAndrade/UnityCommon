@@ -84,7 +84,7 @@ public class GridAction_Pickup : GridAction
 
         if (enableCombatText)
         {
-            CombatTextManager.SpawnText(subject.gameObject, new Vector2(0.0f, subject.cellSize.y * 0.5f), combatText, combatTextColor, combatTextColor.ChangeAlpha(0.0f), 1.0f, 1.0f);
+            CombatTextManager.SpawnText(subject.gameObject, combatText, combatTextColor, combatTextColor.ChangeAlpha(0.0f), 1.0f, 1.0f);
         }
 
         return true;

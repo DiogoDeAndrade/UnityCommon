@@ -57,6 +57,13 @@ public class ResourceHandler : MonoBehaviour
             else
             {
                 onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+
+                if (type.useCombatText)
+                {
+                    var str = type.ctBaseText;
+                    str = str.Replace("{value}", $"{deltaValue}");
+                    CombatTextManager.SpawnText(gameObject, str, type.ctNegativeColor, type.ctNegativeColor.ChangeAlpha(0.0f));
+                }
             }
 
             return true;
@@ -68,6 +75,13 @@ public class ResourceHandler : MonoBehaviour
                 if (_resource < type.maxValue)
                 {
                     onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+
+                    if (type.useCombatText)
+                    {
+                        var str = type.ctBaseText;
+                        str = str.Replace("{value}", $"+{deltaValue}");
+                        CombatTextManager.SpawnText(gameObject, str, type.ctPositiveColor, type.ctPositiveColor.ChangeAlpha(0.0f));
+                    }
 
                     _resource += deltaValue;
                     if ((_resource > 0.0f) && (_resourceEmpty))
@@ -82,6 +96,13 @@ public class ResourceHandler : MonoBehaviour
             if (_resource < type.maxValue)
             {
                 onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+
+                if (type.useCombatText)
+                {
+                    var str = type.ctBaseText;
+                    str = str.Replace("{value}", $"+{deltaValue}");
+                    CombatTextManager.SpawnText(gameObject, str, type.ctPositiveColor, type.ctPositiveColor.ChangeAlpha(0.0f));
+                }
 
                 _resource += deltaValue;
                 return true;

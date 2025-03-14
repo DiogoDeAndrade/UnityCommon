@@ -97,7 +97,10 @@ public class CombatTextManager : MonoBehaviour
         tmp.textObject = Instantiate(textPrefab, transform);
         tmp.textTransform = tmp.textObject.GetComponent<RectTransform>();
 
-        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(uiCamera, ownerObject.transform.position + offset.xy0());
+        var ctSpawnPoint = ownerObject.GetComponentInChildren<CombatTextSpawnPoint>();
+        var position = (ctSpawnPoint == null) ? (ownerObject.transform.position + offset.xy0()) : (ctSpawnPoint.transform.position);
+
+        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(uiCamera, position);
 
         // Convert the screen point to local coordinates in the RectTransform
         RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, screenPoint, uiCamera, out Vector2 localPoint);
