@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -15,7 +16,7 @@ public abstract class GridAction : MonoBehaviour
 
     public string verb => _verb;
 
-    public abstract bool CanRunAction(GridObject subject, Vector2Int position);
+    public abstract void GatherActions(GridObject subject, Vector2Int position, List<GridAction> actions);
 
     public abstract bool RunAction(GridObject subject, Vector2Int position);
 

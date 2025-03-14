@@ -199,10 +199,7 @@ public class GridObject : MonoBehaviour
         {                
             foreach (var action in objActions)
             {
-                if (action.CanRunAction(subject, position))
-                {
-                    actions.Add(action);
-                }
+                action.GatherActions(subject, position, actions);
             }
         }
     }

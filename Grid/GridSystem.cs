@@ -92,10 +92,7 @@ public class GridSystem : MonoBehaviour
         var actionsOnSubject = subject.GetComponents<GridAction>();
         foreach (var action in actionsOnSubject)
         {
-            if (action.CanRunAction(subject, position))
-            {
-                ret.Add(action);
-            }
+            action.GatherActions(subject, position, ret);
         }
 
         foreach (var obj in gridObjects)

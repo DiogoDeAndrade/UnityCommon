@@ -108,4 +108,6 @@ public class FullscreenFader : MonoBehaviour
         fsFader._Fade(1.0f, time, color, action);
     }
 
+    public static bool hasFader => fsFader != null;
+
 }

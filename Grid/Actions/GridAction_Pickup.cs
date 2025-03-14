@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System.Collections.Generic;
 using UnityEditorInternal.Profiling.Memory.Experimental;
 using UnityEngine;
 
@@ -32,21 +33,21 @@ public class GridAction_Pickup : GridAction
         charges = (type == PickupType.Single) ? (1) : (maxCharges);
     }
 
-    public override bool CanRunAction(GridObject subject, Vector2Int position)
+    public override void GatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
     {
-        if ((charges <= 0) && (type != PickupType.Infinite)) return false;
+        if ((charges <= 0) && (type != PickupType.Infinite)) return;
         if (item)
         {
-            if (subject.GetComponent<Inventory>() == null) return false;
+            if (subject.GetComponent<Inventory>() == null) return;
         }
         if (resourceType)
         {
             var resHandler = subject.FindResourceHandler(resourceType);
-            if (resHandler == null) return false;
-            if (resHandler.normalizedResource >= 1.0f) return false;
+            if (resHandler == null) return;
+            if (resHandler.normalizedResource >= 1.0f) return;
         }
 
-        return true;
+        retActions.Add(this);
     }
 
     public override bool RunAction(GridObject subject, Vector2Int position)

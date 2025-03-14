@@ -1,6 +1,5 @@
 using UnityEngine;
 using NaughtyAttributes;
-using Unity.VisualScripting;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(GridObject))]
