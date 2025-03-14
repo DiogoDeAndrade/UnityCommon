@@ -28,10 +28,17 @@ public static class Light2DExtensions
 
     public static Tweener.BaseInterpolator FadeOut(this Light2D light, float duration)
     {
+        return light.FadeTo(0.0f, duration);
+    }
+
+    public static Tweener.BaseInterpolator FadeTo(this Light2D light, float targetIntensity, float duration)
+    {
         light.Tween().Stop("LightFade", Tweener.StopBehaviour.SkipToEnd);
 
         var current = light.intensity;
+        
+        if (current == targetIntensity) return null;
 
-        return light.Tween().Interpolate(current, 0.0f, duration, (value) => light.intensity = value, "LightFade");
+        return light.Tween().Interpolate(current, targetIntensity, duration, (value) => light.intensity = value, "LightFade");
     }
 }

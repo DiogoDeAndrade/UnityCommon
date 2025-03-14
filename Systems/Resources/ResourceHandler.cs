@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using NaughtyAttributes;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ResourceHandler : MonoBehaviour
@@ -12,6 +13,7 @@ public class ResourceHandler : MonoBehaviour
     public delegate void OnResourceNotEmpty(GameObject healSource);
     public event OnResourceNotEmpty onResourceNotEmpty;
 
+    [Expandable]
     public ResourceType type;
 
     protected float     _resource = 100.0f;

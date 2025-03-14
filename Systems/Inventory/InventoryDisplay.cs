@@ -3,13 +3,17 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class InventoryDisplay : MonoBehaviour
-{    
-    Inventory     inventory;
-    ItemDisplay[] itemDisplays;
+{
+    [SerializeField] private RectTransform itemContainer;
+
+    Inventory       inventory;
+    ItemDisplay[]   itemDisplays;
+    CanvasGroup     canvasGroup;
 
     void Awake()
     {
-        itemDisplays = GetComponentsInChildren<ItemDisplay>(true);
+        canvasGroup = GetComponent<CanvasGroup>();
+        itemDisplays = itemContainer.GetComponentsInChildren<ItemDisplay>(true);
         ClearDisplay();
     }
 
@@ -43,6 +47,15 @@ public class InventoryDisplay : MonoBehaviour
 
             itemDisplays[i].Set(item, count);
         }
+
+        if (inventory.HasItems())
+        {
+            canvasGroup.FadeIn(0.5f);
+        }
+        else
+        {
+            canvasGroup.FadeOut(0.5f);
+        }
     }
 
     private void ClearDisplay()
@@ -50,6 +63,22 @@ public class InventoryDisplay : MonoBehaviour
         foreach (var itemDisplay in itemDisplays)
         {
             itemDisplay.Set(null, 0);
+        }
+
+        if (inventory)
+        {
+            if (inventory.HasItems())
+            {
+                canvasGroup.FadeIn(0.5f);
+            }
+            else
+            {
+                canvasGroup.FadeOut(0.5f);
+            }
+        }
+        else
+        {
+            canvasGroup.FadeOut(0.5f);
         }
     }
 }

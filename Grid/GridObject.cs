@@ -195,7 +195,7 @@ public class GridObject : MonoBehaviour
         // Not a tilemap, just a single grid cell
         bool isOnTile = (tilemap) && (tilemap.GetTile(position.xy0()) != null);
 
-        if ((gridSystem.WorldToGrid(transform.position) == position) || (isOnTile))
+        if (((gridSystem.WorldToGrid(transform.position) == position) && (tilemap == null)) || (isOnTile))
         {                
             foreach (var action in objActions)
             {

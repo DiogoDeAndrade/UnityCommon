@@ -447,13 +447,16 @@ public class PathXYEditor : UnityCommonEditor
         return "Path XY";
     }
 
-    protected override Texture2D GetIcon()
+    protected override (Texture2D, Rect) GetIcon()
     {
+        Texture2D varTexture = null;
         if (propType.intValue == (int)PathXY.Type.Linear)
-            return GUIUtils.GetTexture("PathStraight");
+            varTexture = GUIUtils.GetTexture("PathStraight");
         else
-            return GUIUtils.GetTexture("PathCurved");
-    }
+            varTexture = GUIUtils.GetTexture("PathCurved");
 
-    protected override (Color, Color, Color) GetColors() => (GUIUtils.ColorFromHex("#ffcaca"), GUIUtils.ColorFromHex("#2f4858"), GUIUtils.ColorFromHex("#ff6060"));
+    return (varTexture, new Rect(0.0f, 0.0f, 1.0f, 1.0f));
+}
+
+protected override (Color, Color, Color) GetColors() => (GUIUtils.ColorFromHex("#ffcaca"), GUIUtils.ColorFromHex("#2f4858"), GUIUtils.ColorFromHex("#ff6060"));
 }

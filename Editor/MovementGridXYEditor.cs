@@ -82,10 +82,10 @@ namespace OkapiKit.Editor
             return "Grid Movement XY";
         }
 
-        protected override Texture2D GetIcon()
+        protected override (Texture2D, Rect) GetIcon()
         {
             var varTexture = GUIUtils.GetTexture("Movement");
-            return varTexture;
+            return (varTexture, new Rect(0.0f, 0.0f, 1.0f, 1.0f));
         }
 
         protected override (Color, Color, Color) GetColors()

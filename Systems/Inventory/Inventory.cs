@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using static UnityEditor.Progress;
 
 public class Inventory : MonoBehaviour
 {
@@ -114,6 +115,18 @@ public class Inventory : MonoBehaviour
         foreach (var i in items)
         {
             if ((i.item == item) && (i.count > 0)) return true;
+        }
+
+        return false;
+    }
+
+    public bool HasItems()
+    {
+        if (items == null) return false;
+
+        foreach (var i in items)
+        {
+            if ((i.item != null) && (i.count > 0)) return true;
         }
 
         return false;

@@ -7,9 +7,14 @@ public abstract class UnityCommonEditor : Editor
 
     protected abstract string GetTitle();
 
-    protected abstract Texture2D GetIcon();
+    protected abstract (Texture2D, Rect) GetIcon();
 
     protected abstract (Color, Color, Color) GetColors();
+
+    protected virtual bool HasTitleShadow()
+    {
+        return false;
+    }
 
     protected virtual void OnEnable()
     {
@@ -33,7 +38,16 @@ public abstract class UnityCommonEditor : Editor
         EditorGUI.DrawRect(fullRect, barColor);
         var prevColor = styleTitle.normal.textColor;
         styleTitle.normal.textColor = textColor;
-        GUI.DrawTexture(new Rect(titleRect.x + 10, titleRect.y + 4, 32, 32), GetIcon(), ScaleMode.ScaleToFit, true, 1.0f);
+        (var texture, var uv) = GetIcon();
+        GUI.DrawTextureWithTexCoords(new Rect(titleRect.x + 10, titleRect.y + 4, 32, 32), texture, uv, true);
+
+        if (HasTitleShadow())
+        {
+            styleTitle.normal.textColor = Color.black;
+            EditorGUI.LabelField(new Rect(titleRect.x + 51, titleRect.y + 7, inspectorWidth - 20 - titleRect.x - 4, styleTitle.fontSize), GetTitle(), styleTitle);
+            styleTitle.normal.textColor = textColor;
+        }
+
         EditorGUI.LabelField(new Rect(titleRect.x + 50, titleRect.y + 6, inspectorWidth - 20 - titleRect.x - 4, styleTitle.fontSize), GetTitle(), styleTitle);
         styleTitle.normal.textColor = prevColor;
         EditorGUILayout.EndVertical();
