@@ -123,6 +123,18 @@ public static class VectorExtensions
         }
     }
 
+    public static Vector2 SafeNormalized(this Vector2 v)
+    {
+        if (v.sqrMagnitude > 1e-3)
+        {
+            return v.normalized;
+        }
+        else
+        {
+            return Vector2.zero;
+        }
+    }
+
     public static void SafeNormalize(this Vector3 v)
     {
         if (v.sqrMagnitude > 1e-3)
@@ -132,6 +144,17 @@ public static class VectorExtensions
         else
         {
             v.Set(0, 0, 0);
+        }
+    }
+    public static Vector3 SafeNormalized(this Vector3 v)
+    {
+        if (v.sqrMagnitude > 1e-3)
+        {
+            return v.normalized;
+        }
+        else
+        {
+            return Vector3.zero;
         }
     }
 
@@ -144,6 +167,17 @@ public static class VectorExtensions
         else
         {
             v.Set(0, 0, 0, 0);
+        }
+    }
+    public static Vector4 SafeNormalized(this Vector4 v)
+    {
+        if (v.sqrMagnitude > 1e-3)
+        {
+            return v.normalized;
+        }
+        else
+        {
+            return Vector4.zero;
         }
     }
 

@@ -40,33 +40,53 @@ public class ResourceHandler : MonoBehaviour
         _resourceEmpty = false;
     }
 
+    void RenderCombatText(float prevValue)
+    {
+        float actualDelta = _resource - prevValue;
+        if (actualDelta != 0.0f)
+        {
+            if (type.useCombatText)
+            {
+                var str = type.ctBaseText;
+                var c = type.ctPositiveColor;
+                if (actualDelta > 0)
+                {
+                    str = str.Replace("{value}", $"+{actualDelta}");
+                }
+                else
+                {
+                    str = str.Replace("{value}", $"{actualDelta}");
+                    c = type.ctNegativeColor;
+                }
+
+                CombatTextManager.SpawnText(gameObject, str, c, c.ChangeAlpha(0.0f));
+            }
+        }
+    }
+
     public bool Change(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
     {
+        float   prevValue = _resource;
+        bool    ret = true;
+
         if (deltaValue < 0)
         {
-            if (_resourceEmpty) return false;
-
-            _resource += deltaValue;
-            if (_resource <= 0.0f)
-            {
-                _resource = 0.0f;
-                _resourceEmpty = true;
-
-                onResourceEmpty?.Invoke(changeSource);
-            }
+            if (_resourceEmpty) ret = false;
             else
             {
-                onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
-
-                if (type.useCombatText)
+                _resource += deltaValue;
+                if (_resource <= 0.0f)
                 {
-                    var str = type.ctBaseText;
-                    str = str.Replace("{value}", $"{deltaValue}");
-                    CombatTextManager.SpawnText(gameObject, str, type.ctNegativeColor, type.ctNegativeColor.ChangeAlpha(0.0f));
+                    _resource = 0.0f;
+                    _resourceEmpty = true;
+
+                    onResourceEmpty?.Invoke(changeSource);
+                }
+                else
+                {
+                    onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
                 }
             }
-
-            return true;
         }
         else if (deltaValue > 0)
         {
@@ -76,41 +96,30 @@ public class ResourceHandler : MonoBehaviour
                 {
                     onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
 
-                    if (type.useCombatText)
-                    {
-                        var str = type.ctBaseText;
-                        str = str.Replace("{value}", $"+{deltaValue}");
-                        CombatTextManager.SpawnText(gameObject, str, type.ctPositiveColor, type.ctPositiveColor.ChangeAlpha(0.0f));
-                    }
-
                     _resource += deltaValue;
                     if ((_resource > 0.0f) && (_resourceEmpty))
                     {
                         onResourceNotEmpty?.Invoke(changeSource);
                         _resourceEmpty = false;
                     }
-                    return true;
                 }
             }
-            else if (_resourceEmpty) return false;
-            if (_resource < type.maxValue)
+            else if (_resourceEmpty) ret = false;
+            else
             {
-                onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
-
-                if (type.useCombatText)
+                if (_resource < type.maxValue)
                 {
-                    var str = type.ctBaseText;
-                    str = str.Replace("{value}", $"+{deltaValue}");
-                    CombatTextManager.SpawnText(gameObject, str, type.ctPositiveColor, type.ctPositiveColor.ChangeAlpha(0.0f));
-                }
+                    onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
 
-                _resource += deltaValue;
-                return true;
+                    _resource += deltaValue;
+                }
+                else ret = false;
             }
-            return false;
         }
 
-        return true;
+        if (ret) RenderCombatText(prevValue);
+
+        return ret;
     }
 
     public static List<ResourceHandler> FindAllByType(ResourceType type)
