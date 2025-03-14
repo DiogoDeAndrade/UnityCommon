@@ -15,8 +15,10 @@ public class GridObject : MonoBehaviour
 
     public delegate void OnMove(Vector2Int sourcePos, Vector2Int destPos);
     public event OnMove onMove;
+    public delegate void OnMoveEnd(Vector2Int sourcePos, Vector2Int destPos);
+    public event OnMoveEnd onMoveEnd;
     public delegate void OnTurnTo(Vector2Int sourcePos, Vector2Int destPos);
-    public event OnTurnTo onTurnTo;
+    public event OnTurnTo onTurnTo;    
 
     private GridSystem                  gridSystem;
     private Tilemap                     tilemap;
@@ -97,6 +99,7 @@ public class GridObject : MonoBehaviour
                     () =>
                     {
                         moveInterpolator = null;
+                        onMoveEnd?.Invoke(originalGridPos, endPosGrid);
                     });
                 }
 
@@ -111,6 +114,7 @@ public class GridObject : MonoBehaviour
             () =>
             {
                 moveInterpolator = null;
+                onMoveEnd?.Invoke(originalGridPos, endPosGrid);
             });
 
         ComputeFacingFromVector(deltaPos);
