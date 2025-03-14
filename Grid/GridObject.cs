@@ -186,23 +186,20 @@ public class GridObject : MonoBehaviour
 
     public void GatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
     {
-        if (tilemap == null)
-        {
-            // Not a tilemap, just a single grid cell
-            if (gridSystem.WorldToGrid(transform.position) == position)
+        var objActions = GetComponents<GridAction>();
+
+        // Not a tilemap, just a single grid cell
+        bool isOnTile = (tilemap) && (tilemap.GetTile(position.xy0()) != null);
+
+        if ((gridSystem.WorldToGrid(transform.position) == position) || (isOnTile))
+        {                
+            foreach (var action in objActions)
             {
-                var objActions = GetComponents<GridAction>();
-                foreach (var action in objActions)
+                if (action.CanRunAction(subject, position))
                 {
-                    if (action.CanRunAction(subject))
-                    {
-                        actions.Add(action);
-                    }
+                    actions.Add(action);
                 }
-                return;
             }
         }
-
-        // Tilemaps always intersect, get all actions and see if they redirect to something
     }
 }

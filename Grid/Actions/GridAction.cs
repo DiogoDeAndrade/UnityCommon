@@ -15,8 +15,8 @@ public abstract class GridAction : MonoBehaviour
 
     public string verb => _verb;
 
-    public abstract bool CanRunAction(GridObject subject);
+    public abstract bool CanRunAction(GridObject subject, Vector2Int position);
 
-    public abstract bool RunAction(GridObject subject);
+    public abstract bool RunAction(GridObject subject, Vector2Int position);
 
 }

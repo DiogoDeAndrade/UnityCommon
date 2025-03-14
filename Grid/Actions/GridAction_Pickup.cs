@@ -32,7 +32,7 @@ public class GridAction_Pickup : GridAction
         charges = (type == PickupType.Single) ? (1) : (maxCharges);
     }
 
-    public override bool CanRunAction(GridObject subject)
+    public override bool CanRunAction(GridObject subject, Vector2Int position)
     {
         if ((charges <= 0) && (type != PickupType.Infinite)) return false;
         if (item)
@@ -41,13 +41,15 @@ public class GridAction_Pickup : GridAction
         }
         if (resourceType)
         {
-            if (subject.FindResourceHandler(resourceType) == null) return false;
+            var resHandler = subject.FindResourceHandler(resourceType);
+            if (resHandler == null) return false;
+            if (resHandler.normalizedResource >= 1.0f) return false;
         }
 
         return true;
     }
 
-    public override bool RunAction(GridObject subject)
+    public override bool RunAction(GridObject subject, Vector2Int position)
     {
         if (item)
         {
