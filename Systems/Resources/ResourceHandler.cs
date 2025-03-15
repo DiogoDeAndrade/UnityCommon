@@ -157,10 +157,14 @@ public class ResourceHandler : MonoBehaviour
         _resourceEmpty = (_resource <= 0.0f);
     }
 
-    public void ResetResource()
+    public void ResetResource(bool combatText = false)
     {
+        float prevValue = _resource;
+
         _resource = type.defaultValue;
         _resourceEmpty = false;
+
+        if (combatText) RenderCombatText(prevValue);
     }
 }
 

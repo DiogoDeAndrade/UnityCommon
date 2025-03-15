@@ -44,6 +44,7 @@ public class GridAction_Pickup : GridAction
         {
             var resHandler = subject.FindResourceHandler(resourceType);
             if (resHandler == null) return;
+            if (!resHandler.enabled) return;
             if (resHandler.normalizedResource >= 1.0f) return;
         }
 

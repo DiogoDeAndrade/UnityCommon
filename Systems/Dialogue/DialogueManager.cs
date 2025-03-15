@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using static DialogueData;
 
 public class DialogueManager : MonoBehaviour
 {
@@ -136,6 +135,16 @@ public class DialogueManager : MonoBehaviour
 
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    public static bool HasSaidDialogue(string dialogueKey)
+    {
+        if (Instance)
+        {
+            if (Instance.dialogueCount.ContainsKey(dialogueKey)) return true;
         }
 
         return false;
