@@ -140,7 +140,7 @@ public class GridObject : MonoBehaviour
         moveInterpolator?.Interrupt();
         moveInterpolator = null;
 
-        onMove(originalPos, WorldToGrid(target));
+        onMove?.Invoke(originalPos, WorldToGrid(target));
     }
 
     void ComputeFacingFromVector(Vector2 deltaPos)
