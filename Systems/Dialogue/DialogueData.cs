@@ -6,35 +6,44 @@ using NaughtyAttributes;
 [CreateAssetMenu(fileName = "Dialogue Data", menuName = "Unity Common/Dialogue/Dialogue Data")]
 public class DialogueData : ScriptableObject
 {
+    [Flags]
+    public enum DialogueFlags { None = 0,
+                                OneShot = 1 };
+
     public Speaker[]    speakers;
     public TextAsset[]  textAssets;
 
     [Serializable]
-    class Option
+    public class Option
     {
         public string text;
         public string key;
     }
 
     [Serializable]
-    class DialogueElement
+    public class DialogueElement
     {
-        public Speaker speaker;
-        public string text;
+        public Speaker      speaker;
+        public string       text;
         public List<Option> options = new List<Option>();
-        public string nextKey;
+        
+        public bool hasOptions => (options != null) && (options.Count > 0);
     }
 
     [Serializable]
-    class Dialogue
+    public class Dialogue
     {
-        public string key;
-        public List<DialogueElement> elems = new List<DialogueElement>();
+        public DialogueFlags            flags;
+        public string                   key;
+        public List<DialogueElement>    elems = new List<DialogueElement>();
+        public string                   nextKey;
     }
 
     [SerializeField] private List<Dialogue> dialogues = new();
 
-    private Dictionary<string, Speaker> speakerCache = new();
+    private Dictionary<string, Speaker>     speakerCache = new();
+    private Dictionary<string, Dialogue>    dialogueCache = new();
+    private List<string>                    keys = null;
 
     [Button("Parse Data")]
     public void ParseData()
@@ -71,7 +80,7 @@ public class DialogueData : ScriptableObject
                 continue;
             }
 
-            if (trimmedLine.StartsWith("# "))
+            if (trimmedLine.StartsWith("#"))
             {
                 // New Dialogue Section
                 string key = trimmedLine.Substring(2).Trim();
@@ -100,6 +109,27 @@ public class DialogueData : ScriptableObject
                     textBuffer.Add(dialogueText);
                 }
             }
+            else if ((trimmedLine.StartsWith("{")) && (trimmedLine.EndsWith("}")))
+            {
+                string data = trimmedLine.Substring(1, trimmedLine.Length - 2);  // Remove curly brackets
+                var splitData = data.Split(','); // Split by commas
+                DialogueFlags flags = DialogueFlags.None;
+
+                foreach (var entry in splitData)
+                {
+                    string trimmedEntry = entry.Trim(); // Remove extra spaces
+
+                    if (Enum.TryParse(trimmedEntry, out DialogueFlags parsedFlag))
+                    {
+                        flags |= parsedFlag; // Use bitwise OR to accumulate flags
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Unknown DialogueFlag: {trimmedEntry}");
+                    }
+                }
+                currentDialogue.flags = flags;
+            }
             else if (trimmedLine.StartsWith("*"))
             {
                 // Option Handling
@@ -119,9 +149,9 @@ public class DialogueData : ScriptableObject
             {
                 // Next Dialogue Jump
                 string nextKey = trimmedLine.Substring(2).Trim();
-                if (currentElement != null)
+                if (currentDialogue != null)
                 {
-                    currentElement.nextKey = nextKey;
+                    currentDialogue.nextKey = nextKey;
                 }
             }
             else
@@ -158,4 +188,44 @@ public class DialogueData : ScriptableObject
         Debug.LogWarning($"Speaker '{name}' not found!");
         return null;
     }
+
+    public bool HasDialogue(string dialogueKey)
+    {
+        return GetDialogue(dialogueKey) != null;
+    }
+
+    public Dialogue GetDialogue(string dialogueKey)
+    {
+        if (dialogueCache.TryGetValue(dialogueKey, out var dialogue))
+        {
+            return dialogue;
+        }
+
+        // Placeholder function for finding a speaker (replace with actual implementation)
+        dialogue = dialogues.Find(s => s.key == dialogueKey);
+
+        if (dialogue != null)
+        {
+            dialogueCache[dialogueKey] = dialogue;
+            return dialogue;
+        }
+
+        Debug.LogWarning($"Dialogue '{dialogueKey}' not found!");
+        
+        return null;
+    }
+
+    public List<string> GetKeys()
+    {
+        if ((keys == null) || (keys.Count == 0))
+        {
+            keys = new();
+            foreach (var dialogue in dialogues)
+            {
+                keys.Add(dialogue.key);
+            }
+        }
+
+        return keys;
+    }    
 }

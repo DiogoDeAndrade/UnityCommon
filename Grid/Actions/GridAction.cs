@@ -20,4 +20,6 @@ public abstract class GridAction : MonoBehaviour
 
     public abstract bool RunAction(GridObject subject, Vector2Int position);
 
+    public virtual bool ShouldRunTurn() { return true; }
+
 }

@@ -1,0 +1,177 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using static DialogueData;
+
+public class DialogueManager : MonoBehaviour
+{
+    public delegate void OnDialogueStart(string dialogueKey);
+    public event OnDialogueStart onDialogueStart;
+    public delegate void OnDialogueEnd();
+    public event OnDialogueEnd onDialogueEnd;
+
+    [SerializeField] private DialogueData       dialogueData;
+    [SerializeField] private DialogueDisplay    display;
+
+    DialogueData.Dialogue   currentDialogue = null;
+    int                     currentDialogueIndex = -1;
+    Dictionary<string, int> dialogueCount = new();
+
+    static DialogueManager instance = null;
+
+    public static DialogueManager Instance
+    {
+        get
+        {
+            if (instance == null)
+            {
+                instance = FindAnyObjectByType<DialogueManager>();
+            }
+            return instance;
+        }
+    }
+
+    void Awake()
+    {
+        if (instance != null)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        instance = this;
+    }
+
+    protected bool _StartConversation(string dialogueKey)
+    {
+        var dialogue = dialogueData.GetDialogue(dialogueKey);
+        if (dialogue == null) return false;
+        if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
+            dialogueCount.ContainsKey(dialogueKey))
+        {
+            return false;
+        }
+
+        currentDialogue = dialogue;
+        currentDialogueIndex = -1;
+
+        if (dialogueCount.ContainsKey(dialogueKey))
+            dialogueCount[dialogueKey]++;
+        else
+            dialogueCount[dialogueKey] = 1;
+
+        NextDialogue();
+
+        onDialogueStart?.Invoke(dialogueKey);
+
+        return true;
+    }
+
+    void NextDialogue()
+    {
+        if (currentDialogue == null)
+        {
+            EndDialogue();
+            return;
+        }
+        currentDialogueIndex++;
+        if (currentDialogueIndex < currentDialogue.elems.Count)
+        {
+            display.Display(currentDialogue.elems[currentDialogueIndex]);
+        }
+        else
+        {
+            EndDialogue();
+        }
+    }
+
+    void EndDialogue()
+    {
+        display.Clear();
+        onDialogueEnd?.Invoke();
+        currentDialogue = null;
+        currentDialogueIndex = -1;
+    }
+
+    private void _Skip()
+    {
+        if (display.isDisplaying())
+        {
+            display.Skip();
+        }
+        else
+        {
+            NextDialogue();
+        }
+    }
+
+    bool _hasMoreText
+    {
+        get
+        {
+            if (currentDialogue == null) return false;
+
+            if (currentDialogueIndex >= currentDialogue.elems.Count) return false;
+
+            if ((!string.IsNullOrEmpty(currentDialogue.nextKey)) && (HasDialogue(currentDialogue.nextKey))) return true;
+
+            if (currentDialogue.elems[currentDialogueIndex].hasOptions) return true;
+
+            return currentDialogueIndex < currentDialogue.elems.Count - 1;
+        }
+    }
+
+    public static bool HasDialogue(string dialogueKey)
+    {
+        if (Instance)
+        {
+            var dialogue = Instance.dialogueData.GetDialogue(dialogueKey);
+            if (dialogue != null)
+            {
+                if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
+                    Instance.dialogueCount.ContainsKey(dialogueKey))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool StartConversation(string dialogueKey)
+    {
+        if (Instance == null) return false;
+
+        return Instance._StartConversation(dialogueKey);
+    }
+
+    internal static void Skip()
+    {
+        if (Instance == null) return;
+
+        Instance._Skip();
+    }
+
+    public static bool hasMoreText
+    {
+        get
+        {
+            if (Instance == null) return false;
+
+            return Instance._hasMoreText;
+        }
+    }
+
+    public static bool isTalking
+    {
+        get
+        {
+            if (Instance == null) return false;
+
+            return Instance.currentDialogue != null;
+        }
+    }
+}
