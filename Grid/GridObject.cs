@@ -137,7 +137,7 @@ public class GridObject : MonoBehaviour
     {
         var originalPos = WorldToGrid(transform.position);
         transform.position = Snap(target);
-        moveInterpolator.Interrupt();
+        moveInterpolator?.Interrupt();
         moveInterpolator = null;
 
         onMove(originalPos, WorldToGrid(target));

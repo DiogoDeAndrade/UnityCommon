@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 using NaughtyAttributes;
+using System.Threading;
 
 public class DialogueDisplayJRPG : DialogueDisplay
 {
@@ -18,6 +19,9 @@ public class DialogueDisplayJRPG : DialogueDisplay
     float timePerCharacter = 0.1f;
     [SerializeField, ShowIf(nameof(needTimePerCharacter))]
     float timePerCharacterSkip = 0.05f;
+    [SerializeField] GameObject         optionSeparator;
+    [SerializeField] DialogueOption[]   options;
+    [SerializeField] float              optionCooldown = 0.1f;
     [SerializeField] GameObject         continueStatusObject;
     [SerializeField] GameObject         skipStatusObject;
     [SerializeField] GameObject         doneStatusObject;
@@ -25,6 +29,8 @@ public class DialogueDisplayJRPG : DialogueDisplay
     DialogueData.DialogueElement    currentDialogue;
     Coroutine                       showTextCR;
     bool                            skip = false;
+    int                             selectedOption;
+    float                           optionCooldownTime;
 
     bool needTimePerCharacter => appearMethod == AppearMethod.PerChar;
 
@@ -38,6 +44,7 @@ public class DialogueDisplayJRPG : DialogueDisplay
     {
         if (currentDialogue == dialogue) return;
 
+        ClearOptions();
         currentDialogue = dialogue;
         DisableAllStatus();        
 
@@ -76,6 +83,8 @@ public class DialogueDisplayJRPG : DialogueDisplay
         {
             if (DialogueManager.hasMoreText) continueStatusObject?.SetActive(true);
             else doneStatusObject?.SetActive(true);
+
+            DisplayOptions();
         }
     }
 
@@ -97,7 +106,38 @@ public class DialogueDisplayJRPG : DialogueDisplay
         if (DialogueManager.hasMoreText) continueStatusObject?.SetActive(true);
         else doneStatusObject?.SetActive(true);
 
+        DisplayOptions();
+
         showTextCR = null;
+    }
+
+    void DisplayOptions()
+    {
+        ClearOptions();
+
+        if (currentDialogue.hasOptions)
+        {
+            optionSeparator.SetActive(true);
+            for (int i = 0; i < currentDialogue.options.Count; i++)
+            {
+                options[i]?.Show(currentDialogue.options[i].text);
+            }
+
+            selectedOption = 0;
+
+            options[selectedOption]?.Select();
+
+            DisableAllStatus();
+        }
+    }
+
+    void ClearOptions()
+    {
+        optionSeparator.SetActive(false);
+        foreach (var opt in options)
+        {
+            opt?.Hide();
+        }
     }
 
     void FadeIn()
@@ -132,4 +172,32 @@ public class DialogueDisplayJRPG : DialogueDisplay
     }
 
     public override bool isDisplaying() => (currentDialogue != null) && (showTextCR != null);
+
+    public override void SetInput(Vector2 moveVector)
+    {
+        if ((Time.time - optionCooldownTime) < optionCooldown) return;
+
+        if (currentDialogue == null) return;
+        if (!currentDialogue.hasOptions) return;
+
+        if (moveVector.y > 0.2f)
+        {
+            options[selectedOption].Deselect();
+            selectedOption--;
+            if (selectedOption < 0) selectedOption = currentDialogue.options.Count - 1;
+            options[selectedOption].Select();
+
+            optionCooldownTime = Time.time;
+        }
+        else if (moveVector.y < -0.2f)
+        {
+            options[selectedOption].Deselect();
+            selectedOption = (selectedOption + 1) % currentDialogue.options.Count;
+            options[selectedOption].Select();
+
+            optionCooldownTime = Time.time;
+        }
+    }
+
+    public override int GetSelectedOption() => selectedOption;
 }

@@ -91,7 +91,10 @@ public class InputControl
                 if (action == null) RefreshAction();
                 if (action != null)
                 {
-                    if (isVec2) return action.ReadValue<Vector2>();
+                    if (isVec2)
+                    {
+                        return action.ReadValue<Vector2>();
+                    }
                     else return new Vector2(action.ReadValue<float>(), 0.0f);
                 }
                 break;

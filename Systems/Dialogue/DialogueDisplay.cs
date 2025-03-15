@@ -19,4 +19,6 @@ public abstract class DialogueDisplay : MonoBehaviour
     public abstract void Clear();
     public abstract void Skip();
     public abstract bool isDisplaying();
+    public abstract void SetInput(Vector2 moveVector);
+    public abstract int GetSelectedOption();
 }
