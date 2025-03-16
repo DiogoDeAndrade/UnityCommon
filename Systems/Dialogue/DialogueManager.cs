@@ -118,6 +118,33 @@ public class DialogueManager : MonoBehaviour
         }
         else
         {
+            // Check if current dialogue redirects to something
+            if ((currentDialogue.conditionalNext != null) &&
+                (currentDialogue.conditionalNext.Count > 0))
+            {
+                var context = GetComponent<UCExpression.IContext>();
+                if (context != null)
+                {
+                    foreach (var condition in currentDialogue.conditionalNext)
+                    {
+                        if (UCExpression.TryParse(condition.expression, out var expression))
+                        {
+                            if (expression.Evaluate(context))
+                            {
+                                _StartConversation(condition.nextKey);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(currentDialogue.nextKey))
+            {
+                _StartConversation(currentDialogue.nextKey);
+                return;
+            }
+
             EndDialogue();
         }
     }

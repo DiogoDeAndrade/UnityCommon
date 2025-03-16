@@ -31,12 +31,22 @@ public class DialogueData : ScriptableObject
     }
 
     [Serializable]
+    public class DialogueCondition
+    {
+        public string expression; // condition as a string, to be parsed later
+        public string nextKey;
+    }
+
+    [Serializable]
     public class Dialogue
     {
-        public DialogueFlags            flags;
-        public string                   key;
-        public List<DialogueElement>    elems = new List<DialogueElement>();
-        public string                   nextKey;
+        public DialogueFlags flags;
+        public string key;
+        public List<DialogueElement> elems = new();
+
+        // new support for conditional next keys
+        public List<DialogueCondition> conditionalNext = new();
+        public string nextKey; // default next key if none conditions met
     }
 
     [SerializeField] private List<Dialogue> dialogues = new();
@@ -49,6 +59,9 @@ public class DialogueData : ScriptableObject
     public void ParseData()
     {
         dialogues.Clear();
+        speakerCache = new();
+        dialogueCache = new();
+        keys = null;
 
         foreach (var textAsset in textAssets)
         {
@@ -67,106 +80,169 @@ public class DialogueData : ScriptableObject
         foreach (var line in lines)
         {
             string trimmedLine = line.Trim();
-            if (string.IsNullOrWhiteSpace(trimmedLine))
+
+            if (string.IsNullOrEmpty(trimmedLine))
             {
-                // Pause detected: store the collected text as an element
-                if (currentElement != null && textBuffer.Count > 0)
-                {
-                    currentElement.text = string.Join("\n", textBuffer);
-                    currentDialogue.elems.Add(currentElement);
-                    currentElement = new DialogueElement { speaker = currentSpeaker };
-                    textBuffer.Clear();
-                }
+                // Blank line indicates end of current dialogue element text
+                StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
                 continue;
             }
 
             if (trimmedLine.StartsWith("#"))
             {
                 // New Dialogue Section
-                string key = trimmedLine.Substring(2).Trim();
+                StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
+                string key = trimmedLine.Substring(1).Trim();
                 currentDialogue = new Dialogue { key = key };
                 dialogues.Add(currentDialogue);
-                currentElement = new DialogueElement();
-                textBuffer.Clear();
             }
             else if (trimmedLine.StartsWith("[") && trimmedLine.Contains("]:"))
             {
-                // Speaker Change
+                // Speaker Change and new element
+                StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
+
                 int endIdx = trimmedLine.IndexOf("]:");
                 string speakerName = trimmedLine.Substring(1, endIdx - 1);
                 currentSpeaker = GetSpeakerByName(speakerName);
 
                 string dialogueText = trimmedLine.Substring(endIdx + 2).Trim();
+                currentElement = new DialogueElement { speaker = currentSpeaker };
+
                 if (!string.IsNullOrEmpty(dialogueText))
-                {
-                    if (currentElement != null && textBuffer.Count > 0)
-                    {
-                        currentElement.text = string.Join("\n", textBuffer);
-                        currentDialogue.elems.Add(currentElement);
-                        textBuffer.Clear();
-                    }
-                    currentElement = new DialogueElement { speaker = currentSpeaker };
                     textBuffer.Add(dialogueText);
-                }
             }
-            else if ((trimmedLine.StartsWith("{")) && (trimmedLine.EndsWith("}")))
+            else if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
             {
-                string data = trimmedLine.Substring(1, trimmedLine.Length - 2);  // Remove curly brackets
-                var splitData = data.Split(','); // Split by commas
-                DialogueFlags flags = DialogueFlags.None;
-
-                foreach (var entry in splitData)
+                // Flags parsing
+                if (currentDialogue == null)
                 {
-                    string trimmedEntry = entry.Trim(); // Remove extra spaces
-
-                    if (Enum.TryParse(trimmedEntry, out DialogueFlags parsedFlag))
-                    {
-                        flags |= parsedFlag; // Use bitwise OR to accumulate flags
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"Unknown DialogueFlag: {trimmedEntry}");
-                    }
+                    Debug.LogWarning($"Flags defined without dialogue at line: {trimmedLine}");
+                    continue;
                 }
-                currentDialogue.flags = flags;
+
+                ParseDialogueFlags(trimmedLine, currentDialogue);
             }
             else if (trimmedLine.StartsWith("*"))
             {
-                // Option Handling
-                int arrowIdx = trimmedLine.IndexOf("->");
-                if (arrowIdx > 0)
+                // Option parsing
+                ParseOption(trimmedLine, currentElement);
+            }
+            else if (trimmedLine.StartsWith("{") && trimmedLine.Contains("}=>"))
+            {
+                // Conditional Next Dialogue Handling
+                if (currentDialogue == null)
                 {
-                    string optionText = trimmedLine.Substring(1, arrowIdx - 1).Trim();
-                    string destinationKey = trimmedLine.Substring(arrowIdx + 2).Trim();
-
-                    if (currentElement != null)
-                    {
-                        currentElement.options.Add(new Option { text = optionText, key = destinationKey });
-                    }
+                    Debug.LogWarning($"Conditional next-key defined without dialogue at line: {trimmedLine}");
+                    continue;
                 }
+                ParseConditionalNext(trimmedLine, currentDialogue);
             }
             else if (trimmedLine.StartsWith("=>"))
             {
-                // Next Dialogue Jump
-                string nextKey = trimmedLine.Substring(2).Trim();
+                // Default Next Dialogue Handling
                 if (currentDialogue != null)
-                {
-                    currentDialogue.nextKey = nextKey;
-                }
+                    currentDialogue.nextKey = trimmedLine.Substring(2).Trim();
+                else
+                    Debug.LogWarning($"NextKey defined without dialogue at line: {trimmedLine}");
             }
             else
             {
-                // Regular Dialogue Text
+                // Normal text line
                 textBuffer.Add(trimmedLine);
             }
         }
 
-        // Final element storage
-        if (currentElement != null && textBuffer.Count > 0)
+        // Store last element
+        StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
+    }
+
+    // Helper to store buffered text into current element
+    private void StoreCurrentElement(ref Dialogue currentDialogue, ref DialogueElement currentElement, ref Speaker currentSpeaker, List<string> textBuffer)
+    {
+        if (currentDialogue == null || currentSpeaker == null || textBuffer.Count == 0)
+            return;
+
+        if (currentElement == null)
+            currentElement = new DialogueElement { speaker = currentSpeaker };
+
+        currentElement.text = string.Join("\n", textBuffer);
+        currentDialogue.elems.Add(currentElement);
+
+        textBuffer.Clear();
+        currentElement = null;
+    }
+
+    // Helper method to parse flags safely
+    private void ParseDialogueFlags(string line, Dialogue currentDialogue)
+    {
+        string data = line.Substring(1, line.Length - 2);  // Remove curly brackets
+        var splitData = data.Split(',');
+
+        DialogueFlags flags = DialogueFlags.None;
+
+        foreach (var entry in splitData)
         {
-            currentElement.text = string.Join("\n", textBuffer);
-            currentDialogue.elems.Add(currentElement);
+            string trimmedEntry = entry.Trim();
+
+            if (Enum.TryParse(trimmedEntry, out DialogueFlags parsedFlag))
+                flags |= parsedFlag;
+            else
+                Debug.LogWarning($"Unknown DialogueFlag: {trimmedEntry}");
         }
+
+        currentDialogue.flags = flags;
+    }
+
+    // Helper method for option parsing with validation
+    private void ParseOption(string line, DialogueElement currentElement)
+    {
+        int arrowIdx = line.IndexOf("->");
+        if (arrowIdx < 0)
+        {
+            Debug.LogWarning($"Malformed option detected: {line}");
+            return;
+        }
+
+        string optionText = line.Substring(1, arrowIdx - 1).Trim();
+        string destinationKey = line.Substring(arrowIdx + 2).Trim();
+
+        if (string.IsNullOrEmpty(optionText) || string.IsNullOrEmpty(destinationKey))
+        {
+            Debug.LogWarning($"Incomplete option detected: {line}");
+            return;
+        }
+
+        if (currentElement != null)
+            currentElement.options.Add(new Option { text = optionText, key = destinationKey });
+        else
+            Debug.LogWarning($"Option defined without an element context: {line}");
+    }
+
+    private void ParseConditionalNext(string line, Dialogue currentDialogue)
+    {
+        int closeBraceIdx = line.IndexOf("}");
+        string condition = line.Substring(1, closeBraceIdx - 1).Trim();
+
+        int arrowIdx = line.IndexOf("=>", closeBraceIdx);
+        if (arrowIdx < 0)
+        {
+            Debug.LogWarning($"Malformed conditional next detected: {line}");
+            return;
+        }
+
+        string nextKey = line.Substring(arrowIdx + 2).Trim();
+
+        if (string.IsNullOrEmpty(nextKey))
+        {
+            Debug.LogWarning($"Incomplete conditional next detected: {line}");
+            return;
+        }
+
+        currentDialogue.conditionalNext.Add(new DialogueCondition
+        {
+            expression = condition,
+            nextKey = nextKey
+        });
     }
 
     private Speaker GetSpeakerByName(string name)
@@ -229,3 +305,4 @@ public class DialogueData : ScriptableObject
         return keys;
     }    
 }
+  
