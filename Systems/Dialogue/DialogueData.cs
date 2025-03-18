@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using NaughtyAttributes;
+using System.Linq;
+using UnityEditor.Experimental.GraphView;
 
 [CreateAssetMenu(fileName = "Dialogue Data", menuName = "Unity Common/Dialogue/Dialogue Data")]
 public class DialogueData : ScriptableObject
@@ -31,22 +33,59 @@ public class DialogueData : ScriptableObject
     }
 
     [Serializable]
+    public class CodeElem
+    {
+        public bool         isFunctionCall;
+        public string       functionOrVarName;
+        public List<string> expressions;
+    }
+
+    [Serializable]
+    public class NextKeyOrCode
+    {
+        public string           nextKey;
+        public List<CodeElem>   code;
+
+        public bool isCode => (code != null) && (code.Count > 0);
+    }
+
+    [Serializable]
     public class DialogueCondition
     {
-        public string expression; // condition as a string, to be parsed later
-        public string nextKey;
+        public string           condition; // condition as a string, to be parsed later
+        public NextKeyOrCode    nextKey;
     }
 
     [Serializable]
     public class Dialogue
     {
-        public DialogueFlags flags;
-        public string key;
-        public List<DialogueElement> elems = new();
+        public string                   name;
+        public DialogueFlags            flags;
+        public List<DialogueElement>    elems = new();
 
         // new support for conditional next keys
         public List<DialogueCondition> conditionalNext = new();
-        public string nextKey; // default next key if none conditions met
+
+        public bool isRedirect => (elems == null) || (elems.Count == 0);
+        public string GetNextDialogue(UCExpression.IContext context)
+        {
+            foreach (var condition in conditionalNext)
+            {
+                if (string.IsNullOrEmpty(condition.condition))
+                {
+                    return condition.nextKey.nextKey;
+                }
+                if (UCExpression.TryParse(condition.condition, out var expression))
+                {
+                    if (expression.Evaluate(context))
+                    {
+                        return condition.nextKey.nextKey;
+                    }
+                }
+            }
+
+            return null;
+        }
     }
 
     [SerializeField] private List<Dialogue> dialogues = new();
@@ -77,28 +116,50 @@ public class DialogueData : ScriptableObject
         Speaker currentSpeaker = null;
         List<string> textBuffer = new();
 
+        bool isParsingCodeBlock = false;
+        string currentCondition = "";
+        List<string> codeBlockBuffer = new();
+
         foreach (var line in lines)
         {
             string trimmedLine = line.Trim();
 
+            if (isParsingCodeBlock)
+            {
+                if (trimmedLine == "}")
+                {
+                    var codeBlock = string.Join("\n", codeBlockBuffer);
+                    currentDialogue.conditionalNext.Add(new DialogueCondition
+                    {
+                        condition = currentCondition,
+                        nextKey = new NextKeyOrCode { code = ParseCodeStatements(codeBlock) }
+                    });
+
+                    isParsingCodeBlock = false;
+                    currentCondition = "";
+                    codeBlockBuffer.Clear();
+                    continue;
+                }
+
+                codeBlockBuffer.Add(trimmedLine);
+                continue;
+            }
+
             if (string.IsNullOrEmpty(trimmedLine))
             {
-                // Blank line indicates end of current dialogue element text
                 StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
                 continue;
             }
 
             if (trimmedLine.StartsWith("#"))
             {
-                // New Dialogue Section
                 StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
                 string key = trimmedLine.Substring(1).Trim();
-                currentDialogue = new Dialogue { key = key };
+                currentDialogue = new Dialogue { name = key };
                 dialogues.Add(currentDialogue);
             }
             else if (trimmedLine.StartsWith("[") && trimmedLine.Contains("]:"))
             {
-                // Speaker Change and new element
                 StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
 
                 int endIdx = trimmedLine.IndexOf("]:");
@@ -111,49 +172,154 @@ public class DialogueData : ScriptableObject
                 if (!string.IsNullOrEmpty(dialogueText))
                     textBuffer.Add(dialogueText);
             }
-            else if (trimmedLine.StartsWith("{") && trimmedLine.EndsWith("}"))
+            else if (trimmedLine.StartsWith("{"))
             {
-                // Flags parsing
-                if (currentDialogue == null)
+                if (trimmedLine.Contains("}=>{"))
                 {
-                    Debug.LogWarning($"Flags defined without dialogue at line: {trimmedLine}");
-                    continue;
+                    int conditionEnd = trimmedLine.IndexOf("}=>{");
+                    currentCondition = trimmedLine.Substring(1, conditionEnd - 1).Trim();
+                    isParsingCodeBlock = true;
                 }
-
-                ParseDialogueFlags(trimmedLine, currentDialogue);
-            }
-            else if (trimmedLine.StartsWith("*"))
-            {
-                // Option parsing
-                ParseOption(trimmedLine, currentElement);
-            }
-            else if (trimmedLine.StartsWith("{") && trimmedLine.Contains("}=>"))
-            {
-                // Conditional Next Dialogue Handling
-                if (currentDialogue == null)
+                else if (trimmedLine.Contains("}=>"))
                 {
-                    Debug.LogWarning($"Conditional next-key defined without dialogue at line: {trimmedLine}");
-                    continue;
+                    ParseConditionalNext(trimmedLine, currentDialogue);
                 }
-                ParseConditionalNext(trimmedLine, currentDialogue);
+                else
+                {
+                    ParseDialogueFlags(trimmedLine, currentDialogue);
+                }
+            }
+            else if (trimmedLine.StartsWith("=>{"))
+            {
+                currentCondition = "";
+                isParsingCodeBlock = true;
             }
             else if (trimmedLine.StartsWith("=>"))
             {
-                // Default Next Dialogue Handling
-                if (currentDialogue != null)
-                    currentDialogue.nextKey = trimmedLine.Substring(2).Trim();
-                else
-                    Debug.LogWarning($"NextKey defined without dialogue at line: {trimmedLine}");
+                string nextKey = trimmedLine.Substring(2).Trim();
+                currentDialogue.conditionalNext.Add(new DialogueCondition
+                {
+                    condition = "",
+                    nextKey = new NextKeyOrCode { nextKey = nextKey }
+                });
+            }
+            else if (trimmedLine.StartsWith("*"))
+            {
+                ParseOption(trimmedLine, currentElement);
             }
             else
             {
-                // Normal text line
                 textBuffer.Add(trimmedLine);
             }
         }
 
-        // Store last element
         StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
+    }
+
+
+    private void ParseConditionalCode(string line, Dialogue currentDialogue)
+    {
+        int closeBraceIdx = line.IndexOf("}");
+        string condition = line.Substring(1, closeBraceIdx - 1).Trim();
+
+        int arrowIdx = line.IndexOf("=>{");
+        string codeBlock = line.Substring(arrowIdx + 3, line.Length - arrowIdx - 4).Trim();
+
+        currentDialogue.conditionalNext.Add(new DialogueCondition
+        {
+            condition = condition,
+            nextKey = new NextKeyOrCode { code = ParseFunctionCalls(codeBlock) }
+        });
+    }
+
+    private void ParseUnconditionalCode(string line, Dialogue currentDialogue)
+    {
+        string codeBlock = line.Substring(3, line.Length - 4).Trim();
+
+        currentDialogue.conditionalNext.Add(new DialogueCondition
+        {
+            condition = "",
+            nextKey = new NextKeyOrCode { code = ParseFunctionCalls(codeBlock) }
+        });
+    }
+
+    private List<CodeElem> ParseCodeStatements(string codeBlock)
+    {
+        var statements = new List<CodeElem>();
+        var lines = codeBlock.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var statementLine = line.Trim();
+
+            if (statementLine.Contains("="))
+            {
+                var splitAssignment = statementLine.Split('=');
+                statements.Add(new CodeElem
+                {
+                    isFunctionCall = false,
+                    functionOrVarName = splitAssignment[0].Trim(),
+                    expressions = new List<string> { splitAssignment[1].Trim() }
+                });
+            }
+            else
+            {
+                int openParenIdx = statementLine.IndexOf('(');
+                int closeParenIdx = statementLine.LastIndexOf(')');
+
+                string functionName = statementLine.Substring(0, openParenIdx).Trim();
+                string parametersBlock = statementLine.Substring(openParenIdx + 1, closeParenIdx - openParenIdx - 1);
+
+                var parameters = new List<string>();
+
+                if (!string.IsNullOrWhiteSpace(parametersBlock))
+                {
+                    parameters.AddRange(parametersBlock.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                                       .Select(p => p.Trim()));
+                }
+
+                statements.Add(new CodeElem
+                {
+                    isFunctionCall = true,
+                    functionOrVarName = functionName,
+                    expressions = parameters
+                });
+            }
+        }
+
+        return statements;
+    }
+
+    private List<CodeElem> ParseFunctionCalls(string codeBlock)
+    {
+        var functionCalls = new List<CodeElem>();
+        var lines = codeBlock.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var funcLine = line.Trim().TrimEnd(';');
+            int openParenIdx = funcLine.IndexOf('(');
+            int closeParenIdx = funcLine.LastIndexOf(')');
+
+            string functionName = funcLine.Substring(0, openParenIdx).Trim();
+            string parametersBlock = funcLine.Substring(openParenIdx + 1, closeParenIdx - openParenIdx - 1);
+
+            var parameters = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(parametersBlock))
+            {
+                parameters.AddRange(parametersBlock.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                                   .Select(p => p.Trim()));
+            }
+
+            functionCalls.Add(new CodeElem
+            {
+                functionOrVarName = functionName,
+                expressions = parameters
+            });
+        }
+
+        return functionCalls;
     }
 
     // Helper to store buffered text into current element
@@ -223,25 +389,13 @@ public class DialogueData : ScriptableObject
         int closeBraceIdx = line.IndexOf("}");
         string condition = line.Substring(1, closeBraceIdx - 1).Trim();
 
-        int arrowIdx = line.IndexOf("=>", closeBraceIdx);
-        if (arrowIdx < 0)
-        {
-            Debug.LogWarning($"Malformed conditional next detected: {line}");
-            return;
-        }
-
+        int arrowIdx = line.IndexOf("=>");
         string nextKey = line.Substring(arrowIdx + 2).Trim();
-
-        if (string.IsNullOrEmpty(nextKey))
-        {
-            Debug.LogWarning($"Incomplete conditional next detected: {line}");
-            return;
-        }
 
         currentDialogue.conditionalNext.Add(new DialogueCondition
         {
-            expression = condition,
-            nextKey = nextKey
+            condition = condition,
+            nextKey = new NextKeyOrCode { nextKey = nextKey }
         });
     }
 
@@ -278,7 +432,7 @@ public class DialogueData : ScriptableObject
         }
 
         // Placeholder function for finding a speaker (replace with actual implementation)
-        dialogue = dialogues.Find(s => s.key == dialogueKey);
+        dialogue = dialogues.Find(s => s.name == dialogueKey);
 
         if (dialogue != null)
         {
@@ -298,7 +452,7 @@ public class DialogueData : ScriptableObject
             keys = new();
             foreach (var dialogue in dialogues)
             {
-                keys.Add(dialogue.key);
+                keys.Add(dialogue.name);
             }
         }
 

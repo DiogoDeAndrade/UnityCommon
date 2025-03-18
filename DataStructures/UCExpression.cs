@@ -7,8 +7,10 @@ public class UCExpression
     public interface IContext
     {
         DataType GetDataType(string varName);
-        float EvaluateNumber(string varName);
-        bool EvaluateBool(string varName);
+        float GetVarNumber(string varName);
+        bool GetVarBool(string varName);
+        void SetVariable(string varName, float value);
+        void SetVariable(string varName, bool value);
     }
 
     public class ErrorException : Exception
@@ -18,13 +20,14 @@ public class UCExpression
         }
     }
 
-    public enum Type { Neg, And, Or, Less, LEqual, Greater, GEqual, Equal, NEqual, Var, FLiteral }
+    public enum Type { Neg, And, Or, Less, LEqual, Greater, GEqual, Equal, NEqual, Var, FLiteral, BLiteral }
     public enum DataType { None, Bool, Number }
 
-    public Type type; // condition as a string, to be parsed later
-    public List<UCExpression> args;
-    public float fLiteral;
-    public string sLiteral;
+    public Type                 type; // condition as a string, to be parsed later
+    public List<UCExpression>   args;
+    public float                fLiteral;
+    public string               sLiteral;
+    public bool                 bLiteral;
 
     public bool Evaluate(IContext context)
     {
@@ -58,10 +61,12 @@ public class UCExpression
                 CheckArguments(2, "or", context, DataType.Number, DataType.Number);
                 return args[0].EvaluateNumber(context) != args[1].EvaluateNumber(context);
             case Type.Var:
-                if (GetDataType(context) == DataType.Bool) return context.EvaluateBool(sLiteral);
-                else return context.EvaluateNumber(sLiteral) != 0.0f;
+                if (GetDataType(context) == DataType.Bool) return context.GetVarBool(sLiteral);
+                else return context.GetVarNumber(sLiteral) != 0.0f;
             case Type.FLiteral:
                 return fLiteral != 0.0f;
+            case Type.BLiteral:
+                return bLiteral;
             default:
                 break;
         }
@@ -74,9 +79,11 @@ public class UCExpression
         switch (type)
         {
             case Type.Var:
-                return context.EvaluateNumber(sLiteral);
+                return context.GetVarNumber(sLiteral);
             case Type.FLiteral:
                 return fLiteral;
+            case Type.BLiteral:
+                return (bLiteral) ? (1.0f) : (0.0f);
         }
 
         throw (new ErrorException($"Not a number in expression of type {type}!"));
@@ -97,6 +104,7 @@ public class UCExpression
             case Type.NEqual: return DataType.Bool;
             case Type.Var: return context.GetDataType(sLiteral);
             case Type.FLiteral: return DataType.Number;
+            case Type.BLiteral: return DataType.Bool;
         }
         return DataType.None;
     }
@@ -142,7 +150,7 @@ public class UCExpression
         }
     }
 
-    private enum TokenType { None, End, Identifier, Number, And, Or, Neg, LParen, RParen, Less, LEqual, Greater, GEqual, Equal, NEqual }
+    private enum TokenType { None, End, Identifier, Number, And, Or, Neg, LParen, RParen, Less, LEqual, Greater, GEqual, Equal, NEqual, True, False }
 
     private class Tokenizer
     {
@@ -158,6 +166,7 @@ public class UCExpression
             NextToken();
         }
 
+        // Modify Tokenizer.NextToken() method:
         public void NextToken()
         {
             while (pos < expression.Length && char.IsWhiteSpace(expression[pos])) pos++;
@@ -174,7 +183,13 @@ public class UCExpression
                 int start = pos;
                 while (pos < expression.Length && (char.IsLetterOrDigit(expression[pos]) || expression[pos] == '_')) pos++;
                 TokenValue = expression.Substring(start, pos - start);
-                CurrentToken = TokenType.Identifier;
+
+                if (TokenValue is "true" or "yes")
+                    CurrentToken = TokenType.True;
+                else if (TokenValue is "false" or "no")
+                    CurrentToken = TokenType.False;
+                else
+                    CurrentToken = TokenType.Identifier;
             }
             else if (char.IsDigit(c))
             {
@@ -276,28 +291,36 @@ public class UCExpression
 
     private static UCExpression ParsePrimary(Tokenizer tokenizer)
     {
-        if (tokenizer.CurrentToken == TokenType.Identifier)
+        switch (tokenizer.CurrentToken)
         {
-            var expr = new UCExpression { type = Type.Var, sLiteral = tokenizer.TokenValue };
-            tokenizer.NextToken();
-            return expr;
-        }
-        if (tokenizer.CurrentToken == TokenType.Number)
-        {
-            var expr = new UCExpression { type = Type.FLiteral, fLiteral = float.Parse(tokenizer.TokenValue) };
-            tokenizer.NextToken();
-            return expr;
-        }
-        if (tokenizer.CurrentToken == TokenType.LParen)
-        {
-            tokenizer.NextToken();
-            var expr = ParseExpression(tokenizer);
-            if (tokenizer.CurrentToken != TokenType.RParen)
-                throw new ErrorException("Expected closing parenthesis");
-            tokenizer.NextToken();
-            return expr;
-        }
-        throw new ErrorException("Unexpected token");
-    }
+            case TokenType.Identifier:
+                var exprVar = new UCExpression { type = Type.Var, sLiteral = tokenizer.TokenValue };
+                tokenizer.NextToken();
+                return exprVar;
 
+            case TokenType.Number:
+                var exprNum = new UCExpression { type = Type.FLiteral, fLiteral = float.Parse(tokenizer.TokenValue) };
+                tokenizer.NextToken();
+                return exprNum;
+
+            case TokenType.True:
+                tokenizer.NextToken();
+                return new UCExpression { type = Type.BLiteral, bLiteral = true };
+
+            case TokenType.False:
+                tokenizer.NextToken();
+                return new UCExpression { type = Type.BLiteral, bLiteral = false };
+
+            case TokenType.LParen:
+                tokenizer.NextToken();
+                var exprParen = ParseExpression(tokenizer);
+                if (tokenizer.CurrentToken != TokenType.RParen)
+                    throw new ErrorException("Expected closing parenthesis");
+                tokenizer.NextToken();
+                return exprParen;
+
+            default:
+                throw new ErrorException("Unexpected token");
+        }
+    }
 }

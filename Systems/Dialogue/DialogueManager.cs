@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
-using static DialogueData;
 
 public class DialogueManager : MonoBehaviour
 {
@@ -65,9 +65,15 @@ public class DialogueManager : MonoBehaviour
 
         NextDialogue();
 
-        onDialogueStart?.Invoke(dialogueKey);
+        // If after NextDialogue, currentDialogue is null, then it means that the text hasn't been able to start
+        if (currentDialogue != null)
+        {
+            onDialogueStart?.Invoke(dialogueKey);
+            return true;
+        }
 
-        return true;
+        return false;
+
     }
 
     void NextDialogue()
@@ -78,39 +84,20 @@ public class DialogueManager : MonoBehaviour
             return;
         }
 
-        // Check if this has options
-        if (currentDialogue != null)
+        // Check if it's an option
+        if ((currentDialogueIndex >= 0) && (currentDialogue.elems.Count > currentDialogueIndex))
         {
-            if ((currentDialogueIndex >= 0) && (currentDialogue.elems.Count > currentDialogueIndex))
+            if (currentDialogue.elems[currentDialogueIndex].hasOptions)
             {
-                if (currentDialogue.elems[currentDialogueIndex].hasOptions)
-                {
-                    // Get selected option
-                    int selectedOption = display.GetSelectedOption();
-                    var option = currentDialogue.elems[currentDialogueIndex].options[selectedOption];
-                    StartConversation(option.key);
-                    return;
-                }
-                var nextKey = currentDialogue.nextKey;
-                if (!string.IsNullOrEmpty(nextKey))
-                {
-                    if (nextKey.StartsWith("Quit"))
-                    {
-                        EndDialogue();
-
-                        var innerSection = nextKey.Substring(5, nextKey.Length - 6);
-                        onDialogueEvent?.Invoke(innerSection);
-                        dialogueEvents[innerSection] = Time.frameCount;
-                    }
-                    else
-                    {
-                        StartConversation(nextKey);
-                    }
-                    return;
-                }
+                // Get selected option
+                int selectedOption = display.GetSelectedOption();
+                var option = currentDialogue.elems[currentDialogueIndex].options[selectedOption];
+                _StartConversation(option.key);
+                return;
             }
         }
 
+        // It's not, so move forward - check if there's more text
         currentDialogueIndex++;
         if (currentDialogueIndex < currentDialogue.elems.Count)
         {
@@ -118,7 +105,7 @@ public class DialogueManager : MonoBehaviour
         }
         else
         {
-            // Check if current dialogue redirects to something
+            // Check if current dialogue is done (or has nothing), check if it redirects to something
             if ((currentDialogue.conditionalNext != null) &&
                 (currentDialogue.conditionalNext.Count > 0))
             {
@@ -127,11 +114,16 @@ public class DialogueManager : MonoBehaviour
                 {
                     foreach (var condition in currentDialogue.conditionalNext)
                     {
-                        if (UCExpression.TryParse(condition.expression, out var expression))
+                        if (string.IsNullOrEmpty(condition.condition))
+                        {
+                            Execute(condition.nextKey);
+                            return;
+                        }
+                        if (UCExpression.TryParse(condition.condition, out var expression))
                         {
                             if (expression.Evaluate(context))
                             {
-                                _StartConversation(condition.nextKey);
+                                Execute(condition.nextKey);
                                 return;
                             }
                         }
@@ -139,17 +131,128 @@ public class DialogueManager : MonoBehaviour
                 }
             }
 
-            if (!string.IsNullOrEmpty(currentDialogue.nextKey))
-            {
-                _StartConversation(currentDialogue.nextKey);
-                return;
-            }
-
             EndDialogue();
         }
     }
 
-    void EndDialogue()
+    private void Execute(DialogueData.NextKeyOrCode nextKey)
+    {
+        if (nextKey.isCode)
+        {
+            var context = GetComponent<UCExpression.IContext>();
+
+            foreach (var c in nextKey.code)
+            {
+                if (c.isFunctionCall)
+                {
+                    FunctionCall(c, context);
+                }
+                else 
+                {
+                    if ((c.expressions == null) || (c.expressions.Count < 1))
+                    {
+                        throw new UCExpression.ErrorException("Missing expression for assignment!");
+                    }
+
+                    if (UCExpression.TryParse(c.expressions[0], out var expression))
+                    {
+                        if (expression.GetDataType(context) == UCExpression.DataType.Bool)
+                            context.SetVariable(c.functionOrVarName, expression.Evaluate(context));
+                        else
+                            context.SetVariable(c.functionOrVarName, expression.EvaluateNumber(context));
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (!_StartConversation(nextKey.nextKey))
+            {
+                EndDialogue();
+            }            
+        }
+    }
+
+    void FunctionCall(DialogueData.CodeElem code, UCExpression.IContext context)
+    {
+        var type = context.GetType();
+        var methodInfo = type.GetMethod(code.functionOrVarName);
+        
+        if (methodInfo == null)
+        {
+            Debug.LogError($"Method \"{code.functionOrVarName}\" not found in context!");
+            return;
+        }
+
+        // Check parameters, check parameter types
+        List<object> args = new();
+        ParameterInfo[] parameters = methodInfo.GetParameters();
+
+        if (parameters.Length != code.expressions.Count)
+        {
+            Debug.LogError($"Invalid number of argument for \"{code.functionOrVarName}\": expected {parameters.Length}, received {code.expressions.Count}!");
+        }
+        else
+        {
+            for (int index = 0; index < parameters.Length; index++) 
+            {
+                ParameterInfo param = parameters[index];
+
+                if (index >= code.expressions.Count)
+                {
+                    Debug.LogError($"Call to \"{code.functionOrVarName}\" is missing parameter #{index} ({param.Name})!");
+                    continue;
+                }
+                if (UCExpression.TryParse(code.expressions[index], out var expression))
+                {
+                    Type paramType = param.ParameterType;
+                    if (paramType == typeof(bool))
+                    {
+                        var pType = expression.GetDataType(context);
+                        if (pType == UCExpression.DataType.Bool)
+                        {
+                            args.Add(expression.Evaluate(context));
+                        }
+                        else
+                        {
+                            Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} ({code.expressions[index]})!");
+                        }
+                    }
+                    else if (paramType == typeof(float))
+                    {
+                        var pType = expression.GetDataType(context);
+                        if (pType == UCExpression.DataType.Number)
+                        {
+                            args.Add(expression.EvaluateNumber(context));
+                        }
+                        else
+                        {
+                            Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} ({code.expressions[index]})!");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"Unsupported type {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\"!");
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"Failed to parse argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\" ({code.expressions[index]})!");
+                    continue;
+                }
+            }
+            if (args.Count == parameters.Length)
+            {
+                methodInfo.Invoke(context, args.ToArray());
+            }
+            else
+            {
+                Debug.LogError($"Failed to call method {code.functionOrVarName}!");
+            }
+        }
+    }
+
+    public void EndDialogue()
     {
         display.Clear();
         onDialogueEnd?.Invoke();
@@ -190,11 +293,13 @@ public class DialogueManager : MonoBehaviour
 
             if (currentDialogueIndex >= currentDialogue.elems.Count) return false;
 
-            if ((!string.IsNullOrEmpty(currentDialogue.nextKey)) && (!IsKeyword(currentDialogue.nextKey)) && (HasDialogue(currentDialogue.nextKey))) return true;
-
             if (currentDialogue.elems[currentDialogueIndex].hasOptions) return true;
 
-            return currentDialogueIndex < currentDialogue.elems.Count - 1;
+            if (currentDialogueIndex < currentDialogue.elems.Count - 1) return true;
+
+            var context = GetComponent<UCExpression.IContext>();
+
+            return !string.IsNullOrEmpty(currentDialogue.GetNextDialogue(context));
         }
     }
 
@@ -210,7 +315,7 @@ public class DialogueManager : MonoBehaviour
         if (Instance)
         {
             var dialogue = Instance.dialogueData.GetDialogue(dialogueKey);
-            if (dialogue != null)
+            while (dialogue != null)
             {
                 if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
                     Instance.dialogueCount.ContainsKey(dialogueKey))
@@ -218,7 +323,20 @@ public class DialogueManager : MonoBehaviour
                     return false;
                 }
 
-                return true;
+                // Check if this is a NULL entry (just a redirect to something)
+                if (dialogue.isRedirect)
+                {
+                    var context = Instance.GetComponent<UCExpression.IContext>();
+
+                    var nextDialogue = dialogue.GetNextDialogue(context);
+                    if (string.IsNullOrEmpty(nextDialogue)) return false;
+
+                    dialogue = Instance.dialogueData.GetDialogue(nextDialogue);
+                }
+                else
+                {
+                    return true;
+                }
             }
         }
 
