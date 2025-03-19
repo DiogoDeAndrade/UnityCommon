@@ -998,6 +998,7 @@ GameObject:
   - component: {fileID: 7706356827213455311}
   - component: {fileID: 2259924738080694158}
   - component: {fileID: 1852156943838483123}
+  - component: {fileID: 4853291269539809376}
   m_Layer: 5
   m_Name: DialogueCanvas_JRPGSample
   m_TagString: Untagged
@@ -1095,8 +1096,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 55e2c37579b18cc44b2745d866e61907, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dialogueData: {fileID: 11400000, guid: 23d676a6424d5a4498bd1fd3584a918a, type: 2}
+  dialogueData:
+  - {fileID: 11400000, guid: 23d676a6424d5a4498bd1fd3584a918a, type: 2}
   display: {fileID: 4686565168217252093}
+--- !u!114 &4853291269539809376
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7622928816124247557}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f81403b09f3bf004c90f73ce8094b132, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &8151832303110592016
 GameObject:
   m_ObjectHideFlags: 0

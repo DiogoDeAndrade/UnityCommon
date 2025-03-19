@@ -9,12 +9,11 @@ public class DialogueManager : MonoBehaviour
     public event OnDialogueStart onDialogueStart;
     public delegate void OnDialogueEnd();
     public event OnDialogueEnd onDialogueEnd;
-    public delegate void OnDialogueEvent(string parameter);
-    public event OnDialogueEvent onDialogueEvent;
 
-    [SerializeField] private DialogueData       dialogueData;
+    [SerializeField] private DialogueData[]     dialogueData;
     [SerializeField] private DialogueDisplay    display;
 
+    DialogueData            currentDialogueData = null;
     DialogueData.Dialogue   currentDialogue = null;
     int                     currentDialogueIndex = -1;
     Dictionary<string, int> dialogueCount = new();
@@ -45,9 +44,24 @@ public class DialogueManager : MonoBehaviour
         instance = this;
     }
 
+    (DialogueData, DialogueData.Dialogue) FindDialogue(string dialogueKey)
+    {
+        if (dialogueData != null)
+        {
+            foreach (var data in dialogueData)
+            {
+                if (data == null) continue;
+                var d = data.GetDialogue(dialogueKey);
+                if (d != null) return (data, d);
+            }
+        }
+
+        return (null, null);
+    }
+
     protected bool _StartConversation(string dialogueKey)
     {
-        var dialogue = dialogueData.GetDialogue(dialogueKey);
+        (var dialogueData, var dialogue) = FindDialogue(dialogueKey);
         if (dialogue == null) return false;
         if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
             dialogueCount.ContainsKey(dialogueKey))
@@ -55,6 +69,7 @@ public class DialogueManager : MonoBehaviour
             return false;
         }
 
+        currentDialogueData = dialogueData;
         currentDialogue = dialogue;
         currentDialogueIndex = -1;
 
@@ -121,11 +136,15 @@ public class DialogueManager : MonoBehaviour
                         }
                         if (UCExpression.TryParse(condition.condition, out var expression))
                         {
-                            if (expression.Evaluate(context))
+                            if (expression.EvaluateBool(context))
                             {
                                 Execute(condition.nextKey);
                                 return;
                             }
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"Can't parse expression \"{condition.condition}\"!");
                         }
                     }
                 }
@@ -157,9 +176,13 @@ public class DialogueManager : MonoBehaviour
                     if (UCExpression.TryParse(c.expressions[0], out var expression))
                     {
                         if (expression.GetDataType(context) == UCExpression.DataType.Bool)
-                            context.SetVariable(c.functionOrVarName, expression.Evaluate(context));
+                            context.SetVariable(c.functionOrVarName, expression.EvaluateBool(context));
                         else
                             context.SetVariable(c.functionOrVarName, expression.EvaluateNumber(context));
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Can't parse expression \"{c.expressions[0]}\"!");
                     }
                 }
             }
@@ -176,7 +199,8 @@ public class DialogueManager : MonoBehaviour
     void FunctionCall(DialogueData.CodeElem code, UCExpression.IContext context)
     {
         var type = context.GetType();
-        var methodInfo = type.GetMethod(code.functionOrVarName);
+        var methodInfo = type.GetMethod(code.functionOrVarName, 
+                                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         
         if (methodInfo == null)
         {
@@ -209,9 +233,9 @@ public class DialogueManager : MonoBehaviour
                     if (paramType == typeof(bool))
                     {
                         var pType = expression.GetDataType(context);
-                        if (pType == UCExpression.DataType.Bool)
+                        if ((pType == UCExpression.DataType.Bool) || (pType == UCExpression.DataType.Undefined))
                         {
-                            args.Add(expression.Evaluate(context));
+                            args.Add(expression.EvaluateBool(context));
                         }
                         else
                         {
@@ -221,9 +245,21 @@ public class DialogueManager : MonoBehaviour
                     else if (paramType == typeof(float))
                     {
                         var pType = expression.GetDataType(context);
-                        if (pType == UCExpression.DataType.Number)
+                        if ((pType == UCExpression.DataType.Number) || (pType == UCExpression.DataType.Undefined))
                         {
                             args.Add(expression.EvaluateNumber(context));
+                        }
+                        else
+                        {
+                            Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} (\"{code.expressions[index]}\")!");
+                        }
+                    }
+                    else if (paramType == typeof(string))
+                    {
+                        var pType = expression.GetDataType(context);
+                        if ((pType == UCExpression.DataType.String) || (pType == UCExpression.DataType.Undefined))
+                        {
+                            args.Add(expression.EvaluateString(context));
                         }
                         else
                         {
@@ -257,6 +293,7 @@ public class DialogueManager : MonoBehaviour
         display.Clear();
         onDialogueEnd?.Invoke();
         currentDialogue = null;
+        currentDialogueData = null;
         currentDialogueIndex = -1;
     }
 
@@ -314,7 +351,7 @@ public class DialogueManager : MonoBehaviour
     {
         if (Instance)
         {
-            var dialogue = Instance.dialogueData.GetDialogue(dialogueKey);
+            (var dialogueData, var dialogue) = Instance.FindDialogue(dialogueKey);
             while (dialogue != null)
             {
                 if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
@@ -331,7 +368,7 @@ public class DialogueManager : MonoBehaviour
                     var nextDialogue = dialogue.GetNextDialogue(context);
                     if (string.IsNullOrEmpty(nextDialogue)) return false;
 
-                    dialogue = Instance.dialogueData.GetDialogue(nextDialogue);
+                    (dialogueData, dialogue) = Instance.FindDialogue(nextDialogue);
                 }
                 else
                 {

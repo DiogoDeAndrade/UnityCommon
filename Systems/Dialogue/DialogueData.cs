@@ -77,10 +77,14 @@ public class DialogueData : ScriptableObject
                 }
                 if (UCExpression.TryParse(condition.condition, out var expression))
                 {
-                    if (expression.Evaluate(context))
+                    if (expression.EvaluateBool(context))
                     {
                         return condition.nextKey.nextKey;
                     }
+                }
+                else
+                {
+                    Debug.LogWarning($"Can't parse expression \"{condition.condition}\"!");
                 }
             }
 
@@ -246,15 +250,36 @@ public class DialogueData : ScriptableObject
     private List<CodeElem> ParseCodeStatements(string codeBlock)
     {
         var statements = new List<CodeElem>();
-        var lines = codeBlock.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
 
-        foreach (var line in lines)
+        string[] lines = codeBlock.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+        for (int i = 0; i < lines.Length; i++)
         {
-            var statementLine = line.Trim();
+            string statementLine = lines[i].Trim();
+
+            if (string.IsNullOrWhiteSpace(statementLine))
+                continue;
+
+            // Verify each statement ends with a semicolon
+            if (!statementLine.EndsWith(";"))
+            {
+                Debug.LogError($"Syntax Error: Missing ';' at end of statement '{statementLine}' (line {i + 1})");
+                continue; // or optionally throw an exception here if strict behavior desired
+            }
+
+            // Remove the trailing semicolon for parsing
+            statementLine = statementLine.Substring(0, statementLine.Length - 1).Trim();
 
             if (statementLine.Contains("="))
             {
-                var splitAssignment = statementLine.Split('=');
+                var splitAssignment = statementLine.Split(new[] { '=' }, 2);
+
+                if (splitAssignment.Length != 2)
+                {
+                    Debug.LogError($"Invalid assignment syntax: {statementLine}");
+                    continue;
+                }
+
                 statements.Add(new CodeElem
                 {
                     isFunctionCall = false,
@@ -266,6 +291,12 @@ public class DialogueData : ScriptableObject
             {
                 int openParenIdx = statementLine.IndexOf('(');
                 int closeParenIdx = statementLine.LastIndexOf(')');
+
+                if (openParenIdx < 0 || closeParenIdx < 0 || closeParenIdx <= openParenIdx)
+                {
+                    Debug.LogError($"Malformed function call detected: {statementLine}");
+                    continue;
+                }
 
                 string functionName = statementLine.Substring(0, openParenIdx).Trim();
                 string parametersBlock = statementLine.Substring(openParenIdx + 1, closeParenIdx - openParenIdx - 1);
