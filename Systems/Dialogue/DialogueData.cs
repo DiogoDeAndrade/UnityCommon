@@ -12,9 +12,6 @@ public class DialogueData : ScriptableObject
     public enum DialogueFlags { None = 0,
                                 OneShot = 1 };
 
-    public Speaker[]    speakers;
-    public TextAsset[]  textAssets;
-
     [Serializable]
     public class Option
     {
@@ -98,18 +95,33 @@ public class DialogueData : ScriptableObject
     private Dictionary<string, Dialogue>    dialogueCache = new();
     private List<string>                    keys = null;
 
-    [Button("Parse Data")]
-    public void ParseData()
+    public static DialogueData Import(string filename)
     {
+        var newObject = ScriptableObject.CreateInstance<DialogueData>();
+
+        try
+        {
+            newObject._Import(filename);
+        }
+        catch
+        {
+            Debug.LogError($"Failed to load {filename}!");
+            return null;
+        }
+
+        return newObject;
+    }
+
+    void _Import(string filename)
+    { 
         dialogues.Clear();
         speakerCache = new();
         dialogueCache = new();
         keys = null;
 
-        foreach (var textAsset in textAssets)
-        {
-            ParseTextAsset(textAsset.text);
-        }
+        var content = System.IO.File.ReadAllText(filename);
+
+        ParseTextAsset(content);
     }
 
     private void ParseTextAsset(string text)
@@ -438,7 +450,7 @@ public class DialogueData : ScriptableObject
         }
 
         // Placeholder function for finding a speaker (replace with actual implementation)
-        Speaker speaker = Array.Find(speakers, s => s.displayName == name);
+        Speaker speaker = Array.Find(Resources.FindObjectsOfTypeAll<Speaker>(), s => s.displayName == name);
 
         if (speaker != null)
         {

@@ -1,11 +1,7 @@
 using System.Collections.Generic;
 using System;
-using System.Linq;
 using UnityEngine;
-using System.Net.Http;
-using Mono.Cecil.Cil;
 using System.Reflection;
-using static UnityEngine.Rendering.DebugUI;
 
 [Serializable]
 public class UCExpression
@@ -57,22 +53,22 @@ public class UCExpression
                 CheckArguments(2, "or", context, DataType.Bool, DataType.Bool);
                 return args[0].EvaluateBool(context) || args[1].EvaluateBool(context);
             case Type.Less:
-                CheckArguments(2, "or", context, DataType.Number, DataType.Number);
+                CheckArgumentsSameType(2, "<", context);
                 return args[0].EvaluateNumber(context) < args[1].EvaluateNumber(context);
             case Type.LEqual:
-                CheckArguments(2, "or", context, DataType.Number, DataType.Number);
+                CheckArgumentsSameType(2, "<=", context);
                 return args[0].EvaluateNumber(context) <= args[1].EvaluateNumber(context);
             case Type.Greater:
-                CheckArguments(2, "or", context, DataType.Number, DataType.Number);
+                CheckArgumentsSameType(2, ">", context);
                 return args[0].EvaluateNumber(context) > args[1].EvaluateNumber(context);
             case Type.GEqual:
-                CheckArguments(2, "or", context, DataType.Number, DataType.Number);
+                CheckArgumentsSameType(2, ">=", context);
                 return args[0].EvaluateNumber(context) >= args[1].EvaluateNumber(context);
             case Type.Equal:
-                CheckArguments(2, "or", context, DataType.Number, DataType.Number);
+                CheckArgumentsSameType(2, "==", context);
                 return args[0].EvaluateNumber(context) == args[1].EvaluateNumber(context);
             case Type.NEqual:
-                CheckArguments(2, "or", context, DataType.Number, DataType.Number);
+                CheckArgumentsSameType(2, "!=", context);
                 return args[0].EvaluateNumber(context) != args[1].EvaluateNumber(context);
             case Type.Var:
                 if (GetDataType(context) == DataType.Bool) return context.GetVarBool(sLiteral);
@@ -268,6 +264,30 @@ public class UCExpression
                     throw new ErrorException($"Bad argument #{i} - expected {dataTypes[i]}, received {args[i].GetDataType(context)} for variable {args[i].sLiteral}");
                 else
                     throw new ErrorException($"Bad argument #{i} - expected {dataTypes[i]}, received {args[i].GetDataType(context)}");
+            }
+        }
+
+        return true;
+    }
+
+    bool CheckArgumentsSameType(int count, string stringContext, IContext context)
+    {
+        if (args == null)
+        {
+            throw new ErrorException($"No arguments for {stringContext}");
+        }
+        if (args.Count != count)
+        {
+            throw new ErrorException($"Wrong number of arguments for {stringContext}");
+        }
+        for (int i = 0; i < args.Count - 1; i++)
+        {
+            if (args[i].GetDataType(context) != args[i + 1].GetDataType(context))
+            {
+                if (args[i].type == Type.Var)
+                    throw new ErrorException($"Bad argument #{i} - variable {args[i].sLiteral} must be of type {args[i].GetDataType(context)}");
+                else
+                    throw new ErrorException($"Bad argument #{i} - argument must be of type {args[i].GetDataType(context)}");
             }
         }
 
