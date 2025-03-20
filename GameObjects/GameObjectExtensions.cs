@@ -185,4 +185,16 @@ public static class GameObjectExtensions
         // Extract and return the components as an array
         return objectsInRange.ConvertAll(item => item.component).ToArray();
     }
+
+    public static T GetInterfaceComponent<T>(this GameObject gameObject) where T : class
+    {
+        foreach (var component in gameObject.GetComponents<Component>())
+        {
+            if (component is T tComponent)
+            {
+                return tComponent;
+            }
+        }
+        return null;
+    }    
 }

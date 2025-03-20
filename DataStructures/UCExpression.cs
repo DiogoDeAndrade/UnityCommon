@@ -16,6 +16,7 @@ public class UCExpression
         void SetVariable(string varName, bool value);
         void SetVariable(string varName, string value);
         DataType GetFunctionType(string functionName);
+        T EvaluateFunction<T>(string functionName, List<UCExpression> args);
     }
 
     public class ErrorException : Exception
@@ -53,23 +54,12 @@ public class UCExpression
                 CheckArguments(2, "or", context, DataType.Bool, DataType.Bool);
                 return args[0].EvaluateBool(context) || args[1].EvaluateBool(context);
             case Type.Less:
-                CheckArgumentsSameType(2, "<", context);
-                return args[0].EvaluateNumber(context) < args[1].EvaluateNumber(context);
             case Type.LEqual:
-                CheckArgumentsSameType(2, "<=", context);
-                return args[0].EvaluateNumber(context) <= args[1].EvaluateNumber(context);
             case Type.Greater:
-                CheckArgumentsSameType(2, ">", context);
-                return args[0].EvaluateNumber(context) > args[1].EvaluateNumber(context);
             case Type.GEqual:
-                CheckArgumentsSameType(2, ">=", context);
-                return args[0].EvaluateNumber(context) >= args[1].EvaluateNumber(context);
             case Type.Equal:
-                CheckArgumentsSameType(2, "==", context);
-                return args[0].EvaluateNumber(context) == args[1].EvaluateNumber(context);
             case Type.NEqual:
-                CheckArgumentsSameType(2, "!=", context);
-                return args[0].EvaluateNumber(context) != args[1].EvaluateNumber(context);
+                return CompareArguments(type, context);
             case Type.Var:
                 if (GetDataType(context) == DataType.Bool) return context.GetVarBool(sLiteral);
                 else return context.GetVarNumber(sLiteral) != 0.0f;
@@ -80,13 +70,51 @@ public class UCExpression
             case Type.SLiteral:
                 return !string.IsNullOrEmpty(sLiteral);
             case Type.FunctionCall:
-                if (EvaluateFunction<bool>(context) is bool boolValue) return boolValue;
+                if (context.EvaluateFunction<bool>(sLiteral, args) is bool boolValue) return boolValue;
                 return false;
             default:
                 break;
         }
 
         throw (new ErrorException($"Invalid expression type {type}!"));
+    }
+
+    public bool CompareArguments(Type type, IContext context)
+    {
+        var dataType = CheckArgumentsSameType(2, "!=", context);
+        switch (dataType)
+        {
+            case DataType.None:
+            case DataType.Undefined:
+                break;
+            case DataType.Bool:
+                switch (type)
+                {
+                    case Type.Equal: return args[0].EvaluateBool(context) == args[1].EvaluateBool(context);
+                    case Type.NEqual: return args[0].EvaluateBool(context) != args[1].EvaluateBool(context);
+                }
+                break;
+            case DataType.Number:
+                switch (type)
+                {
+                    case Type.Less: return args[0].EvaluateNumber(context) < args[1].EvaluateNumber(context);
+                    case Type.LEqual: return args[0].EvaluateNumber(context) <= args[1].EvaluateNumber(context);
+                    case Type.Greater: return args[0].EvaluateNumber(context) > args[1].EvaluateNumber(context);
+                    case Type.GEqual: return args[0].EvaluateNumber(context) >= args[1].EvaluateNumber(context);
+                    case Type.Equal: return args[0].EvaluateNumber(context) == args[1].EvaluateNumber(context);
+                    case Type.NEqual: return args[0].EvaluateNumber(context) != args[1].EvaluateNumber(context);
+                }
+                break;
+            case DataType.String:
+                switch (type)
+                {
+                    case Type.Equal: return args[0].EvaluateString(context) == args[1].EvaluateString(context);
+                    case Type.NEqual: return args[0].EvaluateString(context) != args[1].EvaluateString(context);
+                }
+                break;
+        }
+
+        return false;
     }
 
     public float EvaluateNumber(IContext context)
@@ -116,7 +144,7 @@ public class UCExpression
             case Type.Modulo:
                 return args[0].EvaluateNumber(context) % args[1].EvaluateNumber(context);
             case Type.FunctionCall:
-                if (EvaluateFunction<float>(context) is float floatValue) return floatValue;
+                if (context.EvaluateFunction<float>(sLiteral, args) is float floatValue) return floatValue;
                 return 0.0f;
         }
 
@@ -136,7 +164,7 @@ public class UCExpression
             case Type.SLiteral:
                 return sLiteral;
             case Type.FunctionCall:
-                if (EvaluateFunction<string>(context) is string stringValue) return stringValue;
+                if (context.EvaluateFunction<string>(sLiteral, args) is string stringValue) return stringValue;
                 return "";
         }
 
@@ -165,87 +193,6 @@ public class UCExpression
         return DataType.None;
     }
 
-    private T EvaluateFunction<T>(IContext context)
-    {
-        var type = context.GetType();
-        var methodInfo = type.GetMethod(sLiteral,
-                                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-        if (methodInfo == null)
-        {
-            throw new UCExpression.ErrorException($"Method \"{sLiteral}\" not found in context!");
-        }
-
-        // Check parameters, check parameter types
-        List<object> funcArgs = new();
-        ParameterInfo[] parameters = methodInfo.GetParameters();
-
-        if (parameters.Length != args.Count)
-        {
-            throw new ErrorException($"Invalid number of argument for \"{sLiteral}\": expected {parameters.Length}, received {args.Count}!");
-        }
-        else
-        {
-            for (int index = 0; index < parameters.Length; index++)
-            {
-                ParameterInfo param = parameters[index];
-
-                System.Type paramType = param.ParameterType;
-                var         expression = args[index];
-
-                if (paramType == typeof(bool))
-                {
-                    var pType = expression.GetDataType(context);
-                    if ((pType == DataType.Bool) || (pType == DataType.Undefined))
-                    {
-                        funcArgs.Add(Convert.ChangeType(expression.EvaluateBool(context), paramType));
-                    }
-                    else
-                    {
-                        Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{sLiteral}\", received {pType}!");
-                    }
-                }
-                else if ((paramType == typeof(float)) ||
-                         (paramType == typeof(int)))
-                {
-                    var pType = expression.GetDataType(context);
-                    if ((pType == DataType.Number) || (pType == DataType.Undefined))
-                    {
-                        funcArgs.Add(Convert.ChangeType(expression.EvaluateNumber(context), paramType));
-                    }
-                    else
-                    {
-                        Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{sLiteral}\", received {pType}!");
-                    }
-                }
-                else if (paramType == typeof(string))
-                {
-                    var pType = expression.GetDataType(context);
-                    if ((pType == DataType.String) || (pType == DataType.Undefined))
-                    {
-                        funcArgs.Add(Convert.ChangeType(expression.EvaluateString(context), paramType));
-                    }
-                    else
-                    {
-                        Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{sLiteral}\", received {pType}!");
-                    }
-                }
-                else
-                {
-                    Debug.LogError($"Unsupported type {paramType} for argument #{index} ({param.Name}) for call to \"{sLiteral}\"!");
-                }
-            }
-            if (funcArgs.Count == parameters.Length)
-            {
-                return (T)Convert.ChangeType(methodInfo.Invoke(context, funcArgs.ToArray()), typeof(T));
-            }
-            else
-            {
-                throw new ErrorException($"Failed to call method {sLiteral}!");
-            }
-        }        
-    }
-
     bool CheckArguments(int count, string stringContext, IContext context, params DataType[] dataTypes)
     {
         if (args == null)
@@ -270,7 +217,7 @@ public class UCExpression
         return true;
     }
 
-    bool CheckArgumentsSameType(int count, string stringContext, IContext context)
+    DataType CheckArgumentsSameType(int count, string stringContext, IContext context)
     {
         if (args == null)
         {
@@ -280,9 +227,20 @@ public class UCExpression
         {
             throw new ErrorException($"Wrong number of arguments for {stringContext}");
         }
-        for (int i = 0; i < args.Count - 1; i++)
+        // Find first argument with an explicit type
+        DataType dt = DataType.Undefined;
+        for (int i = 0; i < args.Count; i++)
         {
-            if (args[i].GetDataType(context) != args[i + 1].GetDataType(context))
+            var a1 = args[i].GetDataType(context);
+            if (a1 != DataType.Undefined) dt = a1;
+        }
+
+        if (dt == DataType.Undefined) return dt;
+
+        for (int i = 0; i < args.Count; i++)
+        {
+            var a1 = args[i].GetDataType(context);
+            if ((a1 != DataType.Undefined) && (a1 != dt))
             {
                 if (args[i].type == Type.Var)
                     throw new ErrorException($"Bad argument #{i} - variable {args[i].sLiteral} must be of type {args[i].GetDataType(context)}");
@@ -291,7 +249,7 @@ public class UCExpression
             }
         }
 
-        return true;
+        return dt;
     }
 
     public static bool TryParse(string expressionString, out UCExpression expression)
@@ -304,8 +262,9 @@ public class UCExpression
                 throw new ErrorException("Unexpected token at the end of expression.");
             return true;
         }
-        catch
+        catch (Exception e)
         {
+            Debug.LogError(e.Message);
             expression = null;
             return false;
         }
@@ -333,12 +292,17 @@ public class UCExpression
 
         public void NextToken()
         {
-            while (pos < expr.Length && char.IsWhiteSpace(expr[pos])) pos++;
-            if (pos >= expr.Length) { CurrentToken = TokenType.End; return; }
+            SkipWhitespaceAndComments();
+
+            if (pos >= expr.Length)
+            {
+                CurrentToken = TokenType.End;
+                return;
+            }
 
             char c = expr[pos];
 
-            if (char.IsLetter(c))
+            if (char.IsLetter(c)) // Identifiers or keywords (true/false)
             {
                 int start = pos;
                 while (pos < expr.Length && (char.IsLetterOrDigit(expr[pos]) || expr[pos] == '_')) pos++;
@@ -350,14 +314,14 @@ public class UCExpression
                     _ => TokenType.Identifier
                 };
             }
-            else if (char.IsDigit(c))
+            else if (char.IsDigit(c)) // Numbers
             {
                 int start = pos;
                 while (pos < expr.Length && (char.IsDigit(expr[pos]) || expr[pos] == '.')) pos++;
                 TokenValue = expr[start..pos];
                 CurrentToken = TokenType.Number;
             }
-            else if (c == '"' || c == '\'')  // Added string literal handling here
+            else if (c == '"' || c == '\'') // String literals
             {
                 char quoteType = c;
                 pos++;
@@ -374,25 +338,142 @@ public class UCExpression
                 pos++; // Skip closing quote
                 CurrentToken = TokenType.String;
             }
-            else
+            else // Operators and special characters
             {
                 switch (c)
                 {
                     case '+': pos++; CurrentToken = TokenType.Plus; break;
                     case '-': pos++; CurrentToken = TokenType.Minus; break;
                     case '*': pos++; CurrentToken = TokenType.Multiply; break;
-                    case '/': pos++; CurrentToken = TokenType.Divide; break;
+                    case '/':
+                        pos++;
+                        if (pos < expr.Length && expr[pos] == '/') // Single-line comment
+                        {
+                            while (pos < expr.Length && expr[pos] != '\n') pos++;
+                            NextToken();
+                            return;
+                        }
+                        else if (pos < expr.Length && expr[pos] == '*') // Multi-line comment
+                        {
+                            pos++;
+                            while (pos < expr.Length - 1 && !(expr[pos] == '*' && expr[pos + 1] == '/'))
+                                pos++;
+                            pos += 2; // Skip */
+                            NextToken();
+                            return;
+                        }
+                        CurrentToken = TokenType.Divide;
+                        break;
                     case '%': pos++; CurrentToken = TokenType.Modulo; break;
                     case '(': pos++; CurrentToken = TokenType.LParen; break;
                     case ')': pos++; CurrentToken = TokenType.RParen; break;
                     case ',': pos++; CurrentToken = TokenType.Comma; break;
-                    default: throw new Exception($"Invalid char '{c}'");
+                    case '!':
+                        pos++;
+                        if (pos < expr.Length && expr[pos] == '=')
+                        {
+                            pos++;
+                            CurrentToken = TokenType.NEqual;
+                        }
+                        else
+                        {
+                            CurrentToken = TokenType.Neg; // Negation `!`
+                        }
+                        break;
+                    case '<':
+                        pos++;
+                        if (pos < expr.Length && expr[pos] == '=')
+                        {
+                            pos++;
+                            CurrentToken = TokenType.LEqual;
+                        }
+                        else
+                        {
+                            CurrentToken = TokenType.Less;
+                        }
+                        break;
+                    case '>':
+                        pos++;
+                        if (pos < expr.Length && expr[pos] == '=')
+                        {
+                            pos++;
+                            CurrentToken = TokenType.GEqual;
+                        }
+                        else
+                        {
+                            CurrentToken = TokenType.Greater;
+                        }
+                        break;
+                    case '=':
+                        pos++;
+                        if (pos < expr.Length && expr[pos] == '=')
+                        {
+                            pos++;
+                            CurrentToken = TokenType.Equal;
+                        }
+                        else
+                        {
+                            throw new ErrorException("Unexpected single '='");
+                        }
+                        break;
+                    case '&':
+                        pos++;
+                        if (pos < expr.Length && expr[pos] == '&')
+                        {
+                            pos++;
+                            CurrentToken = TokenType.And;
+                        }
+                        else
+                        {
+                            throw new ErrorException("Unexpected single '&'. Use '&&' for AND.");
+                        }
+                        break;
+                    case '|':
+                        pos++;
+                        if (pos < expr.Length && expr[pos] == '|')
+                        {
+                            pos++;
+                            CurrentToken = TokenType.Or;
+                        }
+                        else
+                        {
+                            throw new ErrorException("Unexpected single '|'. Use '||' for OR.");
+                        }
+                        break;
+                    default:
+                        throw new ErrorException($"Invalid character '{c}' in expression.");
+                }
+            }
+        }
+
+        private void SkipWhitespaceAndComments()
+        {
+            while (pos < expr.Length)
+            {
+                if (char.IsWhiteSpace(expr[pos]))
+                {
+                    pos++;
+                }
+                else if (pos < expr.Length - 1 && expr[pos] == '/' && expr[pos + 1] == '/') // Single-line comment
+                {
+                    while (pos < expr.Length && expr[pos] != '\n') pos++;
+                }
+                else if (pos < expr.Length - 1 && expr[pos] == '/' && expr[pos + 1] == '*') // Multi-line comment
+                {
+                    pos += 2;
+                    while (pos < expr.Length - 1 && !(expr[pos] == '*' && expr[pos + 1] == '/')) pos++;
+                    pos += 2; // Skip */
+                }
+                else
+                {
+                    break;
                 }
             }
         }
     }
 
-    private static UCExpression ParseExpression(Tokenizer tokenizer) => ParseAddSubtract(tokenizer);
+
+    private static UCExpression ParseExpression(Tokenizer tokenizer) => ParseOr(tokenizer);
 
     private static UCExpression ParseAddSubtract(Tokenizer tokenizer)
     {
@@ -493,7 +574,7 @@ public class UCExpression
 
     private static UCExpression ParseComparison(Tokenizer tokenizer)
     {
-        var left = ParseUnary(tokenizer);
+        var left = ParseAddSubtract(tokenizer);
         while (tokenizer.CurrentToken is TokenType.Less or TokenType.LEqual or TokenType.Greater or TokenType.GEqual)
         {
             var op = tokenizer.CurrentToken;

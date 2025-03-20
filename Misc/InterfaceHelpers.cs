@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System;
 using UnityEngine;
+using System.Linq;
 
 public static class InterfaceHelpers 
 {
@@ -37,5 +38,44 @@ public static class InterfaceHelpers
         }
 
         return result;
+    }
+
+    private static Dictionary<Type, List<Type>> _interfaceToImplementors = new();
+
+    public static T GetFirstInterfaceComponent<T>() where T : class
+    {
+        Type interfaceType = typeof(T);
+
+        // Step 1: Cache the MonoBehaviour types that implement the interface
+        if (!_interfaceToImplementors.ContainsKey(interfaceType))
+        {
+            CacheImplementingTypes<T>();
+        }
+
+        var types = _interfaceToImplementors[interfaceType];
+        foreach (var type in types)
+        {
+            var ret = GameObject.FindFirstObjectByType(type) as T;
+            if (ret != null) return ret;
+        }
+
+        return null;
+    }
+
+    private static void CacheImplementingTypes<T>() where T : class
+    {
+        Type interfaceType = typeof(T);
+        var implementingTypes = new List<Type>();
+
+        foreach (Type type in AppDomain.CurrentDomain.GetAssemblies()
+                     .SelectMany(assembly => assembly.GetTypes()))
+        {
+            if (interfaceType.IsAssignableFrom(type) && type.IsClass && !type.IsAbstract && typeof(MonoBehaviour).IsAssignableFrom(type))
+            {
+                implementingTypes.Add(type);
+            }
+        }
+
+        _interfaceToImplementors[interfaceType] = implementingTypes;
     }
 }

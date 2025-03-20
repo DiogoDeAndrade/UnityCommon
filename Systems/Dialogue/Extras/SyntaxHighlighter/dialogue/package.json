@@ -1,0 +1,35 @@
+{
+  "name": "ucdialogue-syntax",
+  "displayName": "UCDialogue Syntax Highlighting",
+  "description": "Syntax highlighting for Unity Common dialogue format",
+  "version": "1.1.0",
+  "publisher": "diogo-andrade",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "dialogue",
+        "aliases": ["UCDialogue"],
+        "extensions": [".dialogue"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dialogue",
+        "scopeName": "source.dialogue",
+        "path": "./syntaxes/dialogue.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Dialogue Theme",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dialogue-color-theme.json"
+      }
+    ]
+  }
+}

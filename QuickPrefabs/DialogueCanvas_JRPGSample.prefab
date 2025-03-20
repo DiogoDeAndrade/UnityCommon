@@ -1097,7 +1097,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   dialogueData:
-  - {fileID: 11400000, guid: 23d676a6424d5a4498bd1fd3584a918a, type: 2}
+  - {fileID: -246705742386849380, guid: 34e3774718288584092e13d717e1fd11, type: 3}
   display: {fileID: 4686565168217252093}
 --- !u!114 &4853291269539809376
 MonoBehaviour:
@@ -1111,6 +1111,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f81403b09f3bf004c90f73ce8094b132, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  tags:
+  - {fileID: 11400000, guid: 8706b20665abdf744850539ee31f2c5a, type: 2}
+  - {fileID: 11400000, guid: ce8d439afc086e0468d4a77b0c9b76c1, type: 2}
+  - {fileID: 11400000, guid: 475b5854114f59248b909c2b5719347f, type: 2}
+  - {fileID: 11400000, guid: c1f6ee6a1bfc6304c85eeedc07cb61fa, type: 2}
 --- !u!1 &8151832303110592016
 GameObject:
   m_ObjectHideFlags: 0

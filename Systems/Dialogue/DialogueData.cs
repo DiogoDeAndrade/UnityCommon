@@ -4,6 +4,7 @@ using UnityEngine;
 using NaughtyAttributes;
 using System.Linq;
 using UnityEditor.Experimental.GraphView;
+using UnityEditor;
 
 [CreateAssetMenu(fileName = "Dialogue Data", menuName = "Unity Common/Dialogue/Dialogue Data")]
 public class DialogueData : ScriptableObject
@@ -32,7 +33,9 @@ public class DialogueData : ScriptableObject
     [Serializable]
     public class CodeElem
     {
-        public bool         isFunctionCall;
+        public enum Type { FunctionCall, Attribution };
+
+        public Type         type;
         public string       functionOrVarName;
         public List<string> expressions;
     }
@@ -135,10 +138,45 @@ public class DialogueData : ScriptableObject
         bool isParsingCodeBlock = false;
         string currentCondition = "";
         List<string> codeBlockBuffer = new();
+        bool isInBlockComment = false;
 
         foreach (var line in lines)
         {
             string trimmedLine = line.Trim();
+
+            // Handle block comments
+            if (isInBlockComment)
+            {
+                if (trimmedLine.Contains("*/"))
+                {
+                    isInBlockComment = false;
+                    trimmedLine = trimmedLine.Substring(trimmedLine.IndexOf("*/") + 2).Trim();
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            if (trimmedLine.StartsWith("/*"))
+            {
+                isInBlockComment = true;
+                if (trimmedLine.Contains("*/"))
+                {
+                    isInBlockComment = false;
+                    trimmedLine = trimmedLine.Substring(trimmedLine.IndexOf("*/") + 2).Trim();
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
+            // Handle single-line comments
+            if (trimmedLine.StartsWith("//"))
+            {
+                continue;
+            }
 
             if (isParsingCodeBlock)
             {
@@ -177,14 +215,11 @@ public class DialogueData : ScriptableObject
             else if (trimmedLine.StartsWith("[") && trimmedLine.Contains("]:"))
             {
                 StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
-
                 int endIdx = trimmedLine.IndexOf("]:");
                 string speakerName = trimmedLine.Substring(1, endIdx - 1);
                 currentSpeaker = GetSpeakerByName(speakerName);
-
                 string dialogueText = trimmedLine.Substring(endIdx + 2).Trim();
                 currentElement = new DialogueElement { speaker = currentSpeaker };
-
                 if (!string.IsNullOrEmpty(dialogueText))
                     textBuffer.Add(dialogueText);
             }
@@ -228,10 +263,8 @@ public class DialogueData : ScriptableObject
                 textBuffer.Add(trimmedLine);
             }
         }
-
         StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer);
     }
-
 
     private void ParseConditionalCode(string line, Dialogue currentDialogue)
     {
@@ -294,7 +327,7 @@ public class DialogueData : ScriptableObject
 
                 statements.Add(new CodeElem
                 {
-                    isFunctionCall = false,
+                    type = CodeElem.Type.Attribution,
                     functionOrVarName = splitAssignment[0].Trim(),
                     expressions = new List<string> { splitAssignment[1].Trim() }
                 });
@@ -323,7 +356,7 @@ public class DialogueData : ScriptableObject
 
                 statements.Add(new CodeElem
                 {
-                    isFunctionCall = true,
+                    type = CodeElem.Type.FunctionCall,
                     functionOrVarName = functionName,
                     expressions = parameters
                 });
@@ -449,8 +482,18 @@ public class DialogueData : ScriptableObject
             return cachedSpeaker;
         }
 
-        // Placeholder function for finding a speaker (replace with actual implementation)
-        Speaker speaker = Array.Find(Resources.FindObjectsOfTypeAll<Speaker>(), s => s.displayName == name);
+#if UNITY_EDITOR
+        string[] guids = AssetDatabase.FindAssets("t:Speaker"); // Searches all Speaker assets
+        var allSpeakers = guids
+            .Select(AssetDatabase.GUIDToAssetPath)
+            .Select(AssetDatabase.LoadAssetAtPath<Speaker>)
+            .Where(speaker => speaker != null) // Ensure it's a valid Speaker instance
+            .ToArray();
+#else
+        allSpeakers = Resources.FindObjectsOfTypeAll<Speaker>();
+#endif
+
+        Speaker speaker = Array.Find(allSpeakers, s => s.displayName == name);
 
         if (speaker != null)
         {

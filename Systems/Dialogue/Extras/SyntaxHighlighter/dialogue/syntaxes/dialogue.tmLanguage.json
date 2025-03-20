@@ -1,0 +1,59 @@
+{
+	"scopeName": "source.dialogue",
+	"name": "Dialogue",
+	"patterns": [
+	  {
+		"begin": "/\\*",
+		"end": "\\*/",
+		"name": "comment.block.dialogue"
+	  },
+	  {
+		"match": "//.*",
+		"name": "comment.line.dialogue"
+	  },
+	  {
+		"match": "^(#\\s*[A-Za-z0-9:_-]+)",
+		"name": "entity.name.title.dialogue"
+	  },
+	  {
+		"match": "(\\[.*?\\]:)([^\n]*)",
+		"captures": {
+		  "1": { "name": "entity.name.speaker.dialogue" },
+		  "2": { "name": "string.quoted.dialogue" }
+		}
+	  },
+	  {
+		"match": "=>|->",
+		"name": "keyword.operator.redirect.dialogue"
+	  },
+	  {
+		"begin": "\\{",
+		"end": "\\}",
+		"name": "meta.code.dialogue",
+		"patterns": [
+		  {
+			"begin": "/\\*",
+			"end": "\\*/",
+			"name": "comment.block.dialogue"
+		  },
+		  {
+			"match": "//.*",
+			"name": "comment.line.dialogue"
+		  }
+		]
+	  },
+	  {
+		"match": "^(?![#\\*\\{\\[].*?$)(.+)",
+		"name": "string.quoted.dialogue"
+	  },
+	  {
+		"match": "(?<==>\\s?|->\\s?)([A-Za-z0-9:_-]+)",
+		"name": "entity.name.title.dialogue"
+	  },
+	  {
+		"match": "^\\*(.*?) ->",
+		"name": "markup.bold.choice.dialogue"
+	  }
+	]
+  }
+  

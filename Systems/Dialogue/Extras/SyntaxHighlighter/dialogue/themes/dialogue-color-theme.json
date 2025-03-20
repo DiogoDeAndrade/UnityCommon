@@ -1,0 +1,44 @@
+{
+    "name": "Dialogue Theme",
+    "type": "dark",
+    "colors": {},
+    "tokenColors": [
+      {
+        "scope": "comment.line.dialogue",
+        "settings": { "foreground": "#56ac61" }
+      },
+      {
+        "scope": "comment.block.dialogue",
+        "settings": { "foreground": "#56ac61" }
+      },
+      {
+        "scope": "entity.name.section.dialogue",
+        "settings": { "foreground": "#00FFFF" }
+      },
+      {
+        "scope": "entity.name.speaker.dialogue",
+        "settings": { "foreground": "#FF7777" }
+      },
+      {
+        "scope": "keyword.operator.redirect.dialogue",
+        "settings": { "foreground": "#bd62a6" }
+      },
+      {
+        "scope": "meta.code.dialogue",
+        "settings": { "foreground": "#99dfdb" }
+      },
+      {
+        "scope": "string.quoted.dialogue",
+        "settings": { "foreground": "#f8cd7d" }
+      },
+      {
+        "scope": "entity.name.title.dialogue",
+        "settings": { "foreground": "#5298c7" }
+      },
+      {
+        "scope": "markup.bold.choice.dialogue",
+        "settings": { "foreground": "#F8cd7d", "fontStyle": "italic" }
+      }
+    ]
+  }
+  

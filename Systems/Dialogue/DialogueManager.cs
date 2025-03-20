@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using static DialogueData;
 
 public class DialogueManager : MonoBehaviour
 {
@@ -131,14 +132,18 @@ public class DialogueManager : MonoBehaviour
                     {
                         if (string.IsNullOrEmpty(condition.condition))
                         {
+                            var cd = currentDialogue;
                             Execute(condition.nextKey);
+                            if (currentDialogue == cd) EndDialogue();
                             return;
                         }
                         if (UCExpression.TryParse(condition.condition, out var expression))
                         {
                             if (expression.EvaluateBool(context))
                             {
+                                var cd = currentDialogue;
                                 Execute(condition.nextKey);
+                                if (currentDialogue == cd) EndDialogue();
                                 return;
                             }
                         }
@@ -162,11 +167,11 @@ public class DialogueManager : MonoBehaviour
 
             foreach (var c in nextKey.code)
             {
-                if (c.isFunctionCall)
+                if (c.type == CodeElem.Type.FunctionCall)
                 {
                     FunctionCall(c, context);
                 }
-                else 
+                else if (c.type == CodeElem.Type.Attribution)
                 {
                     if ((c.expressions == null) || (c.expressions.Count < 1))
                     {
