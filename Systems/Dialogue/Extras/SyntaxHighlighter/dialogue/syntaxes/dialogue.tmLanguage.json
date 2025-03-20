@@ -16,7 +16,7 @@
 		"name": "entity.name.title.dialogue"
 	  },
 	  {
-		"match": "(\\[.*?\\]:)([^\n]*)",
+		"match": "^\\s*(\\[.*?\\]:)([^\n]*)",
 		"captures": {
 		  "1": { "name": "entity.name.speaker.dialogue" },
 		  "2": { "name": "string.quoted.dialogue" }
@@ -27,18 +27,18 @@
 		"name": "keyword.operator.redirect.dialogue"
 	  },
 	  {
-		"begin": "\\{",
-		"end": "\\}",
-		"name": "meta.code.dialogue",
+		"begin": "(\\{)",
+		"end": "(\\})",
+		"name": "meta.code.dialogue",		
 		"patterns": [
+		  {
+			"match": "(//.*)",
+			"name": "comment.line.dialogue"
+		  },
 		  {
 			"begin": "/\\*",
 			"end": "\\*/",
 			"name": "comment.block.dialogue"
-		  },
-		  {
-			"match": "//.*",
-			"name": "comment.line.dialogue"
 		  }
 		]
 	  },

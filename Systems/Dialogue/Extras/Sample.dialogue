@@ -1,0 +1,59 @@
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// This is the sample dialogue file
+//
+//
+
+/*************************************************
+Comments can be used
+*/
+
+// This defines a named dialogue (Tutorial in this case)
+# Tutorial
+// This one evaluates the expression inside the {} and goes to the first text that matches - this requires a implementation of the UCExpression.IContext interface in the same GameObject as the DialogueManager
+{TutorialStage == 0}=>IntroText
+{TutorialStage == 2}=>PresentSeed
+
+# IntroText
+{OneShot}
+[Crystal]: Welcome, Unlighted One!
+
+I'm so happy you're here! Now, we can bring light back!
+
+Darkness is very dangerous! Walk in the dark for a bit and you'll see!
+// When this dialogue finishes, the code will be called. Code can be attributions (var = expression) or function calls (functionName(...))
+=>{    
+    TutorialStage = 1;
+}
+
+# Death1
+[Crystal]: See?!
+Dangerous!!
+
+But don't worry, you will always come back, although something may be lost in the process!
+// When this text finishes, it will continue on the given text (in this case Death1:Question)
+=>Death1:Question
+
+# Death1:Question
+[Crystal]: Are you ready to go on?
+// This represents a choice in the dialog. Each of the options lead to a different text element
+*No, I'm scared! -> Death1:No
+*Yes, let's go! -> Death1:Yes
+
+# Death1:No
+[Crystal]: Don't be, as an Unlighted you always come back, even if it is unpleasant!
+=>Death1:Question
+
+# Death1:Yes
+[Crystal]: Yay! Very well! Follow the light and find the exit, I'll meet you in the other side!
+=>{
+    TutorialStage = 2;
+    Teleport("Crystal", "CrystalTeleportLocation1");
+}
+
+# PresentSeed
+[Crystal]: You're here! I knew you could do it!
+
+Now, grab that shovel over there, we're going to do something really neat!
+=>{
+    SpawnShovel();
+}
