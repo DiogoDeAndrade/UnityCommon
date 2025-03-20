@@ -1,6 +1,8 @@
+using JetBrains.Annotations;
 using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using static UnityEditor.Progress;
 
@@ -22,6 +24,17 @@ public class Inventory : MonoBehaviour
 
     private List<Items> items;
 
+    public int Add(Item item, int quantity)
+    {
+        int count = 0;
+        for (int i = 0; i < quantity; i++)
+        {
+            if (Add(item)) count++;
+        }
+
+        return count;
+    }
+
     public bool Add(Item item)
     {
         int slotIndex = GetSlot(item);
@@ -38,6 +51,18 @@ public class Inventory : MonoBehaviour
         return true;
     }
 
+    public int Remove(Item item, int count)
+    {
+        int ret = 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            if (Remove(item)) ret++;
+        }
+
+        return ret;
+    }
+
     public bool Remove(Item item)
     {
         int slotIndex = FindItem(item);
@@ -47,6 +72,12 @@ public class Inventory : MonoBehaviour
         }
 
         items[slotIndex].count--;
+
+        if (items[slotIndex].count <= 0)
+        {
+            items[slotIndex].item = null;
+            items[slotIndex].count = 0;
+        }
 
         onChange?.Invoke(false, item, slotIndex);
 
@@ -130,5 +161,18 @@ public class Inventory : MonoBehaviour
         }
 
         return false;
+    }
+
+    public int GetItemCount(Item item)
+    {
+        if (items == null) return 0;
+
+        int count = 0;
+        foreach (var i in items)
+        {
+            if (i.item == item) count += i.count;
+        }
+
+        return count;
     }
 }

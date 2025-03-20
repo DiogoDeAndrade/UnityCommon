@@ -14,7 +14,7 @@ public class GridAction_Tile : GridAction
         tilemap = GetComponent<Tilemap>();
     }
 
-    public override void GatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
+    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
     {
         var tile = tilemap.GetTile(position.xy0());
         if (tiles.Contains(tile))
@@ -26,7 +26,7 @@ public class GridAction_Tile : GridAction
         }
     }
 
-    public override bool RunAction(GridObject subject, Vector2Int position)
+    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
     {
         throw new System.NotImplementedException();
     }

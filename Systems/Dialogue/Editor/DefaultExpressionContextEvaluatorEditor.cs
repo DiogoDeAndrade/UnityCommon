@@ -14,15 +14,7 @@ public class DefaultExpressionContextEvaluatorDrawer : Editor
         DefaultExpressionContextEvaluator evaluator = (DefaultExpressionContextEvaluator)target;
 
         // Use reflection to access private/protected fields if needed
-        FieldInfo variablesField = null;
-        var currentType = evaluator.GetType();
-        while (currentType != null)
-        { 
-            variablesField = currentType.GetField("variables", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (variablesField != null) break;
-
-            currentType = currentType.BaseType;
-        }
+        FieldInfo variablesField = evaluator.GetType().GetPrivateField("variables");
         if (variablesField == null) return;
 
         Dictionary<string, object> variables = variablesField.GetValue(evaluator) as Dictionary<string, object>;
@@ -80,7 +72,7 @@ public class DefaultExpressionContextEvaluatorDrawer : Editor
 
         if (GUILayout.Button("Add All Tags"))
         {
-            MethodInfo addAllTagsMethod = evaluator.GetType().GetMethod("AddAllTags", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo addAllTagsMethod = evaluator.GetType().GetPrivateMethod("AddAllTags");
             if (addAllTagsMethod != null)
             {
                 addAllTagsMethod.Invoke(evaluator, null);
@@ -88,6 +80,18 @@ public class DefaultExpressionContextEvaluatorDrawer : Editor
             else
             {
                 Debug.LogError("Method AddAllTags() not found on this object.");
+            }
+        }
+        if (GUILayout.Button("Add All Items"))
+        {
+            MethodInfo addAllItemsMethod = evaluator.GetType().GetPrivateMethod("AddAllItems");
+            if (addAllItemsMethod != null)
+            {
+                addAllItemsMethod.Invoke(evaluator, null);
+            }
+            else
+            {
+                Debug.LogError("Method AddAllItems() not found on this object.");
             }
         }
     }

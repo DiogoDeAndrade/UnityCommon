@@ -217,9 +217,20 @@ public class DialogueManager : MonoBehaviour
         List<object> args = new();
         ParameterInfo[] parameters = methodInfo.GetParameters();
 
-        if (parameters.Length != code.expressions.Count)
+        // Count mandatory parameters
+        int mandatoryParameters = parameters.Length;
+        for (int i = 0; i < parameters.Length; i++)
         {
-            Debug.LogError($"Invalid number of argument for \"{code.functionOrVarName}\": expected {parameters.Length}, received {code.expressions.Count}!");
+            if (parameters[i].HasDefaultValue)
+            {
+                mandatoryParameters = i;
+                break;
+            }
+        }
+
+        if (mandatoryParameters > code.expressions.Count)
+        {
+            Debug.LogError($"Invalid number of argument for \"{code.functionOrVarName}\": expected {mandatoryParameters}, received {code.expressions.Count}!");
         }
         else
         {
@@ -229,7 +240,7 @@ public class DialogueManager : MonoBehaviour
 
                 if (index >= code.expressions.Count)
                 {
-                    Debug.LogError($"Call to \"{code.functionOrVarName}\" is missing parameter #{index} ({param.Name})!");
+                    args.Add(null);
                     continue;
                 }
                 if (UCExpression.TryParse(code.expressions[index], out var expression))
@@ -259,6 +270,18 @@ public class DialogueManager : MonoBehaviour
                             Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} (\"{code.expressions[index]}\")!");
                         }
                     }
+                    else if (paramType == typeof(int))
+                    {
+                        var pType = expression.GetDataType(context);
+                        if ((pType == UCExpression.DataType.Number) || (pType == UCExpression.DataType.Undefined))
+                        {
+                            args.Add((int)expression.EvaluateNumber(context));
+                        }
+                        else
+                        {
+                            Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} (\"{code.expressions[index]}\")!");
+                        }
+                    }
                     else if (paramType == typeof(string))
                     {
                         var pType = expression.GetDataType(context);
@@ -282,7 +305,7 @@ public class DialogueManager : MonoBehaviour
                     continue;
                 }
             }
-            if (args.Count == parameters.Length)
+            if (args.Count >= mandatoryParameters)
             {
                 methodInfo.Invoke(context, args.ToArray());
             }

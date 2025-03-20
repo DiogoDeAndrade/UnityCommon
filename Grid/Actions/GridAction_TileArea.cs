@@ -14,7 +14,7 @@ public class GridAction_TileArea : GridAction
         tilemap = GetComponent<Tilemap>();
     }
 
-    public override void GatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
+    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
     {
         foreach (var action in actions)
         {
@@ -31,7 +31,7 @@ public class GridAction_TileArea : GridAction
         }
     }
 
-    public override bool RunAction(GridObject subject, Vector2Int position)
+    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
     {
         throw new System.NotImplementedException();
     }

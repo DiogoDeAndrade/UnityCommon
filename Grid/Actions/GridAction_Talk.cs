@@ -5,7 +5,7 @@ public class GridAction_Talk : GridAction
 {
     [SerializeField, DialogueKey] private string dialogueKey;
 
-    public override void GatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
+    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
     {
         if (DialogueManager.HasDialogue(dialogueKey))
         {
@@ -13,7 +13,7 @@ public class GridAction_Talk : GridAction
         }
     }
 
-    public override bool RunAction(GridObject subject, Vector2Int position)
+    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
     {
         DialogueManager.StartConversation(dialogueKey);
 

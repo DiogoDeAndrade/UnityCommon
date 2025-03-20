@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.Linq;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -74,4 +76,20 @@ public class AssetUtils
         return CreateOrReplaceAsset<T>(copyObj, relativePath.ToString());
     }
 
+    public static T[] GetAll<T>() where T : UnityEngine.Object
+    {
+#if UNITY_EDITOR
+        string findKey = $"t:{typeof(T).ToString()}";
+        string[] guids = AssetDatabase.FindAssets(findKey);
+        var objects = guids
+            .Select(AssetDatabase.GUIDToAssetPath)
+            .Select(AssetDatabase.LoadAssetAtPath<T>)
+            .Where(obj => obj!= null) // Ensure it's a valid Speaker instance
+            .ToArray();
+#else
+        var objects = Resources.FindObjectsOfTypeAll<T>();
+#endif
+
+        return objects;
+    }
 }

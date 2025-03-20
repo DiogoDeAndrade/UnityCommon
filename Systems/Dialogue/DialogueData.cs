@@ -482,17 +482,7 @@ public class DialogueData : ScriptableObject
             return cachedSpeaker;
         }
 
-#if UNITY_EDITOR
-        string[] guids = AssetDatabase.FindAssets("t:Speaker"); // Searches all Speaker assets
-        var allSpeakers = guids
-            .Select(AssetDatabase.GUIDToAssetPath)
-            .Select(AssetDatabase.LoadAssetAtPath<Speaker>)
-            .Where(speaker => speaker != null) // Ensure it's a valid Speaker instance
-            .ToArray();
-#else
-        allSpeakers = Resources.FindObjectsOfTypeAll<Speaker>();
-#endif
-
+        var allSpeakers = AssetUtils.GetAll<Speaker>();
         Speaker speaker = Array.Find(allSpeakers, s => s.displayName == name);
 
         if (speaker != null)
@@ -533,7 +523,7 @@ public class DialogueData : ScriptableObject
 
     public List<string> GetKeys()
     {
-        if ((keys == null) || (keys.Count == 0))
+        if ((keys == null) || (keys.Count == 0) || (keys.Count != dialogues.Count))
         {
             keys = new();
             foreach (var dialogue in dialogues)

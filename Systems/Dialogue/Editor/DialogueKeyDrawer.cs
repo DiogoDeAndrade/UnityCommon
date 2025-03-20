@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 [CustomPropertyDrawer(typeof(DialogueKeyAttribute))]
 public class DialogueKeyDrawer : PropertyDrawer
@@ -52,14 +53,17 @@ public class DialogueKeyDrawer : PropertyDrawer
 
     private string[] GetDialogueKeys()
     {
-        var dialogueDataObjects = Resources.FindObjectsOfTypeAll<DialogueData>();
-        var keyList = new List<string>();
+        var dialogueDataObjects = AssetUtils.GetAll<DialogueData>();
+        var keySet = new HashSet<string>();
 
         foreach (var dialogueData in dialogueDataObjects)
         {
-            keyList.AddRange(dialogueData.GetKeys());
+            foreach (var key in dialogueData.GetKeys())
+            {
+                keySet.Add(key);
+            }
         }
 
-        return keyList.ToArray();
+        return keySet.ToArray();
     }
 }

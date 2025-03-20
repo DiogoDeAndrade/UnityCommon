@@ -13,7 +13,7 @@ public class ItemDisplay : MonoBehaviour
     {
         if (itemImage)
         {
-            if (item)
+            if ((item) && (count > 0))
             {
                 itemImage.sprite = item.displaySprite;
                 itemImage.color = item.displaySpriteColor;

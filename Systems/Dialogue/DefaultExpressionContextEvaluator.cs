@@ -4,13 +4,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.Animations;
+using UnityEditorInternal.Profiling.Memory.Experimental;
 using UnityEngine;
 
 public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.IContext
 {
-    [SerializeField] private List<Hypertag> tags;
+    [SerializeField] private List<Hypertag>     tags;
+    [SerializeField] private List<Item>         items;
+    [SerializeField] private List<GameObject>   prefabs;
 
-    protected Dictionary<string, Hypertag> cachedTags;
+    protected Dictionary<string, Hypertag>      cachedTags;
+    protected Dictionary<string, Item>          cachedItems;
+    protected Dictionary<string, GameObject>    cachedPrefabs;
     protected Dictionary<string, object> variables = new();
 
     public bool GetVarBool(string varName)
@@ -66,6 +72,71 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
         variables[varName] = value;
     }
 
+    public bool Spawn(string prefabName, string locationTagName = null, string parentObjectTagName = null)
+    {
+        var prefab = GetPrefabByName(prefabName);
+        if (prefab == null)
+        {
+            return false;
+        }
+        GameObject newObject = Instantiate(prefab);
+        if (!string.IsNullOrEmpty(parentObjectTagName))
+        {
+            var targetTag = GetTagByName(parentObjectTagName);
+            if (targetTag == null)
+            {
+                return false;
+            }
+            var target = Hypertag.FindFirstObjectWithHypertag<Transform>(targetTag);
+            if (target == null)
+            {
+                Debug.LogError($"Can't find parent object tagged with {parentObjectTagName}");
+                return false;
+            }
+            newObject.transform.SetParent(target);
+        }
+        if (!string.IsNullOrEmpty(locationTagName))
+        {
+            var targetTag = GetTagByName(locationTagName);
+            if (targetTag == null)
+            {
+                return false;
+            }
+            var target = Hypertag.FindFirstObjectWithHypertag<Transform>(targetTag);
+            if (target == null)
+            {
+                Debug.LogError($"Can't find target tagged with {locationTagName}");
+                return false;
+            }
+            newObject.transform.position = target.position;
+            newObject.transform.rotation = target.rotation;
+        }
+
+        return (newObject != null);
+    }
+
+    public bool AddItemToInventory(string targetName, string itemName, int quantity = 1)
+    {
+        Item item = GetItemByName(itemName);
+        if (item == null)
+        {
+            return false;
+        }
+
+        var targetTag = GetTagByName(targetName);
+        if (targetTag == null)
+        {
+            return false;
+        }
+        var inventory = Hypertag.FindFirstObjectWithHypertag<Inventory>(targetTag);
+        if (inventory == null)
+        {
+            Debug.LogError($"Can't find inventory tagged with {targetName}");
+            return false;
+        }
+        return inventory.Add(item, quantity) == quantity;
+    }
+
     public void Close()
     {
         DialogueManager.Instance.EndDialogue();
@@ -74,8 +145,7 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
     public T EvaluateFunction<T>(string functionName, List<UCExpression> args)
     {
         var type = GetType();
-        var methodInfo = type.GetMethod((string)functionName,
-                                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        var methodInfo = type.GetPrivateMethod(functionName);
 
         if (methodInfo == null)
         {
@@ -185,18 +255,51 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
         Debug.LogError($"Can't find tag {name}!");
         return null;
     }
+    protected GameObject GetPrefabByName(string name)
+    {
+        if (cachedPrefabs == null)
+        {
+            cachedPrefabs = new();
+            foreach (var p in prefabs) cachedPrefabs.Add(p.name, p);
+        }
+
+        if (cachedPrefabs.TryGetValue(name, out var prefab))
+        {
+            return prefab;
+        }
+        if (cachedPrefabs.TryGetValue(name + " Variant", out prefab))
+        {
+            return prefab;
+        }
+
+        Debug.LogError($"Can't find prefab {name}!");
+        return null;
+    }
+    protected Item GetItemByName(string name)
+    {
+        if (cachedItems == null)
+        {
+            cachedItems = new();
+            foreach (var i in items) cachedItems.Add(i.name, i);
+        }
+
+        if (cachedItems.TryGetValue(name, out var item))
+            return item;
+
+        Debug.LogError($"Can't find item {name}!");
+        return null;
+    }
+
 
 #if UNITY_EDITOR
-    private void AddAllTags()
+    protected void AddAllTags()
     {
-        string[] guids = AssetDatabase.FindAssets("t:Hypertag"); // Searches all Speaker assets
-        var allTags = guids
-            .Select(AssetDatabase.GUIDToAssetPath)
-            .Select(AssetDatabase.LoadAssetAtPath<Hypertag>)
-            .Where(tag => tag != null) // Ensure it's a valid Speaker instance
-            .ToArray();
+        tags = new List<Hypertag>(AssetUtils.GetAll<Hypertag>());
+    }
 
-        tags = new List<Hypertag>(allTags);
+    protected void AddAllItems()
+    {
+        items = new List<Item>(AssetUtils.GetAll<Item>());
     }
 #endif
 }

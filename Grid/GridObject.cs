@@ -47,6 +47,11 @@ public class GridObject : MonoBehaviour
     private void OnEnable()
     {
         gridSystem = GetComponentInParent<GridSystem>();
+        if (gridSystem == null)
+        {
+            gridSystem = FindFirstObjectByType<GridSystem>();
+            transform.SetParent(gridSystem.transform);
+        }
         gridSystem?.Register(this);
     }
 

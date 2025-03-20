@@ -33,7 +33,7 @@ public class GridAction_Pickup : GridAction
         charges = (type == PickupType.Single) ? (1) : (maxCharges);
     }
 
-    public override void GatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
+    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
     {
         if ((charges <= 0) && (type != PickupType.Infinite)) return;
         if (item)
@@ -51,7 +51,7 @@ public class GridAction_Pickup : GridAction
         retActions.Add(this);
     }
 
-    public override bool RunAction(GridObject subject, Vector2Int position)
+    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
     {
         if (item)
         {
@@ -82,11 +82,6 @@ public class GridAction_Pickup : GridAction
                 break;
             default:
                 break;
-        }
-
-        if (enableCombatText)
-        {
-            CombatTextManager.SpawnText(subject.gameObject, combatText, combatTextColor, combatTextColor.ChangeAlpha(0.0f), 1.0f, 1.0f);
         }
 
         return true;

@@ -8,7 +8,7 @@ public class GridAction_Teleport : GridAction
     [SerializeField] 
     private Hypertag    targetLocationTag;
 
-    public override void GatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
+    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
     {
         if (objectToTeleportTag)
         {
@@ -24,7 +24,7 @@ public class GridAction_Teleport : GridAction
         }
     }
 
-    public override bool RunAction(GridObject subject, Vector2Int position)
+    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
     {
         GridObject targetObj = null;
         if (objectToTeleportTag)
