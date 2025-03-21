@@ -98,11 +98,12 @@ public static class DebugHelpers
     }
 
 
-    public static void DrawTextAt(Vector3 pos, Vector3 offset, int fontSize, Color color, string text, bool shadow = false)
+    public static void DrawTextAt(Vector3 pos, Vector3 offset, int fontSize, Color color, string text, bool shadow = false, bool centerY = false)
     {
 #if UNITY_EDITOR
         GUIStyle style = new GUIStyle();
         style.fontSize = fontSize;
+        if (centerY) style.alignment = TextAnchor.UpperCenter;
 
         // Convert the world position to screen space
         Vector3 screenPos = Camera.current.WorldToScreenPoint(pos);

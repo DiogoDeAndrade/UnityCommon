@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using System.Collections.Generic;
 using UnityEditorInternal.Profiling.Memory.Experimental;
 using UnityEngine;
@@ -85,5 +86,11 @@ public class GridAction_Pickup : GridAction
         }
 
         return true;
+    }
+
+    internal void SetItem(Item item)
+    {
+        _verb = "Pickup " + item.displayName;
+        this.item = item;
     }
 }

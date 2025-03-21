@@ -1,5 +1,4 @@
 using UnityEngine;
-using NaughtyAttributes;
 using System;
 
 [Serializable]
@@ -77,7 +76,24 @@ public class GridActionCondition
                     if (inventory == null) return false;
 
                     int count = inventory.GetItemCount(item);
-                    return (count >= itemQuantity);
+
+                    switch (comparison)
+                    {
+                        case Comparison.Less:
+                            return (count < itemQuantity);
+                        case Comparison.LessEqual:
+                            return (count <= itemQuantity);
+                        case Comparison.Greater:
+                            return (count > itemQuantity);
+                        case Comparison.GreaterEqual:
+                            return (count >= itemQuantity);
+                        case Comparison.Equal:
+                            return (count == itemQuantity);
+                        case Comparison.NotEqual:
+                            return (count != itemQuantity);
+                    }
+
+                    return false;
                 }
             default:
                 break;

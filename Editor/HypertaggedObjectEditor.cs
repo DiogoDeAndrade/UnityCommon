@@ -3,7 +3,7 @@ using UnityEditor;
 
 namespace OkapiKit.Editor
 {
-    [CustomEditor(typeof(HypertaggedObject))]
+    [CustomEditor(typeof(HypertaggedObject), true)]
     [CanEditMultipleObjects]
     public class HypertaggedObjectEditor : UnityCommonEditor
     {
