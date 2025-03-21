@@ -76,7 +76,7 @@ public class ResourceHandler : MonoBehaviour
             if (_resourceEmpty) ret = false;
             else
             {
-                _resource += deltaValue;
+                _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
                 if (_resource <= 0.0f)
                 {
                     _resource = 0.0f;
@@ -96,9 +96,10 @@ public class ResourceHandler : MonoBehaviour
             {
                 if (_resource < type.maxValue)
                 {
+                    _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
+
                     onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
 
-                    _resource += deltaValue;
                     if ((_resource > 0.0f) && (_resourceEmpty))
                     {
                         onResourceNotEmpty?.Invoke(changeSource);
@@ -111,9 +112,9 @@ public class ResourceHandler : MonoBehaviour
             {
                 if (_resource < type.maxValue)
                 {
-                    onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+                    _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
 
-                    _resource += deltaValue;
+                    onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
                 }
                 else ret = false;
             }

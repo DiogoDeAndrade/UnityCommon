@@ -319,10 +319,14 @@ public class DialogueManager : MonoBehaviour
     public void EndDialogue()
     {
         display.Clear();
-        onDialogueEnd?.Invoke();
-        currentDialogue = null;
-        currentDialogueData = null;
-        currentDialogueIndex = -1;
+        if (currentDialogue != null)
+        {
+            currentDialogue = null;
+            currentDialogueData = null;
+            currentDialogueIndex = -1;
+
+            onDialogueEnd?.Invoke();
+        }
     }
 
     private bool _HasDialogueEvent(string dialogueEventName, int frameTolerance)
