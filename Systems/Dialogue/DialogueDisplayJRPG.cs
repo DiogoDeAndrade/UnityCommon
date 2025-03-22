@@ -14,6 +14,7 @@ public class DialogueDisplayJRPG : DialogueDisplay
     [SerializeField] Image              speakerPortrait;
     [SerializeField] TextMeshProUGUI    speakerName;
     [SerializeField] TextMeshProUGUI    dialogueText;
+    [SerializeField] Color              dialogueDefaultColor = Color.white;
     [SerializeField] AppearMethod       appearMethod = AppearMethod.All;
     [SerializeField, ShowIf(nameof(needTimePerCharacter))]
     float timePerCharacter = 0.1f;
@@ -50,26 +51,45 @@ public class DialogueDisplayJRPG : DialogueDisplay
 
         FadeIn();
 
-        if (speakerName)
+        if (dialogue.speaker)
         {
-            speakerName.text = dialogue.speaker.displayName;
-            speakerName.color = dialogue.speaker.nameColor;
-        }
+            if (speakerName)
+            {
+                speakerName.gameObject.SetActive(true);
+                speakerName.text = dialogue.speaker.displayName;
+                speakerName.color = dialogue.speaker.nameColor;
+            }
 
-        if ((dialogue.speaker.displaySprite) && (speakerPortrait != null) && (speakerContainer != null))
-        {
-            speakerPortrait.sprite = dialogue.speaker.displaySprite;
-            speakerPortrait.color = dialogue.speaker.displaySpriteColor;
+            if ((dialogue.speaker.displaySprite) && (speakerPortrait != null) && (speakerContainer != null))
+            {
+                speakerPortrait.sprite = dialogue.speaker.displaySprite;
+                speakerPortrait.color = dialogue.speaker.displaySpriteColor;
 
-            speakerContainer.gameObject.SetActive(true);
+                speakerContainer.gameObject.SetActive(true);
+            }
+            else
+            {
+                if (speakerContainer) speakerContainer.gameObject.SetActive(false);
+            }
+
+            dialogueText.color = dialogue.speaker.textColor;
         }
         else
         {
-            if (speakerContainer) speakerContainer.gameObject.SetActive(false);
+            if (speakerName)
+            {
+                speakerName.gameObject.SetActive(false);
+            }
+
+            if (speakerContainer != null)
+            {
+                speakerContainer.gameObject.SetActive(false);
+            }
+
+            dialogueText.color = dialogueDefaultColor;
         }
 
         dialogueText.text = dialogue.text;
-        dialogueText.color = dialogue.speaker.textColor;
 
         if (appearMethod == AppearMethod.PerChar)
         {
@@ -92,6 +112,17 @@ public class DialogueDisplayJRPG : DialogueDisplay
     {
         for (int i = 0; i < currentDialogue.text.Length; i++)
         {
+            if (dialogueText.text[i] == '<')
+            {
+                // Move forward to skip tag
+                i++;
+                while ((dialogueText.text[i] != '>') &&
+                       (i < currentDialogue.text.Length))
+                {
+                    i++;
+                }
+                i++;
+            }
             dialogueText.text = currentDialogue.text.Insert(i, "<color=#FFFFFF00>");
 
             if (!skip)

@@ -1,17 +1,18 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using NaughtyAttributes;
 using System.Linq;
-using UnityEditor.Experimental.GraphView;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 
 [CreateAssetMenu(fileName = "Dialogue Data", menuName = "Unity Common/Dialogue/Dialogue Data")]
 public class DialogueData : ScriptableObject
 {
     [Flags]
     public enum DialogueFlags { None = 0,
-                                OneShot = 1 };
+                                OneShot = 1,
+                                Random = 2 };
 
     [Serializable]
     public class Option
@@ -110,7 +111,7 @@ public class DialogueData : ScriptableObject
         {
             Debug.LogError($"Failed to load {filename}!");
             return null;
-        }
+        }        
 
         return newObject;
     }
@@ -125,6 +126,8 @@ public class DialogueData : ScriptableObject
         var content = System.IO.File.ReadAllText(filename);
 
         ParseTextAsset(content);
+
+        RefreshKeys();
     }
 
     private void ParseTextAsset(string text)
@@ -211,6 +214,7 @@ public class DialogueData : ScriptableObject
                 string key = trimmedLine.Substring(1).Trim();
                 currentDialogue = new Dialogue { name = key };
                 dialogues.Add(currentDialogue);
+                currentSpeaker = null;
             }
             else if (trimmedLine.StartsWith("[") && trimmedLine.Contains("]:"))
             {
@@ -401,7 +405,7 @@ public class DialogueData : ScriptableObject
     // Helper to store buffered text into current element
     private void StoreCurrentElement(ref Dialogue currentDialogue, ref DialogueElement currentElement, ref Speaker currentSpeaker, List<string> textBuffer)
     {
-        if (currentDialogue == null || currentSpeaker == null || textBuffer.Count == 0)
+        if (currentDialogue == null || textBuffer.Count == 0)
             return;
 
         if (currentElement == null)
@@ -525,14 +529,20 @@ public class DialogueData : ScriptableObject
     {
         if ((keys == null) || (keys.Count == 0) || (keys.Count != dialogues.Count))
         {
-            keys = new();
-            foreach (var dialogue in dialogues)
-            {
-                keys.Add(dialogue.name);
-            }
+            RefreshKeys();
         }
 
         return keys;
     }    
+
+    void RefreshKeys()
+    {
+        keys = new();
+        foreach (var dialogue in dialogues)
+        {
+            keys.Add(dialogue.name);
+        }
+
+    }
 }
   

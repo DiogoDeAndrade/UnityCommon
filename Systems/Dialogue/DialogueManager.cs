@@ -113,8 +113,22 @@ public class DialogueManager : MonoBehaviour
             }
         }
 
-        // It's not, so move forward - check if there's more text
-        currentDialogueIndex++;
+        // Check if it should select a random sentence
+        if ((currentDialogue.flags & DialogueData.DialogueFlags.Random) != 0)
+        {
+            if (currentDialogueIndex == -1) currentDialogueIndex = UnityEngine.Random.Range(0, currentDialogue.elems.Count);
+            else
+            {
+                EndDialogue();
+                return;
+            }
+        }
+        else
+        {
+            // It's not, so move forward - check if there's more text
+            currentDialogueIndex++;
+        }
+
         if (currentDialogueIndex < currentDialogue.elems.Count)
         {
             display.Display(currentDialogue.elems[currentDialogueIndex]);

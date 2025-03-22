@@ -1,10 +1,6 @@
-using JetBrains.Annotations;
 using NaughtyAttributes;
-using System;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
-using static UnityEditor.Progress;
 
 public class Inventory : MonoBehaviour
 {

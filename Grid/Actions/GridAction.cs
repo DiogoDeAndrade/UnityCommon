@@ -37,7 +37,7 @@ public abstract class GridAction : MonoBehaviour
     protected UCExpression.IContext context;
     protected GridSystem            gridSystem;
 
-    private void Start()
+    protected virtual void Start()
     {
         context = InterfaceHelpers.GetFirstInterfaceComponent<UCExpression.IContext>();
         gridSystem = GetComponentInParent<GridSystem>();

@@ -1,7 +1,5 @@
 using NaughtyAttributes;
-using System;
 using System.Collections.Generic;
-using UnityEditorInternal.Profiling.Memory.Experimental;
 using UnityEngine;
 
 public class GridAction_Pickup : GridAction
@@ -29,8 +27,9 @@ public class GridAction_Pickup : GridAction
 
     int charges = 0;
 
-    private void Start()
+    protected override void Start()
     {
+        base.Start();
         charges = (type == PickupType.Single) ? (1) : (maxCharges);
     }
 

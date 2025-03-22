@@ -1,11 +1,6 @@
-using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using UnityEditor;
-using UnityEditor.Animations;
-using UnityEditorInternal.Profiling.Memory.Experimental;
 using UnityEngine;
 
 public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.IContext
@@ -115,7 +110,7 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
         return (newObject != null);
     }
 
-    public bool AddItemToInventory(string targetName, string itemName, int quantity = 1)
+    public bool AddItemToInventory(string targetTagName, string itemName, int quantity = 1)
     {
         Item item = GetItemByName(itemName);
         if (item == null)
@@ -123,7 +118,7 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
             return false;
         }
 
-        var targetTag = GetTagByName(targetName);
+        var targetTag = GetTagByName(targetTagName);
         if (targetTag == null)
         {
             return false;
@@ -131,10 +126,73 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
         var inventory = Hypertag.FindFirstObjectWithHypertag<Inventory>(targetTag);
         if (inventory == null)
         {
-            Debug.LogError($"Can't find inventory tagged with {targetName}");
+            Debug.LogError($"Can't find inventory tagged with {targetTagName}");
             return false;
         }
         return inventory.Add(item, quantity) == quantity;
+    }
+    public bool RemoveItemToInventory(string targetTagName, string itemName, int quantity = 1)
+    {
+        Item item = GetItemByName(itemName);
+        if (item == null)
+        {
+            return false;
+        }
+
+        var targetTag = GetTagByName(targetTagName);
+        if (targetTag == null)
+        {
+            return false;
+        }
+        var inventory = Hypertag.FindFirstObjectWithHypertag<Inventory>(targetTag);
+        if (inventory == null)
+        {
+            Debug.LogError($"Can't find inventory tagged with {targetTagName}");
+            return false;
+        }
+        return inventory.Remove(item, quantity) == quantity;
+    }
+
+
+    public bool HasItemInInventory(string targetTagName, string itemName, int quantity = 1)
+    {
+        Item item = GetItemByName(itemName);
+        if (item == null)
+        {
+            return false;
+        }
+
+        var targetTag = GetTagByName(targetTagName);
+        if (targetTag == null)
+        {
+            return false;
+        }
+        var inventory = Hypertag.FindFirstObjectWithHypertag<Inventory>(targetTag);
+        if (inventory == null)
+        {
+            Debug.LogError($"Can't find inventory tagged with {targetTagName}");
+            return false;
+        }
+        return inventory.GetItemCount(item) >= quantity;
+    }
+
+    public bool Destroy(string targetTagName)
+    {
+        var targetTag = GetTagByName(targetTagName);
+        if (targetTag == null)
+        {
+            return false;
+        }
+        var obj = Hypertag.FindFirstObjectWithHypertag<Transform>(targetTag);
+        if (obj == null)
+        {
+            Debug.LogError($"Can't find object tagged with {targetTagName}");
+            return false;
+        }
+
+        Destroy(obj.gameObject);
+
+        return true;
     }
 
     public void Close()

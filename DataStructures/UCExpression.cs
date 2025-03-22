@@ -205,7 +205,7 @@ public class UCExpression
         }
         for (int i = 0; i < args.Count; i++)
         {
-            if (args[i].GetDataType(context) != dataTypes[i])
+            if ((args[i].GetDataType(context) != dataTypes[i]) && (args[i].GetDataType(context) != DataType.Undefined))
             {
                 if (args[i].type == Type.Var)
                     throw new ErrorException($"Bad argument #{i} - expected {dataTypes[i]}, received {args[i].GetDataType(context)} for variable {args[i].sLiteral}");

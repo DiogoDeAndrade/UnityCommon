@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -40,5 +42,18 @@ public static class Light2DExtensions
         if (current == targetIntensity) return null;
 
         return light.Tween().Interpolate(current, targetIntensity, duration, (value) => light.intensity = value, "LightFade");
+    }
+
+    public static void SetSortingLayerToEverything(this Light2D light)
+    {
+        FieldInfo sortingLayersField = typeof(Light2D).GetField("m_ApplyToSortingLayers", BindingFlags.NonPublic | BindingFlags.Instance);
+        int defaultLayerID = SortingLayer.NameToID("Default");
+        var layers = SortingLayer.layers;
+        var allLayers = new List<int>();
+        foreach (var layer in layers)
+        {
+            allLayers.Add(SortingLayer.NameToID(layer.name));
+        }
+        sortingLayersField.SetValue(light, allLayers.ToArray());
     }
 }
