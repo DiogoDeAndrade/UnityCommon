@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
-using static DialogueData;
 
 public class DialogueManager : MonoBehaviour
 {
@@ -70,6 +69,11 @@ public class DialogueManager : MonoBehaviour
             return false;
         }
 
+        if ((currentDialogue != null) && (currentDialogue != dialogue))
+        {
+            onDialogueEnd?.Invoke();
+        }
+
         currentDialogueData = dialogueData;
         currentDialogue = dialogue;
         currentDialogueIndex = -1;
@@ -79,16 +83,11 @@ public class DialogueManager : MonoBehaviour
         else
             dialogueCount[dialogueKey] = 1;
 
+        onDialogueStart?.Invoke(dialogueKey);
+
         NextDialogue();
 
-        // If after NextDialogue, currentDialogue is null, then it means that the text hasn't been able to start
-        if (currentDialogue != null)
-        {
-            onDialogueStart?.Invoke(dialogueKey);
-            return true;
-        }
-
-        return false;
+        return (currentDialogue != null);
 
     }
 
@@ -181,11 +180,11 @@ public class DialogueManager : MonoBehaviour
 
             foreach (var c in nextKey.code)
             {
-                if (c.type == CodeElem.Type.FunctionCall)
+                if (c.type == DialogueData.CodeElem.Type.FunctionCall)
                 {
                     FunctionCall(c, context);
                 }
-                else if (c.type == CodeElem.Type.Attribution)
+                else if (c.type == DialogueData.CodeElem.Type.Attribution)
                 {
                     if ((c.expressions == null) || (c.expressions.Count < 1))
                     {
@@ -384,13 +383,6 @@ public class DialogueManager : MonoBehaviour
 
             return !string.IsNullOrEmpty(currentDialogue.GetNextDialogue(context));
         }
-    }
-
-    bool IsKeyword(string key)
-    {
-        if (key.StartsWith("Quit")) return true;
-
-        return false;
     }
 
     public static bool HasDialogue(string dialogueKey)
