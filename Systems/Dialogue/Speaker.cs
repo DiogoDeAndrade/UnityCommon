@@ -4,6 +4,7 @@ using UnityEngine;
 public class Speaker : ScriptableObject
 {
     public string   displayName;
+    public string[] nameAlias;
     public Color    nameColor = Color.white;
     public Sprite   displaySprite;
     public Color    displaySpriteColor = Color.white;

@@ -487,7 +487,7 @@ public class DialogueData : ScriptableObject
         }
 
         var allSpeakers = AssetUtils.GetAll<Speaker>();
-        Speaker speaker = Array.Find(allSpeakers, s => s.displayName == name);
+        Speaker speaker = Array.Find(allSpeakers, s => (s.displayName == name) || ((s.nameAlias != null) && (s.nameAlias.Contains(name))));
 
         if (speaker != null)
         {
