@@ -481,6 +481,8 @@ public class DialogueData : ScriptableObject
 
     private Speaker GetSpeakerByName(string name)
     {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
         if (speakerCache.TryGetValue(name, out Speaker cachedSpeaker))
         {
             return cachedSpeaker;
