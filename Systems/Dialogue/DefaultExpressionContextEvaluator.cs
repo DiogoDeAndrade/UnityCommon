@@ -131,7 +131,7 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
         }
         return inventory.Add(item, quantity) == quantity;
     }
-    public bool RemoveItemToInventory(string targetTagName, string itemName, int quantity = 1)
+    public bool RemoveItemFromInventory(string targetTagName, string itemName, int quantity = 1)
     {
         Item item = GetItemByName(itemName);
         if (item == null)
