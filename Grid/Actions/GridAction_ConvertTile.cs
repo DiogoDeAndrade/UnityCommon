@@ -4,7 +4,7 @@ using UnityEngine.Tilemaps;
 
 public class GridAction_ConvertTile : GridAction
 {
-    [SerializeField] private List<TileBase> tiles;
+    [SerializeField, Header("Convert Tile")] private List<TileBase> tiles;
     [SerializeField] private TileBase       convertTo;
     [SerializeField] private GameObject     spawn;
 

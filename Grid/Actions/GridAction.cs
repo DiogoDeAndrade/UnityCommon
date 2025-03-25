@@ -16,6 +16,8 @@ public abstract class GridAction : MonoBehaviour
     protected Color   combatTextColor = Color.white;
     [SerializeField, ShowIf(nameof(conditionsHaveItems))]
     protected bool    consumeItems;
+    [SerializeField]
+    protected AudioClip actionSnd;
 
     public string verb => _verb;
     
@@ -67,6 +69,11 @@ public abstract class GridAction : MonoBehaviour
                 CombatTextManager.SpawnText(subject.gameObject, combatText, combatTextColor, combatTextColor.ChangeAlpha(0.0f), 1.0f, 1.0f);
             }
 
+            if (actionSnd)
+            {
+                SoundManager.PlaySound(SoundType.PrimaryFX, actionSnd);
+            }
+
             if (consumeItems)
             {
                 if ((conditions != null) && (conditions.Count > 0))
@@ -93,5 +100,7 @@ public abstract class GridAction : MonoBehaviour
     protected abstract bool ActualRunAction(GridObject subject, Vector2Int position);
 
     public virtual bool ShouldRunTurn() { return true; }
+
+    public bool hasSound => actionSnd != null;
 
 }

@@ -26,6 +26,10 @@ public class DialogueDisplayJRPG : DialogueDisplay
     [SerializeField] GameObject         continueStatusObject;
     [SerializeField] GameObject         skipStatusObject;
     [SerializeField] GameObject         doneStatusObject;
+    [SerializeField] AudioClip          changeSpeakerSnd;
+    [SerializeField] AudioClip          endSnd;
+    [SerializeField] AudioClip          skipSnd;
+    [SerializeField] AudioClip          optionSnd;
 
     DialogueData.DialogueElement    currentDialogue;
     Coroutine                       showTextCR;
@@ -44,6 +48,8 @@ public class DialogueDisplayJRPG : DialogueDisplay
     public override void Display(DialogueData.DialogueElement dialogue)
     {
         if (currentDialogue == dialogue) return;
+
+        var prevSpeaker = (currentDialogue != null) ? (currentDialogue.speaker) : (null);
 
         ClearOptions();
         currentDialogue = dialogue;
@@ -106,6 +112,12 @@ public class DialogueDisplayJRPG : DialogueDisplay
 
             DisplayOptions();
         }
+        
+        var currSpeaker = (currentDialogue != null) ? (currentDialogue.speaker) : (null);
+        if ((changeSpeakerSnd != null) && (currSpeaker != prevSpeaker))
+        {
+            SoundManager.PlaySound(SoundType.PrimaryFX, changeSpeakerSnd);
+        }
     }
 
     IEnumerator ShowTextCharCR()
@@ -139,12 +151,24 @@ public class DialogueDisplayJRPG : DialogueDisplay
             dialogueText.text = currentDialogue.text.Insert(charIndex, "<color=#FFFFFF00>");
 
             if (!skip)
+            {
+                if ((currentDialogue.speaker != null) && (currentDialogue.speaker.characterSnd != null))
+                {
+                    SoundManager.PlaySound(SoundType.PrimaryFX, currentDialogue.speaker.characterSnd, currentDialogue.speaker.characterSndVolume.Random(), currentDialogue.speaker.characterSndPitch.Random());
+                }
+
                 yield return new WaitForSeconds(timePerCharacter);
+            }
             else if (timePerCharacterSkip > 0)
                 yield return new WaitForSeconds(timePerCharacterSkip);
         }
 
         dialogueText.text = currentDialogue.text;
+
+        if (endSnd)
+        {
+            SoundManager.PlaySound(SoundType.PrimaryFX, endSnd);
+        }
 
         DisableAllStatus();
         if (DialogueManager.hasMoreText) continueStatusObject?.SetActive(true);
@@ -213,6 +237,11 @@ public class DialogueDisplayJRPG : DialogueDisplay
         DisableAllStatus();
         if (DialogueManager.hasMoreText) continueStatusObject?.SetActive(true);
         else doneStatusObject?.SetActive(true);
+
+        if (skipSnd)
+        {
+            SoundManager.PlaySound(SoundType.PrimaryFX, skipSnd);
+        }
     }
 
     public override bool isDisplaying() => (currentDialogue != null) && (showTextCR != null);
@@ -232,6 +261,8 @@ public class DialogueDisplayJRPG : DialogueDisplay
             options[selectedOption].Select();
 
             optionCooldownTime = Time.time;
+
+            if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, 1.0f, Random.Range(0.9f, 1.1f));
         }
         else if (moveVector.y < -0.2f)
         {
@@ -240,6 +271,8 @@ public class DialogueDisplayJRPG : DialogueDisplay
             options[selectedOption].Select();
 
             optionCooldownTime = Time.time;
+
+            if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, 1.0f, Random.Range(0.9f, 1.1f));
         }
     }
 

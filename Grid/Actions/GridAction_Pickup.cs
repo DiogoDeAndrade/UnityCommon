@@ -8,7 +8,7 @@ public class GridAction_Pickup : GridAction
 
     [SerializeField, Header("Pickup"), ShowIf(nameof(notResourceType))]
     private Item            item;
-    [SerializeField, ShowIf(nameof(notItem))]
+    [SerializeField, ShowIf(nameof(notItem)), Header("Pickup")]
     private ResourceType    resourceType;
     [SerializeField, ShowIf(nameof(hasResourceType))]
     private float           quantity;

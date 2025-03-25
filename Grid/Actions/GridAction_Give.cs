@@ -6,7 +6,7 @@ public class GridAction_Give : GridAction
 {
     [SerializeField, Header("Give"), ShowIf(nameof(notResourceType))]
     private Item            item;
-    [SerializeField, ShowIf(nameof(notItem))]
+    [SerializeField, Header("Give"), ShowIf(nameof(notItem))]
     private ResourceType    resourceType;
     [SerializeField, ShowIf(nameof(hasResourceType))]
     private float           quantity;

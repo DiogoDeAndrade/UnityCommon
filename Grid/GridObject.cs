@@ -12,6 +12,10 @@ public class GridObject : MonoBehaviour
     private bool checkCollisionOnMove = true;
     [SerializeField, Range(-1.0f, 1.0f), ShowIf(nameof(checkCollisionOnMove))]
     private float moveAnimationOnCollision = 0.0f;
+    [SerializeField]
+    private AudioClip   moveSnd;
+    [SerializeField, ShowIf(nameof(checkCollisionOnMove))]
+    private AudioClip   moveFailSnd;
 
     public delegate void OnMove(Vector2Int sourcePos, Vector2Int destPos);
     public event OnMove onMove;
@@ -106,6 +110,8 @@ public class GridObject : MonoBehaviour
                         moveInterpolator = null;
                         onMoveEnd?.Invoke(originalGridPos, endPosGrid);
                     });
+
+                    if (moveFailSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveFailSnd, 1.0f, UnityEngine.Random.Range(0.7f, 1.3f));
                 }
 
                 ComputeFacingFromVector(deltaPos);
@@ -128,6 +134,8 @@ public class GridObject : MonoBehaviour
 
         onTurnTo?.Invoke(originalGridPos, endPosGrid);
         onMove?.Invoke(originalGridPos, endPosGrid);
+
+        if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd, 1.0f, UnityEngine.Random.Range(0.7f, 1.3f));
 
         return true;
     }

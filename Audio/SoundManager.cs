@@ -114,12 +114,12 @@ public class SoundManager : MonoBehaviour
         return newMusicSource;
     }
 
-    private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
+    private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, bool loop = false)
     {
         var audioSource = GetSource();
 
         audioSource.clip = clip;
-        audioSource.loop = false;
+        audioSource.loop = loop;
         audioSource.volume = volume;
         audioSource.pitch = pitch;
         audioSource.outputAudioMixerGroup = mixerGroups[(int)type];
@@ -172,5 +172,11 @@ public class SoundManager : MonoBehaviour
     {
         if (_instance == null) return null;
         return _instance._PlayMusic(clip, volume, pitch);
+    }
+
+    static public AudioSource PlayLoopSound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
+    {
+        if (_instance == null) return null;
+        return _instance._PlaySound(type, clip, volume, pitch, true);
     }
 }
