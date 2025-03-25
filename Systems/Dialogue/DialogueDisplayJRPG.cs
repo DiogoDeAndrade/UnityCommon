@@ -110,20 +110,33 @@ public class DialogueDisplayJRPG : DialogueDisplay
 
     IEnumerator ShowTextCharCR()
     {
-        for (int i = 0; i < currentDialogue.text.Length; i++)
+        for (int charIndex = 0; charIndex < currentDialogue.text.Length; charIndex++)
         {
-            if (dialogueText.text[i] == '<')
+            int count = 0;
+            if (timePerCharacterSkip > 0)
             {
-                // Move forward to skip tag
-                i++;
-                while ((dialogueText.text[i] != '>') &&
-                       (i < currentDialogue.text.Length))
-                {
-                    i++;
-                }
-                i++;
+                count = Mathf.CeilToInt(Time.deltaTime / timePerCharacterSkip);
             }
-            dialogueText.text = currentDialogue.text.Insert(i, "<color=#FFFFFF00>");
+            for (int j = 0; j < count; j++)
+            {
+                if (dialogueText.text[charIndex] == '<')
+                {
+                    // Move forward to skip tag
+                    charIndex++;
+                    while ((dialogueText.text[charIndex] != '>') &&
+                           (charIndex < currentDialogue.text.Length))
+                    {
+                        charIndex++;
+                    }
+                    charIndex++;
+                }
+                // Skip one character
+                charIndex++;
+            }
+
+            if (charIndex >= currentDialogue.text.Length) break;
+
+            dialogueText.text = currentDialogue.text.Insert(charIndex, "<color=#FFFFFF00>");
 
             if (!skip)
                 yield return new WaitForSeconds(timePerCharacter);
