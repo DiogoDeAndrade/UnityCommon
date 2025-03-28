@@ -5,13 +5,13 @@ using UnityEngine;
 
 public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.IContext
 {
-    [SerializeField] private List<Hypertag>     tags;
-    [SerializeField] private List<Item>         items;
-    [SerializeField] private List<GameObject>   prefabs;
+    [SerializeField] private List<Hypertag>                 tags;
+    [SerializeField] private List<Item>                     items;
+    [SerializeField] private ParamPrefabList<GameObject>    prefabs;
 
-    protected Dictionary<string, Hypertag>      cachedTags;
-    protected Dictionary<string, Item>          cachedItems;
-    protected Dictionary<string, GameObject>    cachedPrefabs;
+    protected Dictionary<string, Hypertag>                  cachedTags;
+    protected Dictionary<string, Item>                      cachedItems;
+    protected Dictionary<string, ParamPrefab<GameObject>>   cachedPrefabs;
     protected Dictionary<string, object> variables = new();
 
     public bool GetVarBool(string varName)
@@ -74,7 +74,7 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
         {
             return false;
         }
-        GameObject newObject = Instantiate(prefab);
+        GameObject newObject = prefab.Instantiate();
         if (!string.IsNullOrEmpty(parentObjectTagName))
         {
             var targetTag = GetTagByName(parentObjectTagName);
@@ -313,12 +313,12 @@ public class DefaultExpressionContextEvaluator : MonoBehaviour, UCExpression.ICo
         Debug.LogError($"Can't find tag {name}!");
         return null;
     }
-    protected GameObject GetPrefabByName(string name)
+    protected ParamPrefab<GameObject> GetPrefabByName(string name)
     {
         if (cachedPrefabs == null)
         {
             cachedPrefabs = new();
-            foreach (var p in prefabs) cachedPrefabs.Add(p.name, p);
+            foreach (var p in prefabs) cachedPrefabs.Add(p.name, p.prefab);
         }
 
         if (cachedPrefabs.TryGetValue(name, out var prefab))

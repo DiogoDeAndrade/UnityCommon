@@ -144,6 +144,11 @@ public class DialogueDisplayJRPG : DialogueDisplay
                 }
                 // Skip one character
                 charIndex++;
+                if (charIndex >= currentDialogue.text.Length)
+                {
+                    charIndex = currentDialogue.text.Length - 1;
+                    break;
+                }
             }
 
             if (charIndex >= currentDialogue.text.Length) break;
