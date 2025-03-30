@@ -102,4 +102,39 @@ public class GridSystem : MonoBehaviour
 
         return ret;
     }
+
+    public GridObject FindVonNeumann(int radius, Vector3 worldPosition, Func<GridObject, bool> predicate)
+    {
+        Vector2Int center = WorldToGrid(worldPosition);
+        return FindVonNeumann(radius, center, predicate);
+    }
+
+    public GridObject FindVonNeumann(int radius, Vector2Int center, Func<GridObject, bool> predicate)
+    {
+        for (int r = 0; r <= radius; r++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                int dy = r - Mathf.Abs(dx);
+
+                // Check both dy and -dy, but avoid duplicate when dy is zero
+                Vector2Int[] positions = dy == 0
+                    ? new[] { center + new Vector2Int(dx, 0) }
+                    : new[] { center + new Vector2Int(dx, dy), center + new Vector2Int(dx, -dy) };
+
+                foreach (var pos in positions)
+                {
+                    foreach (var obj in gridObjects)
+                    {
+                        if (WorldToGrid(obj.transform.position) == pos && predicate(obj))
+                        {
+                            return obj;
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
 }
