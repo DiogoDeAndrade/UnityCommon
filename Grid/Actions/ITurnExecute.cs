@@ -15,7 +15,7 @@ public interface ITurnExecute
         // Collect all ITurnExecute instances
         foreach (var monoBehaviour in allMonoBehaviours)
         {
-            if (monoBehaviour is ITurnExecute executor)
+            if ((monoBehaviour is ITurnExecute executor) && (monoBehaviour.enabled))
             {
                 turnExecutors.Add(executor);
             }
