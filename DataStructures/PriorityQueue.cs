@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 
-public class PriorityQueue<T>
+public class PriorityQueue<T, VALUE_TYPE>
 {
-    private SortedDictionary<int, Queue<T>> _queue = new SortedDictionary<int, Queue<T>>();
+    private SortedDictionary<VALUE_TYPE, Queue<T>> _queue = new SortedDictionary<VALUE_TYPE, Queue<T>>();
     public int Count { get; private set; }
 
-    public void Enqueue(T item, int priority)
+    public void Enqueue(T item, VALUE_TYPE priority)
     {
         if (!_queue.ContainsKey(priority))
         {

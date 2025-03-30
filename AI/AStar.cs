@@ -25,7 +25,7 @@ public static class AStar
         List<Vector2Int> path = new List<Vector2Int>();
         HashSet<Vector2Int> closedSet = new HashSet<Vector2Int>();
         Dictionary<Vector2Int, Node> openSet = new Dictionary<Vector2Int, Node>();
-        PriorityQueue<Node> priorityQueue = new PriorityQueue<Node>();
+        PriorityQueue<Node, int> priorityQueue = new();
 
         int gridWidth = grid.GetLength(0);
         int gridHeight = grid.GetLength(1);
