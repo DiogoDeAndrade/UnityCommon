@@ -40,12 +40,12 @@ public class GridObject : MonoBehaviour
 
     private void Start()
     {
+        facingDirection = 0;
+
         if (snapOnStart)
         {
             ClampToGrid();
         }
-
-        facingDirection = 0;
     }
 
     private void OnEnable()

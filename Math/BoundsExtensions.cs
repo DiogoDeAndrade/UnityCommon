@@ -16,7 +16,7 @@ public static class BoundsExtensions
             case 7: return new Vector3(b.max.x, b.max.y, b.max.z);
         }
 
-        return b.center;    
+        return b.center;
     }
 
     public static Bounds ToLocal(this Bounds b, Transform transform)
@@ -87,4 +87,5 @@ public static class BoundsExtensions
         Gizmos.DrawLine(p[2], p[6]);
         Gizmos.DrawLine(p[3], p[7]);
     }
+
 };
