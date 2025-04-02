@@ -127,7 +127,7 @@ public class ParamValue
                 quaternionValue = q;
                 break;
             case UnityEngine.Object obj:
-                if (obj != null)
+                if (obj != null)  
                     type = obj.GetType();  // capture actual concrete type
                 else
                     type = typeof(UnityEngine.Object);
@@ -162,8 +162,12 @@ public class ParamPrefab<T> : ParamPrefabBase where T : UnityEngine.Object
 
     public string name => prefabObject.name;
 
+    public bool HasPrefab => (this != null) && (prefabObject != null);
+
     public T Instantiate()
     {
+        if (prefabObject == null) return null;
+
         var newObject = GameObject.Instantiate(prefabObject);
 
         ApplyProperties(newObject, parameters);
@@ -173,6 +177,8 @@ public class ParamPrefab<T> : ParamPrefabBase where T : UnityEngine.Object
 
     public T Instantiate(Vector3 position, Quaternion rotation)
     {
+        if (prefabObject == null) return null;
+
         var newObject = GameObject.Instantiate(prefabObject, position, rotation);
 
         ApplyProperties(newObject, parameters);
@@ -290,6 +296,8 @@ public class ParamPrefab<T> : ParamPrefabBase where T : UnityEngine.Object
                             value = param.value;
                             overrideValue = param.overrideValue;
                         }
+
+                        value.type = field.FieldType;
 
                         newParameters.Add(new Param
                         {

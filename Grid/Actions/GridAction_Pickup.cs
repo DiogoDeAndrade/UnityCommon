@@ -2,7 +2,7 @@ using NaughtyAttributes;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GridAction_Pickup : GridAction
+public class GridAction_Pickup : GridActionContainer
 {
     private enum PickupType { Single, Limited, Infinite };
 
@@ -33,7 +33,7 @@ public class GridAction_Pickup : GridAction
         charges = (type == PickupType.Single) ? (1) : (maxCharges);
     }
 
-    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
+    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
     {
         if ((charges <= 0) && (type != PickupType.Infinite)) return;
         if (item)
@@ -48,10 +48,15 @@ public class GridAction_Pickup : GridAction
             if (resHandler.normalizedResource >= 1.0f) return;
         }
 
-        retActions.Add(this);
+        retActions.Add(new NamedAction
+        {
+            name = verb,
+            action = RunAction,
+            container = this
+        });
     }
 
-    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
+    protected bool RunAction(GridObject subject, Vector2Int position)
     {
         if (item)
         {

@@ -1,14 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GridAction_Teleport : GridAction
+public class GridAction_Teleport : GridActionContainer
 {
     [SerializeField] 
     private Hypertag    objectToTeleportTag;
     [SerializeField] 
     private Hypertag    targetLocationTag;
 
-    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
+    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
     {
         if (objectToTeleportTag)
         {
@@ -20,11 +20,16 @@ public class GridAction_Teleport : GridAction
             var targetPos = Hypertag.FindFirstObjectWithHypertag<Transform>(targetLocationTag);
             if (targetPos == null) return;
 
-            actions.Add(this);
+            retActions.Add(new NamedAction
+            {
+                name = verb,
+                action = RunAction,
+                container = this
+            });
         }
     }
 
-    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
+    protected bool RunAction(GridObject subject, Vector2Int position)
     {
         GridObject targetObj = null;
         if (objectToTeleportTag)

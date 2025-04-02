@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using static GridActionContainer;
 
 public class GridObject : MonoBehaviour
 {
@@ -201,9 +202,9 @@ public class GridObject : MonoBehaviour
         return Vector2Int.zero;
     }
 
-    public void GatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
+    public void GatherActions(GridObject subject, Vector2Int position, List<NamedAction> actions)
     {
-        var objActions = GetComponents<GridAction>();
+        var objActions = GetComponents<GridActionContainer>();
 
         // Not a tilemap, just a single grid cell
         bool isOnTile = (tilemap) && (tilemap.GetTile(position.xy0()) != null);

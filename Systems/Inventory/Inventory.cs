@@ -1,8 +1,9 @@
 using NaughtyAttributes;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Inventory : MonoBehaviour
+public class Inventory : MonoBehaviour, IEnumerable<(int slot, Item item, int count)>
 {
     public delegate void OnChange(bool add, Item item, int slot);
     public event OnChange onChange;
@@ -170,5 +171,24 @@ public class Inventory : MonoBehaviour
         }
 
         return count;
+    }
+
+    public IEnumerator<(int slot, Item item, int count)> GetEnumerator()
+    {
+        if (items != null)
+        {
+            for (int i = 0; i < items.Count; i++)
+            {
+                if ((items[i].item != null) && (items[i].count > 0))
+                {
+                    yield return (i, items[i].item, items[i].count);
+                }
+            }
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
     }
 }

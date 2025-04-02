@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class GridAction_ConvertTile : GridAction
+public class GridAction_ConvertTile : GridActionContainer
 {
     [SerializeField, Header("Convert Tile")] private List<TileBase> tiles;
     [SerializeField] private TileBase       convertTo;
@@ -15,16 +15,21 @@ public class GridAction_ConvertTile : GridAction
         tilemap = GetComponent<Tilemap>();
     }
 
-    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
+    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
     {
         var tile = tilemap.GetTile(position.xy0());
         if (tiles.Contains(tile))
         {
-            retActions.Add(this);
+            retActions.Add(new NamedAction
+            {
+                name = verb,
+                action = RunAction,
+                container = this
+            });
         }
     }    
 
-    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
+    protected bool RunAction(GridObject subject, Vector2Int position)
     {
         tilemap.SetTile(position.xy0(), convertTo);
 

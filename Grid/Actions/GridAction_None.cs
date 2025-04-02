@@ -2,14 +2,19 @@ using NaughtyAttributes;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GridAction_None : GridAction
+public class GridAction_None : GridActionContainer
 {
-    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
+    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
     {
-        retActions.Add(this);
+        retActions.Add(new NamedAction
+        {
+            name = verb,
+            action = RunAction,
+            container = this
+        });
     }
 
-    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
+    protected bool RunAction(GridObject subject, Vector2Int position)
     {
         return true;
     }

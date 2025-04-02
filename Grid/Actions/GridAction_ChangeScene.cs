@@ -3,16 +3,21 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using NaughtyAttributes;
 
-public class GridAction_ChangeScene : GridAction
+public class GridAction_ChangeScene : GridActionContainer
 {
     [SerializeField, Scene] private string sceneName;
 
-    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
+    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
     {
-        actions.Add(this);
+        retActions.Add(new NamedAction
+        {
+            name = verb,
+            action = RunAction,
+            container = this
+        });
     }
 
-    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
+    protected virtual bool RunAction(GridObject subject, Vector2Int position)
     {
         if (FullscreenFader.hasFader)
         {

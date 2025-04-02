@@ -2,10 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class GridAction_TileArea : GridAction
+public class GridAction_TileArea : GridActionContainer
 {
-    [SerializeField] private GridAction[]   actions;
-    [SerializeField] private Color          debugColor = Color.yellow;
+    [SerializeField] private GridActionContainer[]  actions;
+    [SerializeField] private Color                  debugColor = Color.yellow;
 
     Tilemap tilemap;
 
@@ -14,7 +14,7 @@ public class GridAction_TileArea : GridAction
         tilemap = GetComponent<Tilemap>();
     }
 
-    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> retActions)
+    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
     {
         foreach (var action in actions)
         {
@@ -26,14 +26,9 @@ public class GridAction_TileArea : GridAction
 
             if (worldBounds.Contains(position.xy0()))
             {
-                retActions.Add(action);
+                action.ActualGatherActions(subject, position, retActions);
             }
         }
-    }
-
-    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
-    {
-        throw new System.NotImplementedException();
     }
 
     public void OnDrawGizmosSelected()

@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+using UnityEngine.Tilemaps;
+using static GridActionContainer;
 
 [RequireComponent(typeof(Grid))]
 public class GridSystem : MonoBehaviour
@@ -9,6 +12,7 @@ public class GridSystem : MonoBehaviour
     private List<GridObject>    gridObjects = new();
     private List<GridCollider>  gridColliders = new();
     private Vector3             gridOffset;
+    private List<Tilemap>       tilemaps;        
 
     public Vector2 cellSize => grid.cellSize;
 
@@ -16,6 +20,7 @@ public class GridSystem : MonoBehaviour
     {
         grid = GetComponent<Grid>();
         gridOffset = new Vector3(grid.cellSize.x * 0.5f, grid.cellSize.y * 0.5f, 0.0f);
+        tilemaps = GetComponentsInChildren<Tilemap>().ToList();
     }
 
     public void Register(GridObject gridObject)
@@ -84,12 +89,12 @@ public class GridSystem : MonoBehaviour
         return false;
     }
 
-    public List<GridAction> GetActions(GridObject subject, Vector2Int position)
+    public List<NamedAction> GetActions(GridObject subject, Vector2Int position)
     {
-        var ret = new List<GridAction>();
+        var ret = new List<NamedAction>();
 
         // Get actions on subject
-        var actionsOnSubject = subject.GetComponents<GridAction>();
+        var actionsOnSubject = subject.GetComponents<GridActionContainer>();
         foreach (var action in actionsOnSubject)
         {
             action.GatherActions(subject, position, ret);
@@ -103,13 +108,13 @@ public class GridSystem : MonoBehaviour
         return ret;
     }
 
-    public bool FindVonNeumann(int radius, Vector3 worldPosition, Func<GridObject, bool> predicate, out GridObject ret, out Vector2Int retPos)
+    public bool FindMoore(int radius, Vector3 worldPosition, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
     {
         Vector2Int center = WorldToGrid(worldPosition);
-        return FindVonNeumann(radius, center, predicate, out ret, out retPos);
+        return FindMoore(radius, center, predicate, out ret, out retPos);
     }
 
-    public bool FindVonNeumann(int radius, Vector2Int center, Func<GridObject, bool> predicate, out GridObject ret, out Vector2Int retPos)
+    public bool FindMoore(int radius, Vector2Int center, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
     {
         ret = null;
         retPos = Vector2Int.zero;
@@ -133,7 +138,7 @@ public class GridSystem : MonoBehaviour
                         if (WorldToGrid(obj.transform.position) == pos)
                         {
                             foundObj = true;
-                            if (predicate(obj))
+                            if (predicate(obj, pos))
                             {
                                 ret = obj;
                                 retPos = pos;
@@ -143,7 +148,7 @@ public class GridSystem : MonoBehaviour
                     }
                     if (!foundObj)
                     {
-                        if (predicate(null))
+                        if (predicate(null, pos))
                         {
                             retPos = pos;
                             return true;
@@ -156,13 +161,66 @@ public class GridSystem : MonoBehaviour
         return false;
     }
 
-    public bool FindRadius(float radius, Vector3 worldPosition, Func<GridObject, bool> predicate, out GridObject ret, out Vector2Int retPos)
+    public bool FindVonNeumann(int radius, Vector3 worldPosition, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
+    {
+        Vector2Int center = WorldToGrid(worldPosition);
+        return FindVonNeumann(radius, center, predicate, out ret, out retPos);
+    }
+
+    public bool FindVonNeumann(int radius, Vector2Int center, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
+    {
+        ret = null;
+        retPos = Vector2Int.zero;
+
+        for (int r = 0; r <= radius; r++)
+        {
+            for (int dx = -r; dx <= r; dx++)
+            {
+                int dy = r - Mathf.Abs(dx);
+
+                // Check both dy and -dy, but avoid duplicate when dy is zero
+                Vector2Int[] positions = dy == 0
+                    ? new[] { center + new Vector2Int(dx, 0) }
+                    : new[] { center + new Vector2Int(dx, dy), center + new Vector2Int(dx, -dy) };
+
+                foreach (var pos in positions)
+                {
+                    bool foundObj = false;
+                    foreach (var obj in gridObjects)
+                    {
+                        if (WorldToGrid(obj.transform.position) == pos)
+                        {
+                            foundObj = true;
+                            if (predicate(obj, pos))
+                            {
+                                ret = obj;
+                                retPos = pos;
+                                return true;
+                            }
+                        }
+                    }
+                    if (!foundObj)
+                    {
+                        if (predicate(null, pos))
+                        {
+                            retPos = pos;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public bool FindRadius(float radius, Vector3 worldPosition, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
     {
         Vector2Int center = WorldToGrid(worldPosition);
         return FindRadius(radius, center, predicate, out ret, out retPos);
     }
 
-    public bool FindRadius(float radius, Vector2Int center, Func<GridObject, bool> predicate, out GridObject ret, out Vector2Int retPos)
+    public bool FindRadius(float radius, Vector2Int center, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
     {
         ret = null;
         retPos = Vector2Int.zero;
@@ -183,7 +241,7 @@ public class GridSystem : MonoBehaviour
                     if (WorldToGrid(obj.transform.position) == pos)
                     {
                         foundObj = true;
-                        if (predicate(obj))
+                        if (predicate(obj, pos))
                         {
                             ret = obj;
                             retPos = pos;
@@ -193,7 +251,7 @@ public class GridSystem : MonoBehaviour
                 }
                 if (!foundObj)
                 {
-                    if (predicate(null))
+                    if (predicate(null, pos))
                     {
                         retPos = pos;
                         return true;
@@ -203,5 +261,18 @@ public class GridSystem : MonoBehaviour
         }
 
         return false;
+    }
+
+    public List<TileBase> GetTiles(Vector2Int pos)
+    {
+        List<TileBase> ret = new();
+
+        foreach (var tilemap in tilemaps)
+        {
+            var tile = tilemap.GetTile(pos.xy0());
+            if (tile) ret.Add(tile);
+        }
+
+        return ret;
     }
 }

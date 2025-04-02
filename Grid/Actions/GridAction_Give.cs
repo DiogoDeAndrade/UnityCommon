@@ -2,7 +2,7 @@ using NaughtyAttributes;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GridAction_Give : GridAction
+public class GridAction_Give : GridActionContainer
 {
     [SerializeField, Header("Give"), ShowIf(nameof(notResourceType))]
     private Item            item;
@@ -15,7 +15,7 @@ public class GridAction_Give : GridAction
     bool hasResourceType => resourceType != null;
     bool notItem => item == null;
 
-    protected override void ActualGatherActions(GridObject subject, Vector2Int position, List<GridAction> actions)
+    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
     {
         if (hasResourceType)
         {
@@ -27,7 +27,12 @@ public class GridAction_Give : GridAction
             if (thatHandler == null) return;
             if (thatHandler.resource < quantity) return;
 
-            actions.Add(this);
+            retActions.Add(new NamedAction
+            {
+                name = verb,
+                action = RunAction,
+                container = this
+            });
         }
         else if (item != null)
         {
@@ -37,11 +42,16 @@ public class GridAction_Give : GridAction
             if (thatInventory == null) return;
             if (thatInventory.GetItemCount(item) < quantity) return;
 
-            actions.Add(this);
+            retActions.Add(new NamedAction
+            {
+                name = verb,
+                action = RunAction,
+                container = this
+            });
         }
     }
 
-    protected override bool ActualRunAction(GridObject subject, Vector2Int position)
+    protected bool RunAction(GridObject subject, Vector2Int position)
     {
         if (hasResourceType)
         {
