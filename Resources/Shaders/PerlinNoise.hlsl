@@ -24,14 +24,52 @@ float Lerp(float a, float b, float t)
 {
     return a + t * (b - a);
 }
-
+ 
 // Gradient function
-float Grad(int hash, float x, float y, float z)
+float Grad3D(int hash, float x, float y, float z)
 {
     int h = hash & 15;
     float u = h < 8 ? x : y;
     float v = h < 4 ? y : (h == 12 || h == 14 ? x : z);
     return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+}
+
+// Gradient dot product
+float Grad2D(int hash, float x, float y) 
+{
+    int h = hash & 7;
+    float u = h < 4 ? x : y;
+    float v = h < 4 ? y : x;
+    return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+}
+
+void PerlinNoise2D_float(float2 pos, out float result)
+{
+    // Grid cell coordinates
+    int X = (int)floor(pos.x) & 255;
+    int Y = (int)floor(pos.y) & 255;
+
+    // Relative pos within cell
+    float x = pos.x - floor(pos.x);
+    float y = pos.y - floor(pos.y);
+
+    // Fade curves
+    float u = Fade(x);
+    float v = Fade(y);
+
+    // Hash coords
+    int A  = perm[X] + Y;
+    int B  = perm[X + 1] + Y;
+
+    // Blend results from corners
+    float res = lerp(
+        lerp(Grad2D(perm[A], x, y), Grad2D(perm[B], x - 1, y), u),
+        lerp(Grad2D(perm[A + 1], x, y - 1), Grad2D(perm[B + 1], x - 1, y - 1), u),
+        v
+    );
+
+    // Normalize to [0,1]
+    result = res * 0.5 + 0.5;
 }
 
 // 3D Noise function
@@ -58,15 +96,37 @@ void PerlinNoise3D_float(float3 p, out float ret)
 
     ret = Lerp(
         Lerp(
-            Lerp(Grad(perm[AA], x, y, z), Grad(perm[BA], x - 1, y, z), u),
-            Lerp(Grad(perm[AB], x, y - 1, z), Grad(perm[BB], x - 1, y - 1, z), u),
+            Lerp(Grad3D(perm[AA], x, y, z), Grad3D(perm[BA], x - 1, y, z), u),
+            Lerp(Grad3D(perm[AB], x, y - 1, z), Grad3D(perm[BB], x - 1, y - 1, z), u),
             v
         ),
         Lerp(
-            Lerp(Grad(perm[AA + 1], x, y, z - 1), Grad(perm[BA + 1], x - 1, y, z - 1), u),
-            Lerp(Grad(perm[AB + 1], x, y - 1, z - 1), Grad(perm[BB + 1], x - 1, y - 1, z - 1), u),
+            Lerp(Grad3D(perm[AA + 1], x, y, z - 1), Grad3D(perm[BA + 1], x - 1, y, z - 1), u),
+            Lerp(Grad3D(perm[AB + 1], x, y - 1, z - 1), Grad3D(perm[BB + 1], x - 1, y - 1, z - 1), u),
             v
         ),
         w
     );
+}
+
+// Vector2d
+void PerlinVector2D_float(float2 uv, out float2 ret)
+{
+    float angle = 0;
+    PerlinNoise2D_float(uv, angle);
+
+    angle = angle * 6.2831853;
+
+    ret = float2(cos(angle), sin(angle));
+}
+
+void PerlinVector2D_Animated_float(float2 uv, float scale, float time, float2 speed, out float2 ret)
+{
+    float2 p = uv * scale + time * speed;
+    float angle = 0;
+    PerlinNoise2D_float(p, angle);
+
+    angle = angle * 6.2831853;
+
+    ret = float2(cos(angle), sin(angle));
 }
