@@ -1,9 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace OkapiKit.Editor
+namespace UC
 {
     [CustomEditor(typeof(MovementGridXY))]
     public class MovementGridXYEditor : UnityCommonEditor

@@ -2,214 +2,218 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class HealthSystem : MonoBehaviour
+namespace UC
 {
-    public enum DamageType { Burst, OverTime };
 
-    public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource);
-    public event OnHit  onHit;
-    public delegate void OnHeal(float healthGain, GameObject healSource);
-    public event OnHeal onHeal;
-
-    public delegate void OnDead(GameObject damageSource);
-    public event OnDead onDead;
-    public delegate void OnRevive(GameObject healSource);
-    public event OnDead onRevive;
-
-    public Faction  faction;
-    public float    maxHealth = 100.0f;
-    public float    invulnerabilityTime = 2.0f;
-    public bool     invulnerabilityBlink = true;
-    [ShowIf(nameof(invulnerabilityBlink))]
-    public bool     useAnimatorForBlink = true;
-    [ShowIf(nameof(needBlinkTime))]
-    public float    blinkTime = 0.1f;
-
-    protected float _health = 100.0f;
-    protected bool  _dead;
-    protected float invulnerabilityTimer;
-
-    Animator            animator;
-    float               blinkTimer;
-    SpriteRenderer      spriteRenderer;
-
-    bool needBlinkTime => invulnerabilityBlink && (!useAnimatorForBlink);
-
-    public float health
+    public class HealthSystem : MonoBehaviour
     {
-        get { return _health; }
-    }
+        public enum DamageType { Burst, OverTime };
 
-    public float normalizedHealth
-    {
-        get { return _health / maxHealth; }
-    }
+        public delegate void OnHit(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource);
+        public event OnHit onHit;
+        public delegate void OnHeal(float healthGain, GameObject healSource);
+        public event OnHeal onHeal;
 
-    public bool isInvulnerable
-    {
-        get { return invulnerabilityTimer > 0.0f; }
-        set
+        public delegate void OnDead(GameObject damageSource);
+        public event OnDead onDead;
+        public delegate void OnRevive(GameObject healSource);
+        public event OnDead onRevive;
+
+        public Faction faction;
+        public float maxHealth = 100.0f;
+        public float invulnerabilityTime = 2.0f;
+        public bool invulnerabilityBlink = true;
+        [ShowIf(nameof(invulnerabilityBlink))]
+        public bool useAnimatorForBlink = true;
+        [ShowIf(nameof(needBlinkTime))]
+        public float blinkTime = 0.1f;
+
+        protected float _health = 100.0f;
+        protected bool _dead;
+        protected float invulnerabilityTimer;
+
+        Animator animator;
+        float blinkTimer;
+        SpriteRenderer spriteRenderer;
+
+        bool needBlinkTime => invulnerabilityBlink && (!useAnimatorForBlink);
+
+        public float health
         {
-            invulnerabilityTimer = invulnerabilityTime;
-
+            get { return _health; }
         }
-    }
 
-    public bool isDead => _dead;
-    public bool isAlive => !_dead;
-    void Awake()
-    {
-        animator = GetComponent<Animator>();
-        spriteRenderer = GetComponent<SpriteRenderer>();
-    }
-
-    void Start()
-    {
-        _health = maxHealth;
-        _dead = false;
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        if (invulnerabilityTimer > 0.0f)
+        public float normalizedHealth
         {
-            invulnerabilityTimer -= Time.deltaTime;
+            get { return _health / maxHealth; }
+        }
 
-            if (invulnerabilityTimer <= 0.0f)
+        public bool isInvulnerable
+        {
+            get { return invulnerabilityTimer > 0.0f; }
+            set
             {
-                invulnerabilityTimer = 0.0f;
-                if (invulnerabilityBlink)
-                {
-                    if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
-                    else spriteRenderer.enabled = true;
-                }
+                invulnerabilityTimer = invulnerabilityTime;
+
             }
-            else
-            {
-                if (invulnerabilityBlink)
-                {
-                    if (useAnimatorForBlink) animator.SetBool("Invulnerable", true);
-                    else
-                    {
-                        blinkTimer -= Time.deltaTime;
-                        if (blinkTimer < 0)
-                        {
-                            blinkTimer = blinkTime;
+        }
 
-                            spriteRenderer.enabled = !spriteRenderer.enabled;
+        public bool isDead => _dead;
+        public bool isAlive => !_dead;
+        void Awake()
+        {
+            animator = GetComponent<Animator>();
+            spriteRenderer = GetComponent<SpriteRenderer>();
+        }
+
+        void Start()
+        {
+            _health = maxHealth;
+            _dead = false;
+        }
+
+        // Update is called once per frame
+        void Update()
+        {
+            if (invulnerabilityTimer > 0.0f)
+            {
+                invulnerabilityTimer -= Time.deltaTime;
+
+                if (invulnerabilityTimer <= 0.0f)
+                {
+                    invulnerabilityTimer = 0.0f;
+                    if (invulnerabilityBlink)
+                    {
+                        if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
+                        else spriteRenderer.enabled = true;
+                    }
+                }
+                else
+                {
+                    if (invulnerabilityBlink)
+                    {
+                        if (useAnimatorForBlink) animator.SetBool("Invulnerable", true);
+                        else
+                        {
+                            blinkTimer -= Time.deltaTime;
+                            if (blinkTimer < 0)
+                            {
+                                blinkTimer = blinkTime;
+
+                                spriteRenderer.enabled = !spriteRenderer.enabled;
+                            }
                         }
                     }
                 }
             }
-        }
-        else
-        {
-            if ((invulnerabilityBlink) && (!isDead))
+            else
             {
-                if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
-                else if (!spriteRenderer.enabled) spriteRenderer.enabled = true;
+                if ((invulnerabilityBlink) && (!isDead))
+                {
+                    if (useAnimatorForBlink) animator.SetBool("Invulnerable", false);
+                    else if (!spriteRenderer.enabled) spriteRenderer.enabled = true;
+                }
             }
         }
-    }
 
-    public bool Heal(float delta, bool reviveIfDeath, GameObject healSource)
-    {
-        if (reviveIfDeath)
+        public bool Heal(float delta, bool reviveIfDeath, GameObject healSource)
         {
+            if (reviveIfDeath)
+            {
+                if (_health < maxHealth)
+                {
+                    onHeal?.Invoke(delta, healSource);
+
+                    _health += delta;
+                    if ((_health > 0.0f) && (_dead))
+                    {
+                        onRevive?.Invoke(healSource);
+                        _dead = false;
+                    }
+                    return true;
+                }
+            }
+            else if (_dead) return false;
             if (_health < maxHealth)
             {
                 onHeal?.Invoke(delta, healSource);
 
                 _health += delta;
-                if ((_health > 0.0f) && (_dead))
-                {
-                    onRevive?.Invoke(healSource);
-                    _dead = false;
-                }
                 return true;
             }
+            return false;
         }
-        else if (_dead) return false;
-        if (_health < maxHealth)
+        public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource)
         {
-            onHeal?.Invoke(delta, healSource);
+            if (isInvulnerable) return false;
+            if (_dead) return false;
 
-            _health += delta;
-            return true;
-        }
-        return false;
-    }
-    public bool DealDamage(DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource)
-    {
-        if (isInvulnerable) return false;
-        if (_dead) return false;
-
-        _health -= damage;
-        if (_health <= 0.0f)
-        {
-            _health = 0.0f;
-            _dead = true;
-
-            onDead?.Invoke(damageSource);
-        }
-        else
-        {
-            onHit?.Invoke(damageType, damage, damagePosition, hitDirection, damageSource);
-
-            if (damageType != DamageType.OverTime)
+            _health -= damage;
+            if (_health <= 0.0f)
             {
-                if (invulnerabilityTime > 0.0f)
+                _health = 0.0f;
+                _dead = true;
+
+                onDead?.Invoke(damageSource);
+            }
+            else
+            {
+                onHit?.Invoke(damageType, damage, damagePosition, hitDirection, damageSource);
+
+                if (damageType != DamageType.OverTime)
                 {
-                    isInvulnerable = true;
+                    if (invulnerabilityTime > 0.0f)
+                    {
+                        isInvulnerable = true;
+                    }
                 }
             }
+
+            return true;
         }
 
-        return true;
-    }
-
-    public static HealthSystem[] FindAll()
-    {
-        return FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
-    }
-
-    public static HealthSystem[] FindAll(Vector3 pos, float range)
-    {
-        List<HealthSystem> ret = new List<HealthSystem>();
-        var healthSystems = FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
-        foreach (var h in healthSystems)
+        public static HealthSystem[] FindAll()
         {
-            if (Vector3.Distance(h.transform.position, pos) < range)
-            {
-                ret.Add(h);
-            }
+            return FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
         }
 
-        return ret.ToArray();
-    }
+        public static HealthSystem[] FindAll(Vector3 pos, float range)
+        {
+            List<HealthSystem> ret = new List<HealthSystem>();
+            var healthSystems = FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
+            foreach (var h in healthSystems)
+            {
+                if (Vector3.Distance(h.transform.position, pos) < range)
+                {
+                    ret.Add(h);
+                }
+            }
 
-    public void SetHealth(float h)
-    {
-        _health = h;
-        _dead = (_health <= 0.0f);
-    }
+            return ret.ToArray();
+        }
 
-    public void ResetHealth()
-    {
-        _health = maxHealth;
-        _dead = false;
-    }
+        public void SetHealth(float h)
+        {
+            _health = h;
+            _dead = (_health <= 0.0f);
+        }
 
-    [Button("Deal 10% Damage")]
-    void DealOneDamage()
-    {
-        DealDamage(DamageType.Burst, 0.1f * maxHealth, Vector3.zero, Vector3.up, null);
-    }
+        public void ResetHealth()
+        {
+            _health = maxHealth;
+            _dead = false;
+        }
 
-    [Button("Kill")]
-    void Kill()
-    {
-        DealDamage(DamageType.Burst, _health, Vector3.zero, Vector3.up, null);
+        [Button("Deal 10% Damage")]
+        void DealOneDamage()
+        {
+            DealDamage(DamageType.Burst, 0.1f * maxHealth, Vector3.zero, Vector3.up, null);
+        }
+
+        [Button("Kill")]
+        void Kill()
+        {
+            DealDamage(DamageType.Burst, _health, Vector3.zero, Vector3.up, null);
+        }
     }
 }

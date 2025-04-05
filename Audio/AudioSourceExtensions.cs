@@ -1,14 +1,17 @@
-using System.Collections;
 using UnityEngine;
 
-public static class AudioSourceExtensions
+namespace UC
 {
-    public static Tweener.BaseInterpolator FadeTo(this AudioSource audioSource, float targetVolume, float time)
+
+    public static class AudioSourceExtensions
     {
-        return audioSource.Tween().Interpolate(audioSource.volume, targetVolume, time,
-            (value) =>
-            {
-                if (audioSource) audioSource.volume = value;
-            });
+        public static Tweener.BaseInterpolator FadeTo(this AudioSource audioSource, float targetVolume, float time)
+        {
+            return audioSource.Tween().Interpolate(audioSource.volume, targetVolume, time,
+                (value) =>
+                {
+                    if (audioSource) audioSource.volume = value;
+                });
+        }
     }
 }

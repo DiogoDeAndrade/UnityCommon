@@ -4,71 +4,75 @@ using TMPro;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-public class BigTextScroll : MonoBehaviour
+namespace UC
 {
-    public delegate void OnEndScroll();
-    public event OnEndScroll onEndScroll;
 
-    [SerializeField]
-    TextAsset      textFile;
-    [SerializeField, ResizableTextArea, ShowIf("noFile")]
-    private string text;
-    [SerializeField]
-    private TextMeshProUGUI textPrefab;
-    [SerializeField]
-    private float           scrollSpeed;
-    [SerializeField]
-    private PlayerInput     playerInput;
-    [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
-    protected InputControl backControl;
-
-    Vector3 originalPosition;
-    RectTransform   rectTransform;
-    RectTransform   lastRectTransform;
-
-    bool noFile => textFile == null;
-
-    void Start()
+    public class BigTextScroll : MonoBehaviour
     {
-        backControl.playerInput = playerInput;
+        public delegate void OnEndScroll();
+        public event OnEndScroll onEndScroll;
 
-        if (textFile)
+        [SerializeField]
+        TextAsset textFile;
+        [SerializeField, ResizableTextArea, ShowIf("noFile")]
+        private string text;
+        [SerializeField]
+        private TextMeshProUGUI textPrefab;
+        [SerializeField]
+        private float scrollSpeed;
+        [SerializeField]
+        private PlayerInput playerInput;
+        [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
+        protected InputControl backControl;
+
+        Vector3 originalPosition;
+        RectTransform rectTransform;
+        RectTransform lastRectTransform;
+
+        bool noFile => textFile == null;
+
+        void Start()
         {
-            text = textFile.text;
+            backControl.playerInput = playerInput;
+
+            if (textFile)
+            {
+                text = textFile.text;
+            }
+
+            var lines = text.Split('\n', System.StringSplitOptions.None);
+            foreach (var line in lines)
+            {
+                var tmp = Instantiate(textPrefab, transform);
+                if (line == "")
+                    tmp.text = "<color=#FF000000>||||</color>";
+                else
+                    tmp.text = line;
+
+                lastRectTransform = tmp.GetComponent<RectTransform>();
+            }
+
+            rectTransform = GetComponent<RectTransform>();
+            originalPosition = rectTransform.anchoredPosition;
+
+            LayoutRebuilder.ForceRebuildLayoutImmediate(transform as RectTransform);
         }
 
-        var lines = text.Split('\n', System.StringSplitOptions.None);
-        foreach (var line in lines)
+        void Update()
         {
-            var tmp = Instantiate(textPrefab, transform);
-            if (line == "")
-                tmp.text = "<color=#FF000000>||||</color>";
-            else
-                tmp.text = line;
+            rectTransform.anchoredPosition = rectTransform.anchoredPosition + Vector2.up * scrollSpeed * Time.deltaTime;
 
-            lastRectTransform = tmp.GetComponent<RectTransform>();
+            float maxY = lastRectTransform.anchoredPosition.y;
+
+            if ((rectTransform.anchoredPosition.y > (Mathf.Abs(maxY) + 150.0f)) || (backControl.IsDown()))
+            {
+                onEndScroll?.Invoke();
+            }
         }
 
-        rectTransform = GetComponent<RectTransform>();
-        originalPosition = rectTransform.anchoredPosition;
-
-        LayoutRebuilder.ForceRebuildLayoutImmediate(transform as RectTransform);
-    }
-
-    void Update()
-    {
-        rectTransform.anchoredPosition = rectTransform.anchoredPosition + Vector2.up * scrollSpeed * Time.deltaTime;
-
-        float maxY = lastRectTransform.anchoredPosition.y;
-
-        if ((rectTransform.anchoredPosition.y > (Mathf.Abs(maxY) + 150.0f)) || (backControl.IsDown()))
+        public void Reset()
         {
-            onEndScroll?.Invoke();
+            rectTransform.anchoredPosition = originalPosition;
         }
-    }
-
-    public void Reset()
-    {
-        rectTransform.anchoredPosition = originalPosition;
     }
 }

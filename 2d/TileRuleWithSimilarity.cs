@@ -3,33 +3,37 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-[CreateAssetMenu(fileName = "Tile Rule with Similarity", menuName = "Unity Common/Tiles/Rule With Similarity")]
-public class TileRuleWithSimilarity : RuleTile<RuleTile.TilingRule.Neighbor> 
+namespace UC
 {
-    [SerializeField] List<Sprite>    spritesInFamily;
 
-    public override bool RuleMatch(int neighbor, TileBase tile) 
+    [CreateAssetMenu(fileName = "Tile Rule with Similarity", menuName = "Unity Common/Tiles/Rule With Similarity")]
+    public class TileRuleWithSimilarity : RuleTile<RuleTile.TilingRule.Neighbor>
     {
-        if (tile == null)
-        {
-            return neighbor != TilingRule.Neighbor.This;
-        }
+        [SerializeField] List<Sprite> spritesInFamily;
 
-        // If the tile is a standard Tile, check its sprite
-        if (tile is Tile tileAsset)
+        public override bool RuleMatch(int neighbor, TileBase tile)
         {
-            if (spritesInFamily.Contains(tileAsset.sprite))
+            if (tile == null)
             {
-                // Treat it as if it's part of this rule-based tile family
-                return (neighbor == TilingRule.Neighbor.This);
+                return neighbor != TilingRule.Neighbor.This;
             }
-            else
-            {
-                return (neighbor == TilingRule.Neighbor.NotThis);
-            }
-        }
 
-        // Check normal RuleTile behavior for any remaining cases
-        return base.RuleMatch(neighbor, tile);
+            // If the tile is a standard Tile, check its sprite
+            if (tile is Tile tileAsset)
+            {
+                if (spritesInFamily.Contains(tileAsset.sprite))
+                {
+                    // Treat it as if it's part of this rule-based tile family
+                    return (neighbor == TilingRule.Neighbor.This);
+                }
+                else
+                {
+                    return (neighbor == TilingRule.Neighbor.NotThis);
+                }
+            }
+
+            // Check normal RuleTile behavior for any remaining cases
+            return base.RuleMatch(neighbor, tile);
+        }
     }
 }

@@ -1,17 +1,21 @@
 using UnityEngine;
 
-public class InactiveIfTransparent : MonoBehaviour
+namespace UC
 {
-    CanvasGroup canvasGroup;
 
-    void Start()
+    public class InactiveIfTransparent : MonoBehaviour
     {
-        canvasGroup = GetComponent<CanvasGroup>();
-    }
+        CanvasGroup canvasGroup;
 
-    // Update is called once per frame
-    void Update()
-    {
-        canvasGroup.interactable = (canvasGroup.alpha >= 1.0f);
+        void Start()
+        {
+            canvasGroup = GetComponent<CanvasGroup>();
+        }
+
+        // Update is called once per frame
+        void Update()
+        {
+            canvasGroup.interactable = (canvasGroup.alpha >= 1.0f);
+        }
     }
 }

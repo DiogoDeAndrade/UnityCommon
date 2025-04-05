@@ -1,8 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-public class ActivatedComponent : MonoBehaviour
+namespace UC.Legacy
 {
-    public bool active = true;
+    public class ActivatedComponent : MonoBehaviour
+    {
+        public bool active = true;
+    }
 }

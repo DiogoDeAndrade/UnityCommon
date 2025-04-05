@@ -3,29 +3,32 @@
 using UnityEditor;
 using UnityEngine;
 
-[InitializeOnLoad]
-static class ShiftDuplicate
+namespace UC
 {
-    private static bool _isDragging;
 
-    static ShiftDuplicate()
+    [InitializeOnLoad]
+    static class ShiftDuplicate
     {
-        SceneView.duringSceneGui += OnSceneGUI;
-    }
+        private static bool _isDragging;
 
-    static void OnSceneGUI(SceneView scn)
-    {
-        Event e = Event.current;
-
-        if (!_isDragging && e.modifiers == EventModifiers.Shift && e.type == EventType.MouseDrag)
+        static ShiftDuplicate()
         {
-            _isDragging = true;
-            scn.SendEvent(EditorGUIUtility.CommandEvent("Duplicate"));
+            SceneView.duringSceneGui += OnSceneGUI;
         }
 
-        if (e.type is EventType.MouseUp or EventType.Ignore)
-            _isDragging = false;
+        static void OnSceneGUI(SceneView scn)
+        {
+            Event e = Event.current;
+
+            if (!_isDragging && e.modifiers == EventModifiers.Shift && e.type == EventType.MouseDrag)
+            {
+                _isDragging = true;
+                scn.SendEvent(EditorGUIUtility.CommandEvent("Duplicate"));
+            }
+
+            if (e.type is EventType.MouseUp or EventType.Ignore)
+                _isDragging = false;
+        }
     }
 }
-
 #endif

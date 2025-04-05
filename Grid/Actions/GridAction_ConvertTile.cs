@@ -2,43 +2,47 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class GridAction_ConvertTile : GridActionContainer
+namespace UC
 {
-    [SerializeField, Header("Convert Tile")] private List<TileBase> tiles;
-    [SerializeField] private TileBase       convertTo;
-    [SerializeField] private GameObject     spawn;
 
-    Tilemap tilemap;
-
-    void Awake()
+    public class GridAction_ConvertTile : GridActionContainer
     {
-        tilemap = GetComponent<Tilemap>();
-    }
+        [SerializeField, Header("Convert Tile")] private List<TileBase> tiles;
+        [SerializeField] private TileBase convertTo;
+        [SerializeField] private GameObject spawn;
 
-    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
-    {
-        var tile = tilemap.GetTile(position.xy0());
-        if (tiles.Contains(tile))
+        Tilemap tilemap;
+
+        void Awake()
         {
-            retActions.Add(new NamedAction
+            tilemap = GetComponent<Tilemap>();
+        }
+
+        public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
+        {
+            var tile = tilemap.GetTile(position.xy0());
+            if (tiles.Contains(tile))
             {
-                name = verb,
-                action = RunAction,
-                container = this
-            });
+                retActions.Add(new NamedAction
+                {
+                    name = verb,
+                    action = RunAction,
+                    container = this
+                });
+            }
         }
-    }    
 
-    protected bool RunAction(GridObject subject, Vector2Int position)
-    {
-        tilemap.SetTile(position.xy0(), convertTo);
-
-        if (spawn)
+        protected bool RunAction(GridObject subject, Vector2Int position)
         {
-            var newObject = Instantiate(spawn, gridSystem.transform);
-            newObject.transform.position = gridSystem.GridToWorld(position);
-        }
+            tilemap.SetTile(position.xy0(), convertTo);
 
-        return true;
+            if (spawn)
+            {
+                var newObject = Instantiate(spawn, gridSystem.transform);
+                newObject.transform.position = gridSystem.GridToWorld(position);
+            }
+
+            return true;
+        }
     }
 }

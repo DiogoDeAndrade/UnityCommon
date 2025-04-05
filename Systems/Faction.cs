@@ -3,58 +3,62 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEditor;
 
-[CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Faction")]
-public class Faction : ScriptableObject
+namespace UC
 {
-    [SerializeField] private List<Faction> hostileFaction;
 
-    public bool IsHostile(Faction faction)
+    [CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Faction")]
+    public class Faction : ScriptableObject
     {
-        if (hostileFaction == null) return false;
+        [SerializeField] private List<Faction> hostileFaction;
 
-        foreach (var f in hostileFaction)
+        public bool IsHostile(Faction faction)
         {
-            if (f == faction) return true;
-        }
+            if (hostileFaction == null) return false;
 
-        return false;
-    }
-
-    public void SetHostile(Faction faction)
-    {
-        if (IsHostile(faction)) return;
-
-        if (hostileFaction == null) hostileFaction = new();
-
-        for (int i = 0; i < hostileFaction.Count; i++)
-        {
-            if (hostileFaction[i] == null)
+            foreach (var f in hostileFaction)
             {
-                hostileFaction[i] = faction;
-                return;
+                if (f == faction) return true;
             }
+
+            return false;
         }
 
-        hostileFaction.Add(faction);
-    }
-
-    [Button("Reciprocate Hostile")]
-    void CopyToOthers()
-    {
-        if (hostileFaction != null)
+        public void SetHostile(Faction faction)
         {
-            foreach (var faction in hostileFaction)
+            if (IsHostile(faction)) return;
+
+            if (hostileFaction == null) hostileFaction = new();
+
+            for (int i = 0; i < hostileFaction.Count; i++)
             {
-                if (faction == null) continue;
-                if (!faction.IsHostile(this))
+                if (hostileFaction[i] == null)
                 {
-                    faction?.SetHostile(this);
-#if UNITY_EDITOR
-                    EditorUtility.SetDirty(faction);
-#endif
+                    hostileFaction[i] = faction;
+                    return;
                 }
             }
+
+            hostileFaction.Add(faction);
         }
 
+        [Button("Reciprocate Hostile")]
+        void CopyToOthers()
+        {
+            if (hostileFaction != null)
+            {
+                foreach (var faction in hostileFaction)
+                {
+                    if (faction == null) continue;
+                    if (!faction.IsHostile(this))
+                    {
+                        faction?.SetHostile(this);
+#if UNITY_EDITOR
+                        EditorUtility.SetDirty(faction);
+#endif
+                    }
+                }
+            }
+
+        }
     }
 }

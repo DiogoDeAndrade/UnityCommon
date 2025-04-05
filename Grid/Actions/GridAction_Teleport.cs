@@ -1,55 +1,59 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GridAction_Teleport : GridActionContainer
+namespace UC
 {
-    [SerializeField] 
-    private Hypertag    objectToTeleportTag;
-    [SerializeField] 
-    private Hypertag    targetLocationTag;
 
-    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
+    public class GridAction_Teleport : GridActionContainer
     {
-        if (objectToTeleportTag)
-        {
-            var targetObj = Hypertag.FindFirstObjectWithHypertag<GridObject>(objectToTeleportTag);
-            if (targetObj == null) return;
-        }
-        if (targetLocationTag)
-        {
-            var targetPos = Hypertag.FindFirstObjectWithHypertag<Transform>(targetLocationTag);
-            if (targetPos == null) return;
+        [SerializeField]
+        private Hypertag objectToTeleportTag;
+        [SerializeField]
+        private Hypertag targetLocationTag;
 
-            retActions.Add(new NamedAction
+        public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
+        {
+            if (objectToTeleportTag)
             {
-                name = verb,
-                action = RunAction,
-                container = this
-            });
-        }
-    }
+                var targetObj = Hypertag.FindFirstObjectWithHypertag<GridObject>(objectToTeleportTag);
+                if (targetObj == null) return;
+            }
+            if (targetLocationTag)
+            {
+                var targetPos = Hypertag.FindFirstObjectWithHypertag<Transform>(targetLocationTag);
+                if (targetPos == null) return;
 
-    protected bool RunAction(GridObject subject, Vector2Int position)
-    {
-        GridObject targetObj = null;
-        if (objectToTeleportTag)
+                retActions.Add(new NamedAction
+                {
+                    name = verb,
+                    action = RunAction,
+                    container = this
+                });
+            }
+        }
+
+        protected bool RunAction(GridObject subject, Vector2Int position)
         {
-            targetObj = Hypertag.FindFirstObjectWithHypertag<GridObject>(objectToTeleportTag);
-            if (targetObj == null) return false;
-        }
-        else
-        {
-            targetObj = subject;
-        }
+            GridObject targetObj = null;
+            if (objectToTeleportTag)
+            {
+                targetObj = Hypertag.FindFirstObjectWithHypertag<GridObject>(objectToTeleportTag);
+                if (targetObj == null) return false;
+            }
+            else
+            {
+                targetObj = subject;
+            }
 
-        if (targetLocationTag)
-        {
-            var targetPos = Hypertag.FindFirstObjectWithHypertag<Transform>(targetLocationTag);
-            if (targetPos == null) return false;
+            if (targetLocationTag)
+            {
+                var targetPos = Hypertag.FindFirstObjectWithHypertag<Transform>(targetLocationTag);
+                if (targetPos == null) return false;
 
-            targetObj.TeleportTo(targetPos.transform.position);
+                targetObj.TeleportTo(targetPos.transform.position);
+            }
+
+            return false;
         }
-
-        return false;
     }
 }

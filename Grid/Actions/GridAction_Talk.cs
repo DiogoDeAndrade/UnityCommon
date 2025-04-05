@@ -1,32 +1,36 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GridAction_Talk : GridActionContainer
+namespace UC
 {
-    [SerializeField, DialogueKey] private string dialogueKey;
 
-    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
+    public class GridAction_Talk : GridActionContainer
     {
-        if (DialogueManager.HasDialogue(dialogueKey))
+        [SerializeField, DialogueKey] private string dialogueKey;
+
+        public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
         {
-            retActions.Add(new NamedAction
+            if (DialogueManager.HasDialogue(dialogueKey))
             {
-                name = verb,
-                action = RunAction,
-                container = this
-            });
+                retActions.Add(new NamedAction
+                {
+                    name = verb,
+                    action = RunAction,
+                    container = this
+                });
+            }
         }
-    }
 
-    protected bool RunAction(GridObject subject, Vector2Int position)
-    {
-        DialogueManager.StartConversation(dialogueKey);
+        protected bool RunAction(GridObject subject, Vector2Int position)
+        {
+            DialogueManager.StartConversation(dialogueKey);
 
-        return true;
-    }
+            return true;
+        }
 
-    public override bool ShouldRunTurn() 
-    { 
-        return false; 
+        public override bool ShouldRunTurn()
+        {
+            return false;
+        }
     }
 }

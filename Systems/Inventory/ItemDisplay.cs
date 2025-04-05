@@ -2,40 +2,44 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-public class ItemDisplay : MonoBehaviour
+namespace UC
 {
-    [SerializeField]
-    private Image           itemImage;
-    [SerializeField]
-    private TextMeshProUGUI itemCountText;
 
-    public void Set(Item item, int count)
+    public class ItemDisplay : MonoBehaviour
     {
-        if (itemImage)
-        {
-            if ((item) && (count > 0))
-            {
-                itemImage.sprite = item.displaySprite;
-                itemImage.color = item.displaySpriteColor;
-            }
-            else
-            {
-                itemImage.sprite = null;
-                itemImage.color = new Color(1.0f, 1.0f, 1.0f, 0.0f);
-            }
-        }
+        [SerializeField]
+        private Image itemImage;
+        [SerializeField]
+        private TextMeshProUGUI itemCountText;
 
-        if (itemCountText)
+        public void Set(Item item, int count)
         {
-            if ((item == null) || (!item.isStackable) || (count < 2))
+            if (itemImage)
             {
-                itemCountText.enabled = false;
+                if ((item) && (count > 0))
+                {
+                    itemImage.sprite = item.displaySprite;
+                    itemImage.color = item.displaySpriteColor;
+                }
+                else
+                {
+                    itemImage.sprite = null;
+                    itemImage.color = new Color(1.0f, 1.0f, 1.0f, 0.0f);
+                }
             }
-            else
+
+            if (itemCountText)
             {
-                itemCountText.enabled = true;
-                itemCountText.color = item.displayTextColor;
-                itemCountText.text = $"x{count}";
+                if ((item == null) || (!item.isStackable) || (count < 2))
+                {
+                    itemCountText.enabled = false;
+                }
+                else
+                {
+                    itemCountText.enabled = true;
+                    itemCountText.color = item.displayTextColor;
+                    itemCountText.text = $"x{count}";
+                }
             }
         }
     }

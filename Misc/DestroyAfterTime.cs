@@ -1,51 +1,54 @@
 ﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class DestroyAfterTime : MonoBehaviour
+namespace UC
 {
-    public float time = 10.0f;
-    public bool fadeOut = false;
 
-    SpriteRenderer spriteRenderer;
-
-    private void Start()
+    public class DestroyAfterTime : MonoBehaviour
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        if (spriteRenderer == null)
-        {
-            fadeOut = false;
-        }
-    }
+        public float time = 10.0f;
+        public bool fadeOut = false;
 
-    void Update()
-    {
-        if (time > 0)
-        {
-            time -= Time.deltaTime;
+        SpriteRenderer spriteRenderer;
 
-            if (time <= 0)
+        private void Start()
+        {
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
             {
-                if (fadeOut)
+                fadeOut = false;
+            }
+        }
+
+        void Update()
+        {
+            if (time > 0)
+            {
+                time -= Time.deltaTime;
+
+                if (time <= 0)
                 {
-                    StartCoroutine(FadeOutCR());
-                }
-                else
-                { 
-                    Destroy(gameObject);
+                    if (fadeOut)
+                    {
+                        StartCoroutine(FadeOutCR());
+                    }
+                    else
+                    {
+                        Destroy(gameObject);
+                    }
                 }
             }
         }
-    }
 
-    IEnumerator FadeOutCR()
-    {
-        while (spriteRenderer.color.a > 0)
+        IEnumerator FadeOutCR()
         {
-            spriteRenderer.color = spriteRenderer.color.MoveTowards(spriteRenderer.color.ChangeAlpha(0.0f), 2.0f * Time.deltaTime);
-            yield return null;
-        }
+            while (spriteRenderer.color.a > 0)
+            {
+                spriteRenderer.color = spriteRenderer.color.MoveTowards(spriteRenderer.color.ChangeAlpha(0.0f), 2.0f * Time.deltaTime);
+                yield return null;
+            }
 
-        Destroy(gameObject);
+            Destroy(gameObject);
+        }
     }
 }

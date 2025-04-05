@@ -1,11 +1,13 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-public static class LayerMaskExtensions
+namespace UC
 {
-    public static bool HasLayer(this LayerMask layerMask, int layer)
+
+    public static class LayerMaskExtensions
     {
-        return (layerMask.value & (1 << layer)) != 0;
+        public static bool HasLayer(this LayerMask layerMask, int layer)
+        {
+            return (layerMask.value & (1 << layer)) != 0;
+        }
     }
 }

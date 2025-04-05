@@ -1,32 +1,36 @@
 using UnityEngine;
 
-public static class PlayerPrefsHelpers
+namespace UC
 {
-    public static Vector4 GetVector4(string key, Vector4 defaultValue = default)
+
+    public static class PlayerPrefsHelpers
     {
-        if (PlayerPrefs.HasKey(key))
+        public static Vector4 GetVector4(string key, Vector4 defaultValue = default)
         {
-            string value = PlayerPrefs.GetString(key);
-            string[] values = value.Split(';');
-            if (values.Length == 4)
+            if (PlayerPrefs.HasKey(key))
             {
-                Vector4 val = new Vector4();
-                if (float.TryParse(values[0], out val.x) &&
-                    float.TryParse(values[1], out val.y) &&
-                    float.TryParse(values[2], out val.z) &&
-                    float.TryParse(values[3], out val.w))
-                {                    
-                    return val;
+                string value = PlayerPrefs.GetString(key);
+                string[] values = value.Split(';');
+                if (values.Length == 4)
+                {
+                    Vector4 val = new Vector4();
+                    if (float.TryParse(values[0], out val.x) &&
+                        float.TryParse(values[1], out val.y) &&
+                        float.TryParse(values[2], out val.z) &&
+                        float.TryParse(values[3], out val.w))
+                    {
+                        return val;
+                    }
                 }
             }
+
+            return defaultValue;
+
         }
 
-        return defaultValue;
-
-    }
-
-    public static void SetVector4(string key, Vector4 value)
-    {
-        PlayerPrefs.SetString(key, $"{value.x};{value.y};{value.z};{value.w}");
+        public static void SetVector4(string key, Vector4 value)
+        {
+            PlayerPrefs.SetString(key, $"{value.x};{value.y};{value.z};{value.w}");
+        }
     }
 }

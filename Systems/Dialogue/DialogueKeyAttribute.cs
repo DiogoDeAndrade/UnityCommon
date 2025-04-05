@@ -1,4 +1,9 @@
 using UnityEngine;
-public class DialogueKeyAttribute : PropertyAttribute
+
+namespace UC
 {
+    public class DialogueKeyAttribute : PropertyAttribute
+    {
+    }
+
 }

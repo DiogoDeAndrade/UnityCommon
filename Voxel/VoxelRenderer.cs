@@ -1,60 +1,62 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(MeshRenderer))]
-[RequireComponent(typeof(MeshFilter))]
-[RequireComponent(typeof(VoxelObject))]
-public class VoxelRenderer : MonoBehaviour
+namespace UC
 {
-    public Material material;
 
-    VoxelObject     voxelObject;
-    MeshFilter      meshFilter;
-    MeshRenderer    meshRenderer;
-
-    void Start()
+    [RequireComponent(typeof(MeshRenderer))]
+    [RequireComponent(typeof(MeshFilter))]
+    [RequireComponent(typeof(VoxelObject))]
+    public class VoxelRenderer : MonoBehaviour
     {
-        UpdateMesh();
-    }
+        public Material material;
 
-    public void UpdateMesh()
-    {
-        if (voxelObject == null)
+        VoxelObject voxelObject;
+        MeshFilter meshFilter;
+        MeshRenderer meshRenderer;
+
+        void Start()
         {
-            voxelObject = GetComponent<VoxelObject>();
-            meshFilter = GetComponent<MeshFilter>();
-            meshRenderer = GetComponent<MeshRenderer>();
+            UpdateMesh();
         }
 
-        meshFilter.mesh = voxelObject.GetMesh();
-
-        if (material == null)
+        public void UpdateMesh()
         {
-            material = meshRenderer.sharedMaterial;
+            if (voxelObject == null)
+            {
+                voxelObject = GetComponent<VoxelObject>();
+                meshFilter = GetComponent<MeshFilter>();
+                meshRenderer = GetComponent<MeshRenderer>();
+            }
+
+            meshFilter.mesh = voxelObject.GetMesh();
 
             if (material == null)
             {
-                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-                material = new Material(shader);
-                material.SetFloat("_Cull", 1.0f);
+                material = meshRenderer.sharedMaterial;
 
-                meshRenderer.material = material;
+                if (material == null)
+                {
+                    Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                    material = new Material(shader);
+                    material.SetFloat("_Cull", 1.0f);
+
+                    meshRenderer.material = material;
+                }
             }
         }
-    }
 
-    public void SetVoxelData(VoxelData voxelData)
-    {
-        if (voxelObject == null)
+        public void SetVoxelData(VoxelData voxelData)
         {
-            voxelObject = GetComponent<VoxelObject>();
-            meshFilter = GetComponent<MeshFilter>();
-            meshRenderer = GetComponent<MeshRenderer>();
-        }
+            if (voxelObject == null)
+            {
+                voxelObject = GetComponent<VoxelObject>();
+                meshFilter = GetComponent<MeshFilter>();
+                meshRenderer = GetComponent<MeshRenderer>();
+            }
 
-        voxelObject.voxelData = voxelData;
-        
-        UpdateMesh();
+            voxelObject.voxelData = voxelData;
+
+            UpdateMesh();
+        }
     }
 }

@@ -1,10 +1,14 @@
 using UnityEngine;
 
-public static class ParticleSystemExtensions
+namespace UC
 {
-    public static void SetEmission(this ParticleSystem ps, bool b)
+
+    public static class ParticleSystemExtensions
     {
-        var emissionModule = ps.emission;
-        emissionModule.enabled = b;
+        public static void SetEmission(this ParticleSystem ps, bool b)
+        {
+            var emissionModule = ps.emission;
+            emissionModule.enabled = b;
+        }
     }
 }

@@ -1,45 +1,47 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public static class HypertaggedExtension
+namespace UC
 {
-    public static bool HasHypertag(this Component go, Hypertag tag)
+
+    public static class HypertaggedExtension
     {
-        foreach (var obj in go.GetComponents<HypertaggedObject>())
+        public static bool HasHypertag(this Component go, Hypertag tag)
         {
-            if (obj.hypertag == tag) return true;
+            foreach (var obj in go.GetComponents<HypertaggedObject>())
+            {
+                if (obj.hypertag == tag) return true;
+            }
+
+            return false;
+        }
+        public static bool HasHypertags(this Component go, Hypertag[] tags)
+        {
+            foreach (var obj in go.GetComponents<HypertaggedObject>())
+            {
+                if (obj.HasHypertags(tags)) return true;
+            }
+
+            return false;
         }
 
-        return false;
-    }
-    public static bool HasHypertags(this Component go, Hypertag[] tags)
-    {
-        foreach (var obj in go.GetComponents<HypertaggedObject>())
+        public static T GetComponentInChildrenWithHypertag<T>(this Component go, Hypertag tag) where T : Component
         {
-            if (obj.HasHypertags(tags)) return true;
+            T obj = go.GetComponentInChildren<T>();
+            if (obj == null) return null;
+
+            if (obj.HasHypertag(tag)) return obj;
+
+            return null;
         }
 
-        return false;
-    }
+        public static T GetComponentInChildrenWithHypertag<T>(this Component go, Hypertag[] tags) where T : Component
+        {
+            T obj = go.GetComponentInChildren<T>();
+            if (obj == null) return null;
 
-    public static T GetComponentInChildrenWithHypertag<T>(this Component go, Hypertag tag) where T : Component
-    {
-        T obj = go.GetComponentInChildren<T>();
-        if (obj == null) return null;
+            if (obj.HasHypertags(tags)) return obj;
 
-        if (obj.HasHypertag(tag)) return obj;
-
-        return null;
-    }
-
-    public static T GetComponentInChildrenWithHypertag<T>(this Component go, Hypertag[] tags) where T : Component
-    {
-        T obj = go.GetComponentInChildren<T>();
-        if (obj == null) return null;
-
-        if (obj.HasHypertags(tags)) return obj;
-
-        return null;
+            return null;
+        }
     }
 }

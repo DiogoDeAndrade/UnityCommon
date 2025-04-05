@@ -1,23 +1,24 @@
-using NaughtyAttributes;
-using System;
 using UnityEngine;
-using UnityEngine.UI;
 
-[RequireComponent(typeof(AudioSource))]
-public class UITrackAudioSource : UITrackObject
+namespace UC
 {
-    private AudioSource audioSource;
 
-    void Awake()
+    [RequireComponent(typeof(AudioSource))]
+    public class UITrackAudioSource : UITrackObject
     {
-        audioSource = GetComponent<AudioSource>();
-    }
+        private AudioSource audioSource;
 
-    protected override bool GetVisibility()
-    {
-        if (audioSource == null) return false;
-        if (!audioSource.isPlaying) return false;
+        void Awake()
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
 
-        return base.GetVisibility();
+        protected override bool GetVisibility()
+        {
+            if (audioSource == null) return false;
+            if (!audioSource.isPlaying) return false;
+
+            return base.GetVisibility();
+        }
     }
 }

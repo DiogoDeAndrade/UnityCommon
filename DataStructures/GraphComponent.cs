@@ -3,115 +3,119 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class GraphComponent : MonoBehaviour
+namespace UC
 {
-    public enum WeightMode { Constant, Distance, Explicit };
 
-    [SerializeField] private bool                       directed = false;
-    [SerializeField] private WeightMode                 weightMode;
-    [SerializeField, Header("Test data")]
-    private List<int>   terminalPoints;
-    [SerializeField, ShowIf("weightMode", WeightMode.Explicit)]
-    private List<float> edgeWeights;
-
-    [SerializeField, Header("Data")] 
-    private Graph<GraphNodeComponent>  graph;
-
-    public bool isDirected => directed;
-
-    [Button("Build from components")]
-    void BuildFromComponents()
+    public class GraphComponent : MonoBehaviour
     {
-        graph = BuildGraphFromChildren();
-    }
+        public enum WeightMode { Constant, Distance, Explicit };
 
-    Graph<GraphNodeComponent> BuildGraphFromChildren()
-    { 
-        var nodes = GetComponentsInChildren<GraphNodeComponent>();
+        [SerializeField] private bool directed = false;
+        [SerializeField] private WeightMode weightMode;
+        [SerializeField, Header("Test data")]
+        private List<int> terminalPoints;
+        [SerializeField, ShowIf("weightMode", WeightMode.Explicit)]
+        private List<float> edgeWeights;
 
-        var graph = new Graph<GraphNodeComponent>(directed);
+        [SerializeField, Header("Data")]
+        private Graph<GraphNodeComponent> graph;
 
-        foreach (GraphNodeComponent node in nodes)
+        public bool isDirected => directed;
+
+        [Button("Build from components")]
+        void BuildFromComponents()
         {
-            node.id = graph.Add(node);
+            graph = BuildGraphFromChildren();
         }
 
-        int edgeIndex = 0;
-        foreach (GraphNodeComponent node in nodes)
+        Graph<GraphNodeComponent> BuildGraphFromChildren()
         {
-            var links = node.GetLinks();
-            foreach (var link in links) 
+            var nodes = GetComponentsInChildren<GraphNodeComponent>();
+
+            var graph = new Graph<GraphNodeComponent>(directed);
+
+            foreach (GraphNodeComponent node in nodes)
             {
-                if (link != null)
+                node.id = graph.Add(node);
+            }
+
+            int edgeIndex = 0;
+            foreach (GraphNodeComponent node in nodes)
+            {
+                var links = node.GetLinks();
+                foreach (var link in links)
                 {
-                    float w = 1.0f;
-                    if (weightMode == WeightMode.Distance) w = Vector3.Distance(node.transform.position, link.transform.position);
-                    else if (weightMode == WeightMode.Explicit)
+                    if (link != null)
                     {
-                        if ((edgeWeights != null) && (edgeWeights.Count > edgeIndex))
-                            w = edgeWeights[edgeIndex];
-                        else
-                            w = float.MaxValue;
-                    }
-                    graph.Add(node, link, w);
+                        float w = 1.0f;
+                        if (weightMode == WeightMode.Distance) w = Vector3.Distance(node.transform.position, link.transform.position);
+                        else if (weightMode == WeightMode.Explicit)
+                        {
+                            if ((edgeWeights != null) && (edgeWeights.Count > edgeIndex))
+                                w = edgeWeights[edgeIndex];
+                            else
+                                w = float.MaxValue;
+                        }
+                        graph.Add(node, link, w);
 
-                    edgeIndex++;
+                        edgeIndex++;
+                    }
                 }
             }
+
+            return graph;
         }
 
-        return graph;
-    }
-
-    [Button("Build Steiner Tree")]
-    void BuildSteinerTree()
-    {
-        graph = BuildGraphFromChildren();
-        graph = SteinerTree.Build(graph, terminalPoints);
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        if (graph != null)
+        [Button("Build Steiner Tree")]
+        void BuildSteinerTree()
         {
-            Gizmos.color = new Color(0.0f, 1.0f, 0.0f, 0.5f);
-            for (int i = 0; i < graph.nodeCount; i++)
+            graph = BuildGraphFromChildren();
+            graph = SteinerTree.Build(graph, terminalPoints);
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            if (graph != null)
             {
-                var node = graph.GetNode(i);
-                if (node == null) continue;
-
-                Gizmos.DrawSphere(node.transform.position, node.radius);
-                DebugHelpers.DrawTextAt(node.transform.position, Vector3.zero, 16, Color.white, $"{node.id}", true);
-            }
-
-            Gizmos.color = Color.cyan;
-            for (int j = 0; j < graph.edgeCount; j++)
-            {
-                var edge = graph.GetEdge(j);
-                if (edge == null) continue;
-                var n1 = graph.GetNode(edge.i1);
-                var n2 = graph.GetNode(edge.i2);
-
-                Vector3 delta = n2.transform.position - n1.transform.position;
-                float deltaMag = delta.magnitude;
-                Vector3 dir = delta / deltaMag;
-
-                Vector3 p1 = n1.transform.position + dir * n1.radius;
-                Vector3 p2 = n2.transform.position - dir * n2.radius;
-
-                if (graph.isDirected)
+                Gizmos.color = new Color(0.0f, 1.0f, 0.0f, 0.5f);
+                for (int i = 0; i < graph.nodeCount; i++)
                 {
-                    Vector3 d = (p2 - p1);
-                    float mag = d.magnitude;
-                    d /= mag;
-                    DebugHelpers.DrawArrow(p1, d, mag, 0.05f * mag, 45.0f);
-                }
-                else
-                {
-                    Gizmos.DrawLine(p1, p2);
+                    var node = graph.GetNode(i);
+                    if (node == null) continue;
+
+                    Gizmos.DrawSphere(node.transform.position, node.radius);
+                    DebugHelpers.DrawTextAt(node.transform.position, Vector3.zero, 16, Color.white, $"{node.id}", true);
                 }
 
-                DebugHelpers.DrawTextAt((p1 + p2) * 0.5f, Vector3.zero, 14, Color.blue, $"{edge.weight}", false);
+                Gizmos.color = Color.cyan;
+                for (int j = 0; j < graph.edgeCount; j++)
+                {
+                    var edge = graph.GetEdge(j);
+                    if (edge == null) continue;
+                    var n1 = graph.GetNode(edge.i1);
+                    var n2 = graph.GetNode(edge.i2);
+
+                    Vector3 delta = n2.transform.position - n1.transform.position;
+                    float deltaMag = delta.magnitude;
+                    Vector3 dir = delta / deltaMag;
+
+                    Vector3 p1 = n1.transform.position + dir * n1.radius;
+                    Vector3 p2 = n2.transform.position - dir * n2.radius;
+
+                    if (graph.isDirected)
+                    {
+                        Vector3 d = (p2 - p1);
+                        float mag = d.magnitude;
+                        d /= mag;
+                        DebugHelpers.DrawArrow(p1, d, mag, 0.05f * mag, 45.0f);
+                    }
+                    else
+                    {
+                        Gizmos.DrawLine(p1, p2);
+                    }
+
+                    DebugHelpers.DrawTextAt((p1 + p2) * 0.5f, Vector3.zero, 14, Color.blue, $"{edge.weight}", false);
+                }
             }
         }
     }

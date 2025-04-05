@@ -1,31 +1,34 @@
 using NaughtyAttributes;
-using System;
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "Item", menuName = "Unity Common/Data/Item")]
-public class Item : ScriptableObject
+namespace UC
 {
-    public Item[]       parentItems;
-    public string       displayName = "Item Display Name";
-    public Color        displaySpriteColor = Color.white;
-    public Sprite       displaySprite;
-    public Color        displayTextColor = Color.white;
-    public GameObject   scenePrefab;
-    public bool         isStackable = false;
-    [ShowIf(nameof(isStackable))]
-    public int          maxStack = 1;
 
-    internal bool IsA(Item itemType)
+    [CreateAssetMenu(fileName = "Item", menuName = "Unity Common/Data/Item")]
+    public class Item : ScriptableObject
     {
-        if (this == itemType) return true;
+        public Item[] parentItems;
+        public string displayName = "Item Display Name";
+        public Color displaySpriteColor = Color.white;
+        public Sprite displaySprite;
+        public Color displayTextColor = Color.white;
+        public GameObject scenePrefab;
+        public bool isStackable = false;
+        [ShowIf(nameof(isStackable))]
+        public int maxStack = 1;
 
-        if (parentItems == null) return false;
-
-        foreach (var item in parentItems)
+        internal bool IsA(Item itemType)
         {
-            if (item == itemType) return true;
-        }
+            if (this == itemType) return true;
 
-        return false;
+            if (parentItems == null) return false;
+
+            foreach (var item in parentItems)
+            {
+                if (item == itemType) return true;
+            }
+
+            return false;
+        }
     }
 }

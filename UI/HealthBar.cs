@@ -1,20 +1,21 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+﻿using UnityEngine;
 
-public class HealthBar : ResourceBar
+namespace UC
 {
-    [Header("Health Bar")]
-    public HealthSystem healthSystem;
 
-    protected override float GetNormalizedResource()
+    public class HealthBar : ResourceBar
     {
-        return Mathf.Clamp01(healthSystem.normalizedHealth);
-    }
+        [Header("Health Bar")]
+        public HealthSystem healthSystem;
 
-    protected override float GetResourceCount()
-    {
-        return healthSystem.health;
+        protected override float GetNormalizedResource()
+        {
+            return Mathf.Clamp01(healthSystem.normalizedHealth);
+        }
+
+        protected override float GetResourceCount()
+        {
+            return healthSystem.health;
+        }
     }
 }

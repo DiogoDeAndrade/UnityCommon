@@ -1,5 +1,10 @@
 using UnityEngine;
 
-public class CombatTextSpawnPoint : MonoBehaviour
+namespace UC
 {
+
+    public class CombatTextSpawnPoint : MonoBehaviour
+    {
+    }
+
 }

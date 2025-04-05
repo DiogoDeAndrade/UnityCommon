@@ -1,30 +1,34 @@
 using NaughtyAttributes;
 using UnityEngine;
 
-public class MeshRendererSortOrder : MonoBehaviour
+namespace UC
 {
-    [SerializeField, SortingLayer] private int sortingLayer;
-    [SerializeField] private int orderInLayer;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    public class MeshRendererSortOrder : MonoBehaviour
     {
-        Set();
-    }
+        [SerializeField, SortingLayer] private int sortingLayer;
+        [SerializeField] private int orderInLayer;
 
-    private void OnValidate()
-    {
-        Set();
-    }
-
-    [Button("Set")]
-    void Set()
-    {
-        MeshRenderer renderer = GetComponent<MeshRenderer>();
-        if (renderer)
+        // Start is called once before the first execution of Update after the MonoBehaviour is created
+        void Start()
         {
-            renderer.sortingLayerID = sortingLayer;
-            renderer.sortingOrder = orderInLayer;
+            Set();
+        }
+
+        private void OnValidate()
+        {
+            Set();
+        }
+
+        [Button("Set")]
+        void Set()
+        {
+            MeshRenderer renderer = GetComponent<MeshRenderer>();
+            if (renderer)
+            {
+                renderer.sortingLayerID = sortingLayer;
+                renderer.sortingOrder = orderInLayer;
+            }
         }
     }
 }

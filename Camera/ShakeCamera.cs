@@ -1,19 +1,23 @@
 using UnityEngine;
 
-public class ShakeCamera: MonoBehaviour
+namespace UC
 {
-    public enum ShakeTrigger { OnStart };
 
-    [SerializeField] private ShakeTrigger   trigger;
-    [SerializeField] private float          time;
-    [SerializeField] private float          strength;
-
-    void Start()
+    public class ShakeCamera : MonoBehaviour
     {
-        if (trigger == ShakeTrigger.OnStart)
+        public enum ShakeTrigger { OnStart };
+
+        [SerializeField] private ShakeTrigger trigger;
+        [SerializeField] private float time;
+        [SerializeField] private float strength;
+
+        void Start()
         {
-            CameraShake2d.Shake(strength, time);
-            Destroy(this);
+            if (trigger == ShakeTrigger.OnStart)
+            {
+                CameraShake2d.Shake(strength, time);
+                Destroy(this);
+            }
         }
     }
 }

@@ -1,21 +1,24 @@
-using NaughtyAttributes;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GridAction_None : GridActionContainer
+namespace UC
 {
-    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
-    {
-        retActions.Add(new NamedAction
-        {
-            name = verb,
-            action = RunAction,
-            container = this
-        });
-    }
 
-    protected bool RunAction(GridObject subject, Vector2Int position)
+    public class GridAction_None : GridActionContainer
     {
-        return true;
+        public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
+        {
+            retActions.Add(new NamedAction
+            {
+                name = verb,
+                action = RunAction,
+                container = this
+            });
+        }
+
+        protected bool RunAction(GridObject subject, Vector2Int position)
+        {
+            return true;
+        }
     }
 }

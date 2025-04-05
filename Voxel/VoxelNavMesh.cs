@@ -1,115 +1,118 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class VoxelNavMesh
+namespace UC
 {
-    public enum TriangulationMesh { Simplification, EarClipping };
 
-    Mesh mesh;
-    Mesh unsimplifiedMesh;
-
-    public void Build(VoxelData vd, List<int> validVoxels, 
-                      TriangulationMesh method, bool simplifyBoundary,
-                      float stepSize, bool simplify, bool keepUnsimplifiedMesh)
+    public class VoxelNavMesh
     {
-        var vertices = new List<Vector3>();
-        var indices = new List<int>();
+        public enum TriangulationMesh { Simplification, EarClipping };
 
-        int FindOrAdd(Vector3 p, float stepSize)
+        Mesh mesh;
+        Mesh unsimplifiedMesh;
+
+        public void Build(VoxelData vd, List<int> validVoxels,
+                          TriangulationMesh method, bool simplifyBoundary,
+                          float stepSize, bool simplify, bool keepUnsimplifiedMesh)
         {
-            for (int i = 0; i < vertices.Count; i++)
+            var vertices = new List<Vector3>();
+            var indices = new List<int>();
+
+            int FindOrAdd(Vector3 p, float stepSize)
             {
-                if (p.xz() == vertices[i].xz())
+                for (int i = 0; i < vertices.Count; i++)
                 {
-                    if (Mathf.Abs(p.y - vertices[i].y) <= stepSize)
+                    if (p.xz() == vertices[i].xz())
                     {
-                        if (p.y < vertices[i].y)
+                        if (Mathf.Abs(p.y - vertices[i].y) <= stepSize)
                         {
-                            vertices[i] = p;
+                            if (p.y < vertices[i].y)
+                            {
+                                vertices[i] = p;
+                            }
+                            return i;
                         }
-                        return i;
                     }
                 }
+
+                vertices.Add(p);
+                return vertices.Count - 1;
             }
 
-            vertices.Add(p);
-            return vertices.Count - 1;
-        }
-
-        int index = 0;
-        for (int z = 0; z < vd.gridSize.z; z++)
-        {
-            for (int y = 0; y < vd.gridSize.y; y++)
+            int index = 0;
+            for (int z = 0; z < vd.gridSize.z; z++)
             {
-                for (int x = 0; x < vd.gridSize.x; x++)
+                for (int y = 0; y < vd.gridSize.y; y++)
                 {
-                    byte value = vd.data[index];
-
-                    if (validVoxels.Exists((v) => v == value))
+                    for (int x = 0; x < vd.gridSize.x; x++)
                     {
-                        // Generate geometry for the top of this voxel for the nav mesh
-                        Vector3 p1 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.offset.x,
-                                                 (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                 (z - 0.0f) * vd.voxelSize.z + vd.offset.z);
-                        Vector3 p2 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.offset.x,
-                                                 (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                 (z + 1.0f) * vd.voxelSize.z + vd.offset.z);
-                        Vector3 p3 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.offset.x,
-                                                 (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                 (z + 1.0f) * vd.voxelSize.z + vd.offset.z);
-                        Vector3 p4 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.offset.x,
-                                                 (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                 (z - 0.0f) * vd.voxelSize.z + vd.offset.z);
+                        byte value = vd.data[index];
 
-                        int i1 = FindOrAdd(p1, stepSize);
-                        int i2 = FindOrAdd(p2, stepSize);
-                        int i3 = FindOrAdd(p3, stepSize);
-                        int i4 = FindOrAdd(p4, stepSize);
+                        if (validVoxels.Exists((v) => v == value))
+                        {
+                            // Generate geometry for the top of this voxel for the nav mesh
+                            Vector3 p1 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.offset.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
+                                                     (z - 0.0f) * vd.voxelSize.z + vd.offset.z);
+                            Vector3 p2 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.offset.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
+                                                     (z + 1.0f) * vd.voxelSize.z + vd.offset.z);
+                            Vector3 p3 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.offset.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
+                                                     (z + 1.0f) * vd.voxelSize.z + vd.offset.z);
+                            Vector3 p4 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.offset.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
+                                                     (z - 0.0f) * vd.voxelSize.z + vd.offset.z);
 
-                        indices.Add(i1); indices.Add(i2); indices.Add(i3);
-                        indices.Add(i1); indices.Add(i3); indices.Add(i4);
+                            int i1 = FindOrAdd(p1, stepSize);
+                            int i2 = FindOrAdd(p2, stepSize);
+                            int i3 = FindOrAdd(p3, stepSize);
+                            int i4 = FindOrAdd(p4, stepSize);
+
+                            indices.Add(i1); indices.Add(i2); indices.Add(i3);
+                            indices.Add(i1); indices.Add(i3); indices.Add(i4);
+                        }
+
+                        index++;
                     }
+                }
+            }
 
-                    index++;
+            mesh = new Mesh();
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(indices, 0);
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+
+            if (simplify)
+            {
+                if (method == TriangulationMesh.Simplification)
+                {
+                    if (keepUnsimplifiedMesh) unsimplifiedMesh = mesh;
+                    mesh = MeshTools.SimplifyMeshInterior(mesh, 0.01f);
+                }
+                else if (method == TriangulationMesh.EarClipping)
+                {
+                    // Get boundary and build triangulation from there
+                    var topology = new Topology(mesh, Matrix4x4.identity);
+                    var boundary = topology.GetBoundaries();
+
+                    Debug.LogError("Ear clipping simplification not implemented!");
+
+                    //                mesh = MeshTools.TriangulateEarClipping(boundary.Get(0));
                 }
             }
         }
 
-        mesh = new Mesh();
-        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        mesh.SetVertices(vertices);
-        mesh.SetTriangles(indices, 0);
-        mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
-
-        if (simplify)
+        public Mesh GetMesh()
         {
-            if (method == TriangulationMesh.Simplification)
-            {
-                if (keepUnsimplifiedMesh) unsimplifiedMesh = mesh;
-                mesh = MeshTools.SimplifyMeshInterior(mesh, 0.01f);
-            }
-            else if (method == TriangulationMesh.EarClipping)
-            {
-                // Get boundary and build triangulation from there
-                var topology = new Topology(mesh, Matrix4x4.identity);
-                var boundary = topology.GetBoundaries();
-
-                Debug.LogError("Ear clipping simplification not implemented!");
-
-//                mesh = MeshTools.TriangulateEarClipping(boundary.Get(0));
-            }
+            return mesh;
         }
-    }
-
-    public Mesh GetMesh()
-    {
-        return mesh;
-    }
-    public Mesh GetUnsimplifiedMesh()
-    {
-        return unsimplifiedMesh;
+        public Mesh GetUnsimplifiedMesh()
+        {
+            return unsimplifiedMesh;
+        }
     }
 }

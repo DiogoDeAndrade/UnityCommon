@@ -2,26 +2,30 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class GridAction_Tile : GridActionContainer
+namespace UC
 {
-    [SerializeField] private List<TileBase>     tiles;
-    [SerializeField] private GridActionContainer[]       actions;
 
-    Tilemap tilemap;
-
-    void Awake()
+    public class GridAction_Tile : GridActionContainer
     {
-        tilemap = GetComponent<Tilemap>();
-    }
+        [SerializeField] private List<TileBase> tiles;
+        [SerializeField] private GridActionContainer[] actions;
 
-    public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
-    {
-        var tile = tilemap.GetTile(position.xy0());
-        if (tiles.Contains(tile))
+        Tilemap tilemap;
+
+        void Awake()
         {
-            foreach (var action in actions)
+            tilemap = GetComponent<Tilemap>();
+        }
+
+        public override void ActualGatherActions(GridObject subject, Vector2Int position, List<NamedAction> retActions)
+        {
+            var tile = tilemap.GetTile(position.xy0());
+            if (tiles.Contains(tile))
             {
-                action.GatherActions(subject, position, retActions);
+                foreach (var action in actions)
+                {
+                    action.GatherActions(subject, position, retActions);
+                }
             }
         }
     }

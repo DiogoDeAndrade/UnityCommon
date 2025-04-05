@@ -2,183 +2,187 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class ResourceHandler : MonoBehaviour
+namespace UC
 {
-    public enum ChangeType { Burst, OverTime };
 
-    public delegate void OnChange(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource);
-    public event OnChange  onChange;
-    public delegate void OnResourceEmpty(GameObject changeSource);
-    public event OnResourceEmpty onResourceEmpty;
-    public delegate void OnResourceNotEmpty(GameObject healSource);
-    public event OnResourceNotEmpty onResourceNotEmpty;
-
-    [Expandable]
-    public ResourceType type;
-
-    protected float     _resource = 100.0f;
-    protected bool      _resourceEmpty;
-
-    public float resource
+    public class ResourceHandler : MonoBehaviour
     {
-        get { return _resource; }
-    }
+        public enum ChangeType { Burst, OverTime };
 
-    public float normalizedResource
-    {
-        get { return _resource / type.maxValue; }
-    }
+        public delegate void OnChange(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource);
+        public event OnChange onChange;
+        public delegate void OnResourceEmpty(GameObject changeSource);
+        public event OnResourceEmpty onResourceEmpty;
+        public delegate void OnResourceNotEmpty(GameObject healSource);
+        public event OnResourceNotEmpty onResourceNotEmpty;
 
-    public bool isResourceEmpty => _resourceEmpty;
-    public bool isResourceNotEmpty => !_resourceEmpty;
-    
-    void Awake()
-    {
-    }
+        [Expandable]
+        public ResourceType type;
 
-    void Start()
-    {
-        ResetResource();
-        _resourceEmpty = false;
-    }
+        protected float _resource = 100.0f;
+        protected bool _resourceEmpty;
 
-    void RenderCombatText(float prevValue)
-    {
-        float actualDelta = _resource - prevValue;
-        if (actualDelta != 0.0f)
+        public float resource
         {
-            if (type.useCombatText)
-            {
-                var str = type.ctBaseText;
-                var c = type.ctPositiveColor;
-                if (actualDelta > 0)
-                {
-                    str = str.Replace("{value}", $"+{actualDelta}");
-                }
-                else
-                {
-                    str = str.Replace("{value}", $"{actualDelta}");
-                    c = type.ctNegativeColor;
-                }
-
-                CombatTextManager.SpawnText(gameObject, str, c, c.ChangeAlpha(0.0f));
-            }
+            get { return _resource; }
         }
-    }
 
-    public bool Change(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
-    {
-        float   prevValue = _resource;
-        bool    ret = true;
-
-        if (deltaValue < 0)
+        public float normalizedResource
         {
-            if (_resourceEmpty) ret = false;
-            else
-            {
-                _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
-                if (_resource <= 0.0f)
-                {
-                    _resource = 0.0f;
-                    _resourceEmpty = true;
+            get { return _resource / type.maxValue; }
+        }
 
-                    onResourceEmpty?.Invoke(changeSource);
-                }
-                else
+        public bool isResourceEmpty => _resourceEmpty;
+        public bool isResourceNotEmpty => !_resourceEmpty;
+
+        void Awake()
+        {
+        }
+
+        void Start()
+        {
+            ResetResource();
+            _resourceEmpty = false;
+        }
+
+        void RenderCombatText(float prevValue)
+        {
+            float actualDelta = _resource - prevValue;
+            if (actualDelta != 0.0f)
+            {
+                if (type.useCombatText)
                 {
-                    onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+                    var str = type.ctBaseText;
+                    var c = type.ctPositiveColor;
+                    if (actualDelta > 0)
+                    {
+                        str = str.Replace("{value}", $"+{actualDelta}");
+                    }
+                    else
+                    {
+                        str = str.Replace("{value}", $"{actualDelta}");
+                        c = type.ctNegativeColor;
+                    }
+
+                    CombatTextManager.SpawnText(gameObject, str, c, c.ChangeAlpha(0.0f));
                 }
             }
         }
-        else if (deltaValue > 0)
+
+        public bool Change(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
         {
-            if (canAddOnEmpty)
+            float prevValue = _resource;
+            bool ret = true;
+
+            if (deltaValue < 0)
             {
-                if (_resource < type.maxValue)
+                if (_resourceEmpty) ret = false;
+                else
                 {
                     _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
-
-                    onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
-
-                    if ((_resource > 0.0f) && (_resourceEmpty))
+                    if (_resource <= 0.0f)
                     {
-                        onResourceNotEmpty?.Invoke(changeSource);
-                        _resourceEmpty = false;
+                        _resource = 0.0f;
+                        _resourceEmpty = true;
+
+                        onResourceEmpty?.Invoke(changeSource);
+                    }
+                    else
+                    {
+                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
                     }
                 }
             }
-            else if (_resourceEmpty) ret = false;
-            else
+            else if (deltaValue > 0)
             {
-                if (_resource < type.maxValue)
+                if (canAddOnEmpty)
                 {
-                    _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
+                    if (_resource < type.maxValue)
+                    {
+                        _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
 
-                    onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+
+                        if ((_resource > 0.0f) && (_resourceEmpty))
+                        {
+                            onResourceNotEmpty?.Invoke(changeSource);
+                            _resourceEmpty = false;
+                        }
+                    }
                 }
-                else ret = false;
+                else if (_resourceEmpty) ret = false;
+                else
+                {
+                    if (_resource < type.maxValue)
+                    {
+                        _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
+
+                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+                    }
+                    else ret = false;
+                }
             }
+
+            if (ret) RenderCombatText(prevValue);
+
+            return ret;
         }
 
-        if (ret) RenderCombatText(prevValue);
-
-        return ret;
-    }
-
-    public static List<ResourceHandler> FindAllByType(ResourceType type)
-    {
-        var allObjects = FindObjectsByType<ResourceHandler>(FindObjectsSortMode.None);
-        var ret = new List<ResourceHandler>();
-        foreach (var obj in allObjects)
+        public static List<ResourceHandler> FindAllByType(ResourceType type)
         {
-            if (obj.type == type) ret.Add(obj);
-        }
-
-        return ret;
-    }
-
-    public static List<ResourceHandler> FindAllInRadius(ResourceType type, Vector3 pos, float range)
-    {
-        List<ResourceHandler> ret = new();
-        var resHandlers = FindObjectsByType<ResourceHandler>(FindObjectsSortMode.None);
-        foreach (var h in resHandlers)
-        {
-            if ((h.type == type) && (Vector3.Distance(h.transform.position, pos) < range))
+            var allObjects = FindObjectsByType<ResourceHandler>(FindObjectsSortMode.None);
+            var ret = new List<ResourceHandler>();
+            foreach (var obj in allObjects)
             {
-                ret.Add(h);
+                if (obj.type == type) ret.Add(obj);
             }
+
+            return ret;
         }
 
-        return ret;
-    }
-
-    public void SetResource(float r)
-    {
-        _resource = r;
-        _resourceEmpty = (_resource <= 0.0f);
-    }
-
-    public void ResetResource(bool combatText = false)
-    {
-        float prevValue = _resource;
-
-        _resource = type.defaultValue;
-        _resourceEmpty = false;
-
-        if (combatText) RenderCombatText(prevValue);
-    }
-}
-
-public static class ResourceHandlerExtensions
-{
-    public static ResourceHandler FindResourceHandler(this Component component, ResourceType type)
-    {
-        var handlers = component.GetComponents<ResourceHandler>();
-        foreach (var handler in handlers)
+        public static List<ResourceHandler> FindAllInRadius(ResourceType type, Vector3 pos, float range)
         {
-            if (handler.type == type) return handler;
+            List<ResourceHandler> ret = new();
+            var resHandlers = FindObjectsByType<ResourceHandler>(FindObjectsSortMode.None);
+            foreach (var h in resHandlers)
+            {
+                if ((h.type == type) && (Vector3.Distance(h.transform.position, pos) < range))
+                {
+                    ret.Add(h);
+                }
+            }
+
+            return ret;
         }
 
-        return null;
+        public void SetResource(float r)
+        {
+            _resource = r;
+            _resourceEmpty = (_resource <= 0.0f);
+        }
+
+        public void ResetResource(bool combatText = false)
+        {
+            float prevValue = _resource;
+
+            _resource = type.defaultValue;
+            _resourceEmpty = false;
+
+            if (combatText) RenderCombatText(prevValue);
+        }
+    }
+
+    public static class ResourceHandlerExtensions
+    {
+        public static ResourceHandler FindResourceHandler(this Component component, ResourceType type)
+        {
+            var handlers = component.GetComponents<ResourceHandler>();
+            foreach (var handler in handlers)
+            {
+                if (handler.type == type) return handler;
+            }
+
+            return null;
+        }
     }
 }

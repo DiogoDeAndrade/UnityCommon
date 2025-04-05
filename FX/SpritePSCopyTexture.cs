@@ -1,42 +1,46 @@
 using NaughtyAttributes;
 using UnityEngine;
 
-public class SpritePSCopyTexture : MonoBehaviour
+namespace UC
 {
-    [SerializeField] private bool dynamic;
 
-    void Start()
+    public class SpritePSCopyTexture : MonoBehaviour
     {
-        CopyTexture();
+        [SerializeField] private bool dynamic;
 
-        if (!dynamic)
+        void Start()
         {
-            Destroy(this);
-        }
-    }
+            CopyTexture();
 
-    // Update is called once per frame
-    void Update()
-    {
-        CopyTexture();
-    }
-
-    [Button("Run Once")]
-    void CopyTexture()
-    {
-        var ps = GetComponent<ParticleSystem>();
-
-        var shape = ps.shape;
-        if ((shape.shapeType == ParticleSystemShapeType.Sprite) ||
-            (shape.shapeType == ParticleSystemShapeType.SpriteRenderer))
-        {
-            if (shape.spriteRenderer != null)
+            if (!dynamic)
             {
-                shape.texture = shape.spriteRenderer.sprite.texture;
+                Destroy(this);
             }
-            else if (shape.sprite != null)
+        }
+
+        // Update is called once per frame
+        void Update()
+        {
+            CopyTexture();
+        }
+
+        [Button("Run Once")]
+        void CopyTexture()
+        {
+            var ps = GetComponent<ParticleSystem>();
+
+            var shape = ps.shape;
+            if ((shape.shapeType == ParticleSystemShapeType.Sprite) ||
+                (shape.shapeType == ParticleSystemShapeType.SpriteRenderer))
             {
-                shape.texture = shape.sprite.texture;
+                if (shape.spriteRenderer != null)
+                {
+                    shape.texture = shape.spriteRenderer.sprite.texture;
+                }
+                else if (shape.sprite != null)
+                {
+                    shape.texture = shape.sprite.texture;
+                }
             }
         }
     }

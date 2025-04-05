@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using NaughtyAttributes;
 
-namespace UnityCommon.Legacy
+namespace UC.Legacy
 {
     public class PlayerController : MonoBehaviour
     {

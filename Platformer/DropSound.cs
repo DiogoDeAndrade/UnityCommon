@@ -1,40 +1,44 @@
 using NaughtyAttributes;
 using UnityEngine;
 
-public class DropSound : MonoBehaviour
+namespace UC
 {
-    [SerializeField] private AudioClip dropSnd;
-    [SerializeField] float cooldown = 0.1f;
-    [SerializeField, MinMaxSlider(0.1f, 1.0f)] Vector2 volumeVariance = Vector2.one;
-    [SerializeField, MinMaxSlider(0.1f, 1.5f)] Vector2 pitchVariance = Vector2.one;
 
-    Rigidbody2D rb;
-    float cooldownTimer;
-
-    Vector2 prevVelocity;
-    void Start()
+    public class DropSound : MonoBehaviour
     {
-        rb = GetComponent<Rigidbody2D>();
-        prevVelocity = rb.linearVelocity;
-    }
+        [SerializeField] private AudioClip dropSnd;
+        [SerializeField] float cooldown = 0.1f;
+        [SerializeField, MinMaxSlider(0.1f, 1.0f)] Vector2 volumeVariance = Vector2.one;
+        [SerializeField, MinMaxSlider(0.1f, 1.5f)] Vector2 pitchVariance = Vector2.one;
 
-    // Update is called once per frame
-    void Update()
-    {
-        if (cooldown > 0)
+        Rigidbody2D rb;
+        float cooldownTimer;
+
+        Vector2 prevVelocity;
+        void Start()
         {
-            cooldownTimer -= Time.deltaTime;
+            rb = GetComponent<Rigidbody2D>();
+            prevVelocity = rb.linearVelocity;
         }
 
-        if ((prevVelocity.y < -5.0f) && (rb.linearVelocityY > -1e-6))
+        // Update is called once per frame
+        void Update()
         {
-            if (cooldownTimer <= 0.0f)
+            if (cooldown > 0)
             {
-                SoundManager.PlaySound(SoundType.PrimaryFX, dropSnd, volumeVariance.Random(), pitchVariance.Random());
-                if (cooldown > 0.0f) cooldownTimer = cooldown;
+                cooldownTimer -= Time.deltaTime;
             }
-        }
 
-        prevVelocity = rb.linearVelocity;
+            if ((prevVelocity.y < -5.0f) && (rb.linearVelocityY > -1e-6))
+            {
+                if (cooldownTimer <= 0.0f)
+                {
+                    SoundManager.PlaySound(SoundType.PrimaryFX, dropSnd, volumeVariance.Random(), pitchVariance.Random());
+                    if (cooldown > 0.0f) cooldownTimer = cooldown;
+                }
+            }
+
+            prevVelocity = rb.linearVelocity;
+        }
     }
 }

@@ -1,33 +1,37 @@
 using System;
 using System.Reflection;
 
-public static class TypeExtensions
+namespace UC
 {
-    public static FieldInfo GetPrivateField(this Type type, string name)
+
+    public static class TypeExtensions
     {
-        var currentType = type;
-        while (currentType != null)
-        { 
-            var ret = currentType.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (ret != null) return ret;
-
-            currentType = currentType.BaseType;
-        }
-
-        return null;
-    }
-
-    public static MethodInfo GetPrivateMethod(this Type type, string name)
-    {
-        var currentType = type;
-        while (currentType != null)
+        public static FieldInfo GetPrivateField(this Type type, string name)
         {
-            var ret = currentType.GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (ret != null) return ret;
+            var currentType = type;
+            while (currentType != null)
+            {
+                var ret = currentType.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (ret != null) return ret;
 
-            currentType = currentType.BaseType;
+                currentType = currentType.BaseType;
+            }
+
+            return null;
         }
 
-        return null;
+        public static MethodInfo GetPrivateMethod(this Type type, string name)
+        {
+            var currentType = type;
+            while (currentType != null)
+            {
+                var ret = currentType.GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (ret != null) return ret;
+
+                currentType = currentType.BaseType;
+            }
+
+            return null;
+        }
     }
 }

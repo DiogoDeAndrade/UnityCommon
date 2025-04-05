@@ -1,32 +1,36 @@
 using UnityEngine;
 
-public class TooltipManager : MonoBehaviour
+namespace UC
 {
-    [SerializeField] private Tooltip tooltipPrefab;
 
-    static TooltipManager instance;
-
-    private void Awake()
+    public class TooltipManager : MonoBehaviour
     {
-        if (instance == null)
+        [SerializeField] private Tooltip tooltipPrefab;
+
+        static TooltipManager instance;
+
+        private void Awake()
         {
-            instance = this;
+            if (instance == null)
+            {
+                instance = this;
+            }
+            else
+            {
+                Destroy(gameObject);
+                return;
+            }
         }
-        else
+
+        private Tooltip _CreateTooltip()
         {
-            Destroy(gameObject);
-            return;
+            var tooltip = Instantiate(tooltipPrefab, transform);
+            return tooltip;
         }
-    }
 
-    private Tooltip _CreateTooltip()
-    {
-        var tooltip = Instantiate(tooltipPrefab, transform);        
-        return tooltip;
-    }
-
-    public static Tooltip CreateTooltip()
-    {
-        return instance._CreateTooltip();
+        public static Tooltip CreateTooltip()
+        {
+            return instance._CreateTooltip();
+        }
     }
 }

@@ -1,24 +1,26 @@
-using System;
 using UnityEngine;
-using static DialogueData;
 
-public abstract class DialogueDisplay : MonoBehaviour
+namespace UC
 {
-    protected CanvasGroup canvasGroup;
 
-    private void Start()
+    public abstract class DialogueDisplay : MonoBehaviour
     {
-        canvasGroup = GetComponent<CanvasGroup>();
-        if (canvasGroup)
-            canvasGroup.alpha = 0.0f;
-        else
-            gameObject.SetActive(false);
-    }
+        protected CanvasGroup canvasGroup;
 
-    public abstract void Display(DialogueElement dialogue);
-    public abstract void Clear();
-    public abstract void Skip();
-    public abstract bool isDisplaying();
-    public abstract void SetInput(Vector2 moveVector);
-    public abstract int GetSelectedOption();
+        private void Start()
+        {
+            canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup)
+                canvasGroup.alpha = 0.0f;
+            else
+                gameObject.SetActive(false);
+        }
+
+        public abstract void Display(DialogueData.DialogueElement dialogue);
+        public abstract void Clear();
+        public abstract void Skip();
+        public abstract bool isDisplaying();
+        public abstract void SetInput(Vector2 moveVector);
+        public abstract int GetSelectedOption();
+    }
 }

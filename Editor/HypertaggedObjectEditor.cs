@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace OkapiKit.Editor
+namespace UC
 {
     [CustomEditor(typeof(HypertaggedObject), true)]
     [CanEditMultipleObjects]

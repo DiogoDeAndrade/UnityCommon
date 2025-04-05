@@ -1,11 +1,8 @@
 ﻿using NaughtyAttributes;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-namespace UnityCommon.Legacy
+namespace UC.Legacy
 {
-
     public class Switch : Interactable
     {
         public bool initialState;

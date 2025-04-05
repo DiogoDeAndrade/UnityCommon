@@ -1,8 +1,6 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-namespace UnityCommon.Legacy
+namespace UC.Legacy
 {
 
     public class Interactable : MonoBehaviour

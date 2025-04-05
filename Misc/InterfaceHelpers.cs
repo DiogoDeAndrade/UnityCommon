@@ -3,79 +3,83 @@ using System;
 using UnityEngine;
 using System.Linq;
 
-public static class InterfaceHelpers 
+namespace UC
 {
-    public static List<Type> FindInterfaceTypes<TInterface>()
+
+    public static class InterfaceHelpers
     {
-        var interfaceType = typeof(TInterface);
-
-        // Validate that the provided type is an interface
-        if (!interfaceType.IsInterface)
+        public static List<Type> FindInterfaceTypes<TInterface>()
         {
-            Debug.LogError($"{interfaceType.Name} is not an interface.");
-            return new List<Type>();
-        }
+            var interfaceType = typeof(TInterface);
 
-        // Get all loaded assemblies in the current AppDomain
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-        // Find all MonoBehaviours implementing the specified interface
-        var result = new List<Type>();
-
-        foreach (var assembly in assemblies)
-        {
-            // Get all types defined in the assembly
-            var types = assembly.GetTypes();
-
-            foreach (var type in types)
+            // Validate that the provided type is an interface
+            if (!interfaceType.IsInterface)
             {
-                // Ensure the type is a MonoBehaviour and implements the interface
-                if (typeof(MonoBehaviour).IsAssignableFrom(type) && interfaceType.IsAssignableFrom(type) && !type.IsAbstract)
+                Debug.LogError($"{interfaceType.Name} is not an interface.");
+                return new List<Type>();
+            }
+
+            // Get all loaded assemblies in the current AppDomain
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            // Find all MonoBehaviours implementing the specified interface
+            var result = new List<Type>();
+
+            foreach (var assembly in assemblies)
+            {
+                // Get all types defined in the assembly
+                var types = assembly.GetTypes();
+
+                foreach (var type in types)
                 {
-                    result.Add(type);
+                    // Ensure the type is a MonoBehaviour and implements the interface
+                    if (typeof(MonoBehaviour).IsAssignableFrom(type) && interfaceType.IsAssignableFrom(type) && !type.IsAbstract)
+                    {
+                        result.Add(type);
+                    }
                 }
             }
+
+            return result;
         }
 
-        return result;
-    }
+        private static Dictionary<Type, List<Type>> _interfaceToImplementors = new();
 
-    private static Dictionary<Type, List<Type>> _interfaceToImplementors = new();
-
-    public static T GetFirstInterfaceComponent<T>() where T : class
-    {
-        Type interfaceType = typeof(T);
-
-        // Step 1: Cache the MonoBehaviour types that implement the interface
-        if (!_interfaceToImplementors.ContainsKey(interfaceType))
+        public static T GetFirstInterfaceComponent<T>() where T : class
         {
-            CacheImplementingTypes<T>();
-        }
+            Type interfaceType = typeof(T);
 
-        var types = _interfaceToImplementors[interfaceType];
-        foreach (var type in types)
-        {
-            var ret = GameObject.FindFirstObjectByType(type) as T;
-            if (ret != null) return ret;
-        }
-
-        return null;
-    }
-
-    private static void CacheImplementingTypes<T>() where T : class
-    {
-        Type interfaceType = typeof(T);
-        var implementingTypes = new List<Type>();
-
-        foreach (Type type in AppDomain.CurrentDomain.GetAssemblies()
-                     .SelectMany(assembly => assembly.GetTypes()))
-        {
-            if (interfaceType.IsAssignableFrom(type) && type.IsClass && !type.IsAbstract && typeof(MonoBehaviour).IsAssignableFrom(type))
+            // Step 1: Cache the MonoBehaviour types that implement the interface
+            if (!_interfaceToImplementors.ContainsKey(interfaceType))
             {
-                implementingTypes.Add(type);
+                CacheImplementingTypes<T>();
             }
+
+            var types = _interfaceToImplementors[interfaceType];
+            foreach (var type in types)
+            {
+                var ret = GameObject.FindFirstObjectByType(type) as T;
+                if (ret != null) return ret;
+            }
+
+            return null;
         }
 
-        _interfaceToImplementors[interfaceType] = implementingTypes;
+        private static void CacheImplementingTypes<T>() where T : class
+        {
+            Type interfaceType = typeof(T);
+            var implementingTypes = new List<Type>();
+
+            foreach (Type type in AppDomain.CurrentDomain.GetAssemblies()
+                         .SelectMany(assembly => assembly.GetTypes()))
+            {
+                if (interfaceType.IsAssignableFrom(type) && type.IsClass && !type.IsAbstract && typeof(MonoBehaviour).IsAssignableFrom(type))
+                {
+                    implementingTypes.Add(type);
+                }
+            }
+
+            _interfaceToImplementors[interfaceType] = implementingTypes;
+        }
     }
 }

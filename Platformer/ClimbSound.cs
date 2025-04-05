@@ -1,55 +1,58 @@
 using NaughtyAttributes;
-using System.Collections.Specialized;
 using UnityEngine;
 
-public class ClimbSound : MonoBehaviour
+namespace UC
 {
-    [SerializeField] float      distancePerStep = 5.0f;
-    [SerializeField] float      teleportDistance = 50.0f;
-    [SerializeField] float      stepCooldown = 0.1f;
-    [SerializeField] AudioClip  climbSnd;
-    [SerializeField, MinMaxSlider(0.1f, 1.0f)] Vector2 volumeVariance = Vector2.one;
-    [SerializeField, MinMaxSlider(0.1f, 1.5f)] Vector2 pitchVariance = Vector2.one;
 
-    float               accumDist;
-    Vector3             prevPos;
-    float               cooldownTimer;
-    MovementPlatformer  movementPlatformer;
-
-    void Start()
+    public class ClimbSound : MonoBehaviour
     {
-        prevPos = transform.position;
-        movementPlatformer = GetComponent<MovementPlatformer>();
-    }
+        [SerializeField] float distancePerStep = 5.0f;
+        [SerializeField] float teleportDistance = 50.0f;
+        [SerializeField] float stepCooldown = 0.1f;
+        [SerializeField] AudioClip climbSnd;
+        [SerializeField, MinMaxSlider(0.1f, 1.0f)] Vector2 volumeVariance = Vector2.one;
+        [SerializeField, MinMaxSlider(0.1f, 1.5f)] Vector2 pitchVariance = Vector2.one;
 
-    void Update()
-    {
-        if (stepCooldown > 0)
+        float accumDist;
+        Vector3 prevPos;
+        float cooldownTimer;
+        MovementPlatformer movementPlatformer;
+
+        void Start()
         {
-            cooldownTimer -= Time.deltaTime;
+            prevPos = transform.position;
+            movementPlatformer = GetComponent<MovementPlatformer>();
         }
-        if (movementPlatformer.isClimbing)
+
+        void Update()
         {
-            float d = Mathf.Abs(prevPos.y - transform.position.y);
-            if (d > teleportDistance)
+            if (stepCooldown > 0)
             {
-                accumDist = 0.0f;
+                cooldownTimer -= Time.deltaTime;
             }
-            else
+            if (movementPlatformer.isClimbing)
             {
-                accumDist += d;
-                if (accumDist > distancePerStep)
+                float d = Mathf.Abs(prevPos.y - transform.position.y);
+                if (d > teleportDistance)
                 {
-                    if (cooldownTimer <= 0.0f)
+                    accumDist = 0.0f;
+                }
+                else
+                {
+                    accumDist += d;
+                    if (accumDist > distancePerStep)
                     {
-                        accumDist = 0.0f;
-                        SoundManager.PlaySound(SoundType.PrimaryFX, climbSnd, volumeVariance.Random(), pitchVariance.Random());
-                        if (stepCooldown > 0) cooldownTimer = stepCooldown;
+                        if (cooldownTimer <= 0.0f)
+                        {
+                            accumDist = 0.0f;
+                            SoundManager.PlaySound(SoundType.PrimaryFX, climbSnd, volumeVariance.Random(), pitchVariance.Random());
+                            if (stepCooldown > 0) cooldownTimer = stepCooldown;
+                        }
                     }
                 }
-            }
 
-            prevPos = transform.position;
+                prevPos = transform.position;
+            }
         }
     }
 }

@@ -1,33 +1,36 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
-public interface ITurnExecute
+namespace UC
 {
-    public int GetExecutionOrder() { return 0; }
-    public void ExecuteTurn();
 
-    public static void ExecuteAllTurns()
+    public interface ITurnExecute
     {
-        var allMonoBehaviours = GameObject.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-        var turnExecutors = new List<ITurnExecute>();
+        public int GetExecutionOrder() { return 0; }
+        public void ExecuteTurn();
 
-        // Collect all ITurnExecute instances
-        foreach (var monoBehaviour in allMonoBehaviours)
+        public static void ExecuteAllTurns()
         {
-            if ((monoBehaviour is ITurnExecute executor) && (monoBehaviour.enabled))
+            var allMonoBehaviours = GameObject.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var turnExecutors = new List<ITurnExecute>();
+
+            // Collect all ITurnExecute instances
+            foreach (var monoBehaviour in allMonoBehaviours)
             {
-                turnExecutors.Add(executor);
+                if ((monoBehaviour is ITurnExecute executor) && (monoBehaviour.enabled))
+                {
+                    turnExecutors.Add(executor);
+                }
             }
-        }
 
-        // Sort by GetExecutionOrder (ascending)
-        turnExecutors.Sort((a, b) => a.GetExecutionOrder().CompareTo(b.GetExecutionOrder()));
+            // Sort by GetExecutionOrder (ascending)
+            turnExecutors.Sort((a, b) => a.GetExecutionOrder().CompareTo(b.GetExecutionOrder()));
 
-        // Execute in order
-        foreach (var executor in turnExecutors)
-        {
-            executor.ExecuteTurn();
+            // Execute in order
+            foreach (var executor in turnExecutors)
+            {
+                executor.ExecuteTurn();
+            }
         }
     }
 }

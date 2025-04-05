@@ -1,118 +1,120 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-public class TimeScaler2d : MonoBehaviour
+namespace UC
 {
-    public float timeScale
+
+    public class TimeScaler2d : MonoBehaviour
     {
-        get { return _timeScale; }
-    }
-
-    public float time
-    {
-        get { return _time; }
-    }
-
-    public float fixedTime
-    {
-        get { return _fixedTime; }
-    }
-
-    public float deltaTime
-    {
-        get { return Time.deltaTime * _timeScale; }
-    }
-
-    public float fixedDeltaTime
-    {
-        get { return Time.fixedDeltaTime * _timeScale; }
-    }
-
-    float _timeScale = 1.0f;
-    float _time = 0.0f;
-    float _fixedTime = 0.0f;
-
-    Rigidbody2D     rb;
-    Animator[]      animators;
-
-    public float originalGravityScale
-    {
-        get
+        public float timeScale
         {
-            return rb.gravityScale / _timeScale;
+            get { return _timeScale; }
         }
-        set
+
+        public float time
         {
-            rb.gravityScale = value * _timeScale;
+            get { return _time; }
         }
-    }
 
-    public Vector2 originalVelocity
-    {
-        get
+        public float fixedTime
         {
-            return rb.linearVelocity / _timeScale;
+            get { return _fixedTime; }
         }
-        set
+
+        public float deltaTime
         {
-            rb.linearVelocity = value * _timeScale;
+            get { return Time.deltaTime * _timeScale; }
         }
-    }
 
-    void Awake()
-    {
-        rb = GetComponent<Rigidbody2D>();
-        animators = GetComponentsInChildren<Animator>(true);
-    }
-
-    void Update()
-    {
-        _time += Time.deltaTime * _timeScale;
-        _fixedTime += Time.fixedDeltaTime * _timeScale;
-    }
-
-    public void ModifyScale(float s)
-    {
-        float scaleDerivative = (_timeScale * s) / _timeScale;
-
-        _timeScale *= s;
-
-        rb.linearVelocity *= scaleDerivative;
-        rb.angularVelocity *= scaleDerivative;
-        rb.gravityScale *= scaleDerivative;
-        rb.linearDamping *= scaleDerivative;
-        rb.angularDamping *= scaleDerivative;
-        rb.mass /= scaleDerivative;
-
-        foreach (var anim in animators)
+        public float fixedDeltaTime
         {
-            anim.speed = _timeScale;
+            get { return Time.fixedDeltaTime * _timeScale; }
         }
-    }
 
-    public void SetScale(float s)
-    {
-        float scaleDerivative = s / _timeScale;
+        float _timeScale = 1.0f;
+        float _time = 0.0f;
+        float _fixedTime = 0.0f;
 
-        _timeScale = s;
+        Rigidbody2D rb;
+        Animator[] animators;
 
-        rb.linearVelocity *= scaleDerivative;
-        rb.angularVelocity *= scaleDerivative;
-        rb.gravityScale *= scaleDerivative;
-        rb.linearDamping *= scaleDerivative;
-        rb.angularDamping *= scaleDerivative;
-        rb.mass /= scaleDerivative;
-
-        foreach (var anim in animators)
+        public float originalGravityScale
         {
-            anim.speed = _timeScale;
+            get
+            {
+                return rb.gravityScale / _timeScale;
+            }
+            set
+            {
+                rb.gravityScale = value * _timeScale;
+            }
         }
-    }
 
-    public void AddForce(Vector2 force, ForceMode2D mode)
-    {
-//        rb.AddForce(force * timeScale, mode);
-        rb.AddForce(force, mode);
+        public Vector2 originalVelocity
+        {
+            get
+            {
+                return rb.linearVelocity / _timeScale;
+            }
+            set
+            {
+                rb.linearVelocity = value * _timeScale;
+            }
+        }
+
+        void Awake()
+        {
+            rb = GetComponent<Rigidbody2D>();
+            animators = GetComponentsInChildren<Animator>(true);
+        }
+
+        void Update()
+        {
+            _time += Time.deltaTime * _timeScale;
+            _fixedTime += Time.fixedDeltaTime * _timeScale;
+        }
+
+        public void ModifyScale(float s)
+        {
+            float scaleDerivative = (_timeScale * s) / _timeScale;
+
+            _timeScale *= s;
+
+            rb.linearVelocity *= scaleDerivative;
+            rb.angularVelocity *= scaleDerivative;
+            rb.gravityScale *= scaleDerivative;
+            rb.linearDamping *= scaleDerivative;
+            rb.angularDamping *= scaleDerivative;
+            rb.mass /= scaleDerivative;
+
+            foreach (var anim in animators)
+            {
+                anim.speed = _timeScale;
+            }
+        }
+
+        public void SetScale(float s)
+        {
+            float scaleDerivative = s / _timeScale;
+
+            _timeScale = s;
+
+            rb.linearVelocity *= scaleDerivative;
+            rb.angularVelocity *= scaleDerivative;
+            rb.gravityScale *= scaleDerivative;
+            rb.linearDamping *= scaleDerivative;
+            rb.angularDamping *= scaleDerivative;
+            rb.mass /= scaleDerivative;
+
+            foreach (var anim in animators)
+            {
+                anim.speed = _timeScale;
+            }
+        }
+
+        public void AddForce(Vector2 force, ForceMode2D mode)
+        {
+            //        rb.AddForce(force * timeScale, mode);
+            rb.AddForce(force, mode);
+        }
     }
 }

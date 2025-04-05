@@ -1,72 +1,54 @@
-using System;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
-public class InventoryDisplay : MonoBehaviour
+namespace UC
 {
-    [SerializeField] private RectTransform itemContainer;
 
-    Inventory       inventory;
-    ItemDisplay[]   itemDisplays;
-    CanvasGroup     canvasGroup;
-
-    void Awake()
+    public class InventoryDisplay : MonoBehaviour
     {
-        canvasGroup = GetComponent<CanvasGroup>();
-        itemDisplays = itemContainer.GetComponentsInChildren<ItemDisplay>(true);
-        ClearDisplay();
-    }
+        [SerializeField] private RectTransform itemContainer;
 
-    public void SetInventory(Inventory inventory)
-    {
-        if (this.inventory != null)
-        {
-            this.inventory.onChange -= UpdateInventory;
-        }
+        Inventory inventory;
+        ItemDisplay[] itemDisplays;
+        CanvasGroup canvasGroup;
 
-        this.inventory = inventory;
-        if (this.inventory)
+        void Awake()
         {
-            this.inventory.onChange += UpdateInventory;
-
-            UpdateInventory(true, null, -1);
-        }
-        else
-        {
+            canvasGroup = GetComponent<CanvasGroup>();
+            itemDisplays = itemContainer.GetComponentsInChildren<ItemDisplay>(true);
             ClearDisplay();
         }
-    }
 
-    private void UpdateInventory(bool add, Item modifiedItem, int slot)
-    {
-        if (inventory == null) return;
-
-        for (int i = 0; i < itemDisplays.Length; i++)
+        public void SetInventory(Inventory inventory)
         {
-            (var item, var count) = inventory.GetSlotContent(i);
+            if (this.inventory != null)
+            {
+                this.inventory.onChange -= UpdateInventory;
+            }
 
-            itemDisplays[i].Set(item, count);
+            this.inventory = inventory;
+            if (this.inventory)
+            {
+                this.inventory.onChange += UpdateInventory;
+
+                UpdateInventory(true, null, -1);
+            }
+            else
+            {
+                ClearDisplay();
+            }
         }
 
-        if (inventory.HasItems())
+        private void UpdateInventory(bool add, Item modifiedItem, int slot)
         {
-            canvasGroup.FadeIn(0.5f);
-        }
-        else
-        {
-            canvasGroup.FadeOut(0.5f);
-        }
-    }
+            if (inventory == null) return;
 
-    private void ClearDisplay()
-    {
-        foreach (var itemDisplay in itemDisplays)
-        {
-            itemDisplay.Set(null, 0);
-        }
+            for (int i = 0; i < itemDisplays.Length; i++)
+            {
+                (var item, var count) = inventory.GetSlotContent(i);
 
-        if (inventory)
-        {
+                itemDisplays[i].Set(item, count);
+            }
+
             if (inventory.HasItems())
             {
                 canvasGroup.FadeIn(0.5f);
@@ -76,9 +58,29 @@ public class InventoryDisplay : MonoBehaviour
                 canvasGroup.FadeOut(0.5f);
             }
         }
-        else
+
+        private void ClearDisplay()
         {
-            canvasGroup.FadeOut(0.5f);
+            foreach (var itemDisplay in itemDisplays)
+            {
+                itemDisplay.Set(null, 0);
+            }
+
+            if (inventory)
+            {
+                if (inventory.HasItems())
+                {
+                    canvasGroup.FadeIn(0.5f);
+                }
+                else
+                {
+                    canvasGroup.FadeOut(0.5f);
+                }
+            }
+            else
+            {
+                canvasGroup.FadeOut(0.5f);
+            }
         }
     }
 }
