@@ -15,6 +15,8 @@ public class DistortionRipples : MonoBehaviour
     private bool            spawnOnMovement = false;
     [SerializeField, ShowIf(nameof(isSpawnOnMovement))]
     private float           deltaDistance = 20.0f;
+    [SerializeField, ShowIf(nameof(isSpawnOnMovement))]
+    private bool            turnToMovement;
     [SerializeField]
     private bool            localSpace = true;
     [SerializeField] 
@@ -45,6 +47,7 @@ public class DistortionRipples : MonoBehaviour
     private Material        rippleMaterial;
 
     Vector3                 prevPos;
+    Vector3                 lastDir;
     float                   accumDistance;
     int                     rippleCount;
     float                   rippleTimer;
@@ -89,7 +92,14 @@ public class DistortionRipples : MonoBehaviour
 
         if (isSpawnOnMovement)
         {
-            accumDistance += Vector3.Distance(transform.position, prevPos);
+            Vector3 deltaPos = transform.position - prevPos;
+            float   distance = deltaPos.magnitude;
+            if (distance > 0.0f)
+            {
+                lastDir = deltaPos.normalized;
+            }
+
+            accumDistance += distance;
             if (accumDistance > deltaDistance)
             {
                 Play(0.0f);
@@ -122,12 +132,26 @@ public class DistortionRipples : MonoBehaviour
         {
             go.transform.SetParent(transform, false);
             go.transform.localPosition = Vector3.zero;
-            go.transform.localRotation = Quaternion.identity;
+            if (turnToMovement)
+            {
+                go.transform.localRotation = Quaternion.LookRotation(Vector3.forward, lastDir.PerpendicularXY());
+            }
+            else
+            {
+                go.transform.localRotation = Quaternion.identity;
+            }
         }
         else
         {
             go.transform.position = transform.position;
-            go.transform.rotation = transform.rotation;
+            if (turnToMovement)
+            {
+                go.transform.rotation = Quaternion.LookRotation(Vector3.forward, lastDir.PerpendicularXY());
+            }
+            else
+            {
+                go.transform.rotation = transform.rotation;
+            }
         }
         go.layer = rippleLayer;
 

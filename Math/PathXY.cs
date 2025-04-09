@@ -680,6 +680,7 @@ namespace UC
                 for (int i = 0; i < points.Count; i++)
                 {
                     Vector2 p = points[i];
+                    if (isLocalSpace) p = transform.TransformPoint(p);
 
                     Handles.DrawLine(p + new Vector2(s, s), p + new Vector2(-s, -s), 1.0f);
                     Handles.DrawLine(p + new Vector2(s, -s), p + new Vector2(-s, s), 1.0f);
