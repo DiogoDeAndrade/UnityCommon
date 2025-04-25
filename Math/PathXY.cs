@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
+using UnityEngine.UI.Extensions;
 
 namespace UC
 {
@@ -653,6 +654,30 @@ namespace UC
 
             // Return the distance between the closest points
             return Vector3.Distance(closestPointOnRay, closestPointOnSegment);
+        }
+
+        public (float distance, Vector3 point, Vector3 direction) GetDistance(Vector3 point)
+        {
+            float   minDist = float.MaxValue;
+            Vector3 closestPoint = point;
+            Vector3 direction = Vector2.up;
+
+            // Then check against segments in the rendered path
+            var renderPoints = GetPoints();
+            for (int i = 1; i < renderPoints.Count; i++)
+            {
+                Vector3 a = renderPoints[i - 1];
+                Vector3 b = renderPoints[i];
+                float d = Line.Distance(a, b, point, out var pt);
+                if (d < minDist)
+                {
+                    minDist = d;
+                    closestPoint = pt;
+                    direction = (b - a).normalized;
+                }
+            }
+
+            return (minDist, closestPoint, direction);
         }
 
 #if UNITY_EDITOR

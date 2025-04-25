@@ -128,6 +128,7 @@ public class DistortionRipples : MonoBehaviour
     void RunRipple()
     {
         GameObject go = new GameObject();
+        go.name = "Ripple";
         if (localSpace)
         {
             go.transform.SetParent(transform, false);

@@ -108,42 +108,6 @@ namespace UC
             }
         }
 
-        /*public static bool Intersect(Vector3 a1, Vector3 a2, Vector3 b1, Vector3 b2, out Vector3 intersection)
-        {
-            Vector3 lineVec3 = b1 - a1;
-            Vector3 lineVec1 = a2 - a1;
-            Vector3 lineVec2 = b2 - b1;
-            Vector3 crossVec1and2 = Vector3.Cross(lineVec1, lineVec2);
-            Vector3 crossVec3and2 = Vector3.Cross(lineVec3, lineVec2);
-
-            float planarFactor = Vector3.Dot(lineVec3, crossVec1and2);
-
-            //is coplanar, and not parallel
-            if ((Mathf.Abs(planarFactor) < 0.0001f) && (crossVec1and2.sqrMagnitude > 0.0001f))
-            {
-                float s1 = Vector3.Dot(crossVec3and2, crossVec1and2) / crossVec1and2.sqrMagnitude;
-
-                if ((s1 >= 0) && (s1 <= 1))
-                {
-                    float s2 = Vector3.Dot(Vector3.Cross(-lineVec3, lineVec1), -crossVec1and2) / crossVec1and2.sqrMagnitude;
-
-                    intersection = b1 + (lineVec2 * Mathf.Max(0.0f, Mathf.Min(s2, 1.0f)));
-
-                    return (s2 >= 0) && (s2 <= 1);
-                }
-                else
-                {
-                    intersection = a1 + (lineVec1 * Mathf.Max(0.0f, Mathf.Min(s1, 1.0f)));
-                    return false;
-                }
-            }
-            else
-            {
-                intersection = Vector3.zero;
-                return false;
-            }
-        }*/
-
         public static bool Raycast(Vector3 origin, Vector3 dir, float range, Vector3 p0, Vector3 p1, out Vector3 intersection, out float tRay)
         {
             Vector3 da = dir * range;  // Unnormalized direction of the ray
@@ -210,6 +174,7 @@ namespace UC
 
             if (Vector3.Dot(av, ab) <= 0)
             {
+
                 return ab.magnitude;
             }
             Vector3 bv = p - p1;
@@ -219,6 +184,26 @@ namespace UC
             }
 
             return Vector3.Cross(ab, av).magnitude / ab.magnitude;
+        }
+
+        public static float Distance(Vector3 p0, Vector3 p1, Vector3 p, out Vector3 closestPoint)
+        {
+            Vector3 ab = p1 - p0;
+            Vector3 ap = p - p0;
+
+            float abSqrMag = ab.sqrMagnitude;
+            if (abSqrMag < Mathf.Epsilon)
+            {
+                // Segment is a point
+                closestPoint = p0;
+                return Vector3.Distance(p, p0);
+            }
+
+            float t = Vector3.Dot(ap, ab) / abSqrMag;
+            t = Mathf.Clamp01(t); // Clamp to segment
+
+            closestPoint = p0 + t * ab;
+            return Vector3.Distance(p, closestPoint);
         }
 
         public static Vector3 GetClosestPoint(Vector3 p0, Vector3 p1, Vector3 p)
