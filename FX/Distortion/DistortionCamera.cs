@@ -30,7 +30,7 @@ public class DistortionCamera : MonoBehaviour
 
     void Start()
     {
-        mainCamera = GetComponentInParent<Camera>();
+        mainCamera = transform.parent?.GetComponentInParent<Camera>() ?? null;
         distortCamera = GetComponent<Camera>();
         if (distortCamera == null)
         {
@@ -85,6 +85,13 @@ public class DistortionCamera : MonoBehaviour
         {
             UpdateRenderTexture();
         }
+
+        // Match ortographic size/FOV
+        distortCamera.orthographic = mainCamera.orthographic;
+        distortCamera.orthographicSize = mainCamera.orthographicSize;
+        distortCamera.fieldOfView = mainCamera.fieldOfView;
+        distortCamera.nearClipPlane = mainCamera.nearClipPlane;
+        distortCamera.farClipPlane = mainCamera.farClipPlane;
 
         if (distortCameraData == null)
         {
