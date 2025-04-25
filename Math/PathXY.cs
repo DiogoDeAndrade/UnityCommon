@@ -2,13 +2,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.UI.Extensions;
+using NaughtyAttributes;
 
 namespace UC
 {
 
     public class PathXY : MonoBehaviour
     {
-        [SerializeField] public enum Type { Linear = 0, Smooth = 1, Circle = 2, Arc = 3, Polygon = 4 };
+        [SerializeField] public enum Type { Linear = 0, Smooth = 1, Circle = 2, Arc = 3, Polygon = 4, Bezier = 5 };
 
         [SerializeField]
         private Type type = Type.Linear;
@@ -23,6 +24,8 @@ namespace UC
         private bool worldSpace = true;
         [SerializeField]
         private bool editMode = false;
+        [SerializeField]
+        private bool mirrorTangents = false;
 
         [SerializeField]
         private bool onlyDisplayWhenSelected = true;
@@ -60,10 +63,42 @@ namespace UC
         public bool isClosed => closed;
         public Type pathType => type;
 
-
         protected void Awake()
         {
             ComputeVariables();
+        }
+
+        public void AddSegment()
+        {
+            if (points == null) points = new List<Vector3>();
+
+            if (type == Type.Smooth) AddPoint();
+            else if (type == Type.Bezier)
+            {
+                if (points.Count >= 4)
+                {
+                    // Add 3 new points
+                    Vector3 p0 = points[points.Count - 1];
+                    Vector3 pBefore = points[points.Count - 2];
+                    Vector3 pLastBezierStart = points[points.Count - 4];
+
+                    Vector3 p1 = p0 - (pBefore - p0);
+                    Vector3 p3 = p0 - (pLastBezierStart - p0);
+                    Vector3 p2 = (p1 + p3) * 0.5f;
+
+                    points.Add(p1);
+                    points.Add(p2);
+                    points.Add(p3);
+                }
+                else
+                {
+                    // Add 4 points
+                    points.Add(Vector3.zero);
+                    points.Add(Vector3.right * 10.0f + Vector3.up * 10.0f);
+                    points.Add(Vector3.right * 20.0f + Vector3.down * 10.0f);
+                    points.Add(Vector3.right * 30.0f);
+                }
+            }
         }
 
         public int AddPoint(int insertionPoint = -1)
@@ -122,6 +157,16 @@ namespace UC
             float it3 = it2 * it;
 
             return pt[0] * it3 + 3 * pt[1] * it2 * t + 3 * pt[2] * it * t2 + pt[3] * t3;
+        }
+
+        static private Vector3 ComputeBezierDerivative(Vector3[] pt, float t)
+        {
+            float it = 1 - t;
+
+            // Derivative of cubic Bézier:
+            return 3 * it * it * (pt[1] - pt[0]) +
+                   6 * it * t * (pt[2] - pt[1]) +
+                   3 * t * t * (pt[3] - pt[2]);
         }
 
         private static Vector3 EvaluateCatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
@@ -230,6 +275,32 @@ namespace UC
 
                         return p1 + (p2 - p1) * remainingT;
                     }
+                case Type.Bezier:
+                    {
+                        int numPoints = points.Count;
+                        if (numPoints < 4) return points[0];
+
+                        int numSegments = closed ? numPoints / 3 : (numPoints - 1) / 3;
+                        if (numSegments == 0) return points[0];
+
+                        float scaledT = t * numSegments;
+                        int segment = Mathf.FloorToInt(scaledT);
+                        segment = Mathf.Clamp(segment, 0, numSegments - 1);
+
+                        t = scaledT - segment;
+
+                        int i0 = (segment * 3) % numPoints;
+                        int i1 = (i0 + 1) % numPoints;
+                        int i2 = (i0 + 2) % numPoints;
+                        int i3 = (i0 + 3) % numPoints;
+
+                        Vector3 p0 = points[i0];
+                        Vector3 p1 = points[i1];
+                        Vector3 p2 = points[i2];
+                        Vector3 p3 = points[i3];
+
+                        return ComputeBezier(new Vector3[] { p0, p1, p2, p3 }, t);
+                    }
                 default:
                     break;
             }
@@ -328,6 +399,32 @@ namespace UC
 
                         return (p2 - p1).normalized;
                     }
+                case Type.Bezier:
+                    {
+                        int numPoints = points.Count;
+                        if (numPoints < 4) return Vector2.zero;
+
+                        int numSegments = closed ? numPoints / 3 : (numPoints - 1) / 3;
+                        if (numSegments == 0) return Vector2.zero;
+
+                        float scaledT = t * numSegments;
+                        int segment = Mathf.FloorToInt(scaledT);
+                        segment = Mathf.Clamp(segment, 0, numSegments - 1);
+
+                        t = scaledT - segment;
+
+                        int i0 = (segment * 3) % numPoints;
+                        int i1 = (i0 + 1) % numPoints;
+                        int i2 = (i0 + 2) % numPoints;
+                        int i3 = (i0 + 3) % numPoints;
+
+                        Vector3 p0 = points[i0];
+                        Vector3 p1 = points[i1];
+                        Vector3 p2 = points[i2];
+                        Vector3 p3 = points[i3];
+
+                        return ComputeBezierDerivative(new Vector3[] { p0, p1, p2, p3 }, t).normalized;
+                    }
                 default:
                     break;
             }
@@ -337,7 +434,7 @@ namespace UC
 
         public void InvertPath()
         {
-            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.Smooth))
+            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.Smooth) || (type == PathXY.Type.Bezier))
             {
                 var newPoints = new List<Vector3>();
                 for (int i = points.Count - 1; i >= 0; i--)
@@ -362,7 +459,7 @@ namespace UC
 
             Vector3 delta = Vector3.zero;
 
-            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.Smooth))
+            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.Smooth) || (type == Type.Bezier))
             {
                 // Get extents of object
                 Vector3 min = points[0];
@@ -483,6 +580,17 @@ namespace UC
                                 fullPoints.Add(fullPoints[0]);
                             }
                         }
+                    }
+                    break;
+                case Type.Bezier:
+                    if (points.Count < 4)
+                    {
+                        steps = 0;
+                        fullPoints = new List<Vector3>(points);
+                    }
+                    else
+                    {
+                        steps = points.Count * 20;
                     }
                     break;
                 default:

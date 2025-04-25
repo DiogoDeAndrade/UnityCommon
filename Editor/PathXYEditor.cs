@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.Linq;
+using System.IO;
 
 namespace UC
 {
@@ -17,6 +18,7 @@ namespace UC
         SerializedProperty propPoints;
         SerializedProperty propWorldSpace;
         SerializedProperty propEditMode;
+        SerializedProperty propMirrorTangents;
         SerializedProperty propOnlyDisplayWhenSelected;
         SerializedProperty propDisplayColor;
 
@@ -69,6 +71,7 @@ namespace UC
             propPoints = serializedObject.FindProperty("points");
             propWorldSpace = serializedObject.FindProperty("worldSpace");
             propEditMode = serializedObject.FindProperty("editMode");
+            propMirrorTangents = serializedObject.FindProperty("mirrorTangents");
             propOnlyDisplayWhenSelected = serializedObject.FindProperty("onlyDisplayWhenSelected");
             propDisplayColor = serializedObject.FindProperty("displayColor");
 
@@ -96,7 +99,35 @@ namespace UC
                     EditorGUILayout.PropertyField(propType, new GUIContent("Type", "Type of path.\nLinear: Straight lines between points\nSmooth: Curved line that passes through some points and is influenced by the others.\nCircle: The first point defines the center, the second the radius of the circle. If there is a third point, it defines the radius in that approximate direction.\nArc: First point defines the center, the second and third define the beginning and end of an arc centered on the first point.\nPolygon: First point define the center, the second and third point define the radius in different directions, while the 'Sides' property defines the number of sides of the polygon."));
                     if ((type != PathXY.Type.Circle) && (type != PathXY.Type.Arc))
                     {
+                        bool wasClosed = propClosed.boolValue;
                         EditorGUILayout.PropertyField(propClosed, new GUIContent("Closed", "If the path should end where it starts."));
+                        if ((propClosed.boolValue) && (!wasClosed))
+                        {
+                            if (t.pathType == PathXY.Type.Bezier && t.GetEditPointsCount() >= 7)
+                            {
+                                serializedObject.ApplyModifiedProperties();
+
+                                Undo.RecordObject(target, "Close path");
+
+                                var points = t.GetEditPoints();
+                                int count = points.Count;
+
+                                // Match last anchor to first
+                                points[count - 1] = points[0];
+
+                                if (propMirrorTangents.boolValue)
+                                {
+                                    // Mirror tangents: p1 and p(n-2)
+                                    Vector3 anchor = points[0];
+                                    Vector3 delta = points[1] - anchor;
+                                    points[count - 2] = anchor - delta;
+                                }
+
+                                serializedObject.Update();
+                                t.SetEditPoints(points);
+                                EditorUtility.SetDirty(t);
+                            }
+                        }
                     }
                     if (type == PathXY.Type.Polygon)
                     {
@@ -105,6 +136,10 @@ namespace UC
                     EditorGUILayout.PropertyField(propPoints, new GUIContent("Points", "Waypoints"));
                     EditorGUILayout.PropertyField(propWorldSpace, new GUIContent("World Space", "Are the positions in world space, or relative to this object."));
                     EditorGUILayout.PropertyField(propEditMode, new GUIContent("Edit Mode", "If edit mode is on, you can edit the points the scene view.\nClick on a point to select it, use the gizmo to move them around."));
+                    if ((propEditMode.boolValue) && (type == PathXY.Type.Bezier))
+                    {
+                        EditorGUILayout.PropertyField(propMirrorTangents, new GUIContent("Mirror tangents", "If on, any change in a tangent on one side will affect the tangent on the other side."));
+                    }
                     EditorGUILayout.PropertyField(propOnlyDisplayWhenSelected, new GUIContent("Only display when selected", "If on, it will only display the path when the object is selected, otherwise it will show the object with the selected color."));
                     EditorGUILayout.PropertyField(propDisplayColor, new GUIContent("Display Color", "What color should the path be rendered when not being edited"));
 
@@ -116,12 +151,12 @@ namespace UC
                     bool prevEnabled = GUI.enabled;
                     GUI.enabled = (propPoints.arraySize < 3) || ((type != PathXY.Type.Circle) && (type != PathXY.Type.Arc) && (type != PathXY.Type.Polygon));
 
-                    if (type == PathXY.Type.Smooth)
+                    if ((type == PathXY.Type.Smooth) || (type == PathXY.Type.Bezier))
                     {
                         if (GUILayout.Button("Add Segment"))
                         {
                             Undo.RecordObject(target, "Add segment");
-                            t.AddPoint();
+                            t.AddSegment();
                             serializedObject.Update();
 
                             // Change to edit mode
@@ -171,6 +206,7 @@ namespace UC
                 {
                     if ((tpath.pathType != PathXY.Type.Linear) &&
                         (tpath.pathType != PathXY.Type.Smooth) &&
+                        (tpath.pathType != PathXY.Type.Bezier) &&
                         (tpath.pathType != PathXY.Type.Arc))
                     {
                         canInvert = false;
@@ -306,6 +342,7 @@ namespace UC
                     float s = (editPoint == i) ? (6.0f) : (5.0f);
                     Handles.color = (editPoint == i) ? (Color.yellow) : (Color.white);
                     bool selectable = true;
+                    bool isBezierHandle = false;
 
                     // Render text
                     string text = "";
@@ -327,16 +364,30 @@ namespace UC
                         else if (i == 2) text = "End";
                         else selectable = false;
                     }
+                    else if (type == PathXY.Type.Bezier)
+                    {
+                        text = $"{i}";
+                        if ((t.isClosed) && (i == t.GetEditPointsCount() - 1)) text = "";
+
+                        if (i % 3 != 0)
+                        {
+                            isBezierHandle = true;
+                            Handles.color = (editPoint == i) ? (Color.cyan) : (Color.white);
+                        }
+                    }
 
                     if (selectable)
                     {
-                        if (Handles.Button(newPoints[i], Quaternion.identity, s, s, Handles.CircleHandleCap))
+                        if (Handles.Button(newPoints[i], Quaternion.identity, s, s, (isBezierHandle) ? (Handles.RectangleHandleCap) : (Handles.CircleHandleCap)))
                         {
                             editPoint = i;
                         }
                         if (editPoint == i)
                         {
-                            Handles.CircleHandleCap(-1, newPoints[i], Quaternion.identity, s * 0.8f, EventType.Repaint);
+                            if (isBezierHandle)
+                                Handles.RectangleHandleCap(-1, newPoints[i], Quaternion.identity, s * 0.8f, EventType.Repaint);
+                            else
+                                Handles.CircleHandleCap(-1, newPoints[i], Quaternion.identity, s * 0.8f, EventType.Repaint);
                         }
                     }
                     if (text != "")
@@ -349,16 +400,84 @@ namespace UC
 
                 if ((editPoint >= 0) && (editPoint < newPoints.Count))
                 {
-                    newPoints[editPoint] = Handles.PositionHandle(newPoints[editPoint], Quaternion.identity);
+                    Vector3 original = newPoints[editPoint];
+                    Vector3 moved = Handles.PositionHandle(original, Quaternion.identity);
 
+                    if (moved != original)
+                    {
+                        newPoints[editPoint] = moved;
+
+                        if (type == PathXY.Type.Bezier && t.isClosed && newPoints.Count >= 4)
+                        {
+                            int lastAnchorIndex = newPoints.Count - 1;
+                            if (editPoint == 0)
+                            {
+                                // Update last anchor to match p0
+                                newPoints[lastAnchorIndex] = moved;
+                            }
+                            else if (editPoint == lastAnchorIndex)
+                            {
+                                // Update p0 to match last anchor
+                                newPoints[0] = moved;
+                            }
+                        }
+                        bool isSpecialEdgeTangent = (editPoint == 1 || editPoint == newPoints.Count - 2);
+                        if ((type == PathXY.Type.Bezier) &&
+                            (editPoint % 3 != 0) &&
+                            (propMirrorTangents.boolValue) &&
+                            (t.isClosed || !isSpecialEdgeTangent))
+                        {
+                            int anchorIndex = -1;
+                            int mirrorIndex = -1;
+                            int count = newPoints.Count;
+
+                            if (editPoint % 3 == 1)
+                            {
+                                // Outgoing tangent: anchor is before
+                                anchorIndex = editPoint - 1;
+                                mirrorIndex = anchorIndex - 1;
+
+                                // Special case: p1 should mirror to p5
+                                if (t.isClosed && anchorIndex == 0)
+                                {
+                                    mirrorIndex = count - 2; // p5
+                                }
+                            }
+                            else if (editPoint % 3 == 2)
+                            {
+                                // Incoming tangent: anchor is after
+                                anchorIndex = editPoint + 1;
+                                mirrorIndex = anchorIndex + 1;
+
+                                // Special case: p5 should mirror to p1
+                                if (t.isClosed && anchorIndex == count - 1)
+                                {
+                                    mirrorIndex = 1; // p1
+                                }
+                            }
+
+                            // Wrap safely
+                            anchorIndex = (anchorIndex + count) % count;
+                            mirrorIndex = (mirrorIndex + count) % count;
+
+                            if (anchorIndex >= 0 && anchorIndex < count &&
+                                mirrorIndex >= 0 && mirrorIndex < count)
+                            {
+                                Vector3 anchor = newPoints[anchorIndex];
+                                Vector3 delta = moved - anchor;
+                                newPoints[mirrorIndex] = anchor - delta;
+                            }
+                        }
+
+                    }
+
+                    // Adjust perpendicular axis on specific path types
                     if ((type == PathXY.Type.Circle) || (type == PathXY.Type.Polygon))
                     {
                         if (newPoints.Count >= 2)
                         {
-                            // Project this point into the perpendicular and use that instead
                             Vector3 delta = (newPoints[1] - newPoints[0]).normalized;
                             (delta.x, delta.y) = (delta.y, -delta.x);
-
                             delta.Normalize();
 
                             if (newPoints.Count >= 3)
@@ -404,6 +523,27 @@ namespace UC
                         {
                             Handles.DrawLine(p1 + d * i * len, p1 + d * (i + 0.5f) * len, 0.5f);
                         }
+                    }
+                }
+                if (type == PathXY.Type.Bezier)
+                {
+                    Handles.color = Color.gray;
+                    var pts = editPoints;
+
+                    int count = pts.Count;
+                    int step = 3;
+
+                    for (int i = 0; i + 3 < count; i += step)
+                    {
+                        Handles.DrawDottedLine(pts[i], pts[i + 1], 2.0f); // Start anchor to handle
+                        Handles.DrawDottedLine(pts[i + 2], pts[i + 3], 2.0f); // Handle to end anchor
+                    }
+
+                    if (t.isClosed && count >= 4 && count % 3 == 1)
+                    {
+                        // Close the last curve
+                        Handles.DrawDottedLine(pts[count - 1], pts[0], 2.0f);
+                        Handles.DrawDottedLine(pts[count - 2], pts[count - 1], 2.0f);
                     }
                 }
 
