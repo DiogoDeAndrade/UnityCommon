@@ -407,68 +407,86 @@ namespace UC
                     {
                         newPoints[editPoint] = moved;
 
-                        if (type == PathXY.Type.Bezier && t.isClosed && newPoints.Count >= 4)
+                        if (type == PathXY.Type.Bezier)
                         {
-                            int lastAnchorIndex = newPoints.Count - 1;
-                            if (editPoint == 0)
+                            if (editPoint % 3 == 0)
                             {
-                                // Update last anchor to match p0
-                                newPoints[lastAnchorIndex] = moved;
-                            }
-                            else if (editPoint == lastAnchorIndex)
-                            {
-                                // Update p0 to match last anchor
-                                newPoints[0] = moved;
-                            }
-                        }
-                        bool isSpecialEdgeTangent = (editPoint == 1 || editPoint == newPoints.Count - 2);
-                        if ((type == PathXY.Type.Bezier) &&
-                            (editPoint % 3 != 0) &&
-                            (propMirrorTangents.boolValue) &&
-                            (t.isClosed || !isSpecialEdgeTangent))
-                        {
-                            int anchorIndex = -1;
-                            int mirrorIndex = -1;
-                            int count = newPoints.Count;
+                                Vector3 delta = moved - original;
+                                int count = newPoints.Count;
 
-                            if (editPoint % 3 == 1)
-                            {
-                                // Outgoing tangent: anchor is before
-                                anchorIndex = editPoint - 1;
-                                mirrorIndex = anchorIndex - 1;
+                                int anchor = editPoint;
 
-                                // Special case: p1 should mirror to p5
-                                if (t.isClosed && anchorIndex == 0)
+                                int prevTangent = anchor - 1;
+                                int nextTangent = anchor + 1;
+
+                                if ((prevTangent < 0) && (t.isClosed)) prevTangent = (prevTangent - 1 + count) % count;
+                                if ((nextTangent >= count) && (t.isClosed)) nextTangent = (nextTangent + 1) % count;
+
+                                if ((prevTangent >= 0) && (prevTangent < count)) newPoints[prevTangent] += delta;
+                                if ((nextTangent >= 0) && (nextTangent < count)) newPoints[nextTangent] += delta;
+
+                                // Also move the duplicate anchor if needed
+                                if (t.isClosed)
                                 {
-                                    mirrorIndex = count - 2; // p5
-                                }
-                            }
-                            else if (editPoint % 3 == 2)
-                            {
-                                // Incoming tangent: anchor is after
-                                anchorIndex = editPoint + 1;
-                                mirrorIndex = anchorIndex + 1;
-
-                                // Special case: p5 should mirror to p1
-                                if (t.isClosed && anchorIndex == count - 1)
-                                {
-                                    mirrorIndex = 1; // p1
+                                    if (editPoint == 0)
+                                    {
+                                        newPoints[count - 1] = moved; // move last anchor to match first
+                                    }
+                                    else if (editPoint == count - 1)
+                                    {
+                                        newPoints[0] = moved; // move first anchor to match last
+                                    }
                                 }
                             }
 
-                            // Wrap safely
-                            anchorIndex = (anchorIndex + count) % count;
-                            mirrorIndex = (mirrorIndex + count) % count;
-
-                            if (anchorIndex >= 0 && anchorIndex < count &&
-                                mirrorIndex >= 0 && mirrorIndex < count)
+                            bool isSpecialEdgeTangent = ((editPoint == 1) || (editPoint == newPoints.Count - 2));
+                            if ((editPoint % 3 != 0) &&
+                                (propMirrorTangents.boolValue) &&
+                                ((t.isClosed) || !isSpecialEdgeTangent))
                             {
-                                Vector3 anchor = newPoints[anchorIndex];
-                                Vector3 delta = moved - anchor;
-                                newPoints[mirrorIndex] = anchor - delta;
+                                // Mirror tangents
+                                int anchorIndex = -1;
+                                int mirrorIndex = -1;
+                                int count = newPoints.Count;
+
+                                if ((editPoint % 3) == 1)
+                                {
+                                    // Outgoing tangent: anchor is before
+                                    anchorIndex = editPoint - 1;
+                                    mirrorIndex = anchorIndex - 1;
+
+                                    // Special case: p1 should mirror to p5
+                                    if ((t.isClosed) && (anchorIndex == 0))
+                                    {
+                                        mirrorIndex = count - 2; // p5
+                                    }
+                                }
+                                else if ((editPoint % 3) == 2)
+                                {
+                                    // Incoming tangent: anchor is after
+                                    anchorIndex = editPoint + 1;
+                                    mirrorIndex = anchorIndex + 1;
+
+                                    // Special case: p5 should mirror to p1
+                                    if (t.isClosed && anchorIndex == count - 1)
+                                    {
+                                        mirrorIndex = 1; // p1
+                                    }
+                                }
+
+                                // Wrap safely
+                                anchorIndex = (anchorIndex + count) % count;
+                                mirrorIndex = (mirrorIndex + count) % count;
+
+                                if (anchorIndex >= 0 && anchorIndex < count &&
+                                    mirrorIndex >= 0 && mirrorIndex < count)
+                                {
+                                    Vector3 anchor = newPoints[anchorIndex];
+                                    Vector3 delta = moved - anchor;
+                                    newPoints[mirrorIndex] = anchor - delta;
+                                }
                             }
                         }
-
                     }
 
                     // Adjust perpendicular axis on specific path types
