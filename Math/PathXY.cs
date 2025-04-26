@@ -804,13 +804,27 @@ namespace UC
         {
             Handles.color = Color.yellow;
 
+            int everyNth = 5;
+
             var renderPoints = GetPoints();
             for (int i = 1; i < renderPoints.Count; i++)
             {
                 Handles.DrawLine(renderPoints[i - 1], renderPoints[i], 1.0f);
+
+                if ((i % everyNth) == 0)
+                {
+                    var dir = (renderPoints[i] - renderPoints[i - 1]);
+                    var length = dir.magnitude;
+                    dir = dir.normalized.PerpendicularXY();
+
+                    Handles.color = Color.yellow.ChangeAlpha(0.25f);
+                    Handles.DrawLine(renderPoints[i], renderPoints[i - 1] + dir * length * 0.5f, 2.0f);
+                    Handles.DrawLine(renderPoints[i], renderPoints[i - 1] - dir * length * 0.5f, 2.0f);
+                    Handles.color = Color.yellow;
+                }
             }
 
-            if (points != null)
+            if ((points != null) && (type != Type.Bezier))
             {
                 float s = 1.0f;
                 for (int i = 0; i < points.Count; i++)
