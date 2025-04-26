@@ -93,5 +93,26 @@ namespace UC
 
             return objects;
         }
+
+        public static T FindAssetByName<T>(string name) where T : UnityEngine.Object
+        {
+#if UNITY_EDITOR
+            string[] guids = AssetDatabase.FindAssets($"{name} t:{typeof(T).Name}");
+
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                T asset = AssetDatabase.LoadAssetAtPath<T>(path);
+                if (asset != null && asset.name == name)
+                    return asset;
+            }
+
+            return null;
+#else
+            Debug.LogError("CreateOrReplaceAsset not available in runtime!");
+            return null;
+#endif
+
+        }
     }
 }

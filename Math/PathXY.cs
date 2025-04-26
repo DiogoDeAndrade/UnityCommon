@@ -3,13 +3,14 @@ using UnityEngine;
 using UnityEditor;
 using UnityEngine.UI.Extensions;
 using NaughtyAttributes;
+using UnityEditor.Experimental.GraphView;
 
 namespace UC
 {
 
     public class PathXY : MonoBehaviour
     {
-        [SerializeField] public enum Type { Linear = 0, Smooth = 1, Circle = 2, Arc = 3, Polygon = 4, Bezier = 5 };
+        [SerializeField] public enum Type { Linear = 0, CatmulRom = 1, Circle = 2, Arc = 3, Polygon = 4, Bezier = 5 };
 
         [SerializeField]
         private Type type = Type.Linear;
@@ -22,15 +23,6 @@ namespace UC
 
         [SerializeField]
         private bool worldSpace = true;
-        [SerializeField]
-        private bool editMode = false;
-        [SerializeField]
-        private bool mirrorTangents = false;
-
-        [SerializeField]
-        private bool onlyDisplayWhenSelected = true;
-        [SerializeField]
-        private Color displayColor = Color.yellow;
 
         private float primaryRadius;
         private Vector2 primaryDir;
@@ -57,7 +49,6 @@ namespace UC
         public void SetPathType(Type t) => type = t;
         public void SetWorldSpace(bool ws) => worldSpace = ws;
 
-        public bool isEditMode => editMode;
         public bool isWorldSpace => worldSpace;
         public bool isLocalSpace => !worldSpace;
         public bool isClosed => closed;
@@ -68,27 +59,61 @@ namespace UC
             ComputeVariables();
         }
 
-        public void AddSegment()
+        public void AddSegment(int insertionPoint = -1)
         {
             if (points == null) points = new List<Vector3>();
 
-            if (type == Type.Smooth) AddPoint();
-            else if (type == Type.Bezier)
+            if (type == Type.Bezier)
             {
                 if (points.Count >= 4)
                 {
-                    // Add 3 new points
-                    Vector3 p0 = points[points.Count - 1];
-                    Vector3 pBefore = points[points.Count - 2];
-                    Vector3 pLastBezierStart = points[points.Count - 4];
+                    if ((closed) && (insertionPoint == -1))
+                    {
+                        int count = points.Count;
 
-                    Vector3 p1 = p0 - (pBefore - p0);
-                    Vector3 p3 = p0 - (pLastBezierStart - p0);
-                    Vector3 p2 = (p1 + p3) * 0.5f;
+                        int baseAnchorIndex;
+                        if (insertionPoint < 0)
+                        {
+                            // No insertion point: split last
+                            baseAnchorIndex = count - 4;
+                        }
+                        else
+                        {
+                            // Find the starting anchor
+                            baseAnchorIndex = (insertionPoint / 3) * 3;
+                            baseAnchorIndex = Mathf.Clamp(baseAnchorIndex, 0, count - 4);
+                        }
 
-                    points.Add(p1);
-                    points.Add(p2);
-                    points.Add(p3);
+                        Vector3 p0 = points[baseAnchorIndex];
+                        Vector3 p1 = points[baseAnchorIndex + 1];
+                        Vector3 p2 = points[baseAnchorIndex + 2];
+                        Vector3 p3 = points[baseAnchorIndex + 3];
+
+                        Bezier.SplitCubic(p0, p1, p2, p3, 0.5f, out Vector3[] bezier1, out Vector3[] bezier2);
+
+                        points[baseAnchorIndex] = bezier1[0];
+                        points[baseAnchorIndex + 1] = bezier1[1];
+                        points[baseAnchorIndex + 2] = bezier1[2];
+                        points[baseAnchorIndex + 3] = bezier1[3];
+
+                        // Insert second bezier right after
+                        points.Insert(baseAnchorIndex + 4, bezier2[1]);
+                        points.Insert(baseAnchorIndex + 5, bezier2[2]);
+                        points.Insert(baseAnchorIndex + 6, bezier2[3]);
+                    }
+                    else
+                    {
+                        Vector3 p0 = points[points.Count - 1];
+                        Vector3 pBefore = points[points.Count - 2];
+
+                        Vector3 p1 = p0 - (pBefore - p0);
+                        Vector3 p3 = p1 - (pBefore - p0);
+                        Vector3 p2 = (p1 + p3) * 0.5f;
+
+                        points.Add(p1);
+                        points.Add(p2);
+                        points.Add(p3);
+                    }
                 }
                 else
                 {
@@ -99,6 +124,7 @@ namespace UC
                     points.Add(Vector3.right * 30.0f);
                 }
             }
+            else AddPoint(insertionPoint);
         }
 
         public int AddPoint(int insertionPoint = -1)
@@ -148,26 +174,7 @@ namespace UC
             return ret;
         }
 
-        static private Vector3 ComputeBezier(Vector3[] pt, float t)
-        {
-            float it = (1 - t);
-            float t2 = t * t;
-            float t3 = t2 * t;
-            float it2 = it * it;
-            float it3 = it2 * it;
-
-            return pt[0] * it3 + 3 * pt[1] * it2 * t + 3 * pt[2] * it * t2 + pt[3] * t3;
-        }
-
-        static private Vector3 ComputeBezierDerivative(Vector3[] pt, float t)
-        {
-            float it = 1 - t;
-
-            // Derivative of cubic Bézier:
-            return 3 * it * it * (pt[1] - pt[0]) +
-                   6 * it * t * (pt[2] - pt[1]) +
-                   3 * t * t * (pt[3] - pt[2]);
-        }
+        
 
         private static Vector3 EvaluateCatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
         {
@@ -224,7 +231,7 @@ namespace UC
 
                         return points[0];
                     }
-                case Type.Smooth:
+                case Type.CatmulRom:
                     {
                         int numPoints = points.Count;
                         int lastIndex = closed ? numPoints : numPoints - 2;
@@ -299,7 +306,7 @@ namespace UC
                         Vector3 p2 = points[i2];
                         Vector3 p3 = points[i3];
 
-                        return ComputeBezier(new Vector3[] { p0, p1, p2, p3 }, t);
+                        return Bezier.ComputeCubic(p0, p1, p2, p3, t);
                     }
                 default:
                     break;
@@ -350,7 +357,7 @@ namespace UC
 
                         return points[0];
                     }
-                case Type.Smooth:
+                case Type.CatmulRom:
                     {
                         int numPoints = points.Count;
                         int lastIndex = closed ? numPoints : numPoints - 2;
@@ -423,7 +430,7 @@ namespace UC
                         Vector3 p2 = points[i2];
                         Vector3 p3 = points[i3];
 
-                        return ComputeBezierDerivative(new Vector3[] { p0, p1, p2, p3 }, t).normalized;
+                        return Bezier.ComputeCubicDerivative(p0, p1, p2, p3, t).normalized;
                     }
                 default:
                     break;
@@ -434,7 +441,7 @@ namespace UC
 
         public void InvertPath()
         {
-            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.Smooth) || (type == PathXY.Type.Bezier))
+            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.CatmulRom) || (type == PathXY.Type.Bezier))
             {
                 var newPoints = new List<Vector3>();
                 for (int i = points.Count - 1; i >= 0; i--)
@@ -459,7 +466,7 @@ namespace UC
 
             Vector3 delta = Vector3.zero;
 
-            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.Smooth) || (type == Type.Bezier))
+            if ((type == PathXY.Type.Linear) || (type == PathXY.Type.CatmulRom) || (type == Type.Bezier))
             {
                 // Get extents of object
                 Vector3 min = points[0];
@@ -499,6 +506,8 @@ namespace UC
 
                 points[i] = matrix * pt;
             }
+
+            worldSpace = false;
         }
 
         public void ConvertToWorldSpace()
@@ -512,6 +521,8 @@ namespace UC
 
                 points[i] = matrix * pt;
             }
+
+            worldSpace = true;
         }
 
         public List<Vector3> GetPoints()
@@ -531,7 +542,7 @@ namespace UC
                     fullPoints = new List<Vector3>(points);
                     if ((closed) && (points.Count > 1)) fullPoints.Add(points[0]);
                     break;
-                case Type.Smooth:
+                case Type.CatmulRom:
                     if (points.Count < 3)
                     {
                         steps = 0;
@@ -791,15 +802,7 @@ namespace UC
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
-            bool selected = false;
-            foreach (var obj in Selection.gameObjects)
-            {
-                if (obj == gameObject) { selected = true; break; }
-            }
-
-            if ((onlyDisplayWhenSelected) && (!selected)) return;
-
-            Handles.color = (selected && editMode) ? (Color.white) : (displayColor);
+            Handles.color = Color.yellow;
 
             var renderPoints = GetPoints();
             for (int i = 1; i < renderPoints.Count; i++)
