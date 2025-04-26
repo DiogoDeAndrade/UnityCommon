@@ -52,7 +52,7 @@ public class DistortionRipples : MonoBehaviour
     int                     rippleCount;
     float                   rippleTimer;
     float                   amplitude;
-    List<SpriteRenderer>    ripples = new();
+    List<DistortionRipple>  ripples = new();
 
     bool hasMultipleRipples => (nRipples > 1);
     bool neitherStartNorDestroy => !playOnStart && !destroyOnEnd;
@@ -69,7 +69,7 @@ public class DistortionRipples : MonoBehaviour
 
     void Update()
     {
-        ripples.RemoveAll(ripple => ripple == null);
+        ripples.RemoveAll(ripple => !ripple.isActive);
 
         if (rippleCount > 0)
         {
@@ -127,50 +127,14 @@ public class DistortionRipples : MonoBehaviour
 
     void RunRipple()
     {
-        GameObject go = new GameObject();
-        go.name = "Ripple";
-        if (localSpace)
-        {
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = Vector3.zero;
-            if (turnToMovement)
-            {
-                go.transform.localRotation = Quaternion.LookRotation(Vector3.forward, lastDir.PerpendicularXY());
-            }
-            else
-            {
-                go.transform.localRotation = Quaternion.identity;
-            }
-        }
-        else
-        {
-            go.transform.position = transform.position;
-            if (turnToMovement)
-            {
-                go.transform.rotation = Quaternion.LookRotation(Vector3.forward, lastDir.PerpendicularXY());
-            }
-            else
-            {
-                go.transform.rotation = transform.rotation;
-            }
-        }
-        go.layer = rippleLayer;
-
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = rippleSprite;
-        sr.sortingLayerID = spriteSortingLayer;
-        sr.sortingOrder = spriteOrderInLayer;
-        sr.material = new Material(rippleMaterial);
-
-        var ripple = go.AddComponent<DistortionRipple>();
-        ripple.SetParams(rippleDuration, sizeCurve, amplitude, strengthCurve, strengthIsSpriteAlpha);
-
+        var sr = DistortionRipple.Spawn(transform, localSpace, turnToMovement, rippleLayer, lastDir, rippleSprite, spriteSortingLayer, spriteOrderInLayer, rippleMaterial, rippleDuration, sizeCurve, amplitude, strengthCurve, strengthIsSpriteAlpha);
         ripples.Add(sr);
 
         rippleTimer = delayBetweenRipples;
         amplitude *= amplitudeMultiplier;
         rippleCount--;
     }
+
     private void OnDrawGizmosSelected()
     {
         if (rippleSprite != null)
