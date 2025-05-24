@@ -82,11 +82,12 @@ namespace UC
         {
             if (musicSource)
             {
+                var tmp = musicSource;
                 musicSource.FadeTo(0.0f, defaultCrossfadeTime).Done(() =>
                 {
-                    musicSource.Stop();
-                    musicSource.clip = null;
-                    musicSource.loop = false;
+                    tmp.Stop();
+                    tmp.clip = null;
+                    tmp.loop = false;
                 });
                 musicSource = null;
             }
