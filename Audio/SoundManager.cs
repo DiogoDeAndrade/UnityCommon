@@ -77,10 +77,27 @@ namespace UC
                 musicSource = _PlayMusic(startMusic, 1.0f, 1.0f);
             }
         }
+
+        void _StopMusic()
+        {
+            if (musicSource)
+            {
+                musicSource.FadeTo(0.0f, defaultCrossfadeTime).Done(() =>
+                {
+                    musicSource.Stop();
+                    musicSource.clip = null;
+                    musicSource.loop = false;
+                });
+                musicSource = null;
+            }
+        }
+
         private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
         {
             if (musicSource == null)
             {
+                if (clip == null) return null;
+
                 musicSource = _PlaySound(SoundType.Music, clip, 1, 1);
                 musicSource.loop = true;
 
@@ -94,7 +111,7 @@ namespace UC
 
             if (clip == null)
             {
-                musicSource.FadeTo(0.0f, defaultCrossfadeTime);
+                _StopMusic();
                 return null;
             }
 
