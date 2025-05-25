@@ -220,6 +220,48 @@ namespace UC
         {
             return new Vector3Int((int)v.x, (int)v.y, (int)v.z);
         }
+
+        public static Vector2 ChangeX(this Vector2 v, float value)
+        {
+            return new Vector2(value, v.y);
+        }
+
+        public static Vector2 ChangeY(this Vector2 v, float value)
+        {
+            return new Vector2(v.x, value);
+        }
+        public static Vector3 ChangeX(this Vector3 v, float value)
+        {
+            return new Vector3(value, v.y, v.z);
+        }
+
+        public static Vector3 ChangeY(this Vector3 v, float value)
+        {
+            return new Vector3(v.x, value, v.z);
+        }
+
+        public static Vector3 ChangeZ(this Vector3 v, float value)
+        {
+            return new Vector3(v.x, v.y, value);
+        }
+        public static Vector4 ChangeX(this Vector4 v, float value)
+        {
+            return new Vector4(value, v.y, v.z, v.w);
+        }
+
+        public static Vector4 ChangeY(this Vector4 v, float value)
+        {
+            return new Vector4(v.x, value, v.z, v.w);
+        }
+
+        public static Vector4 ChangeZ(this Vector4 v, float value)
+        {
+            return new Vector4(v.x, v.y, value, v.w);
+        }
+        public static Vector4 ChangeW(this Vector4 v, float value)
+        {
+            return new Vector4(v.x, v.y, v.z, value);
+        }
     };
 
 }
