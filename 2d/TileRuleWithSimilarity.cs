@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
@@ -19,7 +18,7 @@ namespace UC
             }
 
             // If the tile is a standard Tile, check its sprite
-            if (tile is Tile tileAsset)
+            if (tile is UnityEngine.Tilemaps.Tile tileAsset)
             {
                 if (spritesInFamily.Contains(tileAsset.sprite))
                 {
