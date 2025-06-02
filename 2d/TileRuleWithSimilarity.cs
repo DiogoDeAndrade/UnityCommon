@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
+#if UNITY_2D_TILES_AVAILABLE
+
 namespace UC
 {
 
@@ -36,3 +38,5 @@ namespace UC
         }
     }
 }
+
+#endif
