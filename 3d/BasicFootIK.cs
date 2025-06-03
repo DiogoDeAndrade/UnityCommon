@@ -1,16 +1,28 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// This script controls the feet.
+// It assumes there are animator parameters called "LeftFoot" and "RightFoot" that define if the respective feet should be up (1) or down (0).
+// This makes sense to be driven by the animations themselves, so after you import an animation (from an FBX), you can add a Curve with that name
+// that can be used to drive that value
+// The tweak value will be added to the foot position, and it's kind of a hack to make sure the feet are not floating above the ground on some types of avatars
+// This all assumes the animations are Humanoid type.
+
 namespace UC
 {
 
     [RequireComponent(typeof(Animator))]
     public class BasicFootIK : MonoBehaviour
     {
-        [SerializeField] private float raycastOffset = 0.25f;
-        [SerializeField] private float raycastDistance = 0.25f;
-        [SerializeField] private LayerMask groundLayers;
-        [SerializeField] private Vector3 footPositionTweak = Vector3.zero;
+        [SerializeField, Tooltip("What's the raycasting offset up, relative to what the humanoid rig states is the foot position.")] 
+        private float raycastOffset = 0.25f;
+        [SerializeField, Tooltip("How far down to cast the ray looking for the ground")] 
+        private float raycastDistance = 0.25f;
+        [SerializeField, Tooltip("What is the ground exactly?")] 
+        private LayerMask groundLayers;
+        [SerializeField, Tooltip("After finding the ground position, how much to add to that position to set the foot IK")] 
+        private Vector3 footPositionTweak = Vector3.zero;
 
 #if UNITY_EDITOR
         class DebugIKInfo
