@@ -15,6 +15,8 @@ namespace UC
     [RequireComponent(typeof(Animator))]
     public class BasicFootIK : MonoBehaviour
     {
+        [SerializeField, Tooltip("What layer to target with this IK.\nSet -1 for any")]
+        int animationLayer = -1;
         [SerializeField, Tooltip("What's the raycasting offset up, relative to what the humanoid rig states is the foot position.")] 
         private float raycastOffset = 0.25f;
         [SerializeField, Tooltip("How far down to cast the ray looking for the ground")] 
@@ -36,8 +38,8 @@ namespace UC
 #endif
 
         Animator animator;
-        int leftFootHash = Animator.StringToHash("LeftFoot");
-        int rightFootHash = Animator.StringToHash("RightFoot");
+        static int leftFootHash = Animator.StringToHash("LeftFoot");
+        static int rightFootHash = Animator.StringToHash("RightFoot");
 
         void Start()
         {
@@ -75,6 +77,8 @@ namespace UC
 
         void OnAnimatorIK(int layerIndex)
         {
+            if ((layerIndex != animationLayer) && (animationLayer != -1)) return;
+
             RunIK(AvatarIKGoal.LeftFoot, raycastOffset, animator.GetFloat(leftFootHash));
             RunIK(AvatarIKGoal.RightFoot, raycastOffset, animator.GetFloat(rightFootHash));
         }

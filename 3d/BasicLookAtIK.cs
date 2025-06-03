@@ -37,6 +37,8 @@ namespace UC
         List<DebugPOI> debugPOIs = new();
 #endif
 
+        [SerializeField, Tooltip("What layer to target with this IK.\nSet -1 for any")]
+        int animationLayer = -1;
         [SerializeField, Tooltip("If we want the humanoid to turn the body towards the POI - 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit.")]
         float maxWeightBody = 0.0f;     
         [SerializeField, Tooltip("Should it turn the head towards the POI? 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit.")]
@@ -266,6 +268,8 @@ namespace UC
 
         private void OnAnimatorIK(int layerIndex)
         {
+            if ((layerIndex != animationLayer) && (animationLayer != -1)) return;
+
             if (target)
             {
                 targetLookAtWeight = 1.0f;

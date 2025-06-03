@@ -6,6 +6,7 @@ using UnityEngine;
 // This assumes a humanoid rig.
 // The weapon doesn't require being parented to the hand, it can be a "loose" object, part of what this script does it to move the weapons grip to the hand.
 // Note that the weapon will be moved to the main hand position, but the off-hand will be moved to the off-hand grip position through IK.
+// If aiming is enabled, animator parameter "Aim" will be set to true; if mode is both, "RifleAim" will be set to true
 
 namespace UC
 {
@@ -14,6 +15,8 @@ namespace UC
     {
         public enum Mode { Right, Left, Both, BothReversed };
 
+        [SerializeField, Tooltip("What layer to target with this IK.\nSet -1 for any")]
+        int animationLayer = -1;
         [SerializeField, Tooltip("Which hand to hold the weapon?\nBoth reversed means left-handed grip on the weapon.")]
         private Mode mode = Mode.Right;
         [SerializeField, Tooltip("Transform of the weapon grip")]
@@ -61,6 +64,9 @@ namespace UC
 
         bool canAim => (aimEnable) && (target != null) && (weaponGrip != null);
 
+        static int aimHash = Animator.StringToHash("Aim");
+        static int aimRifleHash = Animator.StringToHash("RifleAim");
+
         void Start()
         {
             animator = GetComponent<Animator>();
@@ -106,6 +112,9 @@ namespace UC
                 offHandVelocity = 0f;
             }
 
+            animator.SetBool(aimHash, canAim);
+            animator.SetBool(aimRifleHash, canAim && isBothHands);
+
             if (weaponGrip == null)
                 return;
 
@@ -130,6 +139,7 @@ namespace UC
         void OnAnimatorIK(int layerIndex)
         {
             if (animator == null) return;
+            if ((layerIndex != animationLayer) && (animationLayer != -1)) return;
 
             AvatarIKGoal mainIK = GetMainHandIK();
 
