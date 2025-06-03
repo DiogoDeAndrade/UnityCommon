@@ -82,6 +82,7 @@ namespace UC
         Vector3 targetBasePos;
         Vector2 wanderAngularRangeRad;
         Vector3 noiseAngle;
+        Transform forceLook;
 
         private void Start()
         {
@@ -117,6 +118,13 @@ namespace UC
             else
             {
                 targetPos = targetBasePos;
+            }
+
+            if (forceLook != null)
+            {
+                targetPos = forceLook.position;
+                target = forceLook;
+                targetLookAtWeight = 1.0f;
             }
 
             // Smooth look movements
@@ -304,6 +312,11 @@ namespace UC
                 }
                 Gizmos.DrawLine(headPos, target.position);
             }
+        }
+
+        public void ForceLook(Transform target)
+        {
+            forceLook = target;
         }
 #endif
     }
