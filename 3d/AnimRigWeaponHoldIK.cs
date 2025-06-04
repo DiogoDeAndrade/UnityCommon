@@ -6,7 +6,7 @@ using UnityEngine.Animations.Rigging;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // This script controls holding a weapon. We can have two scripts to hold two different weapons, or one script to hold a single weapon with both hands.
-// This assumes a humanoid rig, and the AnimationRig package
+// This uses the AnimationRig package.
 // The weapon doesn't require being parented to the hand, it can be a "loose" object, part of what this script does it to move the weapons grip to the hand.
 // Note that the weapon will be moved to the main hand position, but the off-hand will be moved to the off-hand grip position through IK (eventually - not working yet).
 // If aiming is enabled, animator parameter "Aim" will be set to true; if mode is both, "RifleAim" will be set to true
@@ -47,10 +47,13 @@ namespace UC
         private Transform   target;
         [SerializeField, Tooltip("Transition in/out time for aiming")]
         private float transitionSpeed = 0.15f;
-        [SerializeField, ShowIf(nameof(hasHandControl)), Tooltip("Should we force open/close hand when actually holding something?"), Header("Links")]
+        [SerializeField, ShowIf(nameof(hasLookIK)), Tooltip("Should we force the look IK?"), Header("Links")]
+        private bool linkToLook = false;
+        [SerializeField, ShowIf(nameof(hasHandControl)), Tooltip("Should we force open/close hand when actually holding something?")]
         private bool linkToHandControl = false;
 
         private bool isBothHands => mode == Mode.Both || mode == Mode.BothReversed;
+        private bool hasLookIK => (lookIK != null) || (GetComponent<AnimRigLookAtIK>() != null);
         private bool hasHandControl => (handControl != null) || (GetComponent<BasicHandControl>() != null);
 
         bool canAim => (aimEnable) && (target != null) && (weaponGrip != null);
@@ -60,12 +63,14 @@ namespace UC
 
         private Animator animator;
         private BasicHandControl handControl;
+        private AnimRigLookAtIK lookIK;
         private float weightVelocity;
         private Vector3 rLocal, fLocal;
 
         void Start()
         {
             animator = GetComponent<Animator>();
+            lookIK = GetComponent<AnimRigLookAtIK>();
             handControl = GetComponent<BasicHandControl>();
             PrecomputeBarrelData();
         }
@@ -135,6 +140,14 @@ namespace UC
             if (isBothHands)
             {
                 offHandAimIK.weight = mainHandAimIK.weight;
+            }
+
+            if ((linkToLook) && (lookIK != null))
+            {
+                if (aimEnable)
+                    lookIK.ForceLook(target);
+                else
+                    lookIK.ForceLook(null);
             }
         }
 

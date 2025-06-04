@@ -1,19 +1,21 @@
+#if UNITY_3D_ANIMATION_RIG_AVAILABLE
+
 using NaughtyAttributes;
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Animations.Rigging;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // This script controls looking at points of interest (POI) using IK (Inverse Kinematics).
-// This assumes humanoid rig.
+// It uses the animation rig package
 // It supports both looking for POIs in the scene, and wandering gaze if no POI is found.
 // The look position can be overriden externally, for example when a BasicHoldIK script is used to force the gaze towards a weapon sight or similar target.
+// A good approach in terms of rig is having a series of MultiAimConstraints, starting at the head and going down the neck/spine/etc, with less weight.
 
 namespace UC
 {
-
     [RequireComponent(typeof(Animator))]
-    public class BasicLookAtIK : MonoBehaviour
+    public class AnimRigLookAtIK : MonoBehaviour
     {
         // Basically, we can define different scan areas, with different FOV and ranges. It can also scan different layers for interesting objects.
         [System.Serializable]
@@ -26,26 +28,16 @@ namespace UC
             public bool displayCone;
         }
 
-        [SerializeField, Tooltip("What layer to target with this IK.\nSet -1 for any")]
-        int animationLayer = -1;
-        [SerializeField, Tooltip("If we want the humanoid to turn the body towards the POI - 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit.")]
-        float maxWeightBody = 0.0f;     
-        [SerializeField, Tooltip("Should it turn the head towards the POI? 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit.")]
-        float maxWeightHead = 1.0f;
-        [SerializeField, Tooltip("Should it turn the eyes towards the POI? 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit. This requires the humanoid rig to have the eyes bones set up correctly in the animator.")]
-        float maxWeightEyes = 1.0f;
-        [SerializeField, Tooltip("Time to reset the look at position and weights when the target is lost or changed.")]
+        [SerializeField, Tooltip("Rig that controls looking at stuff"), Header("IK Setup")]
+        Rig     lookRig;
+        [SerializeField, Tooltip("Object to control as look target")]
+        Transform targetObject;
+        [SerializeField, Tooltip("Time to reset the look at position and weights when the target is lost or changed."), Header("Animation")]
         float timeToRest = 0.1f;
         [SerializeField, Tooltip("When tracking a target, how fast do we follow it?")]
         float maxSpeedToTarget = 100.0f;
         [SerializeField, Tooltip("When wandering with the gaze, how fast do we move around?")]
         float maxSpeedToWander = 10.0f;
-        [SerializeField, Tooltip("Should we check for LoS when tracking a POI?")]
-        bool checkLOS = true;
-        [SerializeField, MinMaxSlider(0.0f, 1.0f), ShowIf(nameof(checkLOS)), Tooltip("What is the normalized range of the LoS check?\nIf set to 0 and 1, it's the normal, if it's set to 0.1 to 0.9, it will only track obstacles from 10% to 90% of the way towards the POI.")]
-        Vector2 LOSNormalizedRange = new Vector2(0.0f, 1.0f);
-        [SerializeField, ShowIf(nameof(checkLOS)), Tooltip("Obstacle layers for LoS check")]
-        LayerMask obstacleLayers = ~0;
         [SerializeField, Tooltip("If there's no POI, should the view wander?")]
         bool autoWander = false;
         [SerializeField, ShowIf(nameof(autoWander)), MinMaxSlider(0.5f, 5.0f), Tooltip("How long between wander transitions?")]
@@ -58,10 +50,14 @@ namespace UC
         Vector3 noiseFrequency = Vector3.one;
         [SerializeField, ShowIf(nameof(needNoiseParams)), Tooltip("Noise amplitude")]
         float noiseAmplitude = 2.0f;
+        [SerializeField, Tooltip("Should we check for LoS when tracking a POI?"), Header("Target Selection")]
+        bool checkLOS = true;
+        [SerializeField, MinMaxSlider(0.0f, 1.0f), ShowIf(nameof(checkLOS)), Tooltip("What is the normalized range of the LoS check?\nIf set to 0 and 1, it's the normal, if it's set to 0.1 to 0.9, it will only track obstacles from 10% to 90% of the way towards the POI.")]
+        Vector2 LOSNormalizedRange = new Vector2(0.0f, 1.0f);
+        [SerializeField, ShowIf(nameof(checkLOS)), Tooltip("Obstacle layers for LoS check")]
+        LayerMask obstacleLayers = ~0;
         [SerializeField, Tooltip("Scan parameters, ideally define 3 levels")]
         ScanParameters[] scanParameters;
-        [SerializeField, Tooltip("Should the gizmos be displayed?")]
-        bool displayGizmos = true;
 
         bool needNoiseParams => useNoise;
 
@@ -75,7 +71,6 @@ namespace UC
         float weightVelocity = 0.0f;
         float wanderTime = 0.0f;
         Vector3 targetBasePos;
-        Vector2 wanderAngularRangeRad;
         Vector3 noiseAngle;
         Transform forceLook;
 
@@ -125,6 +120,13 @@ namespace UC
             // Smooth look movements
             currentLookAtWeight = Mathf.SmoothDamp(currentLookAtWeight, targetLookAtWeight, ref weightVelocity, timeToRest, float.MaxValue, Time.deltaTime);
             currentTargetPosition = Vector3.SmoothDamp(currentTargetPosition, targetPos, ref targetVelocity, timeToRest, ms, Time.deltaTime);
+
+            if (target)
+            {
+                targetObject.position = currentTargetPosition;
+                
+                lookRig.weight = currentLookAtWeight;
+            }
         }
 
         void WanderSight()
@@ -189,7 +191,7 @@ namespace UC
             }
         }
 
-        private void OnAnimatorIK(int layerIndex)
+        /*private void OnAnimatorIK(int layerIndex)
         {
             if ((layerIndex != animationLayer) && (animationLayer != -1)) return;
 
@@ -204,7 +206,7 @@ namespace UC
 
             animator.SetLookAtPosition(currentTargetPosition);
             animator.SetLookAtWeight(currentLookAtWeight, maxWeightBody, maxWeightHead, maxWeightEyes);
-        }
+        }*/
 
         public void ForceLook(Transform target)
         {
@@ -214,7 +216,6 @@ namespace UC
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
-            if (!displayGizmos) return;
             if (animator == null) animator = GetComponent<Animator>();
 
             var headPos = animator.GetBoneTransform(HumanBodyBones.Head).position;
@@ -233,3 +234,5 @@ namespace UC
 #endif
     }
 }
+
+#endif
