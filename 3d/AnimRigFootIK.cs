@@ -14,6 +14,9 @@ using UnityEngine.Animations.Rigging;
 // - There's the hack which I haven't found a better way to do it, which is the dual extension offset - In my head it doesn't make much sense
 // - Most of the controls snap too quickly, so you can kind of see it on transitions (for example, walk in place near a stair)
 // - There's still some twitching all around, maybe I need to smooth the target position
+// - I think I need to remove the targets from the inside of the object hierarchy for better visuals - this way, I can "lock" the feet in place, and just move it when it's lifted.
+//   If it's linked to the object, while moving the object, I'm moving the constraint target, which will move the foot instead of being locked to the ground, which I belive is part
+//   of the weird visuals.
 // Each individual foot is a Two-Bone Constraint, with tip being the foot bone. Setting position weight to 0.75 looks much better than 1.0.
 
 namespace UC
