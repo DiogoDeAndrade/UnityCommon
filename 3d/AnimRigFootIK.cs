@@ -6,15 +6,18 @@ using UnityEngine.Animations.Rigging;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // This script controls the feet.
-// It assumes there are animator parameters called "LeftFoot" and "RightFoot" that define if the respective feet should be up (1) or down (0).
+// It assumes there are animator parameters with the same names as the configured feet constraints, that define if the respective feet should be up (1) or down (0).
 // This makes sense to be driven by the animations themselves, so after you import an animation (from an FBX), you can add a Curve with that name
-// that can be used to drive that value
+// that can be used to drive that value.
 // The tweak value will be added to the foot position, and it's kind of a hack to make sure the feet are not floating above the ground on some types of avatars
-// This all assumes the animations are Humanoid type.
+// I'm not 100% happy with this thing, there's still a lot of room for improvement:
+// - There's the hack which I haven't found a better way to do it, which is the dual extension offset - In my head it doesn't make much sense
+// - Most of the controls snap too quickly, so you can kind of see it on transitions (for example, walk in place near a stair)
+// - There's still some twitching all around, maybe I need to smooth the target position
+// Each individual foot is a Two-Bone Constraint, with tip being the foot bone. Setting position weight to 0.75 looks much better than 1.0.
 
 namespace UC
 {
-
     [RequireComponent(typeof(Animator))]
     public class AnimRigFootIK : MonoBehaviour
     {
@@ -28,14 +31,14 @@ namespace UC
             public Transform            footBone;
             [HideInInspector]
             public Transform            footEffector;
-            public Vector3              positionTweak;
+            public float                heightOffset;
             public Quaternion           rotationTweak = Quaternion.identity;
             [HideInInspector]
             public Quaternion           originalRotation = Quaternion.identity;
             [HideInInspector]
-            public Vector3              animatedPosition;
+            public float                currentWeight;
             [HideInInspector]
-            public Quaternion           animatedRotation;
+            public float                velocityWeight;
         }
 
         [SerializeField, Tooltip("What's the raycasting offset up, relative to what the humanoid rig states is the foot position."), Header("IK Setup")]
@@ -44,10 +47,14 @@ namespace UC
         private float raycastOffset = 0.25f;
         [SerializeField, Tooltip("How far down to cast the ray looking for the ground")]
         private float raycastDistance = 0.25f;
+        [SerializeField, Tooltip("Radius of the raycast - use spherecast if > 0")]
+        private float raycastRadius = 0.0f;
+        [SerializeField, Tooltip("What's the max steepness allowed for the hit normal?\nThis is mostly needed if raycastRadius > 0")]
+        private float maxSteepness = 45.0f;
         [SerializeField, Tooltip("What is the ground exactly?")]
         private LayerMask groundLayers;
-        [SerializeField, Tooltip("After finding the ground position, how much to add to that position to set the foot IK")]
-        private Vector3 footPositionTweak = Vector3.zero;
+        [SerializeField, Tooltip("This is a hack - if enabled the IK works better on slopes, but worse on planes, see comments in code")]
+        private bool hackDualExtensionOffset = false;
 
         Animator animator;
 
@@ -68,49 +75,77 @@ namespace UC
                 foot.footEffector = foot.foot.data.target;
                 foot.originalRotation = foot.footBone.rotation;
                 foot.foot.weight = 0;
+                foot.currentWeight = 0;
+                foot.velocityWeight = 0;
+                if ((foot.rotationTweak.x == 0.0f) &&
+                    (foot.rotationTweak.y == 0.0f) &&
+                    (foot.rotationTweak.z == 0.0f) &&
+                    (foot.rotationTweak.w == 0.0f))
+                    foot.rotationTweak = Quaternion.identity;
             }
         }
 
-        private void OnAnimatorMove()
-        {
-            // Cache values of the animator
-            foreach (var foot in feet)
-            {
-                foot.animatedPosition = foot.footBone.position;
-                foot.animatedRotation = foot.footBone.rotation;
-            }
-        }
-
-        private void LateUpdate()
+        private void FixedUpdate()
         {
             foreach (var foot in feet)
             {
-                float w = 0.0f;
+                float targetWeight = 0.0f;
                 if (foot.footAnimatorHash != 0)
                 {
-                    w = animator.GetFloat(foot.footAnimatorHash);
+                    targetWeight = animator.GetFloat(foot.footAnimatorHash);
                 }
                 
                 if (GetGroundHit(foot.footBone.position, out var hit))
                 {
-                    if (foot.footAnimatorHash == 0) w = 1.0f;
+                    if (foot.footAnimatorHash == 0) targetWeight = 1.0f;
 
-                    var groundPos = foot.animatedPosition;
-                    groundPos.y = hit.point.y;
-                    foot.footEffector.position = groundPos + foot.positionTweak;
-                    foot.footEffector.rotation = foot.originalRotation * Quaternion.FromToRotation(Vector3.up, hit.normal) * foot.rotationTweak;
+                    float yOffset = foot.heightOffset;
+
+                    if (foot.footBone.position.y < hit.point.y + foot.heightOffset)
+                    {
+                        yOffset += Mathf.Max(0, hit.point.y - foot.footBone.position.y);
+                        targetWeight = 1.0f;
+                    }
+                    // If the normal is too steep, use up instead 
+                    var hitNormal = (Vector3.Angle(hit.normal, Vector3.up) < maxSteepness) ? hit.normal : Vector3.up;
+                    var groundRotation = Quaternion.FromToRotation(Vector3.up, hitNormal);
+
+                    // Adjust position based on ground and tweak position (over-extending because of the targetPositionWeight
+                    // This division shouldn't be needed (it's done afterwards), but if we don't use it, it doesn't work as
+                    // well on slopes, for some reason, I'm probably missing something.
+                    // This way, the feet float a bit above the ground on idle states, etc, but looks fine on slopes...
+                    var groundPos = foot.footBone.position;
+                    if (hackDualExtensionOffset)
+                        groundPos.y = hit.point.y + yOffset / foot.foot.data.targetPositionWeight;
+                    else
+                        groundPos.y = hit.point.y + yOffset;
+
+                    // Over-extend target because of value on the constraint
+                    float deltaY = (groundPos.y - foot.footBone.position.y) / foot.foot.data.targetPositionWeight;
+                    groundPos.y = foot.footBone.position.y + deltaY;
+
+                    foot.footEffector.position = groundPos;
+                    foot.footEffector.rotation = groundRotation * foot.originalRotation * foot.rotationTweak;
                 }
                 else
                 {
-                    w = 0.0f;
+                    targetWeight = 0.0f;
+
+                    foot.footEffector.position = foot.footBone.position;
+                    foot.footEffector.rotation = foot.footBone.rotation;
                 }
 
-                foot.foot.weight = w;
+                foot.currentWeight = Mathf.SmoothDamp(foot.currentWeight, targetWeight, ref foot.velocityWeight, 0.05f, float.MaxValue, Time.deltaTime);
+                foot.foot.weight = foot.currentWeight;
             }
         }
 
         bool GetGroundHit(Vector3 sourcePos, out RaycastHit hit)
         {
+            if (raycastRadius > 0)
+            {
+                return Physics.SphereCast(sourcePos + Vector3.up * raycastOffset, raycastRadius, Vector3.down, out hit, raycastDistance, groundLayers);
+            }
             return Physics.Raycast(sourcePos + Vector3.up * raycastOffset, Vector3.down, out hit, raycastDistance, groundLayers);
         }
 
@@ -132,8 +167,8 @@ namespace UC
                     Gizmos.DrawLine(hit.point, hit.point + hit.normal * raycastDistance * 0.25f);
 
                     var groundPos = foot.footBone.position;
-                    groundPos.y = hit.point.y;
-                    foot.footEffector.position = groundPos + foot.positionTweak;
+                    groundPos.y = hit.point.y + foot.heightOffset;
+                    foot.footEffector.position = groundPos;
                     foot.footEffector.rotation = foot.originalRotation * Quaternion.FromToRotation(Vector3.up, hit.normal) * foot.rotationTweak;
                 }
             }
