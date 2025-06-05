@@ -73,6 +73,7 @@ namespace UC
         Vector3 targetBasePos;
         Vector3 noiseAngle;
         Transform forceLook;
+        bool enableLook = true;
 
         private void Start()
         {
@@ -118,15 +119,15 @@ namespace UC
             }
 
             // Smooth look movements
-            currentLookAtWeight = Mathf.SmoothDamp(currentLookAtWeight, targetLookAtWeight, ref weightVelocity, timeToRest, float.MaxValue, Time.deltaTime);
+            currentLookAtWeight = Mathf.SmoothDamp(currentLookAtWeight, (enableLook) ? (targetLookAtWeight) : (0), ref weightVelocity, timeToRest, float.MaxValue, Time.deltaTime);
             currentTargetPosition = Vector3.SmoothDamp(currentTargetPosition, targetPos, ref targetVelocity, timeToRest, ms, Time.deltaTime);
 
             if (target)
             {
                 targetObject.position = currentTargetPosition;
-                
-                lookRig.weight = currentLookAtWeight;
             }
+            
+            lookRig.weight = currentLookAtWeight;
         }
 
         void WanderSight()
@@ -208,6 +209,16 @@ namespace UC
             animator.SetLookAtWeight(currentLookAtWeight, maxWeightBody, maxWeightHead, maxWeightEyes);
         }*/
 
+        public void DisableLook()
+        {
+            enableLook = false;
+        }
+
+        public void EnableLook()
+        {
+            enableLook = true;
+        }
+
         public void ForceLook(Transform target)
         {
             forceLook = target;
@@ -230,7 +241,7 @@ namespace UC
                     Handles.DrawSolidArc(headPos, Vector3.up, headDir, -scan.fov / 2.0f, scan.maxRange);
                 }
             }
-        }
+        }        
 #endif
     }
 }

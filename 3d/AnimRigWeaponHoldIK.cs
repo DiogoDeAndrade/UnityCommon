@@ -10,9 +10,16 @@ using UnityEngine.Animations.Rigging;
 // The weapon doesn't require being parented to the hand, it can be a "loose" object, part of what this script does it to move the weapons grip to the hand.
 // Note that the weapon will be moved to the main hand position, but the off-hand will be moved to the off-hand grip position through IK (eventually - not working yet).
 // If aiming is enabled, animator parameter "Aim" will be set to true; if mode is both, "RifleAim" will be set to true
-// For best results, have several MultiAimConstraints under the aim rig, one for the hand, another for the forearm and another for the upper arm.
-// I like having different weights to them (1, 0.75 and 0.5, respectively) to get a more natural aiming pose.
-// The hand constraint can have the World Up axis set to SceneUp, it usually has a better result.
+// Single weapon setup:
+//   For best results, have several MultiAimConstraints under the aim rig, one for the hand, another for the forearm and another for the upper arm.
+//   I like having different weights to them (1, 0.75 and 0.5, respectively) to get a more natural aiming pose.
+//   The hand constraint can have the World Up axis set to SceneUp, it usually has a better result.
+// Two-handed rifle setup:
+//   Use a Two-Bone IK setup for the off-hand to hold the weapon off grip. This is only activated when the weapon is aiming.
+//   For the aiming itself, use the same MultiAimConstraints on the hand as for the single weapon.
+//   Rifles and machine guns work best with turning also the body, so a Multi-Aim constraint for the spine is recommended.
+//   Depending on the animation used, you might need to adjust the body. For example, on my test case my animation was 35 degrees off the forward Z for the forward, so I added
+//   a second target point for the spine, and used a HelperRotatePointAroundPoint to rotate the target 35 degrees relative to the player.
 // The result is not 100% perfect, but it works well enough for most cases. When shooting, cheat by making the shot go in the direction of the target object and not the
 // barrel direction, they should be close enough, but not exactly the same.
 
@@ -21,9 +28,10 @@ namespace UC
     [RequireComponent(typeof(Animator))]
     public class AnimRigWeaponHoldIK : MonoBehaviour
     {
-        public enum Mode { Right, Left, Both, BothReversed };
+        public enum Mode { Right, Left, Both };
+        public enum LookMode { None, LookAt, Disable };
 
-        [SerializeField, Tooltip("Which hand to hold the weapon?\nBoth reversed means left-handed grip on the weapon.")]
+        [SerializeField, Tooltip("Which hand to hold the weapon?")]
         private Mode mode = Mode.Right;
         [SerializeField, Tooltip("Transform of the weapon grip")]
         private Transform weaponGrip;
@@ -37,22 +45,26 @@ namespace UC
         private Rig         mainHandAimIK;
         [SerializeField, Tooltip("Hand grip aim constraint")]
         private MultiAimConstraint gripAimConstraint;
+        [SerializeField, Tooltip("Main hand bone")]
+        private Transform   mainHandBone;
         [SerializeField, Tooltip("Object that the constraint is following")]
         private Transform   targetObjectIK;
-        [SerializeField, ShowIf(nameof(isBothHands)), Tooltip("Offhand IK rig")]
-        private Rig         offHandAimIK;
+        [SerializeField, Tooltip("Target for the off-hand")]
+        private Transform targetOffhand;
         [SerializeField, Header("Aiming"), Tooltip("Enable aiming")]
         private bool        aimEnable;
+        [SerializeField, Tooltip("Should try to solve IK to adjust the aim to account for barrel?")]
+        private bool        adjustAimToBarrel = true;
         [SerializeField, Tooltip("Target object")]
         private Transform   target;
         [SerializeField, Tooltip("Transition in/out time for aiming")]
         private float transitionSpeed = 0.15f;
         [SerializeField, ShowIf(nameof(hasLookIK)), Tooltip("Should we force the look IK?"), Header("Links")]
-        private bool linkToLook = false;
+        private LookMode linkToLook = LookMode.Disable;
         [SerializeField, ShowIf(nameof(hasHandControl)), Tooltip("Should we force open/close hand when actually holding something?")]
         private bool linkToHandControl = false;
 
-        private bool isBothHands => mode == Mode.Both || mode == Mode.BothReversed;
+        private bool isBothHands => mode == Mode.Both;
         private bool hasLookIK => (lookIK != null) || (GetComponent<AnimRigLookAtIK>() != null);
         private bool hasHandControl => (handControl != null) || (GetComponent<BasicHandControl>() != null);
 
@@ -97,7 +109,6 @@ namespace UC
                         handControl.OpenLeftHand(weaponGrip != null, weaponGrip == null);
                         break;
                     case Mode.Both:
-                    case Mode.BothReversed:
                         handControl.OpenRightHand(weaponGrip != null, weaponGrip == null);
                         handControl.OpenLeftHand(weaponGrip != null, weaponGrip == null);
                         break;
@@ -112,12 +123,10 @@ namespace UC
             if (weaponGrip == null)
                 return;
 
-            HumanBodyBones mainBone = GetMainHand();
-            Transform mainHand = animator.GetBoneTransform(mainBone);
-            if (mainHand != null)
+            if (mainHandBone != null)
             {
-                weaponGrip.position = mainHand.position;
-                weaponGrip.rotation = mainHand.rotation;
+                weaponGrip.position = mainHandBone.position;
+                weaponGrip.rotation = mainHandBone.rotation;
                 weaponGrip.localScale = flipH ? new Vector3(-1, 1, 1) : Vector3.one;
             }
 
@@ -125,29 +134,50 @@ namespace UC
             {
                 mainHandAimIK.weight = Mathf.SmoothDamp(mainHandAimIK.weight, 1.0f, ref weightVelocity, transitionSpeed, float.MaxValue, Time.deltaTime);
 
-                var localAimAxis = gripAimConstraint.data.aimAxis;
-                var axis = GetAxisFromEnum(localAimAxis);
-                
-                var adjustedTarget = ComputeVirtualTarget(weaponGrip, barrelObject, target.position, axis);
+                if (adjustAimToBarrel)
+                {
+                    var localAimAxis = gripAimConstraint.data.aimAxis;
+                    var axis = GetAxisFromEnum(localAimAxis);
 
-                targetObjectIK.position = adjustedTarget;
+                    var adjustedTarget = ComputeVirtualTarget(weaponGrip, barrelObject, target.position, axis);
+
+                    targetObjectIK.position = adjustedTarget;
+                }
+                else
+                {
+                    targetObjectIK.position = target.position;
+                }
+
+                if (isBothHands)
+                {
+                    targetOffhand.position = weaponOffGrip.position;
+                    targetOffhand.rotation = weaponOffGrip.rotation;
+                    targetOffhand.localScale = flipH ? new Vector3(-1, 1, 1) : Vector3.one;
+                }
             }
             else
             {
                 mainHandAimIK.weight = Mathf.SmoothDamp(mainHandAimIK.weight, 0.0f, ref weightVelocity, transitionSpeed, float.MaxValue, Time.deltaTime);
             }
 
-            if (isBothHands)
+            switch (linkToLook)
             {
-                offHandAimIK.weight = mainHandAimIK.weight;
-            }
-
-            if ((linkToLook) && (lookIK != null))
-            {
-                if (aimEnable)
-                    lookIK.ForceLook(target);
-                else
-                    lookIK.ForceLook(null);
+                case LookMode.None:
+                    break;
+                case LookMode.LookAt:
+                    if (aimEnable)
+                        lookIK.ForceLook(target);
+                    else
+                        lookIK.ForceLook(null);
+                    break;
+                case LookMode.Disable:
+                    if (aimEnable)
+                        lookIK.DisableLook();
+                    else
+                        lookIK.EnableLook();
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -184,13 +214,6 @@ namespace UC
             return virtualTarget;
         }
 
-        HumanBodyBones GetMainHand()
-        {
-            // For BothReversed, “main” is still the hand on the opposite side of the weapon
-            return (mode == Mode.Left || mode == Mode.BothReversed)
-                ? HumanBodyBones.LeftHand
-                : HumanBodyBones.RightHand;
-        }
     }
 }
 
