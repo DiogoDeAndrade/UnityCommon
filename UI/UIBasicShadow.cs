@@ -123,6 +123,12 @@ namespace UC
             {
                 shadowCanvas = gameObject.AddComponent<Canvas>();
                 shadowCanvas.overrideSorting = true;
+
+                Canvas parentCanvas = parentImage.GetComponent<Canvas>();
+                if (parentCanvas)
+                {
+                    shadowCanvas.sortingOrder = parentCanvas.sortingOrder - 1;
+                }
             }
         }
     }
