@@ -47,7 +47,10 @@ namespace UC
 
         protected virtual void Start()
         {
-            MasterInputManager.SetupInput(playerId, playerInput);
+            if (playerId != -1)
+            {
+                MasterInputManager.SetupInput(playerId, playerInput);
+            }
 
             horizontalControl.playerInput = playerInput;
             verticalControl.playerInput = playerInput;

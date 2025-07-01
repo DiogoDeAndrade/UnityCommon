@@ -13,5 +13,14 @@ namespace UC
                     if (audioSource) audioSource.volume = value;
                 });
         }
+
+        public static Tweener.BaseInterpolator PitchShift(this AudioSource audioSource, float targetShift, float time)
+        {
+            return audioSource.Tween().Interpolate(audioSource.pitch, targetShift, time,
+                (value) =>
+                {
+                    if (audioSource) audioSource.pitch = value;
+                });
+        }
     }
 }
