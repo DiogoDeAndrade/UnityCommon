@@ -116,18 +116,18 @@ namespace UC
             {
                 shadowImage = GetComponent<Image>();
                 if (shadowImage == null) shadowImage = gameObject.AddComponent<Image>();
-            }
 
-            shadowCanvas = GetComponent<Canvas>();
-            if (shadowCanvas == null)
-            {
-                shadowCanvas = gameObject.AddComponent<Canvas>();
-                shadowCanvas.overrideSorting = true;
-
-                Canvas parentCanvas = parentImage.GetComponent<Canvas>();
-                if (parentCanvas)
+                shadowCanvas = GetComponent<Canvas>();
+                if (shadowCanvas == null)
                 {
-                    shadowCanvas.sortingOrder = parentCanvas.sortingOrder - 1;
+                    shadowCanvas = gameObject.AddComponent<Canvas>();
+                    shadowCanvas.overrideSorting = true;
+
+                    Canvas parentCanvas = parentImage.GetComponent<Canvas>();
+                    if (parentCanvas)
+                    {
+                        shadowCanvas.sortingOrder = parentCanvas.sortingOrder - 1;
+                    }
                 }
             }
         }

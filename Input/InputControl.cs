@@ -32,7 +32,7 @@ namespace UC
         bool isVec2;
         float prevValue;
 
-        public PlayerInput playerInput { get => _playerInput; set { _playerInput = value; } }
+        public PlayerInput playerInput { get => _playerInput; set { _playerInput = value; RefreshAction(); } }
 
         public float GetAxis()
         {
