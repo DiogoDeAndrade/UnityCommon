@@ -89,6 +89,11 @@ public class DistortionRipple : MonoBehaviour
         if (ripplesPool.Count > 0)
         {
             newElem = ripplesPool.PopLast();
+            newElem.spriteRenderer.sprite = rippleSprite;
+            newElem.spriteRenderer.sprite = rippleSprite;
+            newElem.spriteRenderer.sortingLayerID = spriteSortingLayer;
+            newElem.spriteRenderer.sortingOrder = spriteOrderInLayer;
+            newElem.spriteRenderer.material = new Material(rippleMaterial);
             newElem.gameObject.SetActive(true);
         }
         else
