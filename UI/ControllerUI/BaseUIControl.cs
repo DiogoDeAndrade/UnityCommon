@@ -129,7 +129,7 @@ namespace UC
         public T value => _value;
         public T prevValue => _prevValue;
 
-        protected void ChangeValue(T newValue)
+        public virtual void ChangeValue(T newValue)
         {
             _prevValue = _value;
             _value = newValue;
