@@ -49,6 +49,8 @@ public class DistortionCamera : MonoBehaviour
 
     private void UpdateRenderTexture()
     {
+        Debug.Log("Setting up render texture for distortion");
+
         var prevDistortTexture = distortionTexture;
 
         int width = Mathf.Max(1, Mathf.RoundToInt(Screen.width * renderTargetScale));
@@ -61,7 +63,10 @@ public class DistortionCamera : MonoBehaviour
 
         distortionTexture = new RenderTexture(desc);
         distortionTexture.name = "_DistortionTexture";
-        distortionTexture.Create();
+        if (!distortionTexture.Create())
+        {
+            Debug.LogError("Failed to create distortion texture!");
+        }
 
         if (distortCamera != null)
         {

@@ -77,28 +77,15 @@ namespace UC
                 musicSource = _PlayMusic(startMusic, 1.0f, 1.0f);
             }
         }
-
-        void _StopMusic()
+        private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
         {
-            if (musicSource)
-            {
-                var tmp = musicSource;
-                musicSource.FadeTo(0.0f, defaultCrossfadeTime).Done(() =>
-                {
-                    tmp.Stop();
-                    tmp.clip = null;
-                    tmp.loop = false;
-                });
-                musicSource = null;
-            }
+            return _PlayMusic(clip, volume, pitch, defaultCrossfadeTime);
         }
 
-        private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
+        private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f, float crossFadeTime = 0.0f)
         {
             if (musicSource == null)
             {
-                if (clip == null) return null;
-
                 musicSource = _PlaySound(SoundType.Music, clip, 1, 1);
                 musicSource.loop = true;
 
@@ -112,7 +99,7 @@ namespace UC
 
             if (clip == null)
             {
-                _StopMusic();
+                musicSource.FadeTo(0.0f, crossFadeTime);
                 return null;
             }
 
@@ -188,10 +175,14 @@ namespace UC
         }
 
 
-        static public AudioSource PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
+        static public AudioSource PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f, float crossfadeTime = -float.MaxValue)
         {
             if (_instance == null) return null;
-            return _instance._PlayMusic(clip, volume, pitch);
+
+            if (crossfadeTime >= 0.0f)
+                return _instance._PlayMusic(clip, volume, pitch, crossfadeTime);
+            else
+                return _instance._PlayMusic(clip, volume, pitch);
         }
 
         static public AudioSource PlayLoopSound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f)
