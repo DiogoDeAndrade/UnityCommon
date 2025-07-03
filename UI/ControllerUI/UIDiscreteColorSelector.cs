@@ -71,5 +71,21 @@ namespace UC
                 if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
             }
         }
+
+        public override void ChangeValue(Color newValue)
+        {
+            float minDist = float.MaxValue;
+            for (int i = 0; i < colors.Length; i++)
+            {
+                float d = colors[i].DistanceRGBA(newValue);
+                if (d < minDist)
+                {
+                    minDist = d;
+                    selectedColor = i;
+                }
+            }
+
+            base.ChangeValue(newValue);
+        }
     }
 }

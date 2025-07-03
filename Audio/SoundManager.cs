@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
+using UnityEngine.Rendering;
 
 namespace UC
 {
@@ -24,6 +26,13 @@ namespace UC
         List<AudioSource> audioSources;
         AudioMixerGroup[] mixerGroups;
         AudioSource musicSource;
+
+        class PauseStruct
+        {
+            public List<AudioSource> pausedSources;
+        };
+
+        List<PauseStruct> pauseStack = new();
 
         public static SoundManager instance
         {
@@ -136,6 +145,36 @@ namespace UC
             return audioSource;
         }
 
+        private void _PauseAll()
+        {
+            PauseStruct p = new();
+            p.pausedSources = new();
+
+            foreach (var source in audioSources)
+            {
+                if (source.isPlaying)
+                {
+                    p.pausedSources.Add(source);
+                    source.Pause();
+                }
+            }
+
+            pauseStack.Add(p);
+        }
+
+        private void _UnpauseAll()
+        {
+            if (pauseStack.Count > 0)
+            {
+                var p = pauseStack.PopLast();
+
+                foreach (var source in p.pausedSources)
+                {
+                    source.UnPause();
+                }
+            }
+        }
+
         private AudioSource GetSource()
         {
             if (audioSources == null)
@@ -189,6 +228,18 @@ namespace UC
         {
             if (_instance == null) return null;
             return _instance._PlaySound(type, clip, volume, pitch, true);
+        }
+
+        static public void PauseAll()
+        {
+            if (_instance == null) return;
+            _instance._PauseAll();
+        }
+
+        static public void UnpauseAll()
+        {
+            if (_instance == null) return;
+            _instance._UnpauseAll();
         }
     }
 }

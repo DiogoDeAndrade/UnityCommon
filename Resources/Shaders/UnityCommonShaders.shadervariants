@@ -8,28 +8,16 @@ ShaderVariantCollection:
   m_PrefabAsset: {fileID: 0}
   m_Name: UnityCommonShaders
   m_Shaders:
-  - first: {fileID: -6465566751694194690, guid: 00203c5c3cc86ce468b227e90799daea, type: 3}
-    second:
-      variants: []
-  - first: {fileID: -6465566751694194690, guid: 020d1bb3d385bd44eaebf7cb18699b94, type: 3}
+  - first: {fileID: -6465566751694194690, guid: dc8b51f375091d9418466c64310e5b65, type: 3}
     second:
       variants: []
   - first: {fileID: -6465566751694194690, guid: 4e5bcb4a482a1104c9fbe51cfe0c57ad, type: 3}
     second:
       variants: []
-  - first: {fileID: -6465566751694194690, guid: dc8b51f375091d9418466c64310e5b65, type: 3}
+  - first: {fileID: -6465566751694194690, guid: 020d1bb3d385bd44eaebf7cb18699b94, type: 3}
     second:
       variants: []
-  - first: {fileID: -6465566751694194690, guid: a37697b3006287847aa10e9ecade3390, type: 3}
-    second:
-      variants: []
-  - first: {fileID: -6465566751694194690, guid: 4a523c8102e995b43bb4a017076dd4e1, type: 3}
-    second:
-      variants: []
-  - first: {fileID: -6465566751694194690, guid: 87c7f8cc731ebfe499ee07bb292a40ad, type: 3}
-    second:
-      variants: []
-  - first: {fileID: -6465566751694194690, guid: 8cf3900d257be6949a06c35796cc26d1, type: 3}
+  - first: {fileID: -6465566751694194690, guid: 00203c5c3cc86ce468b227e90799daea, type: 3}
     second:
       variants: []
   - first: {fileID: -6465566751694194690, guid: 1f29407d401dd0142999b13c53bb223f, type: 3}
@@ -38,12 +26,27 @@ ShaderVariantCollection:
   - first: {fileID: -6465566751694194690, guid: c4a53a05f5fc8754d8f736e63ef2de57, type: 3}
     second:
       variants: []
-  - first: {fileID: -6465566751694194690, guid: a42a66f1e6cfedd46b174e56d7098930, type: 3}
+  - first: {fileID: -6465566751694194690, guid: 87c7f8cc731ebfe499ee07bb292a40ad, type: 3}
+    second:
+      variants: []
+  - first: {fileID: -6465566751694194690, guid: 8cf3900d257be6949a06c35796cc26d1, type: 3}
+    second:
+      variants: []
+  - first: {fileID: -6465566751694194690, guid: a37697b3006287847aa10e9ecade3390, type: 3}
+    second:
+      variants: []
+  - first: {fileID: -6465566751694194690, guid: 4a523c8102e995b43bb4a017076dd4e1, type: 3}
     second:
       variants: []
   - first: {fileID: 4800000, guid: 00ca6d65c2a8a6f438266648ca643a4c, type: 3}
     second:
       variants: []
   - first: {fileID: -6465566751694194690, guid: 0c3489a95b354e942adf63620d72d558, type: 3}
+    second:
+      variants: []
+  - first: {fileID: -6465566751694194690, guid: a42a66f1e6cfedd46b174e56d7098930, type: 3}
+    second:
+      variants: []
+  - first: {fileID: -6465566751694194690, guid: 6a89a446a5b112d408536c99d3660e11, type: 3}
     second:
       variants: []

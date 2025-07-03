@@ -26,10 +26,10 @@ namespace UC
                     if (panel)
                     {
                         CanvasGroup cg = parentGroup.GetComponent<CanvasGroup>();
-                        if (cg) cg.FadeOut(0.5f);
+                        if (cg) cg.FadeOut(0.5f).SetUnscaledTime(parentGroup.useUnscaledTime);
                         parentGroup.SetUI(false);
                         cg = panel.GetComponent<CanvasGroup>();
-                        if (cg) cg.FadeIn(0.5f);
+                        if (cg) cg.FadeIn(0.5f).SetUnscaledTime(parentGroup.useUnscaledTime);
                         panel.SetUI(true);
                     }
                     break;
@@ -41,11 +41,11 @@ namespace UC
                         if (topGroup)
                         {
                             cg = topGroup.GetComponent<CanvasGroup>();
-                            if (cg) cg.FadeIn(0.5f);
+                            if (cg) cg.FadeIn(0.5f).SetUnscaledTime(parentGroup.useUnscaledTime);
                             topGroup.SetUI(true);
                         }
                         cg = parentGroup.GetComponent<CanvasGroup>();
-                        if (cg) cg.FadeOut(0.5f);
+                        if (cg) cg.FadeOut(0.5f).SetUnscaledTime(parentGroup.useUnscaledTime);
                         parentGroup.SetUI(false);
                     }
                     break;

@@ -24,6 +24,7 @@ namespace UC
         [SerializeField] AudioClip selectSnd;
 
         [SerializeField] protected BaseUIControl initialControl;
+        [SerializeField] protected bool _useUnscaledTime = false;
 
         protected float cooldownTimer;
         protected BaseUIControl _selectedControl;
@@ -44,10 +45,11 @@ namespace UC
         }
 
         public bool uiEnable => _uiEnable;
+        public bool useUnscaledTime => _useUnscaledTime;
 
         protected virtual void Start()
         {
-            if (playerId != -1)
+            if ((playerId != -1) && (playerInput))
             {
                 MasterInputManager.SetupInput(playerId, playerInput);
             }
@@ -70,7 +72,7 @@ namespace UC
 
             if (_selectedControl)
             {
-                if (cooldownTimer > 0) cooldownTimer -= Time.deltaTime;
+                if (cooldownTimer > 0) cooldownTimer -= GetDeltaTime();
 
                 if (cooldownTimer <= 0.0f)
                 {
@@ -155,5 +157,14 @@ namespace UC
 
         }
 
+        public float GetDeltaTime() => (_useUnscaledTime) ? (Time.unscaledDeltaTime) : (Time.deltaTime);
+
+        public void SetPlayerInput(PlayerInput input)
+        {
+            playerInput = input;
+            horizontalControl.playerInput = playerInput;
+            verticalControl.playerInput = playerInput;
+            interactControl.playerInput = playerInput;
+        }
     }
 }

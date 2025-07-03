@@ -87,7 +87,7 @@ namespace UC
 
             if (cooldownTimer > 0.0f)
             {
-                cooldownTimer -= Time.deltaTime;
+                cooldownTimer -= parentGroup.GetDeltaTime();
             }
         }
 

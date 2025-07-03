@@ -78,5 +78,19 @@ namespace UC
                 if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
             }
         }
+
+        public override void ChangeValue(T newValue)
+        {
+            for (int i = 0; i < options.Length; i++)
+            {
+                if (newValue == options[i])
+                {
+                    selectedItem = i;
+                    break;
+                }
+            }
+
+            base.ChangeValue(newValue);
+        }
     }
 }

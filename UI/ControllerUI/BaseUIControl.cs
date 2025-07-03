@@ -17,7 +17,7 @@ namespace UC
 
         [SerializeField] protected Image highlighterImage;
         [SerializeField] protected TextMeshProUGUI highlighterText;
-        [SerializeField, ShowIf("needHighlightColor")] protected Color highlightColor;
+        [SerializeField, ShowIf(nameof(needHighlightColor))] protected Color highlightColor;
         [SerializeField] protected BaseUIControl _navUp;
         [SerializeField] protected BaseUIControl _navDown;
         [SerializeField] protected BaseUIControl _navLeft;
@@ -118,7 +118,6 @@ namespace UC
         public void SetNavRight(BaseUIControl control) { _navRight = control; }
         public void SetNavUp(BaseUIControl control) { _navUp = control; }
         public void SetNavDown(BaseUIControl control) { _navDown = control; }
-
     }
 
     public class UIControl<T> : BaseUIControl where T : IEquatable<T>
@@ -129,7 +128,7 @@ namespace UC
         public T value => _value;
         public T prevValue => _prevValue;
 
-        protected void ChangeValue(T newValue)
+        public virtual void ChangeValue(T newValue)
         {
             _prevValue = _value;
             _value = newValue;

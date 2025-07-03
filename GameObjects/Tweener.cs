@@ -15,6 +15,7 @@ namespace UC
             public float currentTime;
             public float totalTime;
             public float delayStartTime;
+            public bool unscaledTime;
             public EaseFunction easeFunction;
             public List<Action> doneActions;
 
@@ -57,6 +58,12 @@ namespace UC
             public BaseInterpolator DelayStart(float time)
             {
                 delayStartTime = time;
+                return this;
+            }
+
+            public BaseInterpolator SetUnscaledTime(bool unscaledTime)
+            {
+                this.unscaledTime = unscaledTime;
                 return this;
             }
 
@@ -193,7 +200,9 @@ namespace UC
             {
                 if (interpolators[i] == null) continue;
 
-                interpolators[i].Run(Time.deltaTime);
+                float deltaTime = (interpolators[i].unscaledTime) ? (Time.unscaledDeltaTime) : (Time.deltaTime);
+
+                interpolators[i].Run(deltaTime);
                 if (interpolators[i].isFinished)
                 {
                     CompleteAction(i);
