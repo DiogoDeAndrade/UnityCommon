@@ -110,6 +110,19 @@ namespace UC
                 {
                     shadowText = GetComponent<TextMeshProUGUI>();
                     if (shadowText == null) shadowText = gameObject.AddComponent<TextMeshProUGUI>();
+
+                    shadowCanvas = GetComponent<Canvas>();
+                    if (shadowCanvas == null)
+                    {
+                        shadowCanvas = gameObject.AddComponent<Canvas>();
+                        shadowCanvas.overrideSorting = true;
+
+                        Canvas parentCanvas = parentImage.GetComponent<Canvas>();
+                        if (parentCanvas)
+                        {
+                            shadowCanvas.sortingOrder = parentCanvas.sortingOrder - 1;
+                        }
+                    }
                 }
             }
             else
