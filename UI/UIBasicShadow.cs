@@ -117,7 +117,7 @@ namespace UC
                         shadowCanvas = gameObject.AddComponent<Canvas>();
                         shadowCanvas.overrideSorting = true;
 
-                        Canvas parentCanvas = parentImage.GetComponent<Canvas>();
+                        Canvas parentCanvas = parentText.GetComponent<Canvas>();
                         if (parentCanvas)
                         {
                             shadowCanvas.sortingOrder = parentCanvas.sortingOrder - 1;
