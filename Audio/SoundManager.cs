@@ -159,6 +159,8 @@ namespace UC
                 }
             }
 
+            audioSources.RemoveAll((src) => p.pausedSources.Contains(src));
+
             pauseStack.Add(p);
         }
 
@@ -171,6 +173,7 @@ namespace UC
                 foreach (var source in p.pausedSources)
                 {
                     source.UnPause();
+                    audioSources.Add(source);
                 }
             }
         }
