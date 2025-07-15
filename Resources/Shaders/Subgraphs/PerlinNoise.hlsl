@@ -130,3 +130,19 @@ void PerlinVector2D_Animated_float(float2 uv, float scale, float time, float2 sp
 
     ret = float2(cos(angle), sin(angle));
 }
+
+
+// 3D Noise function
+void FBM4_3D_float(float3 pos, float4 amplitude, float4 frequency, float4 offset, out float ret)
+{
+    float noise1, noise2, noise3, noise4;
+    PerlinNoise3D_float(pos * frequency.x + offset.x, noise1);
+    PerlinNoise3D_float(pos * frequency.y + offset.y, noise2);
+    PerlinNoise3D_float(pos * frequency.z + offset.z, noise3);
+    PerlinNoise3D_float(pos * frequency.w + offset.w, noise4);
+
+    ret = amplitude.x * noise1;
+    ret += amplitude.y * noise2;
+    ret += amplitude.z * noise3;
+    ret += amplitude.w * noise4;
+}

@@ -1015,6 +1015,7 @@
     "m_SourceType": 0,
     "m_FunctionName": "PerlinNoise3D",
     "m_FunctionSource": "bd28df317f882284a881943d0f3c3678",
+    "m_FunctionSourceUsePragmas": true,
     "m_FunctionBody": "Enter function body here..."
 }
 

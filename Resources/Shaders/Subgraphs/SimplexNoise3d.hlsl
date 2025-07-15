@@ -7,8 +7,8 @@ static const float3 grad3[12] = {
     float3(0,1,1), float3(0,-1,1), float3(0,1,-1), float3(0,-1,-1)
 };
 
-// Permutation table
-static const int perm[512] = {
+// simplexPermutation table
+static const int simplexPerm[512] = {
     151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
     190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,
     136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,
@@ -85,10 +85,10 @@ void SimplexNoise3D_float(float3 p, out float ret)
     float z3 = z0 - 1.0 + 3.0 * G3;
 
     // Calculate hashed gradient indices for corners
-    int gi0 = perm[i + perm[j + perm[k]]] % 12;
-    int gi1 = perm[i + i1 + perm[j + j1 + perm[k + k1]]] % 12;
-    int gi2 = perm[i + i2 + perm[j + j2 + perm[k + k2]]] % 12;
-    int gi3 = perm[i + 1 + perm[j + 1 + perm[k + 1]]] % 12;
+    int gi0 = simplexPerm[i + simplexPerm[j + simplexPerm[k]]] % 12;
+    int gi1 = simplexPerm[i + i1 + simplexPerm[j + j1 + simplexPerm[k + k1]]] % 12;
+    int gi2 = simplexPerm[i + i2 + simplexPerm[j + j2 + simplexPerm[k + k2]]] % 12;
+    int gi3 = simplexPerm[i + 1 + simplexPerm[j + 1 + simplexPerm[k + 1]]] % 12;
 
     // Calculate contributions
     float t0 = 0.5 - x0 * x0 - y0 * y0 - z0 * z0;
