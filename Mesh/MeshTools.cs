@@ -851,5 +851,99 @@ namespace UC
 
             return FromTopology(topology);
         }
+
+        public static Mesh CopyMesh(Mesh sourceMesh)
+        {
+            if (sourceMesh == null)
+                throw new System.ArgumentNullException(nameof(sourceMesh));
+
+            Mesh newMesh = new Mesh
+            {
+                indexFormat = sourceMesh.indexFormat,
+                name = sourceMesh.name + "_Copy"
+            };
+
+            // Vertices
+            newMesh.vertices = sourceMesh.vertices;
+
+            // Normals
+            if (sourceMesh.normals != null && sourceMesh.normals.Length > 0)
+                newMesh.normals = sourceMesh.normals;
+
+            // Tangents
+            if (sourceMesh.tangents != null && sourceMesh.tangents.Length > 0)
+                newMesh.tangents = sourceMesh.tangents;
+
+            // Colors
+            if (sourceMesh.colors != null && sourceMesh.colors.Length > 0)
+                newMesh.colors = sourceMesh.colors;
+
+            if (sourceMesh.colors32 != null && sourceMesh.colors32.Length > 0)
+                newMesh.colors32 = sourceMesh.colors32;
+
+            // UVs
+            if (sourceMesh.uv != null && sourceMesh.uv.Length > 0)
+                newMesh.uv = sourceMesh.uv;
+
+            if (sourceMesh.uv2 != null && sourceMesh.uv2.Length > 0)
+                newMesh.uv2 = sourceMesh.uv2;
+
+            if (sourceMesh.uv3 != null && sourceMesh.uv3.Length > 0)
+                newMesh.uv3 = sourceMesh.uv3;
+
+            if (sourceMesh.uv4 != null && sourceMesh.uv4.Length > 0)
+                newMesh.uv4 = sourceMesh.uv4;
+
+#if UNITY_2018_2_OR_NEWER
+            if (sourceMesh.uv5 != null && sourceMesh.uv5.Length > 0)
+                newMesh.uv5 = sourceMesh.uv5;
+
+            if (sourceMesh.uv6 != null && sourceMesh.uv6.Length > 0)
+                newMesh.uv6 = sourceMesh.uv6;
+
+            if (sourceMesh.uv7 != null && sourceMesh.uv7.Length > 0)
+                newMesh.uv7 = sourceMesh.uv7;
+
+            if (sourceMesh.uv8 != null && sourceMesh.uv8.Length > 0)
+                newMesh.uv8 = sourceMesh.uv8;
+#endif
+
+            // Bone weights
+            if (sourceMesh.boneWeights != null && sourceMesh.boneWeights.Length > 0)
+                newMesh.boneWeights = sourceMesh.boneWeights;
+
+            // Bind poses
+            if (sourceMesh.bindposes != null && sourceMesh.bindposes.Length > 0)
+                newMesh.bindposes = sourceMesh.bindposes;
+
+            // Submeshes
+            newMesh.subMeshCount = sourceMesh.subMeshCount;
+            for (int i = 0; i < sourceMesh.subMeshCount; i++)
+            {
+                newMesh.SetIndices(sourceMesh.GetIndices(i), sourceMesh.GetTopology(i), i);
+            }
+
+            // Blend shapes
+            for (int i = 0; i < sourceMesh.blendShapeCount; i++)
+            {
+                string shapeName = sourceMesh.GetBlendShapeName(i);
+                int frameCount = sourceMesh.GetBlendShapeFrameCount(i);
+                for (int j = 0; j < frameCount; j++)
+                {
+                    float weight = sourceMesh.GetBlendShapeFrameWeight(i, j);
+                    Vector3[] deltaVertices = new Vector3[sourceMesh.vertexCount];
+                    Vector3[] deltaNormals = new Vector3[sourceMesh.vertexCount];
+                    Vector3[] deltaTangents = new Vector3[sourceMesh.vertexCount];
+
+                    sourceMesh.GetBlendShapeFrameVertices(i, j, deltaVertices, deltaNormals, deltaTangents);
+                    newMesh.AddBlendShapeFrame(shapeName, weight, deltaVertices, deltaNormals, deltaTangents);
+                }
+            }
+
+            // Recalculate bounds (optional)
+            newMesh.bounds = sourceMesh.bounds;
+
+            return newMesh;
+        }
     }
 }
