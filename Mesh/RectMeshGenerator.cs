@@ -254,9 +254,21 @@ namespace UC
             mesh.UploadMeshData(true);
 
             var meshFilter = GetComponent<MeshFilter>();
-            meshFilter.mesh = mesh;
+            if (meshFilter != null)
+            {
+                meshFilter.mesh = mesh;
+            }
             var meshRenderer = GetComponent<MeshRenderer>();
-            meshRenderer.material = material;
+            if (meshRenderer != null)
+            {
+                meshRenderer.material = material;
+            }
+            var skinnedMeshRenderer = GetComponent<SkinnedMeshRenderer>();
+            if (skinnedMeshRenderer)
+            {
+                skinnedMeshRenderer.sharedMesh = mesh;
+                skinnedMeshRenderer.material = material;
+            }
         }
 
         public static float GetRectSDF(Vector2 halfSize, Vector2 point)

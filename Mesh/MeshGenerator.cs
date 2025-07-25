@@ -4,9 +4,6 @@ using UnityEngine;
 
 namespace UC
 {
-
-    [RequireComponent(typeof(MeshFilter))]
-    [RequireComponent(typeof(MeshRenderer))]
     [ExecuteInEditMode]
     public class MeshGenerator : MonoBehaviour
     {
