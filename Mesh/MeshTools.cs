@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.Rendering;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -944,6 +945,23 @@ namespace UC
             newMesh.bounds = sourceMesh.bounds;
 
             return newMesh;
+        }
+
+        public static void RecalculateNormalsWithMirror(this Mesh mesh)
+        {
+            var normals = mesh.normals;
+
+            mesh.RecalculateNormals();
+
+            var newNormals = mesh.normals;
+
+            for (int i = 0; i < normals.Length; i++)
+            {
+                if (normals[i] != newNormals[i])                
+                {
+                    Debug.Log("Normals are different");
+                }
+            }
         }
     }
 }
