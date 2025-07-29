@@ -1,11 +1,13 @@
 using UnityEngine;
+using NaughtyAttributes;
 
 namespace UC
 {
     public class DynamicUpdateGI : MonoBehaviour
     {
         [SerializeField] private bool updateAllFrames = true;
-        [SerializeField] private ReflectionProbe[] reflectionProbes;
+        [SerializeField] private bool updateReflectionProbes = true;
+        [SerializeField, ShowIf(nameof(updateReflectionProbes))] private ReflectionProbe[] reflectionProbes;
 
         static DynamicUpdateGI Instance;
 
@@ -29,11 +31,12 @@ namespace UC
             }
         }
 
+        [Button("Update Now")]
         void UpdateEnv()
         { 
             DynamicGI.UpdateEnvironment();
 
-            if (reflectionProbes != null)
+            if ((reflectionProbes != null) && (updateReflectionProbes))
             {
                 foreach (var probe in reflectionProbes)
                 {
