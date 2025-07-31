@@ -16,7 +16,8 @@ namespace UC
         [SerializeField, ShowIf(nameof(limited))]
         private int maxSlots = 9;
 
-        private class Items
+        [System.Serializable]
+        public class Items
         {
             public Item item;
             public int count;
