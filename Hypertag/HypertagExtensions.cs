@@ -5,7 +5,7 @@ namespace UC
 
     public static class HypertaggedExtension
     {
-        public static bool HasHypertag(this Component go, Hypertag tag)
+        public static bool HasHypertag(this GameObject go, Hypertag tag)
         {
             foreach (var obj in go.GetComponents<HypertaggedObject>())
             {
@@ -14,11 +14,11 @@ namespace UC
 
             return false;
         }
-        public static bool HasHypertags(this Component go, Hypertag[] tags)
+        public static bool HasHypertags(this GameObject go, Hypertag[] tags)
         {
             foreach (var obj in go.GetComponents<HypertaggedObject>())
             {
-                if (obj.HasHypertags(tags)) return true;
+                if (obj.HasAnyHypertag(tags)) return true;
             }
 
             return false;
@@ -29,7 +29,7 @@ namespace UC
             T obj = go.GetComponentInChildren<T>();
             if (obj == null) return null;
 
-            if (obj.HasHypertag(tag)) return obj;
+            if (obj.gameObject.HasHypertag(tag)) return obj;
 
             return null;
         }
@@ -39,7 +39,7 @@ namespace UC
             T obj = go.GetComponentInChildren<T>();
             if (obj == null) return null;
 
-            if (obj.HasHypertags(tags)) return obj;
+            if (obj.gameObject.HasHypertags(tags)) return obj;
 
             return null;
         }

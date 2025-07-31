@@ -58,9 +58,7 @@ namespace UC
                 var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
                 foreach (var obj in editorL)
                 {
-                    if (!obj.HasHypertag(tag)) continue;
-
-                    yield return obj;
+                    if (obj.hypertag == tag) yield return obj;
                 }
                 yield break;
             }
@@ -103,15 +101,25 @@ namespace UC
             }
         }
 
+        public static T GetFirstOrDefault<T>(Hypertag tag) where T : Component
+        {
+            foreach (var t in Get<T>(tag))
+            {
+                return t;
+            }
+            return default(T);
+        }
+
         public static IEnumerable<T> Get<T>(Hypertag tag) where T : Component
         {
+            if (tag == null) yield break;
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
                 var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
                 foreach (var obj in editorL)
                 {
-                    if (!obj.HasHypertag(tag)) continue;
+                    if (obj.hypertag != tag) continue;
 
                     var c = obj.GetComponent<T>();
                     if (c) yield return c;
@@ -150,7 +158,7 @@ namespace UC
                 var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
                 foreach (var obj in editorL)
                 {
-                    if (!obj.HasHypertag(tag)) continue;
+                    if (obj.hypertag != tag) continue;
                     if (Vector3.Distance(position, obj.transform.position) < radius)
                     {
                         var c = obj.GetComponent<T>();
@@ -182,7 +190,7 @@ namespace UC
                 var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
                 foreach (var obj in editorL)
                 {
-                    if (!obj.HasHypertag(tag)) continue;
+                    if (obj.hypertag != tag) continue;
                     if (Vector2.Distance(position, obj.transform.position) < radius)
                     {
                         var c = obj.GetComponent<T>();
