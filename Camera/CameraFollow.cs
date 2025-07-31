@@ -7,9 +7,11 @@ namespace UC
 
     public class CameraFollow : MonoBehaviour
     {
+        public enum UpdateMode { Update, FixedUpdate, LateUpdate };
         public enum Mode { SimpleFeedbackLoop = 0, CameraTrap = 1, ExponentialDecay = 2 };
         public enum TagMode { Closest = 0, Furthest = 1, Average = 2 };
 
+        [SerializeField] UpdateMode updateMode = UpdateMode.FixedUpdate;
         [SerializeField] Mode mode = Mode.SimpleFeedbackLoop;
         [SerializeField] Hypertag targetTag;
         [SerializeField] TagMode tagMode = TagMode.Closest;
@@ -47,7 +49,20 @@ namespace UC
             }
         }
 
+        void Update()
+        {
+            if (updateMode == UpdateMode.Update) Run_Update();
+        }
         void FixedUpdate()
+        {
+            if (updateMode == UpdateMode.FixedUpdate) Run_Update();
+        }
+        void LateUpdate()
+        {
+            if (updateMode == UpdateMode.LateUpdate) Run_Update();
+        }
+
+        void Run_Update()
         {
             switch (mode)
             {
@@ -186,7 +201,7 @@ namespace UC
                         if (d < minDist)
                         {
                             minDist = d;
-                            cft = targetObject.GetComponent<CameraFollowTarget>();
+                            cft = obj.GetComponent<CameraFollowTarget>();
                             if (cft) selectedPosition = cft.followPos;
                             else selectedPosition = obj.position;
                         }
@@ -201,7 +216,7 @@ namespace UC
                         if (d > maxDist)
                         {
                             maxDist = d;
-                            cft = targetObject.GetComponent<CameraFollowTarget>();
+                            cft = obj.GetComponent<CameraFollowTarget>();
                             if (cft) selectedPosition = cft.followPos;
                             else selectedPosition = obj.position;
                         }
