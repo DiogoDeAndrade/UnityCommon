@@ -12,6 +12,19 @@ namespace UC
         [SerializeField]
         private TextMeshProUGUI itemCountText;
 
+        string baseText = "x{0}";
+
+        private void Start()
+        {
+            if (itemCountText != null)
+            {
+                if (itemCountText.text.IndexOf("{0}") != -1)
+                {
+                    baseText = itemCountText.text;
+                }
+            }
+        }
+
         public void Set(Item item, int count)
         {
             if (itemImage)
@@ -38,7 +51,7 @@ namespace UC
                 {
                     itemCountText.enabled = true;
                     itemCountText.color = item.displayTextColor;
-                    itemCountText.text = $"x{count}";
+                    itemCountText.text = string.Format(baseText, count);
                 }
             }
         }

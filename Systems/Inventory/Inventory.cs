@@ -113,7 +113,7 @@ namespace UC
                 // Find a stack
                 for (int i = 0; i < items.Count; i++)
                 {
-                    if ((items[i].item == item) && (items[i].count < item.maxStack))
+                    if ((items[i].item == item) && ((items[i].count < item.maxStack) || (item.maxStack == 0)))
                     {
                         return i;
                     }

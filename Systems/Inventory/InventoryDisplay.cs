@@ -1,3 +1,5 @@
+using NaughtyAttributes;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace UC
@@ -5,17 +7,34 @@ namespace UC
 
     public class InventoryDisplay : MonoBehaviour
     {
-        [SerializeField] private RectTransform itemContainer;
+        private enum OpenState { Unknown, Open, Close };
 
-        Inventory inventory;
-        ItemDisplay[] itemDisplays;
-        CanvasGroup canvasGroup;
+        [SerializeField] 
+        private bool           isAlwaysOpen = true;
+        [SerializeField, HideIf(nameof(isAlwaysOpen))] 
+        private bool           startOpen;
+        [SerializeField, ShowIf(nameof(isAlwaysOpen))] 
+        private bool           disappearIfEmpty = true;
+        [SerializeField]
+        private float          fadeTime = 0.5f;
+        [SerializeField] 
+        private RectTransform  itemContainer;
+
+        Inventory       inventory;
+        ItemDisplay[]   itemDisplays;
+        CanvasGroup     canvasGroup;
+        OpenState       openState = OpenState.Unknown;
 
         void Awake()
         {
             canvasGroup = GetComponent<CanvasGroup>();
             itemDisplays = itemContainer.GetComponentsInChildren<ItemDisplay>(true);
             ClearDisplay();
+            if (!isAlwaysOpen)
+            {
+                if (startOpen) Open(0.1f);
+                else Close(0.1f);
+            }
         }
 
         public void SetInventory(Inventory inventory)
@@ -34,7 +53,10 @@ namespace UC
             }
             else
             {
-                ClearDisplay();
+                if (isAlwaysOpen)
+                {
+                    if (disappearIfEmpty) Close(fadeTime);
+                }
             }
         }
 
@@ -49,13 +71,23 @@ namespace UC
                 itemDisplays[i].Set(item, count);
             }
 
-            if (inventory.HasItems())
+            if (isAlwaysOpen)
             {
-                canvasGroup.FadeIn(0.5f);
-            }
-            else
-            {
-                canvasGroup.FadeOut(0.5f);
+                if (inventory.HasItems())
+                {
+                    Open();
+                }
+                else
+                {
+                    if (disappearIfEmpty)
+                    {
+                        Close();
+                    }
+                    else
+                    {
+                        Open();
+                    }
+                }
             }
         }
 
@@ -66,20 +98,59 @@ namespace UC
                 itemDisplay.Set(null, 0);
             }
 
-            if (inventory)
+            if (isAlwaysOpen)
             {
-                if (inventory.HasItems())
+                if (inventory)
                 {
-                    canvasGroup.FadeIn(0.5f);
+                    if (inventory.HasItems())
+                    {
+                        Open();
+                    }
+                    else
+                    {
+                        if (!disappearIfEmpty)
+                            Close();
+                    }
+                }
+                else if (disappearIfEmpty)
+                {
+                    Close();
                 }
                 else
                 {
-                    canvasGroup.FadeOut(0.5f);
+                    Open();
                 }
             }
-            else
+        }
+
+        public void Open(float time = 0.0f)
+        {
+            if (openState == OpenState.Open) return;
+
+            canvasGroup.FadeIn((time == 0.0f) ? (fadeTime) : (time));
+            openState = OpenState.Open;
+        }
+        public void Close(float time = 0.0f)
+        {
+            if (openState == OpenState.Close) return;
+
+            canvasGroup.FadeOut((time == 0.0f) ? (fadeTime) : (time));
+            openState = OpenState.Close;
+        }
+
+        public void Toggle(float time = 0.0f)
+        {
+            switch (openState)
             {
-                canvasGroup.FadeOut(0.5f);
+                case OpenState.Open:
+                    Close(time);
+                    break;
+            case OpenState.Unknown:
+            case OpenState.Close:
+                    Open(time);
+                    break;
+                default:
+                    break;
             }
         }
     }
