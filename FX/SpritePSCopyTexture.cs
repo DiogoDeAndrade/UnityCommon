@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System.Collections;
 using UnityEngine;
 
 namespace UC
@@ -7,15 +8,28 @@ namespace UC
     public class SpritePSCopyTexture : MonoBehaviour
     {
         [SerializeField] private bool dynamic;
+        [SerializeField,HideIf(nameof(dynamic))] private bool waitOneFrame;
 
         void Start()
         {
-            CopyTexture();
+            if (dynamic) return;
 
-            if (!dynamic)
+            if (waitOneFrame)
             {
+                StartCoroutine(CopyTextureCR());
+            }
+            else
+            {
+                CopyTexture();
                 Destroy(this);
             }
+        }
+
+        IEnumerator CopyTextureCR()
+        {
+            yield return null;
+            CopyTexture();
+            Destroy(this);
         }
 
         // Update is called once per frame

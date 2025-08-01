@@ -39,8 +39,7 @@ namespace UC
 
         private void OnEnable()
         {
-            if (mpb == null) mpb = new();
-
+            mpb = new();
             spriteRenderer = GetComponent<SpriteRenderer>();
 
             if (createMaterialCopy)
@@ -62,9 +61,6 @@ namespace UC
                 Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
             }
 #endif
-
-            spriteRenderer.GetPropertyBlock(mpb);
-
             ConfigureMaterial();
         }
 
@@ -110,7 +106,7 @@ namespace UC
             else effects &= ~Effects.Outline;
         }
 
-        private void Update()
+        private void LateUpdate()
         {
             ConfigureMaterial();
         }
@@ -118,7 +114,7 @@ namespace UC
         [Button("Update Material")]
         private void ConfigureMaterial()
         {
-            spriteRenderer.GetPropertyBlock(mpb);
+            //spriteRenderer.GetPropertyBlock(mpb);
 
             if ((palette) && (colorRemapEnable))
             {

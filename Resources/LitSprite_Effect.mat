@@ -94,7 +94,7 @@ Material:
     - _DistortScaleUV: 0
     - _EnableExternalAlpha: 0
     - _EnableRemap: 0
-    - _InverseFactor: 0.221
+    - _InverseFactor: 0
     - _OutlineEnable: 0
     - _OutlineWidth: 4
     - _ZWrite: 0
