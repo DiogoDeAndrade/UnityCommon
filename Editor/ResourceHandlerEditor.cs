@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using UnityEditor.UIElements;
 
 namespace UC
 {
@@ -8,14 +9,16 @@ namespace UC
     public class ResourceHandlerEditor : UnityCommonEditor
     {
         private SerializedProperty typeProperty;
-        private SerializedProperty resourceProperty;
-        private SerializedProperty resourceEmptyProperty;
+        private SerializedProperty overrideModeProperty;
+        private SerializedProperty initialValueProperty;
 
         protected override void OnEnable()
         {
             base.OnEnable();
 
-            typeProperty = serializedObject.FindProperty("type");  // Inline editable ResourceType
+            typeProperty = serializedObject.FindProperty("type");  
+            overrideModeProperty = serializedObject.FindProperty("overrideMode");  
+            initialValueProperty = serializedObject.FindProperty("initialValue");  
         }
 
         public override void OnInspectorGUI()
@@ -48,6 +51,11 @@ namespace UC
                         handler.SetResource(newResource);
                         EditorUtility.SetDirty(handler);
                     }
+
+                    EditorGUILayout.PropertyField(overrideModeProperty);
+                    var overrideMode = (ResourceHandler.OverrideMode)overrideModeProperty.enumValueFlag;
+                    if ((overrideMode & ResourceHandler.OverrideMode.InitialResource) != 0)
+                        EditorGUILayout.PropertyField(initialValueProperty);
 
                     // Progress Bar Section
                     DrawProgressBar(handler);

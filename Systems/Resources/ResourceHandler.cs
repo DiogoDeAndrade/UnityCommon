@@ -1,4 +1,5 @@
 ﻿using NaughtyAttributes;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,6 +9,11 @@ namespace UC
     public class ResourceHandler : MonoBehaviour
     {
         public enum ChangeType { Burst, OverTime };
+        public enum OverrideMode
+        {
+            None = 0,
+            InitialResource = 1
+        }
 
         public delegate void OnChange(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource);
         public event OnChange onChange;
@@ -18,9 +24,15 @@ namespace UC
 
         [Expandable]
         public ResourceType type;
+        [SerializeField]
+        private OverrideMode overrideMode;
+        [SerializeField]
+        private float       initialValue;
 
         protected float _resource = 100.0f;
         protected bool _resourceEmpty;
+
+        bool isOverrideInitialResource => (overrideMode & OverrideMode.InitialResource) != 0;
 
         public float resource
         {
@@ -165,8 +177,11 @@ namespace UC
         {
             float prevValue = _resource;
 
-            _resource = type.defaultValue;
-            _resourceEmpty = false;
+            if (isOverrideInitialResource)
+                _resource = initialValue;
+            else
+                _resource = type.defaultValue;
+            _resourceEmpty = (_resource == 0.0f);
 
             if (combatText) RenderCombatText(prevValue);
         }
