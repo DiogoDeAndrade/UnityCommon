@@ -7,23 +7,21 @@ namespace UC
     public class AgroList : MonoBehaviour
     {
         [SerializeField]
-        private float refreshTime = 1.0f;
+        private float       refreshTime = 1.0f;
         [SerializeField]
-        private float agroDecayPerTime = 0.0f;
+        private float       agroDecayPerTime = 0.0f;
         [SerializeField]
-        private float agroDecayPerDistance = 0.0f;
+        private float       agroDecayPerDistance = 0.0f;
         [SerializeField, ShowIf(nameof(hasDecayPerDistance))]
-        private bool is3D = false;
+        private bool        is3D = false;
         [SerializeField, ShowIf(nameof(hasDecayPerDistance))]
-        private float agroMaxDistance = 1000.0f;
+        private float       agroMaxDistance = 1000.0f;
         [SerializeField, ShowIf(nameof(hasDecayPerDistance))]
-        private bool  useLoS;
+        private bool        useLoS;
         [SerializeField, ShowIf(nameof(hasDecayWithLoS))]
         private LayerMask   obstacleMask;
-        [SerializeField]
-        private float agroGainForLoS = 0.0f;
-
-        [System.Serializable]
+           
+        [System.Serializable]                                     
         class AgroElem
         {
             public GameObject   agroTarget;
