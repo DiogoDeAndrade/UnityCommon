@@ -18,8 +18,6 @@ namespace UC
         private float       agroMaxDistance = 1000.0f;
         [SerializeField, ShowIf(nameof(hasDecayPerDistance))]
         private bool        useLoS;
-        [SerializeField, ShowIf(nameof(hasDecayWithLoS))]
-        private LayerMask   obstacleMask;
            
         [System.Serializable]                                     
         class AgroElem
@@ -147,11 +145,11 @@ namespace UC
                             bool los = false;
                             if (is3D)
                             {
-                                los = !Physics.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, obstacleMask);
+                                los = !Physics.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, Globals.obstacleMask);
                             }
                             else
                             {
-                                los = !Physics2D.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, obstacleMask);
+                                los = !Physics2D.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, Globals.obstacleMask);
                             }
                             if (!los) dist = 1.0f;
                         }
