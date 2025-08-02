@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace UC
@@ -37,8 +35,8 @@ namespace UC
 
                 Debug.Log("Order2d Config not loaded, loading...");
 
-                var allConfigs = FindAllInstances<Order2dConfig>();
-                if (allConfigs.Count == 1)
+                var allConfigs = Resources.LoadAll<Order2dConfig>("");
+                if (allConfigs.Length == 1)
                 {
                     _instance = allConfigs[0];
                 }
@@ -47,9 +45,10 @@ namespace UC
             }
         }
 
-        static List<T> FindAllInstances<T>() where T : ScriptableObject
+        public static float GetZ(Vector3 position, float offsetZ)
         {
-            return Resources.LoadAll<T>("").ToList();
+            Order2dConfig cachedInstance = instance;
+            return Mathf.Clamp(cachedInstance._orderScaleY * position.y + offsetZ, cachedInstance._orderMinZ, cachedInstance._orderMaxZ);
         }
     }
 }
