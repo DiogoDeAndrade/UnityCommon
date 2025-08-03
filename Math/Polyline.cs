@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,12 +7,14 @@ using UnityEngine;
 namespace UC
 {
 
-    [System.Serializable]
+    [Serializable]
     public class Polyline : IEnumerable<(Vector3 position, Vector3 normal)>
     {
         [SerializeField]
         List<Vector3>   vertices;
+        [SerializeField]
         List<Vector3>   normals;
+        [SerializeField]
         bool            _closed = false;
 
         public List<Vector3> GetVertices() => vertices;
@@ -349,6 +352,62 @@ namespace UC
             return center / vertices.Count;
         }
 
+        public void Subdivide(float maxEdgeLength)
+        {
+            if (vertices == null || vertices.Count < 2)
+                return;
+
+            bool hasNormals = (normals != null && normals.Count == vertices.Count);
+            var newVerts = new List<Vector3>();
+            var newNorms = hasNormals ? new List<Vector3>() : null;
+
+            int N = vertices.Count;
+            // if closed, we wrap around; otherwise we stop before the last vert
+            int loopCount = isClosed ? N : N - 1;
+
+            for (int i = 0; i < loopCount; i++)
+            {
+                var A = vertices[i];
+                var B = vertices[(i + 1) % N];
+
+                newVerts.Add(A);
+                if (hasNormals) newNorms.Add(normals[i]);
+
+                float d = Vector3.Distance(A, B);
+                if (d > maxEdgeLength)
+                {
+                    // how many interior splits?
+                    int steps = Mathf.CeilToInt(d / maxEdgeLength) - 1;
+                    for (int s = 1; s <= steps; s++)
+                    {
+                        float t = (float)s / (steps + 1);
+                        // split position
+                        var P = Vector3.Lerp(A, B, t);
+                        newVerts.Add(P);
+
+                        if (hasNormals)
+                        {
+                            // interpolate & renormalize
+                            var NA = normals[i];
+                            var NB = normals[(i + 1) % N];
+                            newNorms.Add(Vector3.Lerp(NA, NB, t).normalized);
+                        }
+                    }
+                }
+            }
+
+            // if not closed, we still need to append the last original vertex
+            if (!isClosed)
+            {
+                newVerts.Add(vertices[N - 1]);
+                if (hasNormals) newNorms.Add(normals[N - 1]);
+            }
+
+            vertices = newVerts;
+            if (hasNormals) normals = newNorms;
+        }
+
+
         // Implement the IEnumerable interface to allow iteration
         public IEnumerator<(Vector3 position, Vector3 normal)> GetEnumerator()
         {
@@ -374,6 +433,45 @@ namespace UC
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
+        }
+
+        public void Triangulate_EarCut(List<Polyline> holes, ref List<Vector3> outVertices, ref List<int> outTriangles)
+        {
+            if (outVertices == null)
+                outVertices = new();
+            else
+                outVertices.Clear();
+
+            // 1) Flatten coords into a float[] for Earcut
+            var coords = new List<float>();
+            var holeIndices = new List<int>();
+
+            // Outer boundary
+            foreach (var v in vertices)
+            {
+                coords.Add(v.x);
+                coords.Add(v.y);
+                outVertices.Add(v);
+            }
+
+            // Holes
+            if (holes != null)
+            {
+                foreach (var hole in holes)
+                {
+                    // mark the start index of this hole (in *vertices*, not coords)
+                    holeIndices.Add(coords.Count / 2);
+                    foreach (var v in hole.GetVertices())
+                    {
+                        coords.Add(v.x);
+                        coords.Add(v.y);
+                        outVertices.Add(v);
+                    }
+                }
+            }
+
+            // 2) Triangulate
+            outTriangles = MadWorldNL.EarCut.Tessellate(coords.ToArray(), holeIndices.Count > 0 ? holeIndices.ToArray() : null, 2);
         }
 
 #if UNITY_EDITOR

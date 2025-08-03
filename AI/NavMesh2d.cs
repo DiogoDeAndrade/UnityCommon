@@ -2,13 +2,16 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 using UnityEngine;
 
 namespace UC
 {
     public class NavMesh2d : MonoBehaviour
     {
-        private enum SimplificationAlgorithm { GreedyVertexDecimation, RamerDouglasPeucker };
+        private enum SimplificationAlgorithm { None, GreedyVertexDecimation, RamerDouglasPeucker };
 
         [SerializeField] 
         private int                        setCellSize;
@@ -33,14 +36,38 @@ namespace UC
         bool needSimplificationMaxDistance => simplificationAlgorithm == SimplificationAlgorithm.GreedyVertexDecimation;
 
         [Serializable]
+        class Polygon
+        {
+            public List<int> indices;
+
+            public int Count => (indices == null) ? (0) : (indices.Count);
+            public int this[int index]
+            {
+                get
+                {
+                    // bounds-check, or throw your own exception
+                    if ((indices == null) || (index < 0) || (index >= indices.Count))
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    return indices[index];
+                }
+                set
+                {
+                    // bounds-check, or throw your own exception
+                    if ((indices == null) || (index < 0) || (index >= indices.Count))
+                        throw new ArgumentOutOfRangeException(nameof(index));
+                    indices[index] = value;
+                }
+            }
+        }
+
+        [Serializable]
         class RegionData
         {
             public byte                 regionId;
             public Polyline             boundary;
             public List<Polyline>       holes;
             public List<Vector3>        vertices;
-            public List<List<int>>      polygons;
-            public List<List<int>>      adjacency;
+            public List<Polygon>        polygons;
         };
 
         [SerializeField, HideInInspector] private int           cellSize;
@@ -52,7 +79,7 @@ namespace UC
         [SerializeField, HideInInspector]
         byte[] region;
         [SerializeField, HideInInspector]
-        List<RegionData> regionData;
+        List<RegionData> regionData;      
 
         bool hasValidGrid => (grid != null) && (grid.Length == gridSize.x * gridSize.y);
         bool hasValidRegions => (regionData != null) && (regionData.Count > 0);
@@ -78,6 +105,14 @@ namespace UC
             Simplify();
             Polygonize();
             MergeToConvex();
+
+#if UNITY_EDITOR
+            // Record the change so Unity knows to save it
+            Undo.RecordObject(this, "Rebuild Nav Regions");
+            EditorUtility.SetDirty(this);
+            // If you want the scene to show “unsaved changes”:
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
+#endif
         }
 
         #region CreateGridMap
@@ -245,8 +280,6 @@ namespace UC
                     }
                 }
             }
-
-            Debug.Log($"Computed {currentRegion} walkable regions.");
         }
 
         void FloodFillRegion(int startX, int startY, byte regionId)
@@ -498,235 +531,38 @@ namespace UC
                 // Skip empty regions
                 if (rd.boundary == null) continue;
 
-                // 1) Flatten coords into a double[] for Earcut, and build rd.vertices
-                var coords = new List<float>();
-                var holeIndices = new List<int>();
+                List<int>       triangles = null;
+                rd.boundary.Triangulate_EarCut(rd.holes, ref rd.vertices, ref triangles);
 
-                // Outer boundary
-                foreach (var v in rd.boundary.GetVertices())
+                ConstrainedDelaunayFlipper.EnforceDelaunay(rd.vertices, triangles, rd.boundary, rd.holes, 500, 1.0f);
+
+                for (int i = 0; i < triangles.Count; i += 3)
                 {
-                    coords.Add(v.x);
-                    coords.Add(v.y);
-                    rd.vertices.Add(v);
+                    var poly = new List<int>() { triangles[i], triangles[i + 1], triangles[i + 2] };
+                    rd.polygons.Add(new Polygon { indices = poly });
                 }
-
-                // Holes
-                int holeCount = 0;
-                foreach (var hole in rd.holes)
-                {
-                    // mark the start index of this hole (in *vertices*, not coords)
-                    holeIndices.Add(coords.Count / 2);
-                    foreach (var v in hole.GetVertices())
-                    {
-                        coords.Add(v.x);
-                        coords.Add(v.y);
-                        rd.vertices.Add(v);
-                    }
-                    holeCount++;
-                }
-
-                // 2) Triangulate
-                var indices = MadWorldNL.EarCut.Tessellate(coords.ToArray(), holeIndices.Count > 0 ? holeIndices.ToArray() : null, 2);
-                for (int i = 0; i < indices.Count; i+=3)
-                {
-                    var poly = new List<int>() { indices[i], indices[i + 1], indices[i + 2] };
-                    rd.polygons.Add(poly);
-                }              
             }
-
-            Debug.Log($"Polygonize: created triangulation + adjacency for {regionData.Count} regions.");
         }
+
         #endregion
 
         #region Merge to convex
 
         void MergeToConvex()
         {
+            // Need some marshaling, but that's life
             foreach (var rd in regionData)
-            {
-                // 1) Turn each triangle into a NavCell
-                var cells = new List<NavCell>();
-                foreach (var tri in rd.polygons)
-                    cells.Add(new NavCell(tri));
+            {    
+                List<List<int>> polygons = new();
+                foreach (var polygon in rd.polygons) polygons.Add(new(polygon.indices));
 
-                // 2) Build initial adjacency
-                BuildAdjacency(cells);
+                HertelMehlhornPolygonMerger.Merge(rd.vertices, polygons, ref polygons);
 
-                // 3) Greedily merge until no more convex merges are possible
-                bool merged;
-                do
-                {
-                    merged = false;
-                    for (int i = 0; i < cells.Count && !merged; i++)
-                    {
-                        var A = cells[i];
-                        foreach (var B in A.neighbors)
-                        {
-                            if (TryMerge(A, B, rd.vertices, out var M))
-                            {
-                                // remove A & B
-                                cells.Remove(A);
-                                cells.Remove(B);
-
-                                // disconnect them
-                                foreach (var n in A.neighbors) n.neighbors.Remove(A);
-                                foreach (var n in B.neighbors) n.neighbors.Remove(B);
-
-                                // add M and rebuild its adjacency
-                                cells.Add(M);
-                                foreach (var other in cells)
-                                {
-                                    if (other == M) continue;
-                                    if (SharesEdge(M, other))
-                                    {
-                                        M.neighbors.Add(other);
-                                        other.neighbors.Add(M);
-                                    }
-                                }
-
-                                merged = true;
-                                break;
-                            }
-                        }
-                    }
-                } while (merged);
-
-                // 4) Write back polygons
-                rd.polygons = cells.Select(c => c.vertexIndices).ToList();
-
-                // 5) Write back adjacency (indices into rd.polygons list)
-                //    Build a map from cell -> its index in 'cells'
-                var idxMap = new Dictionary<NavCell, int>();
-                for (int i = 0; i < cells.Count; i++)
-                    idxMap[cells[i]] = i;
-
-                rd.adjacency = new List<List<int>>(cells.Count);
-                foreach (var c in cells)
-                {
-                    var neighIdxs = c.neighbors
-                                      .Select(n => idxMap[n])
-                                      .ToList();
-                    rd.adjacency.Add(neighIdxs);
-                }
+                rd.polygons = new();
+                foreach (var polygon in polygons) rd.polygons.Add(new Polygon { indices = polygon });
             }
         }
-
-        // --------------------------------------------------
-        // Helper types & methods (as before)
-        // --------------------------------------------------
-
-        class NavCell
-        {
-            public List<int> vertexIndices;
-            public HashSet<NavCell> neighbors = new HashSet<NavCell>();
-
-            public NavCell(IEnumerable<int> idxs)
-            {
-                vertexIndices = idxs.ToList();
-            }
-        }
-
-        void BuildAdjacency(List<NavCell> cells)
-        {
-            var edgeMap = new Dictionary<(int, int), NavCell>();
-            foreach (var cell in cells)
-            {
-                int n = cell.vertexIndices.Count;
-                for (int i = 0; i < n; i++)
-                {
-                    int a = cell.vertexIndices[i];
-                    int b = cell.vertexIndices[(i + 1) % n];
-                    var key = a < b ? (a, b) : (b, a);
-                    if (edgeMap.TryGetValue(key, out var other))
-                    {
-                        cell.neighbors.Add(other);
-                        other.neighbors.Add(cell);
-                    }
-                    else edgeMap[key] = cell;
-                }
-            }
-        }
-
-        bool SharesEdge(NavCell A, NavCell B)
-            => A.vertexIndices.Intersect(B.vertexIndices).Count() == 2;
-
-        // Try to merge A & B. Returns true + M when union(A,B) is convex.
-        bool TryMerge(NavCell A, NavCell B, List<Vector3> verts3D, out NavCell M)
-        {
-            // 1) Find their two shared vertices
-            var shared = A.vertexIndices.Intersect(B.vertexIndices).ToList();
-            if (shared.Count != 2)
-            {
-                M = null;
-                return false;
-            }
-            int v0 = shared[0], v1 = shared[1];
-
-            // 2) Build the union loop WITHOUT duplicating v0 or v1
-            var loop = new List<int>();
-            AppendPath(A.vertexIndices, v0, v1, loop, includeEnd: true);
-            AppendPath(B.vertexIndices, v1, v0, loop, includeStart: false, includeEnd: false);
-
-            // 3) Quick degenerate-check
-            if (loop.Count < 3) { M = null; return false; }
-
-            // 4) Test convexity
-            if (!IsConvex(loop, verts3D)) { M = null; return false; }
-
-            // 5) Success
-            M = new NavCell(loop);
-            return true;
-        }
-
-        void AppendPath(
-            List<int> ring,
-            int start,
-            int end,
-            List<int> outList,
-            bool includeStart = true,
-            bool includeEnd = true
-        )
-        {
-            int n = ring.Count;
-            // find the index of 'start' in ring
-            int idx = ring.IndexOf(start);
-            if (idx < 0) return;
-
-            // optionally skip the very first vertex
-            if (!includeStart) idx = (idx + 1) % n;
-
-            // walk forward until we've just added 'end'
-            while (true)
-            {
-                int v = ring[idx];
-                // if we're at the end and shouldn't include it, break
-                if (v == end && !includeEnd) break;
-
-                outList.Add(v);
-                if (v == end) break;
-
-                idx = (idx + 1) % n;
-            }
-        }
-
-        bool IsConvex(List<int> poly, List<Vector3> verts3D)
-        {
-            bool gotPos = false, gotNeg = false;
-            int n = poly.Count;
-            for (int i = 0; i < n; i++)
-            {
-                var a = (Vector2)verts3D[poly[i]];
-                var b = (Vector2)verts3D[poly[(i + 1) % n]];
-                var c = (Vector2)verts3D[poly[(i + 2) % n]];
-                float cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
-                if (cross > 0) gotPos = true;
-                if (cross < 0) gotNeg = true;
-                if (gotPos && gotNeg) return false;
-            }
-            return true;
-        }
-
-
+           
         #endregion
 
         #region Debug and Gizmos
@@ -809,7 +645,7 @@ namespace UC
                 for (int i = 0; i < regionData.Count; i++)
                 {
                     var region = regionData[i];
-
+                        
                     Gizmos.color = regionColors[i % regionColors.Length];
                     if ((region.polygons != null) && (region.vertices != null))
                     {

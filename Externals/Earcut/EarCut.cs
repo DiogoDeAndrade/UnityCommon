@@ -620,7 +620,7 @@ namespace MadWorldNL
             {
                 again = false;
 
-                if (!p!.Steiner && Equals(p, p.Next) || Area(p.Prev!, p, p.Next!) == 0.0f)
+                if ((!p.Steiner) && ((Equals(p, p.Next)) || (Area(p.Prev, p, p.Next) == 0.0f)))
                 {
                     RemoveNode(p);
                     p = end = p.Prev;
