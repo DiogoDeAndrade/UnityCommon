@@ -59,7 +59,7 @@ namespace UC
 
         public static bool IntersectTriangle(this Bounds b, Triangle triangle)
         {
-            return AABB.Intersects(b.min, b.max, triangle.GetVertex(0), triangle.GetVertex(1), triangle.GetVertex(2));
+            return AABB.Intersects(b.min, b.max, triangle.Gefloat(0), triangle.Gefloat(1), triangle.Gefloat(2));
         }
 
         public static Vector3 Random(this Bounds b)

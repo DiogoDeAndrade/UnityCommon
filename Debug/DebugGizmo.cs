@@ -142,9 +142,9 @@ namespace UC
             public override void Draw(float s)
             {
                 Gizmos.color = color;
-                Gizmos.DrawLine(triangle.GetVertex(0), triangle.GetVertex(1));
-                Gizmos.DrawLine(triangle.GetVertex(1), triangle.GetVertex(2));
-                Gizmos.DrawLine(triangle.GetVertex(2), triangle.GetVertex(0));
+                Gizmos.DrawLine(triangle.Gefloat(0), triangle.Gefloat(1));
+                Gizmos.DrawLine(triangle.Gefloat(1), triangle.Gefloat(2));
+                Gizmos.DrawLine(triangle.Gefloat(2), triangle.Gefloat(0));
             }
         }
 

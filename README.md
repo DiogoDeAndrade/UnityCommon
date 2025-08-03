@@ -13,10 +13,11 @@ UnityCommon now requires the following packages installed
 
 * Code (except noted) by Diogo de Andrade
 * [UnityMeshSimplifier] available through the [MIT] license.
+* [MadWorldNL EarCut] available through the [MIT] license.
 
 ## Licenses
 
-All code by me in this repo is made available through the [GPLv3] license.
+All code by me in this repo is made available through the [MIT] license.
 NaughtyAtttributes is made available through the [MIT] license.
 The text and all the other files are made available through the 
 [CC BY-NC-SA 4.0] license.

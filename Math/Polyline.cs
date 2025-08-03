@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace UC
@@ -9,10 +10,17 @@ namespace UC
     public class Polyline : IEnumerable<(Vector3 position, Vector3 normal)>
     {
         [SerializeField]
-        List<Vector3> vertices;
-        List<Vector3> normals;
+        List<Vector3>   vertices;
+        List<Vector3>   normals;
+        bool            _closed = false;
 
         public List<Vector3> GetVertices() => vertices;
+        public bool isClosed 
+        {
+            get => _closed;
+            set { _closed = value; }
+        }
+
 
         public Polyline() { }
         public Polyline(Vector3 p) { vertices = new() { p }; }
@@ -114,6 +122,63 @@ namespace UC
             }
         }
 
+        // Ramer-Douglas-Peucker algorithm gives predictable, distance-based simplification. You choose a single epsilon (max perpendicular deviation)-no accumulated area gymnastics-and it will:
+        // Find the point with the maximum perpendicular distance to the line between start/end.
+        // If that distance > epsilon, keep it and recurse on the two subsegments.
+        // Otherwise, drop all intermediate points.
+        //
+        // Should be much better than my old greedy vertex decimater
+        public Polyline SimplifyRDP(float epsilon, bool closed = true)
+        {
+            static Vector2 ProjectPointOnLine(Vector2 p, Vector2 a, Vector2 b)
+            {
+                var ap = p - a;
+                var ab = (b - a).normalized;
+                float d = Vector2.Dot(ap, ab);
+                return a + ab * d;
+            }
+
+            // Returns a list of indices to keep
+            List<int> RDP(List<Vector2> pts, int i1, int i2, float eps)
+            {
+                float maxDist = 0;
+                int index = i1;
+                for (int i = i1 + 1; i < i2; i++)
+                {
+                    float d = Vector2.Distance(pts[i], ProjectPointOnLine(pts[i], pts[i1], pts[i2]));
+                    if (d > maxDist) { maxDist = d; index = i; }
+                }
+
+                if (maxDist > eps)
+                {
+                    var left = RDP(pts, i1, index, eps);
+                    var right = RDP(pts, index, i2, eps);
+                    // merge, avoid duplicate at the joint
+                    return left.Take(left.Count - 1).Concat(right).ToList();
+                }
+                else
+                {
+                    return new List<int> { i1, i2 };
+                }
+            }
+
+            var pts2D = vertices.Select(v => new Vector2(v.x, v.y)).ToList();
+            var keep = RDP(pts2D, 0, pts2D.Count - 1, epsilon);
+
+            // If closed, ensure the first/last are the same segment
+            if (closed && keep[0] != keep[^1])
+                keep.Add(keep[0]);
+
+            var result = new Polyline();
+            for (int i = 0; i < keep.Count; i++)
+            {
+                int idx = keep[i];
+                result.Add(vertices[idx], normals?.Count == vertices.Count ? normals[idx] : Vector3.zero);
+            }
+            result.isClosed = isClosed;
+            return result;
+        }
+
         public bool isCW()
         {
             Vector3 v = Vector3.zero;
@@ -165,6 +230,30 @@ namespace UC
 
             // Step 3: Use the Shoelace formula to calculate the area of the 2D polygon
             return Calculate2DPolygonArea(projectedVertices);
+        }
+
+        public void RemoveDuplicates(float epsilon = 1e-3f)
+        {
+            var toRemove = new List<int>();
+
+            while (true)
+            {
+                for (int i = 0; i < vertices.Count; i++)
+                {
+                    if (Vector3.Distance(vertices[i], vertices[(i + 1) % vertices.Count]) < epsilon)
+                    {
+                        toRemove.Add(i);
+                    }
+                }
+                if (toRemove.Count == 0) break;
+
+                for (int i = 0; i < toRemove.Count; i++)
+                {
+                    vertices.RemoveAt(toRemove[i] - i);
+                    if (normals != null) normals.RemoveAt(toRemove[i] - i);
+                }
+                toRemove.Clear();
+            }
         }
 
         Vector3 CalculateNormal()
@@ -290,9 +379,9 @@ namespace UC
 #if UNITY_EDITOR
         public void DrawGizmos()
         {
-            for (int i = 0; i < vertices.Count - 1; i++)
+            for (int i = 0; i < vertices.Count - ((isClosed) ? (0) : (1)); i++)
             {
-                Gizmos.DrawLine(vertices[i], vertices[i + 1]);
+                Gizmos.DrawLine(vertices[i], vertices[(i + 1) % vertices.Count]);
             }
         }
 

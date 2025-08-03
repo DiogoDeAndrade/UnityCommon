@@ -37,6 +37,11 @@ namespace UC
             }
         }
 
+        private void OnDestroy()
+        {
+            SetInventory(null);
+        }
+
         public void SetInventory(Inventory inventory)
         {
             if (this.inventory != null)

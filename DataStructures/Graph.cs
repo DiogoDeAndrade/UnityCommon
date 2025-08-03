@@ -202,16 +202,16 @@ namespace UC
 
             while (pq.Any())
             {
-                var (currentDistance, currentVertex) = pq.First();
+                var (currentDistance, currenfloat) = pq.First();
                 pq.Remove(pq.First());
 
-                if (currentVertex == n2) return currentDistance;
+                if (currenfloat == n2) return currentDistance;
 
-                foreach (var edge in edges.Where(e => e.i1 == currentVertex || e.i2 == currentVertex))
+                foreach (var edge in edges.Where(e => e.i1 == currenfloat || e.i2 == currenfloat))
                 {
                     if (edge == null) continue;
 
-                    int neighbor = edge.i1 == currentVertex ? edge.i2 : edge.i1;
+                    int neighbor = edge.i1 == currenfloat ? edge.i2 : edge.i1;
                     float newDistance = currentDistance + edge.weight;
 
                     if (newDistance < distances[neighbor])

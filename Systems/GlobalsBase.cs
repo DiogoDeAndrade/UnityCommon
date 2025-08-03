@@ -8,9 +8,12 @@ namespace UC
     {
         [HorizontalLine(color: EColor.Red)]
         [SerializeField]
-        private LayerMask _obstacleMask;
+        private LayerMask   _obstacleMask;
+        [SerializeField]
+        private ResourceType _healthResource;
 
         public static LayerMask obstacleMask => instanceBase?._obstacleMask ?? ~0;
+        public static ResourceType healthResource => instanceBase?._healthResource ?? null;
 
         protected static GlobalsBase _instanceBase = null;
 

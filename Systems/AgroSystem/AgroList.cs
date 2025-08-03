@@ -18,7 +18,9 @@ namespace UC
         private float       agroMaxDistance = 1000.0f;
         [SerializeField, ShowIf(nameof(hasDecayPerDistance))]
         private bool        useLoS;
-           
+        [SerializeField]
+        private float       agroGainOnDamage = 1.0f;
+
         [System.Serializable]                                     
         class AgroElem
         {
@@ -32,7 +34,31 @@ namespace UC
         private float           refreshTimer = 0;
 
         bool hasDecayPerDistance => agroDecayPerDistance > 0.0f;
-        bool hasDecayWithLoS => hasDecayPerDistance && useLoS;
+
+        private void OnEnable()
+        {
+            if (agroGainOnDamage > 0.0f)
+            {
+                ResourceHandler health = this.FindResourceHandler(Globals.healthResource);
+                if (health)
+                    health.onChange += OnDamage_AddAgro;
+            }
+        }
+        private void OnDisable()
+        {
+            if (agroGainOnDamage > 0.0f)
+            {
+                ResourceHandler health = this.FindResourceHandler(Globals.healthResource);
+                if (health)
+                    health.onChange -= OnDamage_AddAgro;
+            }
+        }
+
+        private void OnDamage_AddAgro(ResourceHandler.ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource)
+        {
+            if (deltaValue < 0.0f)
+                AddAgro(changeSource, -deltaValue * agroGainOnDamage);
+        }
 
         public void AddAgro(GameObject source, float agro)
         {

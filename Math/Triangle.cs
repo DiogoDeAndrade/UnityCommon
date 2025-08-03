@@ -24,7 +24,7 @@ namespace UC
 
         public static Triangle operator *(Triangle src, Matrix4x4 matrix) => new Triangle(matrix * src.v[0].xyz1(), matrix * src.v[1].xyz1(), matrix * src.v[2].xyz1());
 
-        public Vector3 GetVertex(int index)
+        public Vector3 Gefloat(int index)
         {
             return v[index];
         }

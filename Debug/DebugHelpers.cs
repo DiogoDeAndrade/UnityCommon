@@ -59,7 +59,14 @@ namespace UC
 #endif
         }
 
-        public static void DrawPolygon(Vector3[] poly)
+        public static void DrawWireTriangle(Vector3 p1, Vector3 p2, Vector3 p3)
+        {
+            Gizmos.DrawLine(p1, p2);
+            Gizmos.DrawLine(p2, p3);
+            Gizmos.DrawLine(p3, p1);
+        }
+
+        public static void DrawConvexPolygon(Vector3[] poly)
         {
 #if UNITY_EDITOR
             if (triangleMaterial == null)
@@ -87,6 +94,14 @@ namespace UC
 
             GL.End();
 #endif
+        }
+
+        public static void DrawWireConvexPolygon(Vector3[] poly)
+        {
+            for (int i = 0; i < poly.Length; i++)
+            {
+                Gizmos.DrawLine(poly[i], poly[(i + 1) % poly.Length]);
+            }
         }
 
 
