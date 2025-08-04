@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -32,13 +33,24 @@ namespace UC
         private bool debugContours;
         [SerializeField]
         private bool debugPolygons;
+        [SerializeField]
+        private bool debugTestNearPoint;
+        [SerializeField, ShowIf(nameof(debugTestNearPoint))]
+        private Transform testPoint;
+        [SerializeField, ShowIf(nameof(debugTestNearPoint))]
+        private int       testRegionId;
 
         bool needSimplificationMaxDistance => simplificationAlgorithm == SimplificationAlgorithm.GreedyVertexDecimation;
 
         [Serializable]
-        class Polygon
+        class ConvexPolygon
         {
-            public List<int> indices;
+            public List<int>        indices;
+            public List<Vector3>    vertices;   // Can just refer the master list
+
+            [SerializeField, HideInInspector]
+            private Bounds2d        _bounds;
+            public Bounds2d         bounds => _bounds;
 
             public int Count => (indices == null) ? (0) : (indices.Count);
             public int this[int index]
@@ -58,6 +70,178 @@ namespace UC
                     indices[index] = value;
                 }
             }
+
+            public float    Distance(Vector2 point)
+            {
+                int n = indices.Count;
+                float maxSd = float.MinValue;
+
+                for (int i = 0, j = n - 1; i < n; j = i++)
+                {
+                    var vi = (Vector2)vertices[indices[i]];
+                    var vj = (Vector2)vertices[indices[j]];
+                    Vector2 edge = vj - vi;
+                    // Outward normal for CCW: rotate edge right
+                    Vector2 normal = new Vector2(edge.y, -edge.x).normalized;
+                    // Signed distance from point to edge line
+                    float sd = Vector2.Dot(normal, point - vi);
+                    maxSd = Math.Max(maxSd, sd);
+                }
+
+                return maxSd;
+            }
+
+            public float Distance(Vector2 point, out Vector2 closestPoint)
+            {
+                int n = indices.Count;
+                float maxSd = float.MinValue;         // for sign test
+                float minDistSq = float.MaxValue;     // for closest-point
+                Vector2 bestPt = Vector2.zero;
+
+                for (int i = 0, j = n - 1; i < n; j = i++)
+                {
+                    Vector2 vi = (Vector2)vertices[indices[i]];
+                    Vector2 vj = (Vector2)vertices[indices[j]];
+                    Vector2 edge = vj - vi;
+
+                    // 1) signed-distance to edge half-space
+                    Vector2 normal = new Vector2(edge.y, -edge.x).normalized;
+                    float sd = Vector2.Dot(normal, point - vi);
+                    maxSd = Math.Max(maxSd, sd);
+
+                    // 2) orthogonal projection onto the segment [vi,vj]
+                    float t = Vector2.Dot(point - vi, edge) / edge.sqrMagnitude;
+                    t = Mathf.Clamp01(t);
+                    Vector2 proj = vi + edge * t;
+
+                    // 3) track the closest projected point
+                    float dSq = (point - proj).sqrMagnitude;
+                    if (dSq < minDistSq)
+                    {
+                        minDistSq = dSq;
+                        bestPt = proj;
+                    }
+                }
+
+                closestPoint = bestPt;
+                float minDist = Mathf.Sqrt(minDistSq);
+                // if inside (maxSd <= 0), return negative distance
+                return (maxSd > 0f) ? minDist : -minDist;
+            }
+
+            public bool     IsIntersecting(Bounds2d bounds)
+            {
+                // Get AABB corners
+                Vector2[] boxCorners = new Vector2[4]
+                {
+                    bounds.min,
+                    new Vector2(bounds.max.x, bounds.min.y),
+                    bounds.max,
+                    new Vector2(bounds.min.x, bounds.max.y)
+                };
+                int n = indices.Count;
+
+                // Test the two AABB axes (X and Y)
+                foreach (var axis in new[] { Vector2.right, Vector2.up })
+                {
+                    float minP = float.MaxValue, maxP = float.MinValue;
+                    // Project polygon
+                    for (int i = 0; i < n; i++)
+                    {
+                        var v = (Vector2)vertices[indices[i]];
+                        float p = Vector2.Dot(axis, v);
+                        minP = Math.Min(minP, p);
+                        maxP = Math.Max(maxP, p);
+                    }
+                    // Project cell
+                    float minB = float.MaxValue, maxB = float.MinValue;
+                    foreach (var corner in boxCorners)
+                    {
+                        float p = Vector2.Dot(axis, corner);
+                        minB = Math.Min(minB, p);
+                        maxB = Math.Max(maxB, p);
+                    }
+                    if (maxP < minB || maxB < minP)
+                        return false;
+                }
+
+                // Test polygon edge normals
+                for (int i = 0, j = n - 1; i < n; j = i++)
+                {
+                    var vi = (Vector2)vertices[indices[i]];
+                    var vj = (Vector2)vertices[indices[j]];
+                    Vector2 edge = vj - vi;
+                    Vector2 axis = new Vector2(-edge.y, edge.x).normalized;
+
+                    float minP = float.MaxValue, maxP = float.MinValue;
+                    for (int k = 0; k < n; k++)
+                    {
+                        var vk = (Vector2)vertices[indices[k]];
+                        float p = Vector2.Dot(axis, vk);
+                        minP = Math.Min(minP, p);
+                        maxP = Math.Max(maxP, p);
+                    }
+
+                    float minB = float.MaxValue, maxB = float.MinValue;
+                    foreach (var corner in boxCorners)
+                    {
+                        float p = Vector2.Dot(axis, corner);
+                        minB = Math.Min(minB, p);
+                        maxB = Math.Max(maxB, p);
+                    }
+
+                    if (maxP < minB || maxB < minP)
+                        return false;
+                }
+
+                // No separation found
+                return true;
+            }
+
+            public void     ComputeBounds()
+            {
+                Vector2 min = new Vector2(float.MaxValue, float.MaxValue);
+                Vector2 max = -min;
+                
+                foreach (var index in indices)
+                {
+                    var v = vertices[index];
+                    if (v.x < min.x) min.x = v.x;
+                    if (v.y < min.y) min.y = v.y;
+                    if (v.x > max.x) max.x = v.x;
+                    if (v.y > max.y) max.y = v.y;
+                }
+
+                _bounds = new Bounds2d((min + max) * 0.5f, max - min);
+            }
+        }
+
+        class PolyQuadtree : Quadtree<ConvexPolygon>
+        {
+            public PolyQuadtree(Vector2 min, Vector2 max, int nLevels) : base(min, max, nLevels) { }
+
+            public void Add(ConvexPolygon poly)
+            {
+                Add(poly, IntersectionFunction);
+            }
+
+            private bool IntersectionFunction(ConvexPolygon polygon, Bounds2d bounds)
+            {
+                return polygon.IsIntersecting(bounds);
+            }
+
+            public ConvexPolygon FindClosest(Vector2 point, out Vector2 closestPoint)
+            {
+                var ret = FindClosest(point, DistanceFunction, false, out float distance, out closestPoint);
+                if (distance < 0) closestPoint = point;
+
+                return ret;
+            }
+
+            private float DistanceFunction(Vector2 point, ConvexPolygon polygon, out Vector2 closestPoint)
+            {
+                return polygon.Distance(point, out closestPoint);
+            }
         }
 
         [Serializable]
@@ -67,7 +251,22 @@ namespace UC
             public Polyline             boundary;
             public List<Polyline>       holes;
             public List<Vector3>        vertices;
-            public List<Polygon>        polygons;
+            public List<ConvexPolygon>  polygons;
+            public Bounds2d             bounds;
+            [NonSerialized]
+            public PolyQuadtree         quadtree;
+
+            public void ComputeBounds()
+            {
+                if (polygons == null) return;
+
+                bounds = null;
+                foreach (var p in polygons)
+                {
+                    if (bounds == null) bounds = p.bounds;
+                    else bounds.Encapsulate(p.bounds);
+                }
+            }
         };
 
         [SerializeField, HideInInspector] private int           cellSize;
@@ -99,7 +298,9 @@ namespace UC
             cellSize = setCellSize;
             CreateGridMap();
             if (agentType != null)
+            {
                 GrowMap();
+            }
             ComputeRegions();
             ExtractContours();
             Simplify();
@@ -110,7 +311,7 @@ namespace UC
             // Record the change so Unity knows to save it
             Undo.RecordObject(this, "Rebuild Nav Regions");
             EditorUtility.SetDirty(this);
-            // If you want the scene to show “unsaved changes”:
+            // If you want the scene to show unsaved changes:
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
 #endif
         }
@@ -539,7 +740,9 @@ namespace UC
                 for (int i = 0; i < triangles.Count; i += 3)
                 {
                     var poly = new List<int>() { triangles[i], triangles[i + 1], triangles[i + 2] };
-                    rd.polygons.Add(new Polygon { indices = poly });
+                    var convexPolygon = new ConvexPolygon { indices = poly, vertices = rd.vertices };
+                    convexPolygon.ComputeBounds();
+                    rd.polygons.Add(convexPolygon);
                 }
             }
         }
@@ -559,10 +762,37 @@ namespace UC
                 HertelMehlhornPolygonMerger.Merge(rd.vertices, polygons, ref polygons);
 
                 rd.polygons = new();
-                foreach (var polygon in polygons) rd.polygons.Add(new Polygon { indices = polygon });
+                foreach (var polygon in polygons)
+                {
+                    var convexPolygon = new ConvexPolygon { indices = polygon, vertices = rd.vertices };
+                    convexPolygon.ComputeBounds();
+                    rd.polygons.Add(convexPolygon);
+                }
             }
         }
-           
+
+        #endregion
+
+        #region Queries
+        public bool GetPointOnNavMesh(int regionId, Vector3 point, out Vector3 pt)
+        {
+            var rd = regionData[regionId];
+            //if (rd.quadtree == null)
+            {
+                rd.ComputeBounds();
+
+                rd.quadtree = new PolyQuadtree(rd.bounds.min, rd.bounds.max, 3);
+                foreach (var polygon in rd.polygons)
+                {
+                    rd.quadtree.Add(polygon);
+                }
+            }
+
+            var retPolygon = rd.quadtree.FindClosest(point, out Vector2 pt2d);
+            pt = pt2d;
+
+            return retPolygon != null;
+        }
         #endregion
 
         #region Debug and Gizmos
@@ -662,6 +892,23 @@ namespace UC
                             DebugHelpers.DrawWireConvexPolygon(vertices);
                             DebugHelpers.DrawConvexPolygon(vertices);
                         }
+                    }
+                }
+            }         
+        }
+
+        private void OnDrawGizmos()
+        {
+            if ((debugTestNearPoint) && (testPoint))
+            {
+                if ((testRegionId >= 0) && (testRegionId < regionData.Count))
+                {
+                    if (GetPointOnNavMesh(testRegionId, testPoint.position, out Vector3 navMeshPoint))
+                    {
+                        Gizmos.color = Color.magenta;
+                        Gizmos.DrawSphere(testPoint.position, 2.0f);
+                        Gizmos.DrawSphere(navMeshPoint, 2.0f);
+                        Gizmos.DrawLine(testPoint.position, navMeshPoint);
                     }
                 }
             }
