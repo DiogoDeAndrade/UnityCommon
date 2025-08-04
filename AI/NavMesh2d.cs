@@ -80,7 +80,7 @@ namespace UC
                 {
                     var vi = (Vector2)vertices[indices[i]];
                     var vj = (Vector2)vertices[indices[j]];
-                    Vector2 edge = vj - vi;
+                    Vector2 edge = vi - vj;
                     // Outward normal for CCW: rotate edge right
                     Vector2 normal = new Vector2(edge.y, -edge.x).normalized;
                     // Signed distance from point to edge line
@@ -94,27 +94,27 @@ namespace UC
             public float Distance(Vector2 point, out Vector2 closestPoint)
             {
                 int n = indices.Count;
-                float maxSd = float.MinValue;         // for sign test
-                float minDistSq = float.MaxValue;     // for closest-point
+                float maxSd = float.MinValue;
+                float minDistSq = float.MaxValue;
                 Vector2 bestPt = Vector2.zero;
 
                 for (int i = 0, j = n - 1; i < n; j = i++)
                 {
-                    Vector2 vi = (Vector2)vertices[indices[i]];
-                    Vector2 vj = (Vector2)vertices[indices[j]];
+                    Vector2 vi = vertices[indices[i]];
+                    Vector2 vj = vertices[indices[j]];
+
+                    // 1) edge & outward normal (CCW winding)
                     Vector2 edge = vj - vi;
-
-                    // 1) signed-distance to edge half-space
-                    Vector2 normal = new Vector2(edge.y, -edge.x).normalized;
+                    Vector2 normal = new Vector2(-edge.y, edge.x).normalized;
                     float sd = Vector2.Dot(normal, point - vi);
-                    maxSd = Math.Max(maxSd, sd);
+                    maxSd = Mathf.Max(maxSd, sd);
 
-                    // 2) orthogonal projection onto the segment [vi,vj]
+                    // 2) projection onto [vi->vj]
                     float t = Vector2.Dot(point - vi, edge) / edge.sqrMagnitude;
                     t = Mathf.Clamp01(t);
                     Vector2 proj = vi + edge * t;
 
-                    // 3) track the closest projected point
+                    // 3) track closest
                     float dSq = (point - proj).sqrMagnitude;
                     if (dSq < minDistSq)
                     {
@@ -124,9 +124,8 @@ namespace UC
                 }
 
                 closestPoint = bestPt;
-                float minDist = Mathf.Sqrt(minDistSq);
-                // if inside (maxSd <= 0), return negative distance
-                return (maxSd > 0f) ? minDist : -minDist;
+                float euclid = Mathf.Sqrt(minDistSq);
+                return (maxSd > 0f) ? euclid : -euclid;
             }
 
             public bool     IsIntersecting(Bounds2d bounds)
@@ -214,6 +213,39 @@ namespace UC
 
                 _bounds = new Bounds2d((min + max) * 0.5f, max - min);
             }
+
+            public bool IsCCW()
+            {
+                int n = indices.Count;
+                if (n < 3)
+                    return false;  // degenerate
+
+                // Compute twice the signed area
+                float area2 = 0f;
+                for (int i = 0; i < n; i++)
+                {
+                    Vector2 v1 = (Vector2)vertices[indices[i]];
+                    Vector2 v2 = (Vector2)vertices[indices[(i + 1) % n]];
+                    area2 += v1.x * v2.y - v2.x * v1.y;
+                }
+
+                // If signed area is positive, the winding is CCW
+                return area2 > 0f;
+            }
+
+            public void InvertWinding()
+            {
+                indices.Reverse();
+            }
+
+            public void ForceCCW()
+            {
+                if (!IsCCW()) InvertWinding();
+            }
+            public void ForceCW()
+            {
+                if (IsCCW()) InvertWinding();
+            }
         }
 
         class PolyQuadtree : Quadtree<ConvexPolygon>
@@ -230,10 +262,9 @@ namespace UC
                 return polygon.IsIntersecting(bounds);
             }
 
-            public ConvexPolygon FindClosest(Vector2 point, out Vector2 closestPoint)
+            public ConvexPolygon FindClosest(Vector2 point, out float distance, out Vector2 closestPoint)
             {
-                var ret = FindClosest(point, DistanceFunction, false, out float distance, out closestPoint);
-                if (distance < 0) closestPoint = point;
+                var ret = FindClosest(point, DistanceFunction, false, out distance, out closestPoint);
 
                 return ret;
             }
@@ -253,10 +284,10 @@ namespace UC
             public List<Vector3>        vertices;
             public List<ConvexPolygon>  polygons;
             public Bounds2d             bounds;
-            [NonSerialized]
-            public PolyQuadtree         quadtree;
+            
+            private PolyQuadtree        _quadtree;
 
-            public void ComputeBounds()
+            void ComputeBounds()
             {
                 if (polygons == null) return;
 
@@ -265,6 +296,24 @@ namespace UC
                 {
                     if (bounds == null) bounds = p.bounds;
                     else bounds.Encapsulate(p.bounds);
+                }
+            }
+
+            public PolyQuadtree quadtree
+            {
+                get
+                {
+                    if (_quadtree == null)
+                    {
+                        ComputeBounds();
+
+                        _quadtree = new PolyQuadtree(bounds.min, bounds.max, 3);
+                        foreach (var polygon in polygons)
+                        {
+                            _quadtree.Add(polygon);
+                        }
+                    }
+                    return _quadtree;
                 }
             }
         };
@@ -741,6 +790,7 @@ namespace UC
                 {
                     var poly = new List<int>() { triangles[i], triangles[i + 1], triangles[i + 2] };
                     var convexPolygon = new ConvexPolygon { indices = poly, vertices = rd.vertices };
+
                     convexPolygon.ComputeBounds();
                     rd.polygons.Add(convexPolygon);
                 }
@@ -765,7 +815,9 @@ namespace UC
                 foreach (var polygon in polygons)
                 {
                     var convexPolygon = new ConvexPolygon { indices = polygon, vertices = rd.vertices };
+                    convexPolygon.ForceCCW();
                     convexPolygon.ComputeBounds();
+
                     rd.polygons.Add(convexPolygon);
                 }
             }
@@ -774,22 +826,48 @@ namespace UC
         #endregion
 
         #region Queries
-        public bool GetPointOnNavMesh(int regionId, Vector3 point, out Vector3 pt)
-        {
-            var rd = regionData[regionId];
-            //if (rd.quadtree == null)
-            {
-                rd.ComputeBounds();
 
-                rd.quadtree = new PolyQuadtree(rd.bounds.min, rd.bounds.max, 3);
-                foreach (var polygon in rd.polygons)
+        public bool GetPointOnNavMesh(Vector3 point, out int regionId, out Vector3 pt)
+        {
+            ConvexPolygon   retPolygon = null;
+            Vector3         retPt = point;
+            float           retDist = float.MaxValue;
+            int             retRegionId = -1;
+
+            if (regionData == null)
+            {
+                pt = point;
+                regionId = -1;
+                return false;
+            }
+
+            foreach (var rd in regionData)
+            {
+                var poly = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
+                if ((poly != null) && (retDist > distance))
                 {
-                    rd.quadtree.Add(polygon);
+                    retDist = distance;
+                    retPolygon = poly;
+                    retRegionId = rd.regionId;
+                    retPt = pt2d;
                 }
             }
 
-            var retPolygon = rd.quadtree.FindClosest(point, out Vector2 pt2d);
-            pt = pt2d;
+            if (retDist < 0) pt = point;
+            else pt = retPt;
+            regionId = retRegionId;
+
+            return retPolygon != null;
+        }
+
+        public bool GetPointOnNavMesh(Vector3 point, int regionId, out Vector3 pt)
+        {
+            var rd = regionData[regionId];
+
+            var retPolygon = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
+
+            if (distance < 0) pt = point;
+            else pt = pt2d;
 
             return retPolygon != null;
         }
@@ -903,7 +981,17 @@ namespace UC
             {
                 if ((testRegionId >= 0) && (testRegionId < regionData.Count))
                 {
-                    if (GetPointOnNavMesh(testRegionId, testPoint.position, out Vector3 navMeshPoint))
+                    if (GetPointOnNavMesh(testPoint.position, testRegionId, out Vector3 navMeshPoint))
+                    {
+                        Gizmos.color = Color.magenta;
+                        Gizmos.DrawSphere(testPoint.position, 2.0f);
+                        Gizmos.DrawSphere(navMeshPoint, 2.0f);
+                        Gizmos.DrawLine(testPoint.position, navMeshPoint);
+                    }
+                }
+                else
+                {
+                    if (GetPointOnNavMesh(testPoint.position, out int regionId, out Vector3 navMeshPoint))
                     {
                         Gizmos.color = Color.magenta;
                         Gizmos.DrawSphere(testPoint.position, 2.0f);
