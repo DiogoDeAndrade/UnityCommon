@@ -39,6 +39,15 @@ namespace UC
         public GraphComponent GraphComponent => GetComponent<GraphComponent>();
 
 #if UNITY_EDITOR
+        private void OnEnable()
+        {
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
+        private void OnDisable()
+        {
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
+
         private void OnDrawGizmosSelected()
         {
             var nodes = Nodes;

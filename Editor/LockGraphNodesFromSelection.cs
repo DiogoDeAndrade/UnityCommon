@@ -27,7 +27,7 @@ namespace UC
             if (node)
             {
                 var editor = node.GetComponentInParent<UC.GraphEditor>();
-                if (editor != null)
+                if ((editor != null) && (editor.enabled))
                 {
                     // Cancel selection by re-selecting GraphEditor
                     Selection.activeGameObject = editor.gameObject;
@@ -45,7 +45,7 @@ namespace UC
             if (node != null)
             {
                 var editor = node.GetComponentInParent<UC.GraphEditor>();
-                if (editor != null)
+                if ((editor != null) && (editor.enabled))
                 {
                     Selection.activeGameObject = editor.gameObject;
                 }

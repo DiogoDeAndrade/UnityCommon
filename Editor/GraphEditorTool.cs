@@ -18,6 +18,9 @@ namespace UC
         public override void OnToolGUI(EditorWindow window)
         {
             var editor = (GraphEditor)target;
+
+            if (!editor.enabled) return;
+
             var nodes = editor.Nodes;
             var e = Event.current;
             HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
@@ -52,6 +55,8 @@ namespace UC
                     Undo.DestroyObjectImmediate(selectedNode.gameObject);
                     selectedNode = null;
                     e.Use();
+
+                    UpdateGraph(editor);
                     return;
                 }
             }

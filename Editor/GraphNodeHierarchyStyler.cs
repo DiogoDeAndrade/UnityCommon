@@ -20,6 +20,7 @@ public static class GraphNodeHierarchyStyler
 
         var editor = obj.GetComponentInParent<UC.GraphEditor>();
         if (editor == null) return;
+        if (!editor.enabled) return;
 
         // Only draw a simple line across the default label — clean strikethrough
         float y = selectionRect.y + selectionRect.height * 0.5f;
