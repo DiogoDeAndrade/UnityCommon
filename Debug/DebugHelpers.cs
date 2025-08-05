@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -32,9 +33,9 @@ namespace UC
         }
 
         static Material triangleMaterial;
-        public static void DrawTriangle(Vector3 p1, Vector3 p2, Vector3 p3)
-        {
 #if UNITY_EDITOR
+        static void SetTriangleMaterial()
+        {
             if (triangleMaterial == null)
             {
                 // Create a simple unlit material for GL
@@ -47,6 +48,13 @@ namespace UC
                 triangleMaterial.SetInt("_ZWrite", 0);
             }
             triangleMaterial.SetPass(0);
+        }
+#endif
+
+        public static void DrawTriangle(Vector3 p1, Vector3 p2, Vector3 p3)
+        {
+#if UNITY_EDITOR
+            SetTriangleMaterial();
 
             GL.Begin(GL.TRIANGLES);
             GL.Color(Gizmos.color);
@@ -69,18 +77,7 @@ namespace UC
         public static void DrawConvexPolygon(Vector3[] poly)
         {
 #if UNITY_EDITOR
-            if (triangleMaterial == null)
-            {
-                // Create a simple unlit material for GL
-                Shader shader = Shader.Find("Hidden/Internal-Colored");
-                triangleMaterial = new Material(shader);
-                triangleMaterial.hideFlags = HideFlags.HideAndDontSave;
-                triangleMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                triangleMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                triangleMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-                triangleMaterial.SetInt("_ZWrite", 0);
-            }
-            triangleMaterial.SetPass(0);
+            SetTriangleMaterial();
 
             GL.Begin(GL.TRIANGLES);
             GL.Color(Gizmos.color);
@@ -96,6 +93,44 @@ namespace UC
 #endif
         }
 
+        public static void DrawConvexPolygon(Vector3[] vertices, int[] indices)
+        {
+#if UNITY_EDITOR
+            SetTriangleMaterial();
+
+            GL.Begin(GL.TRIANGLES);
+            GL.Color(Gizmos.color);
+
+            for (int i = 1; i < indices.Length - 1; i++)
+            {
+                GL.Vertex(vertices[indices[0]]);
+                GL.Vertex(vertices[indices[i]]);
+                GL.Vertex(vertices[indices[i + 1]]);
+            }
+
+            GL.End();
+#endif
+        }
+
+        public static void DrawConvexPolygon(List<Vector3> vertices, List<int> indices)
+        {
+#if UNITY_EDITOR
+            SetTriangleMaterial();
+
+            GL.Begin(GL.TRIANGLES);
+            GL.Color(Gizmos.color);
+
+            for (int i = 1; i < indices.Count - 1; i++)
+            {
+                GL.Vertex(vertices[indices[0]]);
+                GL.Vertex(vertices[indices[i]]);
+                GL.Vertex(vertices[indices[i + 1]]);
+            }
+
+            GL.End();
+#endif
+        }
+
         public static void DrawWireConvexPolygon(Vector3[] poly)
         {
             for (int i = 0; i < poly.Length; i++)
@@ -104,6 +139,21 @@ namespace UC
             }
         }
 
+        public static void DrawWireConvexPolygon(Vector3[] vertices, int[] indices)
+        {
+            for (int i = 0; i < indices.Length; i++)
+            {
+                Gizmos.DrawLine(vertices[indices[i]], vertices[indices[(i + 1) % indices.Length]]);
+            }
+        }
+
+        public static void DrawWireConvexPolygon(List<Vector3> vertices, List<int> indices)
+        {
+            for (int i = 0; i < indices.Count; i++)
+            {
+                Gizmos.DrawLine(vertices[indices[i]], vertices[indices[(i + 1) % indices.Count]]);
+            }
+        }
 
         public static void DrawTextAt(Vector3 pos, Vector3 offset, int fontSize, Color color, string text, bool shadow = false, bool centerY = false)
         {

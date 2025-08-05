@@ -6,8 +6,17 @@
   * These boundary/holes can be simplified either by using a greedy vertex decimater, or RDP (Ramer-Douglas-Peucker algorithm)
   * [MadWorldNL's Earcut](https://github.com/MadWorldNL/EarCut) is then used to convert these to a triangle mesh
   * This mesh can then be merged into convex polygons
+  * Can query the navmesh for point in navmesh - it uses a quadtree for efficient querying
+    * It can search within a region, or just any region
+  * It can query the navmesh for the polygon path between two points in a region
 * Still to do:
-  * Use the convex polygons, create a navigation graph/mesh and run A* to do pathfinding, with some rubberbanding to improve the path (will be done in the NavMeshAgent2d class)
+  * Pathfinding
+    * Use rubberbanding to actually create path
+    * Follow path (NavMeshAgent2d)
+    * LoS query
+    * Area costs
+    * Obstacle avoidance
+    * Dynamic meshes
   * I'm not happy with the convex polygons generated, there's usually a lot of small, thin triangles.
     * It might be that I'm asking too much, Recast has thin triangles sometimes and it works fine - maybe implement the path-finding and see if this is an actual problem!
     * Options

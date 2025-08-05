@@ -2,11 +2,15 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 using UnityEngine;
+using static UC.Inventory;
+using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
 namespace UC
 {
@@ -26,31 +30,50 @@ namespace UC
         private float                      simplificationMaxDistance = 10.0f;
 
         [SerializeField]
+        private bool debugEnabled;
+        [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool debugGrid;
-        [SerializeField, ShowIf(nameof(debugGrid))]
+        [SerializeField, ShowIf(nameof(needColorByRegion))]
         private bool colorByRegion;
-        [SerializeField]
+        [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool debugContours;
-        [SerializeField]
+        [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool debugPolygons;
-        [SerializeField]
+        [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool debugTestNearPoint;
-        [SerializeField, ShowIf(nameof(debugTestNearPoint))]
+        [SerializeField, ShowIf(nameof(needTestPoint))]
         private Transform testPoint;
-        [SerializeField, ShowIf(nameof(debugTestNearPoint))]
+        [SerializeField, ShowIf(nameof(debugEnabled))]
+        private bool debugTestPath;
+        [SerializeField, ShowIf(nameof(isTestPath))]
+        private Transform startPoint;
+        [SerializeField, ShowIf(nameof(isTestPath))]
+        private Transform endPoint;
+        [SerializeField, ShowIf(nameof(needTestRegion))]
         private int       testRegionId;
 
         bool needSimplificationMaxDistance => simplificationAlgorithm == SimplificationAlgorithm.GreedyVertexDecimation;
+        bool needTestPoint => debugEnabled && debugTestNearPoint;
+        bool needTestRegion => debugEnabled && (debugTestNearPoint || debugTestPath);
+        bool needColorByRegion => debugEnabled && debugGrid;
+        bool isTestPath => debugEnabled && debugTestPath;
+
 
         [Serializable]
         class ConvexPolygon
         {
+            public int              id;
             public List<int>        indices;
             public List<Vector3>    vertices;   // Can just refer the master list
 
             [SerializeField, HideInInspector]
             private Bounds2d        _bounds;
-            public Bounds2d         bounds => _bounds;
+            [SerializeField, HideInInspector]
+            private Vector3         _center;
+            public List<int>        neighbors = new();
+
+            public Bounds2d bounds => _bounds;
+            public Vector3 center => _center;
 
             public int Count => (indices == null) ? (0) : (indices.Count);
             public int this[int index]
@@ -197,10 +220,12 @@ namespace UC
                 return true;
             }
 
-            public void     ComputeBounds()
+            public void     UpdateGeometry()
             {
                 Vector2 min = new Vector2(float.MaxValue, float.MaxValue);
                 Vector2 max = -min;
+
+                _center = Vector3.zero;
                 
                 foreach (var index in indices)
                 {
@@ -209,28 +234,34 @@ namespace UC
                     if (v.y < min.y) min.y = v.y;
                     if (v.x > max.x) max.x = v.x;
                     if (v.y > max.y) max.y = v.y;
+
+                    _center += v;
                 }
 
                 _bounds = new Bounds2d((min + max) * 0.5f, max - min);
+                _center /= indices.Count;
             }
 
-            public bool IsCCW()
+            public bool isCCW
             {
-                int n = indices.Count;
-                if (n < 3)
-                    return false;  // degenerate
-
-                // Compute twice the signed area
-                float area2 = 0f;
-                for (int i = 0; i < n; i++)
+                get
                 {
-                    Vector2 v1 = (Vector2)vertices[indices[i]];
-                    Vector2 v2 = (Vector2)vertices[indices[(i + 1) % n]];
-                    area2 += v1.x * v2.y - v2.x * v1.y;
-                }
+                    int n = indices.Count;
+                    if (n < 3)
+                        return false;  // degenerate
 
-                // If signed area is positive, the winding is CCW
-                return area2 > 0f;
+                    // Compute twice the signed area
+                    float area2 = 0f;
+                    for (int i = 0; i < n; i++)
+                    {
+                        Vector2 v1 = (Vector2)vertices[indices[i]];
+                        Vector2 v2 = (Vector2)vertices[indices[(i + 1) % n]];
+                        area2 += v1.x * v2.y - v2.x * v1.y;
+                    }
+
+                    // If signed area is positive, the winding is CCW
+                    return area2 > 0f;
+                }
             }
 
             public void InvertWinding()
@@ -240,11 +271,35 @@ namespace UC
 
             public void ForceCCW()
             {
-                if (!IsCCW()) InvertWinding();
+                if (!isCCW) InvertWinding();
             }
             public void ForceCW()
             {
-                if (IsCCW()) InvertWinding();
+                if (isCCW) InvertWinding();
+            }
+
+            public IEnumerable<(int v1, int v2)> Edges()
+            {
+                for (int i = 0; i < indices.Count; i++)
+                {
+                    yield return (indices[i], indices[(i + 1) % indices.Count]);
+                }
+            }
+
+            public bool HasEdge((int v1, int v2) edge)
+            {
+                for (int i = 0; i < indices.Count; i++)
+                {
+                    int i1 = indices[i];
+                    int i2 = indices[(i + 1) % indices.Count];
+                    if (((edge.v1 == i1) && (edge.v2 == i2)) ||
+                        ((edge.v2 == i1) && (edge.v1 == i2)))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
         }
 
@@ -355,6 +410,7 @@ namespace UC
             Simplify();
             Polygonize();
             MergeToConvex();
+            ComputeNeighbors();
 
 #if UNITY_EDITOR
             // Record the change so Unity knows to save it
@@ -789,9 +845,9 @@ namespace UC
                 for (int i = 0; i < triangles.Count; i += 3)
                 {
                     var poly = new List<int>() { triangles[i], triangles[i + 1], triangles[i + 2] };
-                    var convexPolygon = new ConvexPolygon { indices = poly, vertices = rd.vertices };
+                    var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = poly, vertices = rd.vertices };
 
-                    convexPolygon.ComputeBounds();
+                    convexPolygon.UpdateGeometry();
                     rd.polygons.Add(convexPolygon);
                 }
             }
@@ -814,9 +870,9 @@ namespace UC
                 rd.polygons = new();
                 foreach (var polygon in polygons)
                 {
-                    var convexPolygon = new ConvexPolygon { indices = polygon, vertices = rd.vertices };
+                    var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = polygon, vertices = rd.vertices };
                     convexPolygon.ForceCCW();
-                    convexPolygon.ComputeBounds();
+                    convexPolygon.UpdateGeometry();
 
                     rd.polygons.Add(convexPolygon);
                 }
@@ -825,14 +881,76 @@ namespace UC
 
         #endregion
 
+        #region Adjacency
+
+        public void ComputeNeighbors()
+        {
+            foreach (var region in regionData)
+            {
+                var polys = region.polygons;
+                for (int i = 0; i < polys.Count; i++)
+                {
+                    var pi = polys[i];
+                    pi.neighbors.Clear();
+
+                    foreach (var edge in pi.Edges())
+                    {
+                        int neighbour = -1;
+
+                        for (int j = 0; j < polys.Count; j++)
+                        {
+                            if (i == j) continue;
+
+                            var pj = polys[j];
+
+                            if (pj.HasEdge(edge))
+                            {
+                                neighbour = j;
+                                break;
+                            }
+                        }
+
+                        pi.neighbors.Add(neighbour);
+                    }
+
+                }
+            }
+        }
+        #endregion
+
         #region Queries
+
+        public bool GetPointOnNavMesh(Vector3 point, int regionId, out Vector3 pt)
+        {
+            var rd = regionData[regionId];
+
+            var retPolygon = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
+
+            if (distance < 0) pt = point;
+            else pt = pt2d;
+
+            return retPolygon != null;
+        }
+
+        public bool GetPointOnNavMesh(Vector3 point, int regionId, out int polygonId, out Vector3 pt)
+        {
+            var rd = regionData[regionId];
+
+            var retPolygon = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
+
+            if (distance < 0) pt = point;
+            else pt = pt2d;
+            polygonId = retPolygon.id;
+
+            return retPolygon != null;
+        }
 
         public bool GetPointOnNavMesh(Vector3 point, out int regionId, out Vector3 pt)
         {
-            ConvexPolygon   retPolygon = null;
-            Vector3         retPt = point;
-            float           retDist = float.MaxValue;
-            int             retRegionId = -1;
+            ConvexPolygon retPolygon = null;
+            Vector3 retPt = point;
+            float retDist = float.MaxValue;
+            int retRegionId = -1;
 
             if (regionData == null)
             {
@@ -860,17 +978,168 @@ namespace UC
             return retPolygon != null;
         }
 
-        public bool GetPointOnNavMesh(Vector3 point, int regionId, out Vector3 pt)
+        public bool GetPointOnNavMesh(Vector3 point, out int regionId, out int polygonId, out Vector3 pt)
         {
-            var rd = regionData[regionId];
+            ConvexPolygon retPolygon = null;
+            Vector3 retPt = point;
+            float retDist = float.MaxValue;
+            int retRegionId = -1;
 
-            var retPolygon = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
+            if (regionData == null)
+            {
+                pt = point;
+                regionId = -1;
+                polygonId = -1;
+                return false;
+            }
 
-            if (distance < 0) pt = point;
-            else pt = pt2d;
+            foreach (var rd in regionData)
+            {
+                var poly = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
+                if ((poly != null) && (retDist > distance))
+                {
+                    retDist = distance;
+                    retPolygon = poly;
+                    retRegionId = rd.regionId;
+                    retPt = pt2d;
+                }
+            }
+
+            if (retDist < 0) pt = point;
+            else pt = retPt;
+            regionId = retRegionId;
+            polygonId = retPolygon.id;
 
             return retPolygon != null;
         }
+
+
+        public List<Vector3> PlanPath(Vector3 start, Vector3 end, ref int regionId, ref List<int> polygons)
+        {
+            var startOnNavmesh = start;
+            var endOnNavmesh = end;
+            int startPolygonId = -1;
+            int endPolygonId = -1;
+
+            if ((regionId >= 0) && (regionId < regionData.Count))
+            {
+                if (!GetPointOnNavMesh(start, regionId, out startPolygonId, out startOnNavmesh))
+                {
+                    Debug.LogWarning("Can't find start point on navmesh!");
+                    return null;
+                }
+                if (!GetPointOnNavMesh(end, regionId, out endPolygonId, out endOnNavmesh))
+                {
+                    Debug.LogWarning("Can't find end point on navmesh!");
+                    return null;
+                }
+            }
+            else
+            {
+                if (!GetPointOnNavMesh(start, out int startRegionId, out startPolygonId, out startOnNavmesh))
+                {
+                    Debug.LogWarning("Can't find start point on navmesh!");
+                    return null;
+                }
+                if (!GetPointOnNavMesh(end, out int endRegionId, out endPolygonId, out endOnNavmesh))
+                {
+                    Debug.LogWarning("Can't find end point on navmesh!");
+                    return null;
+                }
+                if (startRegionId != endRegionId)
+                {
+                    {
+                        Debug.LogWarning("Can't find path between points in different regions!");
+                        return null;
+                    }
+                }
+                regionId = startRegionId;
+            }
+
+            return PlanPathOnNavmesh(startOnNavmesh, startPolygonId, endOnNavmesh, endPolygonId, regionId, ref polygons);
+        }
+
+        public List<Vector3> PlanPathOnNavmesh(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons)
+        {
+            if (polygons == null) polygons = new();
+
+            var region = regionData[regionId];
+            var polys = region.polygons;
+
+            var frontier = new PriorityQueue<int, float>();
+            var cameFrom = new Dictionary<int, int>();
+            var costSoFar = new Dictionary<int, float>();
+            var visited = new HashSet<int>();
+
+            Vector2 endPos = polys[endPolygonId].center;
+
+            frontier.Enqueue(startPolygonId, 0);
+            costSoFar[startPolygonId] = 0;
+
+            while (frontier.Count > 0)
+            {
+                int current = frontier.Dequeue();
+
+                if (current == endPolygonId)
+                    break;
+
+                if (!visited.Add(current))
+                    continue;
+
+                var currentPoly = polys[current];
+                Vector2 currentPos = currentPoly.center;
+
+                foreach (var neighbor in currentPoly.neighbors)
+                {
+                    if (neighbor == -1) continue;
+
+                    var neighborPoly = polys[neighbor];
+                    Vector2 neighborPos = neighborPoly.center;
+
+                    float newCost = costSoFar[current] + Vector2.Distance(currentPos, neighborPos);
+
+                    if (!costSoFar.ContainsKey(neighbor) || newCost < costSoFar[neighbor])
+                    {
+                        costSoFar[neighbor] = newCost;
+                        float priority = newCost + Vector2.Distance(neighborPos, endPos);
+                        frontier.Enqueue(neighbor, priority);
+                        cameFrom[neighbor] = current;
+                    }
+                }
+            }
+
+            // Reconstruct path
+            List<int> pathPolyIds = new();
+            int currentId = endPolygonId;
+
+            if (!cameFrom.ContainsKey(endPolygonId) && startPolygonId != endPolygonId)
+                return null; // No path
+
+            pathPolyIds.Add(currentId);
+            while (currentId != startPolygonId)
+            {
+                currentId = cameFrom[currentId];
+                pathPolyIds.Add(currentId);
+            }
+            pathPolyIds.Reverse();
+
+            polygons.AddRange(pathPolyIds);
+
+            // Convert to center path
+            var path = new List<Vector3>();
+            if (pathPolyIds.Count > 0) path.Add(start);
+            for (int i = 1; i < pathPolyIds.Count - 1; i++)
+                path.Add(polys[pathPolyIds[i]].center);
+            if (pathPolyIds.Count > 1) path.Add(end);
+
+            return path;
+        }
+
+        private ConvexPolygon GetPoly(int regionId, int polygonId)
+        {
+            return regionData[regionId].polygons[polygonId];
+        }
+
         #endregion
 
         #region Debug and Gizmos
@@ -884,8 +1153,10 @@ namespace UC
             new Color(1.0f, 1.0f, 1.0f, 0.25f)
         };
 
-        void OnDrawGizmosSelected()
+        void OnDrawGizmos()
         {
+            if (!debugEnabled) return;
+
             if ((debugGrid) && (hasValidGrid))
             {
                 bool draw = true;
@@ -973,10 +1244,7 @@ namespace UC
                     }
                 }
             }         
-        }
-
-        private void OnDrawGizmos()
-        {
+        
             if ((debugTestNearPoint) && (testPoint))
             {
                 if ((testRegionId >= 0) && (testRegionId < regionData.Count))
@@ -997,6 +1265,30 @@ namespace UC
                         Gizmos.DrawSphere(testPoint.position, 2.0f);
                         Gizmos.DrawSphere(navMeshPoint, 2.0f);
                         Gizmos.DrawLine(testPoint.position, navMeshPoint);
+                    }
+                }
+            }
+
+            if ((debugTestPath) && (startPoint) && (endPoint))
+            {
+                List<int>   polygons = null;
+                int         regionId = testRegionId;
+                var path = PlanPath(startPoint.position, endPoint.position, ref regionId, ref polygons);
+                if (path != null)
+                {
+                    Gizmos.color = Color.green;
+                    foreach (var polygon in polygons)
+                    {
+                        var poly = GetPoly(testRegionId, polygon);
+                        if (poly != null)
+                        {
+                            DebugHelpers.DrawConvexPolygon(poly.vertices, poly.indices);
+                        }
+                    }
+                    Gizmos.color = Color.blue;
+                    for (int i = 0; i < path.Count - 1; i++)
+                    {
+                        Gizmos.DrawLine(path[i], path[i + 1]);
                     }
                 }
             }
