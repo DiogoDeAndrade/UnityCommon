@@ -23,7 +23,7 @@ namespace UC
         public bool isDirected => directed;
 
         [Button("Build from components")]
-        void BuildFromComponents()
+        public void BuildFromComponents()
         {
             graph = BuildGraphFromChildren();
         }
@@ -34,6 +34,8 @@ namespace UC
 
             var graph = new Graph<GraphNodeComponent>(directed);
 
+            GraphEditor graphEditor = GetComponent<GraphEditor>();
+
             foreach (GraphNodeComponent node in nodes)
             {
                 node.id = graph.Add(node);
@@ -43,22 +45,32 @@ namespace UC
             foreach (GraphNodeComponent node in nodes)
             {
                 var links = node.GetLinks();
-                foreach (var link in links)
+                if (links != null)
                 {
-                    if (link != null)
+                    foreach (var link in links)
                     {
-                        float w = 1.0f;
-                        if (weightMode == WeightMode.Distance) w = Vector3.Distance(node.transform.position, link.transform.position);
-                        else if (weightMode == WeightMode.Explicit)
+                        if (link != null)
                         {
-                            if ((edgeWeights != null) && (edgeWeights.Count > edgeIndex))
-                                w = edgeWeights[edgeIndex];
-                            else
-                                w = float.MaxValue;
-                        }
-                        graph.Add(node, link, w);
+                            float w = 1.0f;
+                            if (weightMode == WeightMode.Distance) w = Vector3.Distance(node.transform.position, link.transform.position);
+                            else if (weightMode == WeightMode.Explicit)
+                            {
+                                if (graphEditor)
+                                {
+                                    w = graphEditor.DefaultWeight;
+                                }
+                                else
+                                {
+                                    if ((edgeWeights != null) && (edgeWeights.Count > edgeIndex))
+                                        w = edgeWeights[edgeIndex];
+                                    else
+                                        w = float.MaxValue;
+                                }
+                            }
+                            graph.Add(node, link, w);
 
-                        edgeIndex++;
+                            edgeIndex++;
+                        }
                     }
                 }
             }
@@ -67,10 +79,23 @@ namespace UC
         }
 
         [Button("Build Steiner Tree")]
-        void BuildSteinerTree()
+        public void BuildSteinerTree()
         {
             graph = BuildGraphFromChildren();
             graph = SteinerTree.Build(graph, terminalPoints);
+        }
+
+        public int AddNode(GraphNodeComponent node)
+        {
+            if (graph == null)
+            {
+                graph = new Graph<GraphNodeComponent>(directed);
+            }
+
+            var newId = graph.Add(node);
+            node.id = newId;
+
+            return newId;
         }
 
         private void OnDrawGizmosSelected()

@@ -15,7 +15,11 @@ namespace UC
         [SerializeField] private GraphNodeComponent[] links;
 
         public int id { get { return _id; } set { _id = value; } }
-        public float radius => _radius;
+        public float radius
+        {
+            get { return _radius; }
+            set { _radius = value; }
+        }
 
         public bool Equals(GraphNodeComponent other)
         {
@@ -23,7 +27,6 @@ namespace UC
         }
 
         public GraphNodeComponent[] GetLinks() => links;
-
 
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()

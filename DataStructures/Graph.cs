@@ -160,7 +160,7 @@ namespace UC
             for (int i = 0; i < nodes.Count; i++)
             {
                 if (nodes[i] == null) continue;
-                if (nodes[i].Equals(n)) return i;
+                if ((nodes[i].node != null) && (nodes[i].node.Equals(n))) return i;
             }
 
             return -1;

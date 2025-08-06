@@ -39,7 +39,7 @@ namespace UC
         {
             if (agroGainOnDamage > 0.0f)
             {
-                ResourceHandler health = this.FindResourceHandler(Globals.healthResource);
+                ResourceHandler health = this.FindResourceHandler(GlobalsBase.healthResource);
                 if (health)
                     health.onChange += OnDamage_AddAgro;
             }
@@ -48,7 +48,7 @@ namespace UC
         {
             if (agroGainOnDamage > 0.0f)
             {
-                ResourceHandler health = this.FindResourceHandler(Globals.healthResource);
+                ResourceHandler health = this.FindResourceHandler(GlobalsBase.healthResource);
                 if (health)
                     health.onChange -= OnDamage_AddAgro;
             }
@@ -171,11 +171,11 @@ namespace UC
                             bool los = false;
                             if (is3D)
                             {
-                                los = !Physics.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, Globals.obstacleMask);
+                                los = !Physics.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, GlobalsBase.obstacleMask);
                             }
                             else
                             {
-                                los = !Physics2D.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, Globals.obstacleMask);
+                                los = !Physics2D.Raycast(transform.position, toAgroTarget.normalized, toAgroTarget.magnitude, GlobalsBase.obstacleMask);
                             }
                             if (!los) dist = 1.0f;
                         }
