@@ -10,14 +10,17 @@
     * It can search within a region, or just any region
   * It can query the navmesh for the polygon path between two points in a region
   * Can do pathfinding queries, with or without funneling, and with or without biasing
+  * NavMeshAgent2d class now can follow a path, using pursuit follow
 * Still to do:
   * Pathfinding
-    * Follow path (NavMeshAgent2d)
-    * Path-smoothing
+    * Path following - Direct follow
     * LoS query
+    * Path-smoothing (LoS query + curves)
     * Area costs
     * Obstacle avoidance
-    * Dynamic meshes
+    * Dynamic meshes (carving)
+    * Offmesh links - Doors (conditionals)
+    * Offmesh links - Holes (link fields)
   * I'm not happy with the convex polygons generated, there's usually a lot of small, thin triangles.
     * It might be that I'm asking too much, Recast has thin triangles sometimes and it works fine - maybe implement the path-finding and see if this is an actual problem!
     * Options

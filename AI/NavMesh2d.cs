@@ -14,7 +14,7 @@ namespace UC
     public class NavMesh2d : MonoBehaviour
     {
         private enum SimplificationAlgorithm { None, GreedyVertexDecimation, RamerDouglasPeucker };
-        private enum PathMode { PolygonCenter, MidEdge };
+        private enum PathMode { MidEdge };
         public enum PathState { Thinking, NoPath, Partial, Full };
 
         [SerializeField] 
@@ -410,6 +410,24 @@ namespace UC
 
         bool hasValidGrid => (grid != null) && (grid.Length == gridSize.x * gridSize.y);
         bool hasValidRegions => (regionData != null) && (regionData.Count > 0);
+
+        private void Awake()
+        {
+            if (NavigationMeshes == null) NavigationMeshes = new();
+            if (NavigationMeshes.ContainsKey(agentType))
+            {
+                Debug.LogError($"More than one navigation mesh for agent type {agentType.name}!");
+            }
+            else
+            {
+                NavigationMeshes.Add(agentType, this);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            NavigationMeshes.Remove(agentType);
+        }
 
         [Button("Clear")]
         public void Clear()
@@ -1054,9 +1072,6 @@ namespace UC
 
             switch (pathMode)
             {
-                case PathMode.PolygonCenter:
-                    ret = PlanPathOnNavmeshPolygonCenter(start, startPolygonId, end, endPolygonId, regionId, ref polygons, ref path);
-                    break;
                 case PathMode.MidEdge:
                     ret = PlanPathOnNavmeshMidEdge(start, startPolygonId, end, endPolygonId, regionId, ref polygons, ref path);
                     break;
@@ -1070,82 +1085,6 @@ namespace UC
             }
 
             return ret;
-        }
-
-        public PathState PlanPathOnNavmeshPolygonCenter(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path)
-        {
-            if (polygons == null) polygons = new();
-
-            var region = regionData[regionId];
-            var polys = region.polygons;
-
-            var frontier = new PriorityQueue<int, float>();
-            var cameFrom = new Dictionary<int, int>();
-            var costSoFar = new Dictionary<int, float>();
-            var visited = new HashSet<int>();
-
-            Vector2 endPos = polys[endPolygonId].center;
-
-            frontier.Enqueue(startPolygonId, 0);
-            costSoFar[startPolygonId] = 0;
-
-            while (frontier.Count > 0)
-            {
-                int current = frontier.Dequeue();
-
-                if (current == endPolygonId)
-                    break;
-
-                if (!visited.Add(current))
-                    continue;
-
-                var currentPoly = polys[current];
-                Vector2 currentPos = currentPoly.center;
-
-                foreach (var neighbor in currentPoly.neighbors)
-                {
-                    if (neighbor == -1) continue;
-
-                    var neighborPoly = polys[neighbor];
-                    Vector2 neighborPos = neighborPoly.center;
-
-                    float newCost = costSoFar[current] + Vector2.Distance(currentPos, neighborPos);
-
-                    if (!costSoFar.ContainsKey(neighbor) || newCost < costSoFar[neighbor])
-                    {
-                        costSoFar[neighbor] = newCost;
-                        float priority = newCost + Vector2.Distance(neighborPos, endPos);
-                        frontier.Enqueue(neighbor, priority);
-                        cameFrom[neighbor] = current;
-                    }
-                }
-            }
-
-            // Reconstruct path
-            List<int> pathPolyIds = new();
-            int currentId = endPolygonId;
-
-            if (!cameFrom.ContainsKey(endPolygonId) && startPolygonId != endPolygonId)
-                return PathState.NoPath; // No path
-
-            pathPolyIds.Add(currentId);
-            while (currentId != startPolygonId)
-            {
-                currentId = cameFrom[currentId];
-                pathPolyIds.Add(currentId);
-            }
-            pathPolyIds.Reverse();
-
-            polygons.AddRange(pathPolyIds);
-
-            // Convert to center path
-            if (path == null) path = new List<PathNode>();
-            if (pathPolyIds.Count > 0) path.Add(new (start));
-            for (int i = 1; i < pathPolyIds.Count - 1; i++)
-                path.Add(new (polys[pathPolyIds[i]].center));
-            if (pathPolyIds.Count > 1) path.Add(new (end));
-
-            return PathState.Full;
         }
 
         private PathState PlanPathOnNavmeshMidEdge(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path)
@@ -1387,6 +1326,17 @@ namespace UC
             return regionData[regionId].polygons[polygonId];
         }
 
+        public int GetRegion(Vector3 position)
+        {
+            if (GetPointOnNavMesh(position, out var regionId, out var pt))
+            {
+                return regionId;
+            }
+
+            return -1;
+        }
+
+
         #endregion
 
         #region Debug and Gizmos
@@ -1522,15 +1472,17 @@ namespace UC
                 int             regionId = testRegionId;
                 List<PathNode>  path = null;
                 if (PlanPath(startPoint.position, endPoint.position, ref regionId, ref polygons, ref path) != PathState.NoPath)
-                if (path != null)
                 {
-                    Gizmos.color = new Color(0.0f, 1.0f, 0.0f, 0.75f);
-                    foreach (var polygon in polygons)
+                    if (debugPolygons)
                     {
-                        var poly = GetPoly(testRegionId, polygon);
-                        if (poly != null)
+                        Gizmos.color = new Color(0.0f, 1.0f, 0.0f, 0.75f);
+                        foreach (var polygon in polygons)
                         {
-                            DebugHelpers.DrawConvexPolygon(poly.vertices, poly.indices);
+                            var poly = GetPoly(testRegionId, polygon);
+                            if (poly != null)
+                            {
+                                DebugHelpers.DrawConvexPolygon(poly.vertices, poly.indices);
+                            }
                         }
                     }
                     Gizmos.color = Color.blue;
@@ -1540,6 +1492,20 @@ namespace UC
                     }
                 }
             }
+        }
+        #endregion
+
+        #region NavMesh2d management
+        static Dictionary<AgentType, NavMesh2d> NavigationMeshes;
+
+        public static NavMesh2d Get(AgentType agentType)
+        {
+            if (NavigationMeshes.TryGetValue(agentType, out var navMesh))
+            {
+                return navMesh;
+            }
+
+            return null;
         }
         #endregion
     }
