@@ -31,6 +31,8 @@ namespace UC
         private PathMode                    pathMode = PathMode.MidEdge;
         [SerializeField]
         private bool                        funnelEnable = true;
+        [SerializeField, Range(0.0f, 1.0f)]
+        private float                       funnelBias = 0.0f;
 
         [SerializeField]
         private bool debugEnabled;
@@ -944,14 +946,12 @@ namespace UC
 
         public bool GetPointOnNavMesh(Vector3 point, int regionId, out Vector3 pt)
         {
-            var rd = regionData[regionId];
+            return GetPointOnNavMesh(point, regionId, out int polygonId, out pt);
+        }
 
-            var retPolygon = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
-
-            if (distance < 0) pt = point;
-            else pt = pt2d;
-
-            return retPolygon != null;
+        public bool GetPointOnNavMesh(Vector3 point, out int regionId, out Vector3 pt)
+        {
+            return GetPointOnNavMesh(point, out regionId, out int polygonId, out pt);
         }
 
         public bool GetPointOnNavMesh(Vector3 point, int regionId, out int polygonId, out Vector3 pt)
@@ -963,39 +963,6 @@ namespace UC
             if (distance < 0) pt = point;
             else pt = pt2d;
             polygonId = retPolygon.id;
-
-            return retPolygon != null;
-        }
-
-        public bool GetPointOnNavMesh(Vector3 point, out int regionId, out Vector3 pt)
-        {
-            ConvexPolygon retPolygon = null;
-            Vector3 retPt = point;
-            float retDist = float.MaxValue;
-            int retRegionId = -1;
-
-            if (regionData == null)
-            {
-                pt = point;
-                regionId = -1;
-                return false;
-            }
-
-            foreach (var rd in regionData)
-            {
-                var poly = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
-                if ((poly != null) && (retDist > distance))
-                {
-                    retDist = distance;
-                    retPolygon = poly;
-                    retRegionId = rd.regionId;
-                    retPt = pt2d;
-                }
-            }
-
-            if (retDist < 0) pt = point;
-            else pt = retPt;
-            regionId = retRegionId;
 
             return retPolygon != null;
         }
@@ -1036,7 +1003,7 @@ namespace UC
         }
 
 
-        public PathState PlanPath(Vector3 start, Vector3 end, ref int regionId, ref List<int> polygons, ref List<PathNode> path)
+        public PathState PlanPath(Vector3 start, Vector3 end, ref int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue)
         {
             var startOnNavmesh = start;
             var endOnNavmesh = end;
@@ -1078,10 +1045,10 @@ namespace UC
                 regionId = startRegionId;
             }
 
-            return PlanPathOnNavmesh(startOnNavmesh, startPolygonId, endOnNavmesh, endPolygonId, regionId, ref polygons, ref path);
+            return PlanPathOnNavmesh(startOnNavmesh, startPolygonId, endOnNavmesh, endPolygonId, regionId, ref polygons, ref path, pathMidBias);
         }
 
-        public PathState PlanPathOnNavmesh(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path)
+        public PathState PlanPathOnNavmesh(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue)
         {
             PathState ret = PathState.NoPath;
 
@@ -1099,7 +1066,7 @@ namespace UC
 
             if ((funnelEnable) && (path.Count > 2))
             {
-                Funnel(polygons, path, regionId);
+                Funnel(polygons, path, regionId, (pathMidBias < 0) ? (funnelBias) : (pathMidBias));
             }
 
             return ret;
@@ -1272,79 +1239,95 @@ namespace UC
             return PathState.Full;
         }
 
-        // Funnel implementation that modifies the path list in-place
-        private void Funnel(List<int> polygons, List<PathNode> path, int regionId)
+        private void Funnel(List<int> polygons, List<PathNode> path, int regionId, float bias)
         {
-            if (polygons == null || path == null || path.Count < 2 || polygons.Count < 1)
+            // trivial cases
+            if (polygons == null || path == null || polygons.Count < 2 || path.Count < 2)
                 return;
 
             var region = regionData[regionId];
-            var polys = region.polygons;
-            var verts = region.vertices;
+            var verts = region.vertices;     // Vector3[] or Vector2[]
+            var polyList = region.polygons;     // List<Polygon> (each has .indices and .neighbors)
 
-            List<(Vector2 left, Vector2 right)> portals = new();
+            // 1) Build the portal list: one portal per shared edge
+            var lefts = new List<Vector2>();
+            var rights = new List<Vector2>();
 
-            for (int i = 0; i < polygons.Count - 1; i++)
+            for (int i = 1; i < polygons.Count; i++)
             {
-                var from = polys[polygons[i]];
-                int to = polygons[i + 1];
+                var prev = polyList[polygons[i - 1]];
+                int currId = polygons[i];
 
-                for (int j = 0; j < from.neighbors.Count; j++)
+                // find which edge of prev links to curr
+                for (int e = 0; e < prev.neighbors.Count; e++)
                 {
-                    if (from.neighbors[j] == to)
+                    if (prev.neighbors[e] != currId)
+                        continue;
+
+                    int vi = prev.indices[e];
+                    int vj = prev.indices[(e + 1) % prev.indices.Count];
+                    Vector2 p0 = (Vector2)verts[vi];
+                    Vector2 p1 = (Vector2)verts[vj];
+
+                    // orient portal endpoints by local travel direction
+                    Vector2 travelDir = (path[i].pos - path[i - 1].pos).normalized;
+                    Vector2 edgeVec = p1 - p0;
+                    float side = Vector3.Cross(travelDir, edgeVec).z;
+
+                    Vector2 rawLeft, rawRight;
+                    if (side >= 0f)
                     {
-                        int vi = from[j];
-                        int vj = from[(j + 1) % from.Count];
-                        Vector2 a = verts[vi];
-                        Vector2 b = verts[vj];
-
-                        // Check if 'to' also has the same edge in reverse
-                        var toPoly = polys[to];
-                        bool reversed = false;
-                        for (int k = 0; k < toPoly.Count; k++)
-                        {
-                            int ti = toPoly[k];
-                            int tj = toPoly[(k + 1) % toPoly.Count];
-                            if ((ti == vj && tj == vi))
-                            {
-                                reversed = true;
-                                break;
-                            }
-                        }
-
-                        if (reversed)
-                            portals.Add((b, a));
-                        else
-                            portals.Add((a, b));
-                        
-                        break;
+                        // p1 is to the left of travelDir
+                        rawLeft = p0;
+                        rawRight = p1;
                     }
+                    else
+                    {
+                        rawLeft = p1;
+                        rawRight = p0;
+                    }
+
+                    // now pull both ends toward the true midpoint by t
+                    Vector2 mid = 0.5f * (p0 + p1);
+                    Vector2 adjL = Vector2.Lerp(rawLeft, mid, bias);
+                    Vector2 adjR = Vector2.Lerp(rawRight, mid, bias);
+
+                    lefts.Add(adjL);
+                    rights.Add(adjR);
+
+                    break;
                 }
             }
 
+            // 1b) append a zero-width portal at the goal
+            Vector3 goal = path[path.Count - 1].pos;
+            lefts.Add(goal);
+            rights.Add(goal);
+
+            // 2) Funnel-tightening
+            var newPath = new List<PathNode> { path[0] };
+
             Vector2 apex = path[0].pos;
-            Vector2 left = portals[0].left;
-            Vector2 right = portals[0].right;
+            Vector2 left = apex;
+            Vector2 right = apex;
             int apexIndex = 0, leftIndex = 0, rightIndex = 0;
 
-            List<PathNode> newPath = new();
-            newPath.Add(path[0]);
-
-            for (int i = 1; i < portals.Count; i++)
+            for (int i = 0; i < lefts.Count; i++)
             {
-                Vector2 newLeft = portals[i].left;
-                Vector2 newRight = portals[i].right;
+                Vector2 newLeft = lefts[i];
+                Vector2 newRight = rights[i];
 
-                // Tighten the funnel from the right
-                if (TriangleArea2(apex, right, newRight) <= 0)
+                // --- update right boundary ---
+                if (TriangleArea2(apex, right, newRight) <= 0f)
                 {
-                    if (apex == right || TriangleArea2(apex, left, newRight) > 0)
+                    if (apex == right || TriangleArea2(apex, left, newRight) > 0f)
                     {
                         right = newRight;
                         rightIndex = i;
                     }
                     else
                     {
+                        // emit left apex, restart
                         newPath.Add(new PathNode(left));
                         apex = left;
                         apexIndex = leftIndex;
@@ -1357,16 +1340,17 @@ namespace UC
                     }
                 }
 
-                // Tighten the funnel from the left
-                if (TriangleArea2(apex, left, newLeft) >= 0)
+                // --- update left boundary ---
+                if (TriangleArea2(apex, left, newLeft) >= 0f)
                 {
-                    if (apex == left || TriangleArea2(apex, right, newLeft) < 0)
+                    if (apex == left || TriangleArea2(apex, right, newLeft) < 0f)
                     {
                         left = newLeft;
                         leftIndex = i;
                     }
                     else
                     {
+                        // emit right apex, restart
                         newPath.Add(new PathNode(right));
                         apex = right;
                         apexIndex = rightIndex;
@@ -1380,14 +1364,21 @@ namespace UC
                 }
             }
 
-            newPath.Add(path[^1]);
+            // 3) ensure the real goal is the last waypoint
+            if (newPath[newPath.Count - 1].pos != goal)
+                newPath.Add(new PathNode(goal));
+
+            // overwrite original path
             path.Clear();
             path.AddRange(newPath);
         }
 
+        // Twice the signed area of triangle (a,b,c).
+        // >0 if c is to the left of a->b, <0 if to the right.
         private float TriangleArea2(Vector2 a, Vector2 b, Vector2 c)
         {
-            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            return (b.x - a.x) * (c.y - a.y)
+                 - (b.y - a.y) * (c.x - a.x);
         }
 
 

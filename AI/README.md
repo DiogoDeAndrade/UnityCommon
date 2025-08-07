@@ -9,10 +9,11 @@
   * Can query the navmesh for point in navmesh - it uses a quadtree for efficient querying
     * It can search within a region, or just any region
   * It can query the navmesh for the polygon path between two points in a region
+  * Can do pathfinding queries, with or without funneling, and with or without biasing
 * Still to do:
   * Pathfinding
-    * Use rubberbanding to actually create path
     * Follow path (NavMeshAgent2d)
+    * Path-smoothing
     * LoS query
     * Area costs
     * Obstacle avoidance
