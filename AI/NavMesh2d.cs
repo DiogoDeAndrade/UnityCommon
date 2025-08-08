@@ -2,21 +2,20 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
-
+using UnityEngine;
+using Unity.VisualScripting;
 
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using UnityEngine;
-using static UC.Inventory;
-using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
 namespace UC
 {
     public class NavMesh2d : MonoBehaviour
     {
         private enum SimplificationAlgorithm { None, GreedyVertexDecimation, RamerDouglasPeucker };
+        private enum PathMode { MidEdge };
+        public enum PathState { Thinking, NoPath, Partial, Full };
 
         [SerializeField] 
         private int                        setCellSize;
@@ -28,35 +27,50 @@ namespace UC
         private SimplificationAlgorithm    simplificationAlgorithm = SimplificationAlgorithm.RamerDouglasPeucker;
         [SerializeField, ShowIf(nameof(needSimplificationMaxDistance))] 
         private float                      simplificationMaxDistance = 10.0f;
+        [SerializeField]
+        private PathMode                    pathMode = PathMode.MidEdge;
+        [SerializeField]
+        private bool                        funnelEnable = true;
+        [SerializeField, Range(0.0f, 1.0f)]
+        private float                       funnelBias = 0.0f;
 
         [SerializeField]
-        private bool debugEnabled;
+        private bool        debugEnabled;
         [SerializeField, ShowIf(nameof(debugEnabled))]
-        private bool debugGrid;
+        private bool        debugGrid;
         [SerializeField, ShowIf(nameof(needColorByRegion))]
-        private bool colorByRegion;
+        private bool        colorByRegion;
         [SerializeField, ShowIf(nameof(debugEnabled))]
-        private bool debugContours;
+        private bool        debugContours;
         [SerializeField, ShowIf(nameof(debugEnabled))]
-        private bool debugPolygons;
+        private bool        debugPolygons;
         [SerializeField, ShowIf(nameof(debugEnabled))]
-        private bool debugTestNearPoint;
+        private bool        debugTestNearPoint;
+        [SerializeField, ShowIf(nameof(debugEnabled))]
+        private bool        debugTestPath;
+        [SerializeField, ShowIf(nameof(debugEnabled)), Label("Debug Test LoS")]
+        private bool        debugTestLoS;
         [SerializeField, ShowIf(nameof(needTestPoint))]
-        private Transform testPoint;
-        [SerializeField, ShowIf(nameof(debugEnabled))]
-        private bool debugTestPath;
-        [SerializeField, ShowIf(nameof(isTestPath))]
-        private Transform startPoint;
-        [SerializeField, ShowIf(nameof(isTestPath))]
-        private Transform endPoint;
+        private Transform   testPoint;
+        [SerializeField, ShowIf(nameof(needPoints))]
+        private Transform   startPoint;
+        [SerializeField, ShowIf(nameof(needPoints))]
+        private Transform   endPoint;
         [SerializeField, ShowIf(nameof(needTestRegion))]
-        private int       testRegionId;
+        private int         testRegionId;
 
         bool needSimplificationMaxDistance => simplificationAlgorithm == SimplificationAlgorithm.GreedyVertexDecimation;
         bool needTestPoint => debugEnabled && debugTestNearPoint;
-        bool needTestRegion => debugEnabled && (debugTestNearPoint || debugTestPath);
+        bool needTestRegion => debugEnabled && (debugTestNearPoint || debugTestPath || debugTestLoS);
         bool needColorByRegion => debugEnabled && debugGrid;
-        bool isTestPath => debugEnabled && debugTestPath;
+        bool needPoints => debugEnabled && (debugTestPath || debugTestLoS);
+
+        public struct PathNode
+        {
+            public PathNode(Vector3 p) { pos = p; }
+
+            public Vector3 pos;
+        }
 
 
         [Serializable]
@@ -373,6 +387,18 @@ namespace UC
             }
         };
 
+
+        struct NavmeshPolyState : IComparable<NavmeshPolyState>
+        {
+            public int polyId;
+            public Vector2 pos;
+            public float cost;
+            public float priority;
+            public List<Vector2> path;
+
+            public int CompareTo(NavmeshPolyState other) => priority.CompareTo(other.priority);
+        }
+
         [SerializeField, HideInInspector] private int           cellSize;
         [SerializeField, HideInInspector] private Vector2Int    gridSize;
         [SerializeField, HideInInspector] private Vector2       gridOffset;
@@ -386,6 +412,24 @@ namespace UC
 
         bool hasValidGrid => (grid != null) && (grid.Length == gridSize.x * gridSize.y);
         bool hasValidRegions => (regionData != null) && (regionData.Count > 0);
+
+        private void Awake()
+        {
+            if (NavigationMeshes == null) NavigationMeshes = new();
+            if (NavigationMeshes.ContainsKey(agentType))
+            {
+                Debug.LogError($"More than one navigation mesh for agent type {agentType.name}!");
+            }
+            else
+            {
+                NavigationMeshes.Add(agentType, this);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            NavigationMeshes.Remove(agentType);
+        }
 
         [Button("Clear")]
         public void Clear()
@@ -411,6 +455,18 @@ namespace UC
             Polygonize();
             MergeToConvex();
             ComputeNeighbors();
+
+            if (!debugEnabled)
+            {
+                grid = null;
+                region = null;
+                foreach (var rd in regionData)
+                {
+                    rd.boundary = null;
+                    rd.holes = null;
+                    var quadtree = rd.quadtree;
+                }
+            }
 
 #if UNITY_EDITOR
             // Record the change so Unity knows to save it
@@ -922,14 +978,12 @@ namespace UC
 
         public bool GetPointOnNavMesh(Vector3 point, int regionId, out Vector3 pt)
         {
-            var rd = regionData[regionId];
+            return GetPointOnNavMesh(point, regionId, out int polygonId, out pt);
+        }
 
-            var retPolygon = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
-
-            if (distance < 0) pt = point;
-            else pt = pt2d;
-
-            return retPolygon != null;
+        public bool GetPointOnNavMesh(Vector3 point, out int regionId, out Vector3 pt)
+        {
+            return GetPointOnNavMesh(point, out regionId, out int polygonId, out pt);
         }
 
         public bool GetPointOnNavMesh(Vector3 point, int regionId, out int polygonId, out Vector3 pt)
@@ -941,39 +995,6 @@ namespace UC
             if (distance < 0) pt = point;
             else pt = pt2d;
             polygonId = retPolygon.id;
-
-            return retPolygon != null;
-        }
-
-        public bool GetPointOnNavMesh(Vector3 point, out int regionId, out Vector3 pt)
-        {
-            ConvexPolygon retPolygon = null;
-            Vector3 retPt = point;
-            float retDist = float.MaxValue;
-            int retRegionId = -1;
-
-            if (regionData == null)
-            {
-                pt = point;
-                regionId = -1;
-                return false;
-            }
-
-            foreach (var rd in regionData)
-            {
-                var poly = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
-                if ((poly != null) && (retDist > distance))
-                {
-                    retDist = distance;
-                    retPolygon = poly;
-                    retRegionId = rd.regionId;
-                    retPt = pt2d;
-                }
-            }
-
-            if (retDist < 0) pt = point;
-            else pt = retPt;
-            regionId = retRegionId;
 
             return retPolygon != null;
         }
@@ -1014,7 +1035,7 @@ namespace UC
         }
 
 
-        public List<Vector3> PlanPath(Vector3 start, Vector3 end, ref int regionId, ref List<int> polygons)
+        public PathState PlanPath(Vector3 start, Vector3 end, ref int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue)
         {
             var startOnNavmesh = start;
             var endOnNavmesh = end;
@@ -1026,12 +1047,12 @@ namespace UC
                 if (!GetPointOnNavMesh(start, regionId, out startPolygonId, out startOnNavmesh))
                 {
                     Debug.LogWarning("Can't find start point on navmesh!");
-                    return null;
+                    return PathState.NoPath;
                 }
                 if (!GetPointOnNavMesh(end, regionId, out endPolygonId, out endOnNavmesh))
                 {
                     Debug.LogWarning("Can't find end point on navmesh!");
-                    return null;
+                    return PathState.NoPath;
                 }
             }
             else
@@ -1039,82 +1060,105 @@ namespace UC
                 if (!GetPointOnNavMesh(start, out int startRegionId, out startPolygonId, out startOnNavmesh))
                 {
                     Debug.LogWarning("Can't find start point on navmesh!");
-                    return null;
+                    return PathState.NoPath;
                 }
                 if (!GetPointOnNavMesh(end, out int endRegionId, out endPolygonId, out endOnNavmesh))
                 {
                     Debug.LogWarning("Can't find end point on navmesh!");
-                    return null;
+                    return PathState.NoPath;
                 }
                 if (startRegionId != endRegionId)
                 {
                     {
                         Debug.LogWarning("Can't find path between points in different regions!");
-                        return null;
+                        return PathState.NoPath;
                     }
                 }
                 regionId = startRegionId;
             }
 
-            return PlanPathOnNavmesh(startOnNavmesh, startPolygonId, endOnNavmesh, endPolygonId, regionId, ref polygons);
+            return PlanPathOnNavmesh(startOnNavmesh, startPolygonId, endOnNavmesh, endPolygonId, regionId, ref polygons, ref path, pathMidBias);
         }
 
-        public List<Vector3> PlanPathOnNavmesh(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons)
+        public PathState PlanPathOnNavmesh(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue)
+        {
+            PathState ret = PathState.NoPath;
+
+            switch (pathMode)
+            {
+                case PathMode.MidEdge:
+                    ret = PlanPathOnNavmeshMidEdge(start, startPolygonId, end, endPolygonId, regionId, ref polygons, ref path);
+                    break;
+                default:
+                    break;
+            }
+
+            if ((funnelEnable) && (path.Count > 2))
+            {
+                Funnel(polygons, path, regionId, (pathMidBias < 0) ? (funnelBias) : (pathMidBias));
+            }
+
+            return ret;
+        }
+
+        private PathState PlanPathOnNavmeshMidEdge(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path)
         {
             if (polygons == null) polygons = new();
 
             var region = regionData[regionId];
             var polys = region.polygons;
-
             var frontier = new PriorityQueue<int, float>();
             var cameFrom = new Dictionary<int, int>();
             var costSoFar = new Dictionary<int, float>();
-            var visited = new HashSet<int>();
+            var entryPoint = new Dictionary<int, Vector2>();
 
-            Vector2 endPos = polys[endPolygonId].center;
+            Vector2 endPos = end;
 
             frontier.Enqueue(startPolygonId, 0);
             costSoFar[startPolygonId] = 0;
+            entryPoint[startPolygonId] = (Vector2)start;
 
             while (frontier.Count > 0)
             {
                 int current = frontier.Dequeue();
-
                 if (current == endPolygonId)
                     break;
 
-                if (!visited.Add(current))
-                    continue;
+                Vector2 fromPos = entryPoint[current];
 
                 var currentPoly = polys[current];
-                Vector2 currentPos = currentPoly.center;
+                var vertices = region.vertices;
 
-                foreach (var neighbor in currentPoly.neighbors)
+                for (int i = 0; i < currentPoly.neighbors.Count; i++)
                 {
+                    int neighbor = currentPoly.neighbors[i];
                     if (neighbor == -1) continue;
 
-                    var neighborPoly = polys[neighbor];
-                    Vector2 neighborPos = neighborPoly.center;
+                    int vi = currentPoly[i];
+                    int vj = currentPoly[(i + 1) % currentPoly.Count];
+                    Vector2 edgeMid = 0.5f * ((Vector2)vertices[vi] + (Vector2)vertices[vj]);
 
-                    float newCost = costSoFar[current] + Vector2.Distance(currentPos, neighborPos);
+                    // incremental: from where we entered ‘current’ to this portal
+                    float stepCost = Vector2.Distance(fromPos, edgeMid);
+                    float newCost = costSoFar[current] + stepCost;
+
+                    float priority = newCost + Vector2.Distance(edgeMid, endPos);
 
                     if (!costSoFar.ContainsKey(neighbor) || newCost < costSoFar[neighbor])
                     {
                         costSoFar[neighbor] = newCost;
-                        float priority = newCost + Vector2.Distance(neighborPos, endPos);
                         frontier.Enqueue(neighbor, priority);
                         cameFrom[neighbor] = current;
+                        entryPoint[neighbor] = edgeMid;
                     }
                 }
             }
 
-            // Reconstruct path
+            if (!cameFrom.ContainsKey(endPolygonId) && startPolygonId != endPolygonId)
+                return PathState.NoPath;
+
             List<int> pathPolyIds = new();
             int currentId = endPolygonId;
-
-            if (!cameFrom.ContainsKey(endPolygonId) && startPolygonId != endPolygonId)
-                return null; // No path
-
             pathPolyIds.Add(currentId);
             while (currentId != startPolygonId)
             {
@@ -1125,20 +1169,285 @@ namespace UC
 
             polygons.AddRange(pathPolyIds);
 
-            // Convert to center path
-            var path = new List<Vector3>();
-            if (pathPolyIds.Count > 0) path.Add(start);
-            for (int i = 1; i < pathPolyIds.Count - 1; i++)
-                path.Add(polys[pathPolyIds[i]].center);
-            if (pathPolyIds.Count > 1) path.Add(end);
+            if (path == null) path = new List<PathNode>();
+            path.Add(new PathNode(start));
+            for (int i = 1; i < pathPolyIds.Count; i++)
+            {
+                int prev = pathPolyIds[i - 1];
+                int curr = pathPolyIds[i];
 
-            return path;
+                var prevPoly = polys[prev];
+                var verts = region.vertices;
+
+                for (int j = 0; j < prevPoly.neighbors.Count; j++)
+                {
+                    if (prevPoly.neighbors[j] == curr)
+                    {
+                        int vi = prevPoly[j];
+                        int vj = prevPoly[(j + 1) % prevPoly.Count];
+                        Vector2 edgeMid = 0.5f * ((Vector2)verts[vi] + (Vector2)verts[vj]);
+                        path.Add(new PathNode(edgeMid));
+                        break;
+                    }
+                }
+            }
+            path.Add(new PathNode(end));
+
+            return PathState.Full;
         }
+
+        private void Funnel(List<int> polygons, List<PathNode> path, int regionId, float bias)
+        {
+            // trivial cases
+            if (polygons == null || path == null || polygons.Count < 2 || path.Count < 2)
+                return;
+
+            var region = regionData[regionId];
+            var verts = region.vertices;     // Vector3[] or Vector2[]
+            var polyList = region.polygons;     // List<Polygon> (each has .indices and .neighbors)
+
+            // 1) Build the portal list: one portal per shared edge
+            var lefts = new List<Vector2>();
+            var rights = new List<Vector2>();
+
+            for (int i = 1; i < polygons.Count; i++)
+            {
+                var prev = polyList[polygons[i - 1]];
+                int currId = polygons[i];
+
+                // find which edge of prev links to curr
+                for (int e = 0; e < prev.neighbors.Count; e++)
+                {
+                    if (prev.neighbors[e] != currId)
+                        continue;
+
+                    int vi = prev.indices[e];
+                    int vj = prev.indices[(e + 1) % prev.indices.Count];
+                    Vector2 p0 = (Vector2)verts[vi];
+                    Vector2 p1 = (Vector2)verts[vj];
+
+                    // orient portal endpoints by local travel direction
+                    Vector2 travelDir = (path[i].pos - path[i - 1].pos).normalized;
+                    Vector2 edgeVec = p1 - p0;
+                    float side = Vector3.Cross(travelDir, edgeVec).z;
+
+                    Vector2 rawLeft, rawRight;
+                    if (side >= 0f)
+                    {
+                        // p1 is to the left of travelDir
+                        rawLeft = p0;
+                        rawRight = p1;
+                    }
+                    else
+                    {
+                        rawLeft = p1;
+                        rawRight = p0;
+                    }
+
+                    // now pull both ends toward the true midpoint by t
+                    Vector2 mid = 0.5f * (p0 + p1);
+                    Vector2 adjL = Vector2.Lerp(rawLeft, mid, bias);
+                    Vector2 adjR = Vector2.Lerp(rawRight, mid, bias);
+
+                    lefts.Add(adjL);
+                    rights.Add(adjR);
+
+                    break;
+                }
+            }
+
+            // 1b) append a zero-width portal at the goal
+            Vector3 goal = path[path.Count - 1].pos;
+            lefts.Add(goal);
+            rights.Add(goal);
+
+            // 2) Funnel-tightening
+            var newPath = new List<PathNode> { path[0] };
+
+            Vector2 apex = path[0].pos;
+            Vector2 left = apex;
+            Vector2 right = apex;
+            int apexIndex = 0, leftIndex = 0, rightIndex = 0;
+
+            for (int i = 0; i < lefts.Count; i++)
+            {
+                Vector2 newLeft = lefts[i];
+                Vector2 newRight = rights[i];
+
+                // --- update right boundary ---
+                if (Triangle.SignedArea2(apex, right, newRight) <= 0f)
+                {
+                    if ((apex == right) || (Triangle.SignedArea2(apex, left, newRight) > 0f))
+                    {
+                        right = newRight;
+                        rightIndex = i;
+                    }
+                    else
+                    {
+                        // emit left apex, restart
+                        newPath.Add(new PathNode(left));
+                        apex = left;
+                        apexIndex = leftIndex;
+                        left = apex;
+                        right = apex;
+                        leftIndex = apexIndex;
+                        rightIndex = apexIndex;
+                        i = apexIndex;
+                        continue;
+                    }
+                }
+
+                // --- update left boundary ---
+                if (Triangle.SignedArea2(apex, left, newLeft) >= 0f)
+                {
+                    if ((apex == left) || (Triangle.SignedArea2(apex, right, newLeft) < 0f))
+                    {
+                        left = newLeft;
+                        leftIndex = i;
+                    }
+                    else
+                    {
+                        // emit right apex, restart
+                        newPath.Add(new PathNode(right));
+                        apex = right;
+                        apexIndex = rightIndex;
+                        left = apex;
+                        right = apex;
+                        leftIndex = apexIndex;
+                        rightIndex = apexIndex;
+                        i = apexIndex;
+                        continue;
+                    }
+                }
+            }
+
+            // 3) ensure the real goal is the last waypoint
+            if (newPath[newPath.Count - 1].pos != goal)
+                newPath.Add(new PathNode(goal));
+
+            // overwrite original path
+            path.Clear();
+            path.AddRange(newPath);
+        }
+
 
         private ConvexPolygon GetPoly(int regionId, int polygonId)
         {
             return regionData[regionId].polygons[polygonId];
         }
+
+        public int GetRegion(Vector3 position)
+        {
+            if (GetPointOnNavMesh(position, out var regionId, out var pt))
+            {
+                return regionId;
+            }
+
+            return -1;
+        }
+
+        public bool RaycastVector(Vector3 start, Vector3 dir, float maxDist, int regionId, out Vector3 endPoint, out int polygonId)
+        {
+            // 1) Normalize and find the starting polygon
+            Vector3 direction = dir.normalized;
+            if (!GetPointOnNavMesh(start, regionId, out polygonId, out Vector3 currentPoint))
+            {
+                endPoint = start;
+                return false;
+            }
+
+            // 2) Prepare traversal state
+            var rd = regionData[regionId];
+            float traveled = 0f;
+            float remaining = maxDist;
+            int currentPoly = polygonId;
+            const float epsilon = 1e-4f;
+            int maxIters = rd.polygons.Count * 2;
+            int iter = 0;
+
+            // 3) Loop: in each polygon, find the nearest edge-intersection
+            while (iter++ < maxIters)
+            {
+                var poly = rd.polygons[currentPoly];
+                float closestT = float.MaxValue;
+                int bestNeighbor = -1;
+                Vector3 hitPos = Vector3.zero;
+
+                // 3a) test each edge
+                for (int i = 0; i < poly.neighbors.Count; i++)
+                {
+                    int neighbor = poly.neighbors[i];
+                    Vector2 v1 = (Vector2)rd.vertices[poly.indices[i]];
+                    Vector2 v2 = (Vector2)rd.vertices[poly.indices[(i + 1) % poly.indices.Count]];
+
+                    // solve ray–segment intersection in 2D:
+                    Vector2 p = new Vector2(currentPoint.x, currentPoint.y);
+                    Vector2 r = new Vector2(direction.x, direction.y);
+                    Vector2 q = v1;
+                    Vector2 s = v2 - v1;
+
+                    float rxs = r.x * s.y - r.y * s.x;
+                    if (Mathf.Abs(rxs) < Mathf.Epsilon)
+                        continue; // parallel
+
+                    Vector2 qp = q - p;
+                    float t = (qp.x * s.y - qp.y * s.x) / rxs;
+                    float u = (qp.x * r.y - qp.y * r.x) / rxs;
+
+                    if (t > epsilon && t <= remaining + epsilon && u >= -epsilon && u <= 1f + epsilon)
+                    {
+                        if (t < closestT)
+                        {
+                            closestT = t;
+                            bestNeighbor = neighbor;
+                            hitPos = currentPoint + direction * t;
+                        }
+                    }
+                }
+
+                // 3b) no edge hit -> stays in this poly for full distance
+                if (closestT == float.MaxValue)
+                {
+                    endPoint = start + direction * maxDist;
+                    polygonId = currentPoly;
+                    return false;
+                }
+
+                // 3c) the intersection lies beyond maxDist
+                if (closestT > remaining)
+                {
+                    endPoint = start + direction * maxDist;
+                    polygonId = currentPoly;
+                    return false;
+                }
+
+                // 3d) hit a boundary edge?
+                if (bestNeighbor == -1)
+                {
+                    endPoint = hitPos;
+                    polygonId = currentPoly;
+                    return true;
+                }
+
+                // 3e) cross into neighbor polygon
+                traveled += closestT + epsilon;
+                remaining = maxDist - traveled;
+                currentPoint = hitPos + direction * epsilon;
+                currentPoly = bestNeighbor;
+            }
+
+            // 4) fallback if something went wrong
+            endPoint = start + direction * maxDist;
+            polygonId = currentPoly;
+            return false;
+        }
+
+        public bool RaycastSegment(Vector3 start, Vector3 end, int regionId, out Vector3 endPoint, out int polygonId)
+        {
+            return RaycastVector(start, (end - start).normalized, (end - start).magnitude, regionId, out endPoint, out polygonId);
+        }
+
+
 
         #endregion
 
@@ -1271,27 +1580,56 @@ namespace UC
 
             if ((debugTestPath) && (startPoint) && (endPoint))
             {
-                List<int>   polygons = null;
-                int         regionId = testRegionId;
-                var path = PlanPath(startPoint.position, endPoint.position, ref regionId, ref polygons);
-                if (path != null)
+                List<int>       polygons = null;
+                int             regionId = testRegionId;
+                List<PathNode>  path = null;
+                if (PlanPath(startPoint.position, endPoint.position, ref regionId, ref polygons, ref path) != PathState.NoPath)
                 {
-                    Gizmos.color = Color.green;
-                    foreach (var polygon in polygons)
+                    if (debugPolygons)
                     {
-                        var poly = GetPoly(testRegionId, polygon);
-                        if (poly != null)
+                        Gizmos.color = new Color(0.0f, 1.0f, 0.0f, 0.75f);
+                        foreach (var polygon in polygons)
                         {
-                            DebugHelpers.DrawConvexPolygon(poly.vertices, poly.indices);
+                            var poly = GetPoly(testRegionId, polygon);
+                            if (poly != null)
+                            {
+                                DebugHelpers.DrawConvexPolygon(poly.vertices, poly.indices);
+                            }
                         }
                     }
                     Gizmos.color = Color.blue;
                     for (int i = 0; i < path.Count - 1; i++)
                     {
-                        Gizmos.DrawLine(path[i], path[i + 1]);
+                        Gizmos.DrawLine(path[i].pos, path[i + 1].pos);
                     }
                 }
             }
+
+            if ((debugTestLoS) && (startPoint))
+            {
+                if (RaycastSegment(startPoint.position, endPoint.position, testRegionId, out Vector3 actualEndPoint, out int polygonId))
+                    Gizmos.color = Color.red;
+                else
+                    Gizmos.color = Color.green;
+
+                Gizmos.DrawLine(startPoint.position, actualEndPoint);
+                Handles.DrawDottedLine(actualEndPoint, endPoint.position, 2);
+
+            }
+        }
+        #endregion
+
+        #region NavMesh2d management
+        static Dictionary<AgentType, NavMesh2d> NavigationMeshes;
+
+        public static NavMesh2d Get(AgentType agentType)
+        {
+            if (NavigationMeshes.TryGetValue(agentType, out var navMesh))
+            {
+                return navMesh;
+            }
+
+            return null;
         }
         #endregion
     }

@@ -1,6 +1,10 @@
 using System.Collections.Generic;
 using UC;
 using UnityEngine;
+using System.IO;
+using UnityEditor.PackageManager.UI;
+
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -9,132 +13,226 @@ namespace UC
 {
     public class NavMeshAgent2d : MonoBehaviour
     {
-        [SerializeField] private AgentType agentType;
-        [SerializeField] private float maxSpeed;
-        [SerializeField] private float stopDistance = 2.0f;
+        public delegate void OnComplete(NavMeshAgent2d agent);
+        public event OnComplete onComplete;
+        public delegate bool OnStopped(NavMeshAgent2d agent);
+        public OnStopped onStopped;
 
-        protected bool          navMesh = false;
+        [SerializeField] private AgentType agentType;
+        [SerializeField] private float speed;
+        [SerializeField] private float angularSpeed;
+        [SerializeField] private float acceleration;
+        [SerializeField] private float stoppingDistance = 2.0f;
+
+
+        protected NavMesh2d     navMesh;
+        protected int           regionId = -1;
         protected bool          _isMoving = false;
         protected Vector2       targetPosition;
-        protected List<Vector2> currentPath;
         protected Vector2[]     lastDeltas;
-        protected int           lastDeltasIndex = 0;
-        protected Vector2       lastDeltaPos;
-        protected Vector2       moveDir;
+        protected int           lastDeltasSampleCount = 0;
+        protected Vector2       prevPos;
         protected Rigidbody2D   rb;
-        protected Vector2       requestedMovePoint;
+
+        private List<NavMesh2d.PathNode>    path;
+        private int                         currentPathIndex;
+        private Vector2                     velocity;
+        private Vector2                     desiredDir;
 
         public void SetMaxSpeed(float maxSpeed)
         {
-            this.maxSpeed = maxSpeed;
+            this.speed = maxSpeed;
         }
 
         public bool isMoving => _isMoving;
 
         void Start()
         {
+            navMesh = NavMesh2d.Get(agentType);
+            regionId = navMesh.GetRegion(transform.position);
+
             lastDeltas = new Vector2[16];
-            lastDeltaPos = transform.position;
+            prevPos = transform.position;
             rb = GetComponent<Rigidbody2D>();
 
+            path = new List<NavMesh2d.PathNode>();
         }
 
         void Update()
         {
-            // Update delta movement (to check if we're stuck for 16 frames)
-            Vector3 delta = transform.position.xy() - lastDeltaPos;
-            lastDeltas[lastDeltasIndex] = delta;
-            lastDeltasIndex = (lastDeltasIndex + 1) % lastDeltas.Length;
-            lastDeltaPos = transform.position;
+            if ((rb == null) || (rb.bodyType != RigidbodyType2D.Dynamic))
+            {
+                TickAgent(Time.deltaTime, useRigidbody: false);
+            }
+
+            if (_isMoving)
+            {
+                var lastDelta = transform.position.xy() - prevPos;
+                lastDeltas[lastDeltasSampleCount++ % lastDeltas.Length] = lastDelta;
+
+                prevPos = transform.position;
+
+                if (lastDeltasSampleCount > lastDeltas.Length)
+                {
+                    float accum = 0.0f;
+                    foreach (var sample in lastDeltas)
+                    {
+                        accum += sample.magnitude;
+                    }
+
+                    if (accum < 1e-3)
+                    {
+                        if (onStopped != null)
+                        {
+                            if (!onStopped.Invoke(this))
+                            {
+                                ForceStop();
+                                ResetStopDetection();
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         private void FixedUpdate()
         {
-            UpdateMovement();
+            if ((rb != null) && (rb.bodyType == RigidbodyType2D.Dynamic))
+            {
+                TickAgent(Time.fixedDeltaTime, useRigidbody: true);
+            }
         }
 
-        public bool MoveTo(Vector2 newTargetPosition)
+        private void TickAgent(float dt, bool useRigidbody)
         {
-            // If it's already moving, check if the target position has changed enough for
-            // replanning
-            if ((_isMoving) && (currentPath != null))
+            if (!_isMoving || path == null || currentPathIndex >= path.Count)
             {
-                if (Vector3.Distance(requestedMovePoint, newTargetPosition) < stopDistance)
-                {
-                    // No need to replan
-                    return true;
-                }
+                ForceStop();
+                return;
             }
 
-            // Check if this position is already my position
-            if (Vector3.Distance(transform.position, newTargetPosition) < stopDistance)
+            Vector2 currentPosition = transform.position;
+            Vector2 target = path[currentPathIndex].pos;
+            Vector2 toTarget = target - currentPosition;
+            float distanceToTarget = toTarget.magnitude;
+
+            if (distanceToTarget < stoppingDistance)
             {
-                // Already there
+                currentPathIndex++;
+                if (currentPathIndex >= path.Count)
+                {
+                    ForceStop();
+
+                    onComplete?.Invoke(this);
+
+                    return;
+                }
+                target = path[currentPathIndex].pos;
+                toTarget = target - currentPosition;
+                distanceToTarget = toTarget.magnitude;
+            }
+
+            desiredDir = toTarget.normalized;
+
+            // Clamp angle change using angularSpeed
+            if (velocity.sqrMagnitude > 0.001f)
+            {
+                float angleDiff = Vector2.SignedAngle(velocity.normalized, desiredDir);
+                float maxTurn = angularSpeed * dt;
+                angleDiff = Mathf.Clamp(angleDiff, -maxTurn, maxTurn);
+                desiredDir = Quaternion.Euler(0, 0, angleDiff) * velocity.normalized;
+            }
+
+            Vector2 desiredVelocity = desiredDir * speed;
+
+            // Accelerate toward desiredVelocity
+            velocity = Vector2.MoveTowards(velocity, desiredVelocity, acceleration * dt);
+
+            if (useRigidbody)
+            {
+                rb.linearVelocity = velocity;
+            }
+            else
+            {
+                transform.position += (Vector3)(velocity * dt);
+            }
+        }
+
+        void ForceStop()
+        {
+            if (_isMoving)
+                _isMoving = false;
+            velocity = Vector2.zero;
+            if ((rb) && (rb.bodyType == RigidbodyType2D.Dynamic))
+            {
+                rb.linearVelocity = Vector2.zero;
+            }
+        }
+
+        public bool SetDestination(Vector2 newTargetPosition)
+        {
+            if (navMesh == null) return false;
+            if (newTargetPosition == targetPosition) return true;
+
+            List<NavMesh2d.PathNode>    newPath = null;
+            List<int>                   polyIds = null;
+
+            if (!navMesh.GetPointOnNavMesh(transform.position, regionId, out int startPolyId, out Vector3 startPosOnNavmesh))
+            {
+                return false;
+            }
+            if (!navMesh.GetPointOnNavMesh(newTargetPosition, regionId, out int endPolyId, out Vector3 endPosOnNavmesh))
+            {
                 return false;
             }
 
-            // Plan a path - for now, just a straight line from where we are to the target
-            List<Vector2> newPath = new();
-            newPath.Add(newTargetPosition);
+            var result = navMesh.PlanPathOnNavmesh(startPosOnNavmesh, startPolyId, endPosOnNavmesh, endPolyId, regionId, ref polyIds, ref newPath);
+            if (result == NavMesh2d.PathState.NoPath || newPath.Count < 2)
+            {
+                _isMoving = false;
+                return false;
+            }
 
-            currentPath = newPath;
+            targetPosition = newTargetPosition;
+            path = newPath;
+            currentPathIndex = 1; // start pursuing the first target (index 1), since [0] is usually the current pos
             _isMoving = true;
-            requestedMovePoint = newTargetPosition;
-
             return true;
         }
 
-        bool UpdateMovement()
+        public void ResetStopDetection()
         {
-            if (currentPath == null) return true;
-
-            moveDir = Vector2.zero;
-            float maxDisp = maxSpeed * Time.fixedDeltaTime;
-
-            while (currentPath.Count > 0)
-            {
-                Vector3 moveDir = (currentPath[0] - transform.position.xy());
-                if (moveDir.magnitude < maxDisp)
-                {
-                    transform.position = currentPath[0];
-                    currentPath.PopFirst();
-                }
-                else
-                {
-                    moveDir.Normalize();
-
-                    rb.linearVelocity = moveDir * maxSpeed;
-
-                    return false;
-                }
-            }
-
-            rb.linearVelocity = Vector2.zero;
-            currentPath = null;
-            _isMoving = false;
-
-            return true;
+            lastDeltasSampleCount = 0;
         }
 
         private void OnDrawGizmos()
         {
-#if UNITY_EDITOR
-            if (currentPath == null || currentPath.Count == 0)
-                return;
-
-            Handles.color = Color.yellow;
-
-            Vector3 prev = transform.position;
-            foreach (var point in currentPath)
+            if (_isMoving)
             {
-                Handles.DrawDottedLine(prev, point, 5f); // 4 = dash spacing
-                prev = point;
-            }
+                if (path != null && path.Count > 1)
+                {
+                    Gizmos.color = Color.cyan;
+                    for (int i = 0; i < path.Count - 1; i++)
+                    {
+                        Gizmos.DrawLine(path[i].pos, path[i + 1].pos);
+                    }
 
-            Gizmos.color = Color.magenta;
-            Gizmos.DrawLine(prev, requestedMovePoint);
-            Gizmos.DrawSphere(requestedMovePoint, 4.0f);
-#endif
+                    if (currentPathIndex < path.Count)
+                    {
+                        var target = path[currentPathIndex].pos;
+                        Gizmos.color = Color.yellow;
+                        Gizmos.DrawSphere(target, 2.0f);
+                    }
+                }
+
+                Gizmos.color = Color.cyan;
+                DebugHelpers.DrawArrow(transform.position, desiredDir, 10.0f, 5.0f, desiredDir.Perpendicular());
+                Gizmos.color = Color.yellow;
+                DebugHelpers.DrawArrow(transform.position, velocity.normalized, 10.0f, 5.0f, desiredDir.Perpendicular());
+
+                Gizmos.color = Color.red;
+                Gizmos.DrawSphere(targetPosition, 3.0f);
+            }
         }
     }
 }
