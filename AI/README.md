@@ -11,10 +11,10 @@
   * It can query the navmesh for the polygon path between two points in a region
   * Can do pathfinding queries, with or without funneling, and with or without biasing
   * NavMeshAgent2d class now can follow a path, using pursuit follow
+  * NavMesh2d can now do LoS queries (raycast)
 * Still to do:
   * Pathfinding
     * Path following - Direct follow
-    * LoS query
     * Path-smoothing (LoS query + curves)
     * Area costs
     * Obstacle avoidance

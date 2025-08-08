@@ -1,3 +1,4 @@
+using Unity.Burst.Intrinsics;
 using UnityEngine;
 
 namespace UC
@@ -18,9 +19,10 @@ namespace UC
             v = new Vector3[3] { p1, p2, p3 };
         }
 
-        public float area => 0.5f * Mathf.Sqrt(Mathf.Pow(((v[1].x * v[0].y) - (v[2].x * v[0].y) - (v[0].x * v[1].y) + (v[2].x * v[1].y) + (v[0].x * v[2].y) - (v[1].x * v[2].y)), 2.0f) +
-                                               Mathf.Pow(((v[1].x * v[0].z) - (v[2].x * v[0].z) - (v[0].x * v[1].z) + (v[2].x * v[1].z) + (v[0].x * v[2].z) - (v[1].x * v[2].z)), 2.0f) +
-                                               Mathf.Pow(((v[1].y * v[0].z) - (v[2].y * v[0].z) - (v[0].y * v[1].z) + (v[2].y * v[1].z) + (v[0].y * v[2].z) - (v[1].y * v[2].z)), 2.0f));
+        //public float area => 0.5f * Mathf.Sqrt(Mathf.Pow(((v[1].x * v[0].y) - (v[2].x * v[0].y) - (v[0].x * v[1].y) + (v[2].x * v[1].y) + (v[0].x * v[2].y) - (v[1].x * v[2].y)), 2.0f) +
+        //                                       Mathf.Pow(((v[1].x * v[0].z) - (v[2].x * v[0].z) - (v[0].x * v[1].z) + (v[2].x * v[1].z) + (v[0].x * v[2].z) - (v[1].x * v[2].z)), 2.0f) +
+        //                                       Mathf.Pow(((v[1].y * v[0].z) - (v[2].y * v[0].z) - (v[0].y * v[1].z) + (v[2].y * v[1].z) + (v[0].y * v[2].z) - (v[1].y * v[2].z)), 2.0f));
+        public float area => Area(v[0], v[1], v[2]);
 
         public static Triangle operator *(Triangle src, Matrix4x4 matrix) => new Triangle(matrix * src.v[0].xyz1(), matrix * src.v[1].xyz1(), matrix * src.v[2].xyz1());
 
@@ -214,5 +216,35 @@ namespace UC
             Gizmos.DrawLine(v[1], v[2]);
             Gizmos.DrawLine(v[2], v[0]);
         }
+
+        // Signed area of triangle (a,b,c).
+        // >0 if c is to the left of a->b, <0 if to the right.
+        // Assumes CCW order
+        public static float SignedArea(Vector2 a, Vector2 b, Vector2 c)
+        {
+            return Area(a, b, c) * 0.5f;
+        }
+        // Twice the signed area of triangle (a,b,c).
+        // >0 if c is to the left of a->b, <0 if to the right.
+        // Assumes CCW order
+        public static float SignedArea2(Vector2 a, Vector2 b, Vector2 c)
+        {
+            return (b.x - a.x) * (c.y - a.y)
+                 - (b.y - a.y) * (c.x - a.x);
+        }
+
+        public static float Area(Vector3 a, Vector3 b, Vector3 c)
+        {
+            var v1 = b - a;
+            var v2 = c - a;
+
+            return Vector3.Cross(v1, v2).magnitude;
+        }
+
+        public static float Area2(Vector3 a, Vector3 b, Vector3 c)
+        {
+            return 0.5f * Area2(a, b, c);
+        }
+
     }
 }
