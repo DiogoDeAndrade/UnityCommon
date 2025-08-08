@@ -11,12 +11,12 @@ namespace UC
         [Serializable]
         public enum MaterialMode { Single, Palette, Multi };
 
-        [SerializeField] private VoxelData _voxelData;
+        [SerializeField] private VoxelDataByte _voxelData;
         private Mesh _mesh;
         [SerializeField] private MaterialMode _materialMode;
         [SerializeField] private Dictionary<int, int> _voxelValueToMaterialId;
 
-        public VoxelData voxelData
+        public VoxelDataByte voxelData
         {
             get => _voxelData;
             set
@@ -68,12 +68,12 @@ namespace UC
 
         public Vector3 offset
         {
-            get => _voxelData.offset;
+            get => _voxelData.minBound;
             set
             {
-                if (_voxelData.offset != value) _mesh = null;
+                if (_voxelData.minBound != value) _mesh = null;
 
-                _voxelData.offset = value;
+                _voxelData.minBound = value;
             }
         }
 
@@ -156,7 +156,7 @@ namespace UC
             int incX = 1;
             int incY = _voxelData.gridSize.x;
             int incZ = _voxelData.gridSize.x * _voxelData.gridSize.y;
-            Vector3 o = _voxelData.offset + _voxelData.voxelSize * 0.5f;
+            Vector3 o = _voxelData.minBound + _voxelData.voxelSize * 0.5f;
             byte value;
             float uvPaletteScale = 1.0f / 16.0f;
             float uvPaletteOffset = 0.5f / 16.0f;
@@ -336,7 +336,7 @@ namespace UC
             _voxelData.data[x + (y * _voxelData.gridSize.x) + (z * _voxelData.gridSize.x * _voxelData.gridSize.y)] = val;
         }
 
-        public void Set(VoxelData data)
+        public void Set(VoxelDataByte data)
         {
             _voxelData = data;
             _mesh = null;

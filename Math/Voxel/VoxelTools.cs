@@ -6,9 +6,9 @@ namespace UC
 
     public static class VoxelTools
     {
-        static public VoxelData Voxelize(Mesh mesh, float density, bool forcePowerOfTwo = false, float triangleScale = 1.0f, float gridScale = 1.0f, bool fillEmpty = false)
+        static public VoxelDataByte Voxelize(Mesh mesh, float density, bool forcePowerOfTwo = false, float triangleScale = 1.0f, float gridScale = 1.0f, bool fillEmpty = false)
         {
-            VoxelData ret = new VoxelData();
+            VoxelDataByte ret = new VoxelDataByte();
 
             Bounds bounds = mesh.bounds;
             bounds.Expand(bounds.size * gridScale - bounds.size);
@@ -34,7 +34,7 @@ namespace UC
             ret.voxelSize = new Vector3(bounds.size.x / (float)gridSize.x,
                                         bounds.size.y / (float)gridSize.y,
                                         bounds.size.z / (float)gridSize.z);
-            ret.offset = new Vector3(bounds.min.x, bounds.min.y, bounds.min.z);
+            ret.minBound = new Vector3(bounds.min.x, bounds.min.y, bounds.min.z);
             ret.data = new byte[gridSize.x * gridSize.y * gridSize.z];
 
             Vector3 densityV = new Vector3(gridSize.x / bounds.size.x, gridSize.y / bounds.size.y, gridSize.z / bounds.size.z);
@@ -59,12 +59,12 @@ namespace UC
                         v3 = ((v3 - center) * triangleScale) + center;
                     }
 
-                    var min_x = Mathf.FloorToInt((Mathf.Min(v1.x, v2.x, v3.x) - ret.offset.x) * densityV.x);
-                    var min_y = Mathf.FloorToInt((Mathf.Min(v1.y, v2.y, v3.y) - ret.offset.y) * densityV.y);
-                    var min_z = Mathf.FloorToInt((Mathf.Min(v1.z, v2.z, v3.z) - ret.offset.z) * densityV.z);
-                    var max_x = Mathf.CeilToInt((Mathf.Max(v1.x, v2.x, v3.x) - ret.offset.x) * densityV.x);
-                    var max_y = Mathf.CeilToInt((Mathf.Max(v1.y, v2.y, v3.y) - ret.offset.y) * densityV.y);
-                    var max_z = Mathf.CeilToInt((Mathf.Max(v1.z, v2.z, v3.z) - ret.offset.z) * densityV.z);
+                    var min_x = Mathf.FloorToInt((Mathf.Min(v1.x, v2.x, v3.x) - ret.minBound.x) * densityV.x);
+                    var min_y = Mathf.FloorToInt((Mathf.Min(v1.y, v2.y, v3.y) - ret.minBound.y) * densityV.y);
+                    var min_z = Mathf.FloorToInt((Mathf.Min(v1.z, v2.z, v3.z) - ret.minBound.z) * densityV.z);
+                    var max_x = Mathf.CeilToInt((Mathf.Max(v1.x, v2.x, v3.x) - ret.minBound.x) * densityV.x);
+                    var max_y = Mathf.CeilToInt((Mathf.Max(v1.y, v2.y, v3.y) - ret.minBound.y) * densityV.y);
+                    var max_z = Mathf.CeilToInt((Mathf.Max(v1.z, v2.z, v3.z) - ret.minBound.z) * densityV.z);
 
                     // DEBUG CODE: Just cover everything
                     /*min_x = min_y = min_z = 0;
@@ -74,17 +74,17 @@ namespace UC
 
                     for (int z = Mathf.Max(0, min_z); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
                     {
-                        offset.z = ret.offset.z + z * ret.voxelSize.z;
+                        offset.z = ret.minBound.z + z * ret.voxelSize.z;
                         for (int y = Mathf.Max(0, min_y); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
                         {
-                            offset.y = ret.offset.y + y * ret.voxelSize.y;
+                            offset.y = ret.minBound.y + y * ret.voxelSize.y;
                             for (int x = Mathf.Max(0, min_x); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
                             {
                                 int voxelIndex = x + (y * gridSize.x) + (z * gridSize.x * gridSize.y);
                                 if (ret.data[voxelIndex] == 0)
                                 {
                                     // Check this voxel
-                                    offset.x = ret.offset.x + x * ret.voxelSize.x;
+                                    offset.x = ret.minBound.x + x * ret.voxelSize.x;
                                     Vector3 aabb_min = offset;
                                     Vector3 aabb_max = aabb_min + ret.voxelSize;
 
@@ -107,9 +107,9 @@ namespace UC
             return ret;
         }
 
-        private static void FindAndFillEmpty(VoxelData vd)
+        private static void FindAndFillEmpty(VoxelDataByte vd)
         {
-            byte GetAdjacent(VoxelData vd, int x, int y, int z)
+            byte GetAdjacent(VoxelDataByte vd, int x, int y, int z)
             {
                 byte v;
                 v = vd[x - 1, y, z]; if (v != 0) return v;
@@ -122,7 +122,7 @@ namespace UC
                 return 0;
             }
 
-            bool FloodFillAndCheckBounds(VoxelData vd, int sx, int sy, int sz, byte v)
+            bool FloodFillAndCheckBounds(VoxelDataByte vd, int sx, int sy, int sz, byte v)
             {
                 Stack<Vector3Int> stack = new Stack<Vector3Int>();
                 int lx = vd.gridSize.x - 1;
@@ -199,7 +199,7 @@ namespace UC
             vd.Replace(254, 0);
         }
 
-        public static void MarkTop(VoxelData vd, byte value)
+        public static void MarkTop(VoxelDataByte vd, byte value)
         {
             int index = 0;
             int incAboveItem = vd.gridSize.x;
@@ -224,7 +224,7 @@ namespace UC
             }
         }
 
-        public static void MarkMinHeight(VoxelData vd, int voxelHeight, byte value)
+        public static void MarkMinHeight(VoxelDataByte vd, int voxelHeight, byte value)
         {
             int index = 0;
 
@@ -250,7 +250,7 @@ namespace UC
             }
         }
 
-        public static int GetHeight(VoxelData vd, int x, int y, int z)
+        public static int GetHeight(VoxelDataByte vd, int x, int y, int z)
         {
             int index = x + ((y + 1) * vd.gridSize.x) + (z * vd.gridSize.x * vd.gridSize.y);
             int incAboveItem = vd.gridSize.x;
@@ -268,7 +268,7 @@ namespace UC
             return int.MaxValue;
         }
 
-        public static (int, int, int)? FindVoxel(VoxelData vd, byte value)
+        public static (int, int, int)? FindVoxel(VoxelDataByte vd, byte value)
         {
             int index = 0;
 
@@ -290,7 +290,7 @@ namespace UC
             return null;
         }
 
-        public static void FloodFill(VoxelData vd, int x, int y, int z, byte value, byte newValue)
+        public static void FloodFill(VoxelDataByte vd, int x, int y, int z, byte value, byte newValue)
         {
             if ((x < 0) || (y < 0) || (z < 0)) return;
             if ((x >= vd.gridSize.x) || (y >= vd.gridSize.y) || (z >= vd.gridSize.z)) return;
@@ -309,7 +309,7 @@ namespace UC
             }
         }
 
-        public static int FloodFillWithStep(VoxelData vd, int stepSize, int x, int y, int z, byte value, byte newValue)
+        public static int FloodFillWithStep(VoxelDataByte vd, int stepSize, int x, int y, int z, byte value, byte newValue)
         {
             int count = 0;
             Queue<Vector3Int> explore = new Queue<Vector3Int>();
@@ -344,7 +344,7 @@ namespace UC
             return count;
         }
 
-        public static int CountVoxel(VoxelData vd, byte value)
+        public static int CountVoxel(VoxelDataByte vd, byte value)
         {
             int index = 0;
             int count = 0;
@@ -371,7 +371,7 @@ namespace UC
             public byte voxelId;
         }
 
-        public static List<VoxelRegion> MarkRegions(VoxelData vd, int stepSize, byte value, byte firstRegion, byte lastRegion)
+        public static List<VoxelRegion> MarkRegions(VoxelDataByte vd, int stepSize, byte value, byte firstRegion, byte lastRegion)
         {
             int regionId = 0;
             int regionRange = lastRegion - firstRegion + 1;

@@ -20,6 +20,8 @@ namespace UC
         [SerializeField, Header("Data")]
         private Graph<GraphNodeComponent> graph;
 
+        public Graph<GraphNodeComponent> Graph => graph;
+
         public bool isDirected => directed;
 
         [Button("Build from components")]

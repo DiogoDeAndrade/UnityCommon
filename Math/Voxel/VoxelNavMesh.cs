@@ -11,7 +11,7 @@ namespace UC
         Mesh mesh;
         Mesh unsimplifiedMesh;
 
-        public void Build(VoxelData vd, List<int> validVoxels,
+        public void Build(VoxelDataByte vd, List<int> validVoxels,
                           TriangulationMesh method, bool simplifyBoundary,
                           float stepSize, bool simplify, bool keepUnsimplifiedMesh)
         {
@@ -51,18 +51,18 @@ namespace UC
                         if (validVoxels.Exists((v) => v == value))
                         {
                             // Generate geometry for the top of this voxel for the nav mesh
-                            Vector3 p1 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.offset.x,
-                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                     (z - 0.0f) * vd.voxelSize.z + vd.offset.z);
-                            Vector3 p2 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.offset.x,
-                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                     (z + 1.0f) * vd.voxelSize.z + vd.offset.z);
-                            Vector3 p3 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.offset.x,
-                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                     (z + 1.0f) * vd.voxelSize.z + vd.offset.z);
-                            Vector3 p4 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.offset.x,
-                                                     (y + 1.0f) * vd.voxelSize.y + vd.offset.y,
-                                                     (z - 0.0f) * vd.voxelSize.z + vd.offset.z);
+                            Vector3 p1 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.minBound.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.minBound.y,
+                                                     (z - 0.0f) * vd.voxelSize.z + vd.minBound.z);
+                            Vector3 p2 = new Vector3((x - 0.0f) * vd.voxelSize.x + vd.minBound.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.minBound.y,
+                                                     (z + 1.0f) * vd.voxelSize.z + vd.minBound.z);
+                            Vector3 p3 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.minBound.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.minBound.y,
+                                                     (z + 1.0f) * vd.voxelSize.z + vd.minBound.z);
+                            Vector3 p4 = new Vector3((x + 1.0f) * vd.voxelSize.x + vd.minBound.x,
+                                                     (y + 1.0f) * vd.voxelSize.y + vd.minBound.y,
+                                                     (z - 0.0f) * vd.voxelSize.z + vd.minBound.z);
 
                             int i1 = FindOrAdd(p1, stepSize);
                             int i2 = FindOrAdd(p2, stepSize);

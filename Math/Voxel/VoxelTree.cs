@@ -126,15 +126,15 @@ namespace UC
             this.isOccupancyMap = isOccupancyMap;
         }
 
-        public VoxelTree(int maxVoxelsPerLeaf, bool isOccupancyMap, VoxelData data) : this(maxVoxelsPerLeaf, isOccupancyMap)
+        public VoxelTree(int maxVoxelsPerLeaf, bool isOccupancyMap, VoxelDataByte data) : this(maxVoxelsPerLeaf, isOccupancyMap)
         {
             Build(data);
         }
 
-        public void Build(VoxelData data)
+        public void Build(VoxelDataByte data)
         {
             voxelSize = data.voxelSize;
-            baseOffset = data.offset;
+            baseOffset = data.minBound;
             nodes = new List<Node>();
             Build(data, -1, data.gridSize, new Vector3Int(0, 0, 0));
 
@@ -280,7 +280,7 @@ namespace UC
             return new Bounds((bmin + bmax) * 0.5f, bmax - bmin);
         }
 
-        int Build(VoxelData data, int parentId, Vector3Int voxelCount, Vector3Int voxelOffset)
+        int Build(VoxelDataByte data, int parentId, Vector3Int voxelCount, Vector3Int voxelOffset)
         {
             var node = new Node()
             {
