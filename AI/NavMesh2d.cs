@@ -37,8 +37,12 @@ namespace UC
         private bool        debugEnabled;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool        debugGrid;
-        [SerializeField, ShowIf(nameof(needColorByRegion))]
+        [SerializeField, ShowIf(nameof(debugGridEnabled))]
         private bool        colorByRegion;
+        [SerializeField, ShowIf(nameof(debugGridEnabled))]
+        private bool        colorByCost;
+        [SerializeField, ShowIf(nameof(debugGridEnabled))]
+        private bool        costLabel;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool        debugContours;
         [SerializeField, ShowIf(nameof(debugEnabled))]
@@ -61,7 +65,7 @@ namespace UC
         bool needSimplificationMaxDistance => simplificationAlgorithm == SimplificationAlgorithm.GreedyVertexDecimation;
         bool needTestPoint => debugEnabled && debugTestNearPoint;
         bool needTestRegion => debugEnabled && (debugTestNearPoint || debugTestPath || debugTestLoS);
-        bool needColorByRegion => debugEnabled && debugGrid;
+        bool debugGridEnabled => debugEnabled && debugGrid;
         bool needPoints => debugEnabled && (debugTestPath || debugTestLoS);
 
         public struct PathNode
@@ -407,6 +411,10 @@ namespace UC
         [SerializeField, HideInInspector]
         byte[] region;
         [SerializeField, HideInInspector]
+        float[] cost;
+        [SerializeField, HideInInspector]
+        Vector2 costRange;
+        [SerializeField, HideInInspector]
         List<RegionData> regionData;      
 
         bool hasValidGrid => (grid != null) && (grid.Length == gridSize.x * gridSize.y);
@@ -435,6 +443,7 @@ namespace UC
         {
             grid = null;
             region = null;
+            cost = null;
             regionData = null;
         }
 
@@ -449,6 +458,7 @@ namespace UC
                 GrowMap();
             }
             ComputeRegions();
+            ComputeCost();
             ExtractContours();
             Simplify();
             Polygonize();
@@ -459,6 +469,7 @@ namespace UC
             {
                 grid = null;
                 region = null;
+                cost = null;
                 foreach (var rd in regionData)
                 {
                     rd.boundary = null;
@@ -482,12 +493,12 @@ namespace UC
             ComputeGridSize();
 
             grid = new byte[gridSize.x * gridSize.y];
-            int index = 0;
 
             var contactFilter = new ContactFilter2D();
             contactFilter.layerMask = obstacleMask;
             var results = new Collider2D[32];
 
+            int index = 0;
             for (int y = 0; y < gridSize.y; y++)
             {
                 for (int x = 0; x < gridSize.x; x++)
@@ -513,7 +524,6 @@ namespace UC
                 }
             }
         }
-
 
         void ComputeGridSize()
         {
@@ -671,6 +681,40 @@ namespace UC
             }
         }
 
+        #endregion
+
+        #region Cost
+        void ComputeCost()
+        {
+            cost = new float[gridSize.x * gridSize.y];
+            costRange = Vector2.one;
+
+            var modifiers = new List<NavMeshModifier2d>(FindObjectsByType<NavMeshModifier2d>(FindObjectsSortMode.None));
+            modifiers.Sort((m1, m2) => m2.priority.CompareTo(m1.priority));
+
+            int index = 0;            
+            for (int y = 0; y < gridSize.y; y++)
+            {
+                for (int x = 0; x < gridSize.x; x++)
+                {
+                    float   tileCost = 1.0f;
+                    Vector2 boxCenterPos = GridToWorldCenter(x, y);
+
+                    foreach (var modifier in modifiers)
+                    {
+                        if (modifier.InfluenceCost(boxCenterPos, ref tileCost))
+                        {
+                            if (tileCost < costRange.x) costRange.x = tileCost;
+                            if (tileCost > costRange.y) costRange.y = tileCost;
+                            break;
+                        }
+                    }
+
+                    cost[index] = tileCost;                    
+                    index++;
+                }
+            }
+        }
         #endregion
 
         #region Contours
@@ -1473,6 +1517,7 @@ namespace UC
                 {
                     for (int x = 0; x < gridSize.x; x++)
                     {
+                        bool    wall = false;
                         Vector2 boxCenterPos = GridToWorldCenter(x, y);
                         if ((colorByRegion) && (region != null) && (region.Length == grid.Length))
                         {
@@ -1493,11 +1538,27 @@ namespace UC
                             switch (grid[index])
                             {
                                 case 0: Gizmos.color = new Color(0.0f, 1.0f, 0.0f, 0.25f); break;
-                                case 1: Gizmos.color = new Color(1.0f, 0.0f, 0.0f, 0.25f); break;
-                                case 2: Gizmos.color = new Color(1.0f, 1.0f, 0.0f, 0.25f); break;
+                                case 1: Gizmos.color = new Color(1.0f, 0.0f, 0.0f, 0.25f); wall = true; break;
+                                case 2: Gizmos.color = new Color(1.0f, 1.0f, 0.0f, 0.25f); wall = true; break;
                             }
                         }
+                        if ((colorByCost) && (cost != null) && (cost.Length == grid.Length) && (!wall))
+                        {
+                            var normalizedCost = Mathf.InverseLerp(costRange.x, costRange.y, cost[index]);
+                            if (costRange.x == costRange.y) normalizedCost = 1.0f;
+                            var c = Gizmos.color;
+                            c = Color.Lerp(c * 0.25f, c, normalizedCost);
+                            c.a = Gizmos.color.a;
+                            Gizmos.color = c;
+                        }
                         if (draw) Gizmos.DrawCube(boxCenterPos, Vector2.one * cellSize);
+                        if (costLabel)
+                        {
+                            if (cost[index] != 1.0f)
+                            {
+                                DebugHelpers.DrawTextAt(boxCenterPos, Vector3.zero, cellSize * 2, Color.grey, $"{cost[index]}", true, true);
+                            }
+                        }
 
                         index++;
                     }

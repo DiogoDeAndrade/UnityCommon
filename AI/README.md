@@ -16,10 +16,10 @@
 * Still to do:
   * Pathfinding
     * Area costs
-    * Obstacle avoidance
-    * Dynamic meshes (carving)
     * Offmesh links - Doors (conditionals)
     * Offmesh links - Holes (link fields)
+    * Obstacle avoidance
+    * Dynamic meshes (carving)
     * Multithreaded generation and queries
   * I'm not happy with the convex polygons generated, there's usually a lot of small, thin triangles.
     * It might be that I'm asking too much, Recast has thin triangles sometimes and it works fine - maybe implement the path-finding and see if this is an actual problem!
