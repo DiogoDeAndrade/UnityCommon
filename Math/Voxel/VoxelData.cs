@@ -25,17 +25,19 @@ namespace UC
             }
         }
 
+        public int IndexOf(int x, int y, int z) => x + y * gridSize.x + z * gridSize.x * gridSize.y;
+
         public DATA_TYPE this[int x, int y, int z]
         {
-            get { return data[x + y * gridSize.x + z * gridSize.x * gridSize.y]; }
-            set { data[x + y * gridSize.x + z * gridSize.x * gridSize.y] = value; }
+            get { return data[IndexOf(x, y, z)]; }
+            set { data[IndexOf(x, y, z)] = value; }
         }
 
 
         public DATA_TYPE this[Vector3Int p]
         {
-            get { return data[p.x + p.y * gridSize.x + p.z * gridSize.x * gridSize.y]; }
-            set { data[p.x + p.y * gridSize.x + p.z * gridSize.x * gridSize.y] = value; }
+            get { return data[IndexOf(p.x, p.y, p.z)]; }
+            set { data[IndexOf(p.x, p.y, p.z)] = value; }
         }
 
         public void Replace(DATA_TYPE src, DATA_TYPE dest)

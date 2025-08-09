@@ -31,6 +31,7 @@ namespace UC
 
         public override float Sample(Vector3 worldPoint)
         {
+            if ((operands == null) || (operands.Length == 0)) return 0.0f;
             float ret = operands[0].Sample(worldPoint);
             switch (op)
             {
