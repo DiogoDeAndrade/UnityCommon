@@ -29,6 +29,13 @@ namespace UC
         public Polyline(Vector3 p) { vertices = new() { p }; }
         public Polyline(Vector3 p1, Vector3 p2, Vector3 p3) { vertices = new() { p1, p2, p3 }; }
 
+        public Polyline(Polyline polyline)
+        {
+            vertices = new(polyline.vertices);
+            if (polyline.normals != null) normals = new(polyline.normals);
+            _closed = polyline._closed;
+        }
+
         public void Add(Vector3 vertex)
         {
             if (vertices == null) vertices = new List<Vector3>();
@@ -89,6 +96,12 @@ namespace UC
         {
             get => vertices[idx];
             set => vertices[idx] = value;
+        }
+
+        public Vector3 this[int idx, bool fromTheEnd]
+        {
+            get => vertices[vertices.Count - idx - 1];
+            set => vertices[vertices.Count - idx - 1] = value;
         }
 
         public Vector3 GetNormal(int idx)
@@ -216,6 +229,7 @@ namespace UC
         public void ReverseOrder()
         {
             vertices.Reverse();
+            if (normals != null) normals.Reverse();
         }
 
         public float ComputeArea()
@@ -437,41 +451,193 @@ namespace UC
 
         public void Triangulate_EarCut(List<Polyline> holes, ref List<Vector3> outVertices, ref List<int> outTriangles)
         {
-            if (outVertices == null)
-                outVertices = new();
-            else
-                outVertices.Clear();
-
-            // 1) Flatten coords into a float[] for Earcut
-            var coords = new List<float>();
-            var holeIndices = new List<int>();
-
-            // Outer boundary
-            foreach (var v in vertices)
+            #region Helpers
+            static bool NearlyEqual(Vector2 a, Vector2 b, float eps = 1e-5f)
             {
-                coords.Add(v.x);
-                coords.Add(v.y);
-                outVertices.Add(v);
+                return (a - b).sqrMagnitude <= eps * eps;
             }
 
-            // Holes
+            static float SignedArea(List<Vector2> ring)
+            {
+                float a = 0f;
+                for (int i = 0, n = ring.Count; i < n; i++)
+                {
+                    var p = ring[i];
+                    var q = ring[(i + 1) % n];
+                    a += p.x * q.y - q.x * p.y;
+                }
+                return 0.5f * a;
+            }
+
+            static List<Vector2> NormalizeRing(List<Vector3> src, bool wantCCW, float collinearEps = 1e-9f)
+            {
+                // 1) copy to 2D, drop duplicate last==first and consecutive dups
+                var pts = new List<Vector2>(src.Count);
+                for (int i = 0; i < src.Count; i++)
+                {
+                    var v = new Vector2(src[i].x, src[i].y);
+                    if (pts.Count == 0 || !NearlyEqual(pts[pts.Count - 1], v)) pts.Add(v);
+                }
+                if (pts.Count >= 2 && NearlyEqual(pts[0], pts[^1])) pts.RemoveAt(pts.Count - 1);
+
+                for (int i = pts.Count - 2; i >= 0 && pts.Count >= 2; --i)
+                    if (NearlyEqual(pts[i], pts[i + 1])) pts.RemoveAt(i + 1);
+
+                // 2) remove near-collinears
+                if (pts.Count >= 3)
+                {
+                    var clean = new List<Vector2>(pts.Count);
+                    for (int i = 0; i < pts.Count; i++)
+                    {
+                        var a = pts[(i + pts.Count - 1) % pts.Count];
+                        var b = pts[i];
+                        var c = pts[(i + 1) % pts.Count];
+                        var ab = b - a;
+                        var bc = c - b;
+                        float cross = ab.x * bc.y - ab.y * bc.x;
+                        if (Mathf.Abs(cross) > collinearEps || NearlyEqual(a, b) || NearlyEqual(b, c))
+                            clean.Add(b);
+                    }
+                    pts = clean;
+                }
+
+                // 3) enforce winding
+                bool isCCW = SignedArea(pts) > 0f;
+                if (wantCCW != isCCW) pts.Reverse();
+                return pts;
+            }
+
+            static bool PointInRing(List<Vector2> ring, Vector2 p)
+            {
+                bool inside = false;
+                for (int i = 0, n = ring.Count, j = n - 1; i < n; j = i++)
+                {
+                    var a = ring[i];
+                    var b = ring[j];
+                    if (((a.y > p.y) != (b.y > p.y)) &&
+                        (p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y + Mathf.Epsilon) + a.x))
+                        inside = !inside;
+                }
+                return inside;
+            }
+
+            static bool RingFullyInside(List<Vector2> inner, List<Vector2> outer)
+            {
+                // quick AABB reject
+                Vector2 minI = inner[0], maxI = inner[0];
+                for (int i = 1; i < inner.Count; i++)
+                {
+                    var v = inner[i];
+                    if (v.x < minI.x) minI.x = v.x; if (v.y < minI.y) minI.y = v.y;
+                    if (v.x > maxI.x) maxI.x = v.x; if (v.y > maxI.y) maxI.y = v.y;
+                }
+                // cheap bbox check via point-in-ring on corners
+                if (!PointInRing(outer, minI)) return false;
+                if (!PointInRing(outer, new Vector2(maxI.x, minI.y))) return false;
+                if (!PointInRing(outer, maxI)) return false;
+                if (!PointInRing(outer, new Vector2(minI.x, maxI.y))) return false;
+
+                // strict: every vertex inside
+                for (int i = 0; i < inner.Count; i++)
+                    if (!PointInRing(outer, inner[i])) return false;
+
+                // NOTE: we are intentionally ignoring edge-touch and partial intersection cases for now.
+                return true;
+            }
+
+            static void BuildEarcutInput(List<Vector2> outer, List<List<Vector2>> holesRings, out float[] data, out int[] holeIdx)
+            {
+                int dim = 2;
+                int total = outer.Count;
+                foreach (var h in holesRings) total += h.Count;
+                data = new float[total * dim];
+                var holeStarts = new List<int>(holesRings.Count);
+
+                int w = 0;
+                for (int i = 0; i < outer.Count; i++) { data[w++] = outer[i].x; data[w++] = outer[i].y; }
+                int running = outer.Count;
+                foreach (var h in holesRings)
+                {
+                    holeStarts.Add(running);
+                    for (int i = 0; i < h.Count; i++) { data[w++] = h[i].x; data[w++] = h[i].y; }
+                    running += h.Count;
+                }
+                holeIdx = holeStarts.Count > 0 ? holeStarts.ToArray() : null;
+            }
+
+            static float AreaAbs(List<Vector2> ring)
+            {
+                float a2 = 0f;
+                for (int i = 0, n = ring.Count; i < n; i++)
+                {
+                    var p = ring[i];
+                    var q = ring[(i + 1) % n];
+                    a2 += p.x * q.y - q.x * p.y;
+                }
+                return Mathf.Abs(0.5f * a2);
+            }
+
+            #endregion
+
+            if (outVertices == null) outVertices = new List<Vector3>();
+            else outVertices.Clear();
+
+            // Outer ring normalization (CCW)
+            var outer = NormalizeRing(this.vertices, true);
+
+            // Candidate hole normalization (CW) + filtering to "fully inside outer"
+            var keptHoles = new List<List<Vector2>>();
             if (holes != null)
             {
-                foreach (var hole in holes)
+                for (int h = 0; h < holes.Count; h++)
                 {
-                    // mark the start index of this hole (in *vertices*, not coords)
-                    holeIndices.Add(coords.Count / 2);
-                    foreach (var v in hole.GetVertices())
+                    var ring = NormalizeRing(holes[h].GetVertices(), false);
+                    if ((ring.Count >= 3) && (RingFullyInside(ring, outer)))
                     {
-                        coords.Add(v.x);
-                        coords.Add(v.y);
-                        outVertices.Add(v);
+                        keptHoles.Add(ring);
                     }
                 }
             }
+            if (keptHoles.Count > 1)
+            {
+                int n = keptHoles.Count;
+                var remove = new bool[n];
 
-            // 2) Triangulate
-            outTriangles = MadWorldNL.EarCut.Tessellate(coords.ToArray(), holeIndices.Count > 0 ? holeIndices.ToArray() : null, 2);
+                for (int i = 0; i < n; i++)
+                {
+                    if (remove[i]) continue;
+                    for (int j = 0; j < n; j++)
+                    {
+                        if (i == j || remove[j]) continue;
+
+                        // if hole i is fully inside hole j, drop i
+                        if (RingFullyInside(keptHoles[i], keptHoles[j]))
+                        {
+                            // Prefer to drop the smaller one if both contain each other (degenerate duplicates)
+                            float ai = AreaAbs(keptHoles[i]);
+                            float aj = AreaAbs(keptHoles[j]);
+                            if (ai <= aj) remove[i] = true;
+                            else remove[j] = true;
+                        }
+                    }
+                }
+
+                var filtered = new List<List<Vector2>>(n);
+                for (int i = 0; i < n; i++)
+                    if (!remove[i]) filtered.Add(keptHoles[i]);
+                keptHoles = filtered;
+            }
+
+            // Build Earcut input
+            BuildEarcutInput(outer, keptHoles, out var coords, out var holeIndices);
+
+            // Rebuild outVertices to match coords order exactly
+            outVertices.Capacity = coords.Length / 2;
+            for (int i = 0; i < coords.Length; i += 2)
+                outVertices.Add(new Vector3(coords[i + 0], coords[i + 1], 0f));
+
+            // Triangulate
+            outTriangles = MadWorldNL.EarCut.Tessellate(coords, holeIndices, 2);
         }
 
 #if UNITY_EDITOR

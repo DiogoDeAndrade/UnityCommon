@@ -13,14 +13,16 @@
   * NavMeshAgent2d class now can follow a path, using pursuit follow
   * NavMesh2d can now do LoS queries (raycast)
   * There's two follow modes: pursuit (which is more physical, based on acceleration and velocity), and direct (in which we follow the path, with a possible offset and some path smoothing)
+  * Pathfinding can now account for costs, using class NavMeshModifier2d, you can condition the cost of the parts of the environment.
 * Still to do:
   * Pathfinding
     * Area costs
+    * Terrain type
     * Offmesh links - Doors (conditionals)
     * Offmesh links - Holes (link fields)
     * Obstacle avoidance
-    * Dynamic meshes (carving)
     * Multithreaded generation and queries
+    * Dynamic meshes (carving)
   * I'm not happy with the convex polygons generated, there's usually a lot of small, thin triangles.
     * It might be that I'm asking too much, Recast has thin triangles sometimes and it works fine - maybe implement the path-finding and see if this is an actual problem!
     * Options

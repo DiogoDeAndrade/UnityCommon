@@ -70,6 +70,90 @@ namespace UC
             outPolygons = polys;
         }
 
+        public delegate bool IsMergeAllowed<T>(List<T> parentsA, List<T> parentsB);
+
+        public static void MergeExt<T>(List<Vector3> vertices, List<List<int>> inPolygons, List<T> parentObjects, ref List<List<int>> outPolygons, ref List<List<T>> outParents, IsMergeAllowed<T> filterFunction) where T : class
+        {
+            if (inPolygons == null) 
+            { 
+                outPolygons = new List<List<int>>(); 
+                outParents = new List<List<T>>(); 
+                return; 
+            }
+            if ((parentObjects == null) || (parentObjects.Count != inPolygons.Count))
+            {
+                throw new System.ArgumentException("parentObjects must have one entry per input polygon.");
+            }
+
+            // working copies
+            var polys = new List<List<int>>(inPolygons.Count);
+            var parents = new List<List<T>>(inPolygons.Count);
+
+            for (int i = 0; i < inPolygons.Count; i++)
+            {
+                polys.Add(new List<int>(inPolygons[i]));
+                var p = new List<T>(1) { parentObjects[i] };
+                parents.Add(p);
+            }
+
+            bool anyMerge = true;
+            while (anyMerge)
+            {
+                anyMerge = false;
+                var adjacency = BuildAdjacency(polys);
+
+                foreach (var kv in adjacency)
+                {
+                    var edge = kv.Key;
+                    var shared = kv.Value;
+                    if (shared.Count != 2) continue; // only interior shared edges
+
+                    int idxA = shared[0];
+                    int idxB = shared[1];
+
+                    // optional filter: can these two sets of parents be merged?
+                    if ((filterFunction != null) && (!filterFunction(parents[idxA], parents[idxB])))
+                        continue;
+
+                    var merged = MergeOnEdge(polys[idxA], polys[idxB], edge.A, edge.B);
+
+                    if (IsConvex(vertices, merged))
+                    {
+                        // build merged parents (dedupe, preserve order)
+                        var mergedParents = new List<T>(parents[idxA].Count + parents[idxB].Count);
+                        var seen = new System.Collections.Generic.HashSet<T>();
+                        for (int i = 0; i < parents[idxA].Count; i++)
+                        {
+                            var t = parents[idxA][i];
+                            if (seen.Add(t)) mergedParents.Add(t);
+                        }
+                        for (int i = 0; i < parents[idxB].Count; i++)
+                        {
+                            var t = parents[idxB][i];
+                            if (seen.Add(t)) mergedParents.Add(t);
+                        }
+
+                        // remove higher index first to keep indices valid
+                        int hi = Mathf.Max(idxA, idxB);
+                        int lo = Mathf.Min(idxA, idxB);
+                        polys.RemoveAt(hi);
+                        polys.RemoveAt(lo);
+                        parents.RemoveAt(hi);
+                        parents.RemoveAt(lo);
+
+                        polys.Add(merged);
+                        parents.Add(mergedParents);
+
+                        anyMerge = true;
+                        break; // restart adjacency with updated lists
+                    }
+                }
+            }
+
+            outPolygons = polys;
+            outParents = parents;
+        }
+
         static Dictionary<Edge, List<int>> BuildAdjacency(List<List<int>> polys)
         {
             var adj = new Dictionary<Edge, List<int>>();
