@@ -8,23 +8,23 @@ namespace UC
     public class NavMeshModifier2d : MonoBehaviour
     {
         [System.Serializable]
-        struct CostPerTileType
+        struct DataPerTileType
         {
-            public TileBase tile;
+            public TileBase             tile;
             [SerializeField]
-            public bool     overrideCost;
-            [SerializeField, ShowIf(nameof(overrideCost))]
-            public float    costMultiplier;
+            public bool                 overrideTerrainType;
+            [SerializeField, ShowIf(nameof(overrideTerrainType))]
+            public NavMeshTerrainType2d terrainType;
         }   
 
         [SerializeField]
-        private int                 _priority = 0;
+        private int                     _priority = 0;
         [SerializeField, ShowIf(nameof(isTilemap))]
-        private CostPerTileType[]   costPerTileTypes;
+        private DataPerTileType[]       dataPerTileTypes;
         [SerializeField, ShowIf(nameof(isCollider))]
-        private bool                overrideCost;
-        [SerializeField, ShowIf(nameof(needCostMultiplier))]
-        private float               costMultiplier = 1.0f;
+        private bool                    overrideTerrainType;
+        [SerializeField, ShowIf(nameof(needTerrainType))]
+        private NavMeshTerrainType2d    terrainType;
 
         public int priority => _priority;
 
@@ -46,24 +46,24 @@ namespace UC
                 return mainCollider != null;
             }
         }
-        bool needCostMultiplier => isCollider && overrideCost;
+        bool needTerrainType => isCollider && overrideTerrainType;
 
         Tilemap     tilemap;
         Collider2D  mainCollider;
 
-        public bool InfluenceCost(Vector2 pos, ref float cost)
+        public bool InfluenceTerrainType(Vector2 pos, ref NavMeshTerrainType2d terrainType)
         {
-            if ((isTilemap) && (costPerTileTypes != null) && (costPerTileTypes.Length > 0))
+            if ((isTilemap) && (dataPerTileTypes != null) && (dataPerTileTypes.Length > 0))
             {
                 // Get tile at this world position
                 var tilePos = tilemap.WorldToCell(pos);
                 var tile = tilemap.GetTile(tilePos);
 
-                foreach (var costPerTileType in costPerTileTypes)
+                foreach (var costPerTileType in dataPerTileTypes)
                 {
-                    if ((costPerTileType.tile == tile) && (costPerTileType.overrideCost))
+                    if ((costPerTileType.tile == tile) && (costPerTileType.overrideTerrainType))
                     {
-                        cost = costPerTileType.costMultiplier;
+                        terrainType = costPerTileType.terrainType;
                         return true;
                     }
                 }
@@ -72,9 +72,9 @@ namespace UC
             {
                 bool b = mainCollider.enabled;
                 mainCollider.enabled = true;
-                if ((overrideCost) && (mainCollider.OverlapPoint(pos)))
+                if ((overrideTerrainType) && (mainCollider.OverlapPoint(pos)))
                 {
-                    cost = costMultiplier;
+                    terrainType = this.terrainType;
                     mainCollider.enabled = b;
                     return true;
                 }

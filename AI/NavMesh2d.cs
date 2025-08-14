@@ -21,7 +21,7 @@ namespace UC
         [SerializeField] 
         private int                        setCellSize;
         [SerializeField] 
-        private AgentType                  agentType;
+        private NavMeshAgentType2d                  agentType;
         [SerializeField] 
         private LayerMask                  obstacleMask;
         [SerializeField] 
@@ -34,8 +34,8 @@ namespace UC
         private bool                        funnelEnable = true;
         [SerializeField, Range(0.0f, 1.0f)]
         private float                       funnelBias = 0.0f;
-        [SerializeField, Tooltip("Quantize per-cell cost into this step to form subregions. Example: 0.25 means costs 1.11 and 1.18 both fall into bucket ~1.0.")]
-        private float                       costQuantStep = 0.25f;
+        [SerializeField]
+        private NavMeshTerrainType2d        defaultTerrainType;
         [SerializeField, Tooltip("Absolute area tolerance squared-units for deciding if a cost loop equals the region outer boundary.")]
         private float                       boundaryAreaTolerance = 1.0f;
         [SerializeField]
@@ -48,7 +48,7 @@ namespace UC
         private bool        colorByCost;
         [SerializeField, ShowIf(nameof(debugGridEnabled))]
         private bool        costLabel;
-        [SerializeField, ShowIf(nameof(needPolygonCostLabelScale))]
+        [SerializeField, ShowIf(nameof(needCostLabelScale))]
         private float       costLabelScale = 1.0f;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool        debugContours;
@@ -74,6 +74,8 @@ namespace UC
         private Transform   endPoint;
         [SerializeField, ShowIf(nameof(needTestRegion))]
         private int         testRegionId;
+        [SerializeField, ShowIf(nameof(needTestAgent))]
+        private NavMeshAgentType2d  testAgent;
 
         bool needSimplificationMaxDistance => simplificationAlgorithm == SimplificationAlgorithm.GreedyVertexDecimation;
         bool needTestPoint => debugEnabled && debugTestNearPoint;
@@ -83,6 +85,7 @@ namespace UC
         bool needPoints => debugEnabled && (debugTestPath || debugTestLoS);
         bool needCostLabelScale => debugGridEnabled && costLabel;
         bool needPolygonCostLabelScale => debugPolygonsEnabled && polygonCostLabel;
+        bool needTestAgent => debugEnabled && debugTestPath;
 
         public struct PathNode
         {
@@ -95,10 +98,10 @@ namespace UC
         [Serializable]
         class ConvexPolygon
         {
-            public int              id;
-            public List<int>        indices;
-            public List<Vector3>    vertices;   // Can just refer the master list
-            public float            cost;
+            public int                  id;
+            public List<int>            indices;
+            public List<Vector3>        vertices;   // Can just refer the master list
+            public NavMeshTerrainType2d terrainType;
 
             [SerializeField, HideInInspector]
             private Bounds2d        _bounds;
@@ -367,15 +370,15 @@ namespace UC
         [Serializable]
         class Subregion
         {
-            public float    cost;
-            public Polyline regionBoundary;
+            public NavMeshTerrainType2d terrainType;
+            public Polyline             regionBoundary;
         }
 
         [Serializable]
         class RegionData
         {
             public byte                 regionId;
-            public float                defaultCost = 1.0f;
+            public NavMeshTerrainType2d defaultTerrainType;
             public float                boundaryAreaAbs = 0.0f; 
             public Polyline             boundary;
             public List<Polyline>       holes;
@@ -388,7 +391,6 @@ namespace UC
 
             public RegionData()
             {
-                defaultCost = 1.0f;
             }
 
             void ComputeBounds()
@@ -428,15 +430,15 @@ namespace UC
         [SerializeField, HideInInspector] private Vector2       gridOffset;
 
         [SerializeField, HideInInspector]
-        byte[] grid;
+        byte[]                  grid;
         [SerializeField, HideInInspector]
-        byte[] region;
+        byte[]                  region;
         [SerializeField, HideInInspector]
-        float[] cost;
+        NavMeshTerrainType2d[]  terrainType;
         [SerializeField, HideInInspector]
-        Vector2 costRange;
+        Vector2                 costRange;
         [SerializeField, HideInInspector]
-        List<RegionData> regionData;      
+        List<RegionData>        regionData;      
 
         bool hasValidGrid => (grid != null) && (grid.Length == gridSize.x * gridSize.y);
         bool hasValidRegions => (regionData != null) && (regionData.Count > 0);
@@ -464,7 +466,7 @@ namespace UC
         {
             grid = null;
             region = null;
-            cost = null;
+            terrainType = null;
             regionData = null;
         }
 
@@ -490,7 +492,7 @@ namespace UC
             {
                 grid = null;
                 region = null;
-                cost = null;
+                terrainType = null;
                 foreach (var rd in regionData)
                 {
                     rd.boundary = null;
@@ -661,7 +663,8 @@ namespace UC
 
                     regionData.Add(new RegionData()
                     {
-                        regionId = currentRegion
+                        regionId = currentRegion,
+                        defaultTerrainType = defaultTerrainType,
                     });
 
                     currentRegion++;
@@ -708,7 +711,7 @@ namespace UC
         #region Cost
         void ComputeCost()
         {
-            cost = new float[gridSize.x * gridSize.y];
+            terrainType = new NavMeshTerrainType2d[gridSize.x * gridSize.y];
             costRange = Vector2.one;
 
             var modifiers = new List<NavMeshModifier2d>(FindObjectsByType<NavMeshModifier2d>(FindObjectsSortMode.None));
@@ -719,21 +722,21 @@ namespace UC
             {
                 for (int x = 0; x < gridSize.x; x++)
                 {
-                    float   tileCost = 1.0f;
-                    Vector2 boxCenterPos = GridToWorldCenter(x, y);
+                    NavMeshTerrainType2d    tt = defaultTerrainType;
+                    Vector2                 boxCenterPos = GridToWorldCenter(x, y);
 
                     foreach (var modifier in modifiers)
                     {
                         if (!modifier.enabled) continue;
-                        if (modifier.InfluenceCost(boxCenterPos, ref tileCost))
+                        if (modifier.InfluenceTerrainType(boxCenterPos, ref tt))
                         {
-                            if (tileCost < costRange.x) costRange.x = tileCost;
-                            if (tileCost > costRange.y) costRange.y = tileCost;
+                            if (tt.defaultCost < costRange.x) costRange.x = tt.defaultCost;
+                            if (tt.defaultCost > costRange.y) costRange.y = tt.defaultCost;
                             break;
                         }
                     }
 
-                    cost[index] = tileCost;                    
+                    this.terrainType[index] = tt;
                     index++;
                 }
             }
@@ -914,21 +917,9 @@ namespace UC
             int w = gridSize.x, h = gridSize.y;
             byte rid = rd.regionId;
 
-            // Component labels for this region (-1 = not visited or not in region)
+            // Component labels for this region (-1 = not visited / not in region)
             int[] comp = new int[w * h];
             for (int i = 0; i < comp.Length; i++) comp[i] = -1;
-
-            // Precompute bucket per-cell (only for this region)
-            int[] bucket = new int[w * h];
-            for (int y = 0; y < h; y++)
-            {
-                for (int x = 0; x < w; x++)
-                {
-                    int idx = y * w + x;
-                    if (region[idx] == rid) bucket[idx] = CostBucket(cost[idx]);
-                    else bucket[idx] = int.MinValue; // not in this region
-                }
-            }
 
             int currentComp = 0;
             var subregions = rd.subregions;
@@ -936,9 +927,9 @@ namespace UC
 
             float outerAreaAbs = rd.boundaryAreaAbs;
             float bestOuterAreaDiff = float.MaxValue;
-            float chosenOuterCost = rd.defaultCost;
+            NavMeshTerrainType2d chosenOuterTerrain = rd.defaultTerrainType;
 
-            // Flood-fill connected components of same cost bucket within this region
+            // BFS over 4-neighborhood
             var queue = new Queue<Cell>();
             var neighbors = new (int dx, int dy)[] { (-1, 0), (1, 0), (0, -1), (0, 1) };
 
@@ -950,10 +941,11 @@ namespace UC
                     if (region[startIdx] != rid) continue;
                     if (comp[startIdx] != -1) continue;
 
-                    int b = bucket[startIdx];
-                    if (b == int.MinValue) continue;
+                    // Terrain type to match for this component
+                    NavMeshTerrainType2d tt = terrainType[startIdx];
+                    if (tt == null) continue;
 
-                    // BFS this component
+                    // BFS this terrain-typed component
                     var cells = new HashSet<int>();
                     comp[startIdx] = currentComp;
                     queue.Clear();
@@ -968,10 +960,11 @@ namespace UC
                             int nx = c.x + neighbors[k].dx;
                             int ny = c.y + neighbors[k].dy;
                             if (!InBounds(nx, ny)) continue;
+
                             int nIdx = ny * w + nx;
                             if (region[nIdx] != rid) continue;
                             if (comp[nIdx] != -1) continue;
-                            if (bucket[nIdx] != b) continue;
+                            if (!ReferenceEquals(terrainType[nIdx], tt)) continue;
 
                             comp[nIdx] = currentComp;
                             queue.Enqueue(new Cell(nx, ny, nIdx));
@@ -991,28 +984,22 @@ namespace UC
                         continue;
                     }
 
-                    // Average cost of this component (optional, but nice)
-                    float acc = 0f; int cnt = 0;
-                    foreach (var idx in cells) { acc += cost[idx]; cnt++; }
-                    float avgCost = (cnt > 0) ? (acc / cnt) : 1.0f;
-
-                    // Classify: does this loop match the outer boundary?
+                    // Decide whether this component is the region's "outer" area
                     float areaDiff = Mathf.Abs(areaAbs - outerAreaAbs);
                     if (areaDiff <= boundaryAreaTolerance)
                     {
-                        // Consider it the region's outer-cost component
                         if (areaDiff < bestOuterAreaDiff)
                         {
                             bestOuterAreaDiff = areaDiff;
-                            chosenOuterCost = avgCost;
+                            chosenOuterTerrain = tt;
                         }
                     }
                     else
                     {
-                        // Store as subregion
+                        // Store as subregion for this terrain type
                         subregions.Add(new Subregion
                         {
-                            cost = avgCost,
+                            terrainType = tt,
                             regionBoundary = pl
                         });
                     }
@@ -1021,14 +1008,9 @@ namespace UC
                 }
             }
 
-            // Finalize region outer cost
-            rd.defaultCost = (bestOuterAreaDiff < float.MaxValue) ? chosenOuterCost : rd.defaultCost;
-        }
-
-        int CostBucket(float c)
-        {
-            if (costQuantStep <= 0f) return Mathf.RoundToInt(c * 1000f); // fallback
-            return Mathf.RoundToInt(c / costQuantStep);
+            // Finalize region outer terrain
+            if (bestOuterAreaDiff < float.MaxValue)
+                rd.defaultTerrainType = chosenOuterTerrain;
         }
 
         struct Cell 
@@ -1227,7 +1209,7 @@ namespace UC
                 for (int i = 0; i < triangles.Count; i += 3)
                 {
                     var poly = new List<int>() { triangles[i], triangles[i + 1], triangles[i + 2] };
-                    var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = poly, vertices = rd.vertices, cost = rd.defaultCost };
+                    var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = poly, vertices = rd.vertices, terrainType = rd.defaultTerrainType };
 
                     convexPolygon.UpdateGeometry();
                     rd.polygons.Add(convexPolygon);
@@ -1255,7 +1237,7 @@ namespace UC
                                 FindOrAdd(polyVertexList[polyTriangleList[i + 2]]),
                             };
 
-                            var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = poly, vertices = rd.vertices, cost = subregion.cost };
+                            var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = poly, vertices = rd.vertices, terrainType = subregion.terrainType };
                             convexPolygon.UpdateGeometry();
                             rd.polygons.Add(convexPolygon);
                         }
@@ -1273,7 +1255,7 @@ namespace UC
             // Have to have the same cost to merge
             bool SameCostOnly(List<ConvexPolygon> parentsA, List<ConvexPolygon> parentsB)
             {
-                return parentsA[0].cost == parentsB[0].cost;
+                return parentsA[0].terrainType == parentsB[0].terrainType;
             }
 
             // Need some marshaling, but that's life
@@ -1289,7 +1271,7 @@ namespace UC
 
                 for (int i = 0; i < polygons.Count; i++)                    
                 {
-                    var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = polygons[i], vertices = rd.vertices, cost = parents[i][0].cost };
+                    var convexPolygon = new ConvexPolygon { id = rd.polygons.Count, indices = polygons[i], vertices = rd.vertices, terrainType = parents[i][0].terrainType };
                     convexPolygon.ForceCCW();
                     convexPolygon.UpdateGeometry();
 
@@ -1398,7 +1380,7 @@ namespace UC
         }
 
 
-        public PathState PlanPath(Vector3 start, Vector3 end, ref int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue)
+        public PathState PlanPath(Vector3 start, Vector3 end, ref int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue, NavMeshAgentType2d agentType = null)
         {
             var startOnNavmesh = start;
             var endOnNavmesh = end;
@@ -1440,17 +1422,17 @@ namespace UC
                 regionId = startRegionId;
             }
 
-            return PlanPathOnNavmesh(startOnNavmesh, startPolygonId, endOnNavmesh, endPolygonId, regionId, ref polygons, ref path, pathMidBias);
+            return PlanPathOnNavmesh(startOnNavmesh, startPolygonId, endOnNavmesh, endPolygonId, regionId, ref polygons, ref path, pathMidBias, agentType);
         }
 
-        public PathState PlanPathOnNavmesh(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue)
+        public PathState PlanPathOnNavmesh(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path, float pathMidBias = -float.MaxValue, NavMeshAgentType2d agentType = null)
         {
             PathState ret = PathState.NoPath;
 
             switch (pathMode)
             {
                 case PathMode.MidEdge:
-                    ret = PlanPathOnNavmeshMidEdge(start, startPolygonId, end, endPolygonId, regionId, ref polygons, ref path);
+                    ret = PlanPathOnNavmeshMidEdge(start, startPolygonId, end, endPolygonId, regionId, ref polygons, ref path, agentType);
                     break;
                 default:
                     break;
@@ -1464,7 +1446,17 @@ namespace UC
             return ret;
         }
 
-        private PathState PlanPathOnNavmeshMidEdge(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path)
+        private float GetCost(NavMeshAgentType2d agent, NavMeshTerrainType2d terrainType)
+        {
+            if (agent == null)
+            {
+                return agentType.GetCost(terrainType);
+            }
+
+            return agent.GetCost(terrainType);
+        }
+
+        private PathState PlanPathOnNavmeshMidEdge(Vector3 start, int startPolygonId, Vector3 end, int endPolygonId, int regionId, ref List<int> polygons, ref List<PathNode> path, NavMeshAgentType2d agentType = null)
         {
             if (polygons == null) polygons = new();
 
@@ -1502,7 +1494,7 @@ namespace UC
                     Vector2 edgeMid = 0.5f * ((Vector2)vertices[vi] + (Vector2)vertices[vj]);
 
                     // incremental: from where we entered ‘current’ to this portal
-                    float stepCost = Vector2.Distance(fromPos, edgeMid) * Mathf.Max(1e-5f, currentPoly.cost);
+                    float stepCost = Vector2.Distance(fromPos, edgeMid) * Mathf.Max(1e-5f, GetCost(agentType, currentPoly.terrainType));
                     float newCost = costSoFar[current] + stepCost;
 
                     float minUnitCost = Mathf.Max(1e-5f, costRange.x);
@@ -1874,16 +1866,19 @@ namespace UC
                                 case 2: Gizmos.color = new Color(1.0f, 1.0f, 0.0f, 0.25f); wall = true; break;
                             }
                         }
-                        if ((colorByCost) && (cost != null) && (cost.Length == grid.Length) && (!wall))
+
+                        var cost = GetCost(agentType, terrainType[index]);
+
+                        if ((colorByCost) && (terrainType != null) && (terrainType.Length == grid.Length) && (!wall))
                         {
-                            Gizmos.color = GetColorByCost(cost[index], Gizmos.color);
+                            Gizmos.color = GetColorByCost(cost, Gizmos.color);
                         }
                         if (draw) Gizmos.DrawCube(boxCenterPos, Vector2.one * cellSize);
                         if (costLabel)
                         {
-                            if (cost[index] != 1.0f)
+                            if (cost != 1.0f)
                             {
-                                DebugHelpers.DrawTextAt(boxCenterPos, Vector3.zero, (int)(cellSize * costLabelScale * 2.0f), Color.grey, $"{cost[index]}", true, true);
+                                DebugHelpers.DrawTextAt(boxCenterPos, Vector3.zero, (int)(cellSize * costLabelScale * 2.0f), Color.grey, $"{cost}", true, true);
                             }
                         }
 
@@ -1946,9 +1941,11 @@ namespace UC
                                 vertices[k] = region.vertices[poly[k]];
                             }
 
+                            var cost = GetCost(agentType, poly.terrainType);
+
                             if (colorPolygonsByCost)
                             {
-                                Gizmos.color = GetColorByCost(poly.cost, regionColors[i % regionColors.Length]);
+                                Gizmos.color = GetColorByCost(cost, regionColors[i % regionColors.Length]);
                             }
 
                             DebugHelpers.DrawWireConvexPolygon(vertices);
@@ -1956,9 +1953,9 @@ namespace UC
 
                             if (polygonCostLabel)
                             {
-                                if (poly.cost != 1.0f)
+                                if (cost != 1.0f)
                                 {
-                                    DebugHelpers.DrawTextAt(poly.center, Vector3.zero, (int)(cellSize * polygonCostLabelScale * 4.0f), Color.grey, $"{poly.cost}", true, true);
+                                    DebugHelpers.DrawTextAt(poly.center, Vector3.zero, (int)(cellSize * polygonCostLabelScale * 4.0f), Color.grey, $"{cost}", true, true);
                                 }
                             }
                         }
@@ -1995,7 +1992,8 @@ namespace UC
                 List<int>       polygons = null;
                 int             regionId = testRegionId;
                 List<PathNode>  path = null;
-                if (PlanPath(startPoint.position, endPoint.position, ref regionId, ref polygons, ref path) != PathState.NoPath)
+                var             agent = (testAgent != null) ? (testAgent) : (agentType);
+                if (PlanPath(startPoint.position, endPoint.position, ref regionId, ref polygons, ref path, agentType : agent) != PathState.NoPath)
                 {
                     if (debugPolygons)
                     {
@@ -2032,13 +2030,18 @@ namespace UC
         #endregion
 
         #region NavMesh2d management
-        static Dictionary<AgentType, NavMesh2d> NavigationMeshes;
+        static Dictionary<NavMeshAgentType2d, NavMesh2d> NavigationMeshes;
 
-        public static NavMesh2d Get(AgentType agentType)
+        public static NavMesh2d Get(NavMeshAgentType2d agentType)
         {
             if (NavigationMeshes.TryGetValue(agentType, out var navMesh))
             {
                 return navMesh;
+            }
+
+            if (agentType.parentType != null)
+            {
+                return Get(agentType.parentType);
             }
 
             return null;

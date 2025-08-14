@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using NaughtyAttributes;
+using System;
+
 
 
 
@@ -20,7 +22,7 @@ namespace UC
         public OnStopped onStopped;
 
         [SerializeField] 
-        private AgentType       agentType;
+        private NavMeshAgentType2d       agentType;
         [SerializeField] 
         private PathFollowMode  followMode = PathFollowMode.FollowPursuit;
         [SerializeField] 
@@ -70,7 +72,14 @@ namespace UC
         void Start()
         {
             navMesh = NavMesh2d.Get(agentType);
-            regionId = navMesh.GetRegion(transform.position);
+            if (navMesh == null)
+            {
+                Debug.LogWarning($"Navmesh not found for agent of type {agentType.name}!");
+            }
+            else
+            {
+                regionId = navMesh.GetRegion(transform.position);
+            }
 
             lastDeltas = new Vector2[16];
             prevPos = transform.position;
@@ -408,7 +417,7 @@ namespace UC
                 return false;
             }
 
-            var result = navMesh.PlanPathOnNavmesh(startPosOnNavmesh, startPolyId, endPosOnNavmesh, endPolyId, regionId, ref polyIds, ref newPath);
+            var result = navMesh.PlanPathOnNavmesh(startPosOnNavmesh, startPolyId, endPosOnNavmesh, endPolyId, regionId, ref polyIds, ref newPath, agentType : agentType);
             if (result == NavMesh2d.PathState.NoPath || newPath.Count < 2)
             {
                 _isMoving = false;
@@ -531,6 +540,5 @@ namespace UC
                 Gizmos.DrawSphere(targetPosition, 3.0f);
             }
         }
-
     }
 }
