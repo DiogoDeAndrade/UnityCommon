@@ -1,6 +1,5 @@
 using NaughtyAttributes;
 using System.Collections.Generic;
-using System.Runtime.InteropServices.WindowsRuntime;
 using UnityEngine;
 
 namespace UC
@@ -18,6 +17,14 @@ namespace UC
         private float               voxelsPerUnit = 1.0f;
         [SerializeField]
         private Material            defaultMaterial;
+        [SerializeField]
+        private bool                simplify;
+        [SerializeField, Range(0.0f, 1.0f), ShowIf(nameof(simplify))]
+        private float               quality = 0.5f;        
+        [SerializeField, ShowIf(nameof(simplify))]
+        private bool                preserveBorderEdges = false;
+        [SerializeField, ShowIf(nameof(simplify))]
+        private bool                preserveSurfaceCurvature = false;
         [SerializeField]
         private bool                debugEnabled;
         [SerializeField, ShowIf(nameof(debugEnabled))]
@@ -320,6 +327,25 @@ namespace UC
             mesh.RecalculateBounds();
             if (normalMode == NormalMode.Simple) mesh.RecalculateNormals();
             mesh.RecalculateTangents();
+
+            if (simplify)
+            {
+                var simplificationOptions = UnityMeshSimplifier.SimplificationOptions.Default;
+                simplificationOptions.PreserveSurfaceCurvature = preserveSurfaceCurvature;
+                simplificationOptions.PreserveBorderEdges = preserveBorderEdges;
+
+                var meshSimplifier = new UnityMeshSimplifier.MeshSimplifier();
+                meshSimplifier.Initialize(mesh);
+                meshSimplifier.SimplificationOptions = simplificationOptions;
+                meshSimplifier.SimplifyMesh(quality);
+
+                mesh = meshSimplifier.ToMesh();
+                if (normalMode == NormalMode.Simple)
+                {
+                    mesh.RecalculateNormals();
+                    mesh.RecalculateTangents();
+                }
+            }
 
             return mesh;
         }
