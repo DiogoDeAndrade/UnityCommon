@@ -202,6 +202,19 @@ namespace UC
             return new Vector3(-v.y, v.x, v.z);
         }
 
+        public static Vector3 Perpendicular(this Vector3 v)
+        {
+            // If v is zero, just return zero to avoid NaN
+            if (v == Vector3.zero)
+                return Vector3.zero;
+
+            // Pick an arbitrary axis not parallel to v
+            Vector3 other = Mathf.Abs(v.x) < Mathf.Abs(v.z) ? Vector3.right : Vector3.up;
+
+            // Cross product to get a perpendicular
+            return Vector3.Cross(v, other).normalized;
+        }
+
         public static Vector2Int xy(this Vector3Int v)
         {
             return new Vector2Int(v.x, v.y);
