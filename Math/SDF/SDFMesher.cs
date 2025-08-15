@@ -1,5 +1,6 @@
 using NaughtyAttributes;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -10,6 +11,7 @@ namespace UC
     {
         public enum NormalMode { Simple, Estimated, HardEdges };
         public enum FilterMode { Box2, Box3, Tent3, Gaussian5 };
+        public enum NoiseMode { None, Perlin };
 
         [SerializeField]
         private SDFComponent        sdf;
@@ -23,6 +25,14 @@ namespace UC
         private int                 filterIterations;
         [SerializeField, ShowIf(nameof(filter))]
         private FilterMode          filterMode;
+        [SerializeField] 
+        private NoiseMode           noiseMode;
+        [SerializeField, ShowIf(nameof(isPerlinNoise))] 
+        private float               noiseStrength;
+        [SerializeField, ShowIf(nameof(isPerlinNoise))] 
+        private Vector3             perAxisStrength = Vector3.one;
+        [SerializeField, ShowIf(nameof(isPerlinNoise))] 
+        private float               noiseFrequency;
         [SerializeField]
         private Material            defaultMaterial;
         [SerializeField]
@@ -40,6 +50,8 @@ namespace UC
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool                debugShowGrid;
         [SerializeField, ShowIf(nameof(isShowGrid))]
+        private bool                debugShowVoxelData;
+        [SerializeField, ShowIf(nameof(isShowGrid))]
         private bool                debugShowGridLines;
         [SerializeField, ShowIf(nameof(isShowGrid))]
         private Gradient            debugColorRange;
@@ -55,6 +67,7 @@ namespace UC
 
         bool isShowGrid => debugEnabled && debugShowGrid;
         bool hasHardEdges => normalMode == NormalMode.HardEdges;
+        bool isPerlinNoise => noiseMode == NoiseMode.Perlin;
 
         public float voxelSizeF => (1.0f / voxelsPerUnit) * ((filter) ? (1 << filterIterations ) : (1));
         public Vector3 voxelSize => Vector3.one * voxelSizeF;
@@ -330,7 +343,7 @@ namespace UC
 
                         for (int i = 0; i < 8; i++)
                         {
-                            p[i] = GetPos(x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]);
+                            p[i] = GetPosWithNoise(x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]);
                             val[i] = voxelData[x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]];
                             if (val[i] < iso) cubeIndex |= (1 << i);
                         }
@@ -419,6 +432,19 @@ namespace UC
         private Vector3 GetPos(int x, int y, int z) => new Vector3(voxelData.minBound.x + x * voxelData.voxelSize.x,
                                                                    voxelData.minBound.y + y * voxelData.voxelSize.y,
                                                                    voxelData.minBound.z + z * voxelData.voxelSize.z);
+        private Vector3 GetPosWithNoise(int x, int y, int z)
+        {
+            var p = new Vector3(voxelData.minBound.x + x * voxelData.voxelSize.x,
+                                voxelData.minBound.y + y * voxelData.voxelSize.y,
+                                voxelData.minBound.z + z * voxelData.voxelSize.z);
+            if (noiseMode == NoiseMode.Perlin)
+            {
+                var delta = Noise.PerlinDirection3d(p * noiseFrequency);
+                return p + new Vector3(noiseStrength * perAxisStrength.x * delta.x, noiseStrength * perAxisStrength.y * delta.y, noiseStrength * perAxisStrength.z * delta.z);
+            }
+
+            return p;
+        }
 
         public static class MeshHardEdgeSplitter
         {
@@ -589,55 +615,60 @@ namespace UC
                 {
                     Gizmos.color = Color.gray;
 
-                    // — lines along Z (vary x,y, connect z=0 -> z=gs.z-1)
+                    // Helper
+                    Vector3 P(int xi, int yi, int zi) => GetPosWithNoise(xi, yi, zi);
+
+                    // 1) For every cell, draw the 3 edges from its min corner: +X, +Y, +Z.
+                    for (int z = 0; z < gs.z - 1; z++)
+                        for (int y = 0; y < gs.y - 1; y++)
+                            for (int x = 0; x < gs.x - 1; x++)
+                            {
+                                var p = P(x, y, z);
+                                Gizmos.DrawLine(p, P(x + 1, y, z)); // +X
+                                Gizmos.DrawLine(p, P(x, y + 1, z)); // +Y
+                                Gizmos.DrawLine(p, P(x, y, z + 1)); // +Z
+                            }
+
+                    // 2) Stitch the three "max" faces that have no owning cell:
+                    int Xmax = gs.x - 1, Ymax = gs.y - 1, Zmax = gs.z - 1;
+
+                    // Face x = Xmax: draw +Y and +Z edges
+                    for (int y = 0; y < gs.y - 1; y++)
+                        for (int z = 0; z < gs.z; z++) Gizmos.DrawLine(P(Xmax, y, z), P(Xmax, y + 1, z));
+                    for (int y = 0; y < gs.y; y++)
+                        for (int z = 0; z < gs.z - 1; z++) Gizmos.DrawLine(P(Xmax, y, z), P(Xmax, y, z + 1));
+
+                    // Face y = Ymax: draw +X and +Z edges
+                    for (int x = 0; x < gs.x - 1; x++)
+                        for (int z = 0; z < gs.z; z++) Gizmos.DrawLine(P(x, Ymax, z), P(x + 1, Ymax, z));
+                    for (int x = 0; x < gs.x; x++)
+                        for (int z = 0; z < gs.z - 1; z++) Gizmos.DrawLine(P(x, Ymax, z), P(x, Ymax, z + 1));
+
+                    // Face z = Zmax: draw +X and +Y edges
+                    for (int x = 0; x < gs.x - 1; x++)
+                        for (int y = 0; y < gs.y; y++) Gizmos.DrawLine(P(x, y, Zmax), P(x + 1, y, Zmax));
+                    for (int x = 0; x < gs.x; x++)
+                        for (int y = 0; y < gs.y - 1; y++) Gizmos.DrawLine(P(x, y, Zmax), P(x, y + 1, Zmax));
+                }
+                // 2) Draw a small colored sphere at each corner sample:
+                if (debugShowVoxelData)
+                {
+                    float sphereRadius = voxelData.voxelSize.magnitude * 0.20f;
                     for (int x = 0; x < gs.x; x++)
                     {
                         for (int y = 0; y < gs.y; y++)
                         {
-                            Vector3 p1 = GetPos(x, y, 0);
-                            Vector3 p2 = GetPos(x, y, gs.z - 1);
-                            Gizmos.DrawLine(p1, p2);
-                        }
-                    }
-
-                    // — lines along Y (vary x,z, connect y=0 -> y=gs.y-1)
-                    for (int x = 0; x < gs.x; x++)
-                    {
-                        for (int z = 0; z < gs.z; z++)
-                        {
-                            Vector3 p1 = GetPos(x, 0, z);
-                            Vector3 p2 = GetPos(x, gs.y - 1, z);
-                            Gizmos.DrawLine(p1, p2);
-                        }
-                    }
-
-                    // — lines along X (vary y,z, connect x=0 -> x=gs.x-1)
-                    for (int y = 0; y < gs.y; y++)
-                    {
-                        for (int z = 0; z < gs.z; z++)
-                        {
-                            Vector3 p1 = GetPos(0, y, z);
-                            Vector3 p2 = GetPos(gs.x - 1, y, z);
-                            Gizmos.DrawLine(p1, p2);
-                        }
-                    }
-                }
-                // 2) Draw a small colored sphere at each corner sample:
-                float sphereRadius = voxelData.voxelSize.magnitude * 0.20f;
-                for (int x = 0; x < gs.x; x++)
-                {
-                    for (int y = 0; y < gs.y; y++)
-                    {
-                        for (int z = 0; z < gs.z; z++)
-                        {
-                            float val = voxelData[x, y, z];
-                            if ((val >= debugFilterRange.x) && (val <= debugFilterRange.y))
+                            for (int z = 0; z < gs.z; z++)
                             {
-                                float t = Mathf.InverseLerp(distanceRange.x, distanceRange.y, val);
-                                Color c = debugColorRange.Evaluate(t);
+                                float val = voxelData[x, y, z];
+                                if ((val >= debugFilterRange.x) && (val <= debugFilterRange.y))
+                                {
+                                    float t = Mathf.InverseLerp(distanceRange.x, distanceRange.y, val);
+                                    Color c = debugColorRange.Evaluate(t);
 
-                                Gizmos.color = c;
-                                Gizmos.DrawSphere(GetPos(x, y, z), sphereRadius);
+                                    Gizmos.color = c;
+                                    Gizmos.DrawSphere(GetPos(x, y, z), sphereRadius);
+                                }
                             }
                         }
                     }
