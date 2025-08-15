@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace UC
 {
+    // Enforces Delauney triangulation by flipping adjacent triangles on the common edge,
+    // to ensure fatter triangles
+
     public static class ConstrainedDelaunayFlipper
     {
         struct Edge : IEquatable<Edge>
@@ -18,20 +21,71 @@ namespace UC
             public override int GetHashCode() => (A * 397) ^ B;
         }
 
-        /// <summary>
-        /// In-place edge flips on 'tris' to maximize minimum angles,
-        /// respecting the fixed boundary+holes, never inverting or leaving
-        /// the mesh outside its original region.
-        /// </summary>
-        /// <param name="vertices">All mesh vertices (Vector3, z ignored).</param>
-        /// <param name="tris">Flat triangle list: 3 ints per tri.</param>
-        /// <param name="boundary">CCW outer ring.</param>
-        /// <param name="holes">Zero or more CCW hole rings.</param>
-        /// <param name="maxPasses">How many full clean-up sweeps to do.</param>
-        /// <param name="epsilonDeg">Minimum-angle gain threshold (degrees).</param>
-        public static void EnforceDelaunay(List<Vector3> vertices, List<int> tris, Polyline boundary, List<Polyline> holes, int maxPasses = 5, float epsilonDeg = 0.1f)
+        public static void EnforceDelaunay(List<Vector3> vertices, List<int> tris,
+                                           Polyline boundary, List<Polyline> holes,
+                                           int maxPasses = 5, float epsilonDeg = 0.0f)
         {
-            // 1) Gather fixed edges from boundary and holes
+            // ---- helpers ----
+            static float Orient2D(Vector2 a, Vector2 b, Vector2 c)
+            {
+                return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            }
+            static float InCircle(Vector2 a, Vector2 b, Vector2 c, Vector2 d)
+            {
+                float adx = a.x - d.x, ady = a.y - d.y;
+                float bdx = b.x - d.x, bdy = b.y - d.y;
+                float cdx = c.x - d.x, cdy = c.y - d.y;
+
+                float ad2 = adx * adx + ady * ady;
+                float bd2 = bdx * bdx + bdy * bdy;
+                float cd2 = cdx * cdx + cdy * cdy;
+
+                return ad2 * (bdx * cdy - bdy * cdx)
+                     - bd2 * (adx * cdy - ady * cdx)
+                     + cd2 * (adx * bdy - ady * bdx);
+            }
+            static float SignedArea(Vector3 A, Vector3 B, Vector3 C)
+            {
+                return (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
+            }
+            static int OtherVertex(List<int> T, int o, int a, int b)
+            {
+                for (int e = 0; e < 3; e++)
+                {
+                    int v = T[o + e];
+                    if (v != a && v != b) return v;
+                }
+                throw new InvalidOperationException("Degenerate triangle in OtherVertex");
+            }
+
+            // 1) Build a fast position->index map for fixed edges
+            var indexMap = new Dictionary<(int, int), int>(vertices.Count);
+            const float snap = 1e-6f;
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                var v = vertices[i];
+                int sx = Mathf.RoundToInt(v.x / snap);
+                int sy = Mathf.RoundToInt(v.y / snap);
+                indexMap[(sx, sy)] = i;
+            }
+            int FindNearestIndex(Vector2 p)
+            {
+                int sx = Mathf.RoundToInt(p.x / snap);
+                int sy = Mathf.RoundToInt(p.y / snap);
+                if (indexMap.TryGetValue((sx, sy), out int idx)) return idx;
+
+                // fallback (rare): linear search
+                int best = 0; float best2 = float.MaxValue;
+                for (int i = 0; i < vertices.Count; i++)
+                {
+                    var d = (Vector2)vertices[i] - p;
+                    float d2 = d.sqrMagnitude;
+                    if (d2 < best2) { best2 = d2; best = i; }
+                }
+                return best;
+            }
+
+            // 2) Collect fixed edges (outer and holes)
             var fixedEdges = new HashSet<Edge>();
             void CollectRing(Polyline ring)
             {
@@ -39,17 +93,37 @@ namespace UC
                 for (int i = 0; i < n; i++)
                 {
                     int ni = (i + 1) % n;
-                    var a = ring[i];
-                    var b = ring[ni];
-                    int ai = FindNearestIndex(vertices, a);
-                    int bi = FindNearestIndex(vertices, b);
+                    int ai = FindNearestIndex(ring[i]);
+                    int bi = FindNearestIndex(ring[ni]);
                     fixedEdges.Add(new Edge(ai, bi));
                 }
             }
             CollectRing(boundary);
-            foreach (var hole in holes) CollectRing(hole);
+            foreach (var h in holes) CollectRing(h);
 
-            // 2) Rebuild adjacency helper
+            // 3) Region test
+            bool PointInRing(Vector2 p, Polyline ring)
+            {
+                bool inside = false;
+                int n = ring.Count;
+                for (int i = 0, j = n - 1; i < n; j = i++)
+                {
+                    var vi = (Vector2)ring[i];
+                    var vj = (Vector2)ring[j];
+                    if (((vi.y > p.y) != (vj.y > p.y)) &&
+                        (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y) + vi.x))
+                        inside = !inside;
+                }
+                return inside;
+            }
+            bool IsInsideRegion(Vector2 p)
+            {
+                if (!PointInRing(p, boundary)) return false;
+                foreach (var h in holes) if (PointInRing(p, h)) return false;
+                return true;
+            }
+
+            // 4) adjacency builder
             Dictionary<Edge, List<int>> BuildAdjacency()
             {
                 var adj = new Dictionary<Edge, List<int>>();
@@ -62,7 +136,7 @@ namespace UC
                         var edge = new Edge(a, b);
                         if (!adj.TryGetValue(edge, out var list))
                         {
-                            list = new List<int>();
+                            list = new List<int>(2);
                             adj[edge] = list;
                         }
                         list.Add(t / 3);
@@ -71,45 +145,18 @@ namespace UC
                 return adj;
             }
 
-            // 3) Point-in-polygon (even-odd) for boundary+holes
-            bool PointInRing(Vector2 p, Polyline ring)
-            {
-                bool inside = false;
-                int n = ring.Count;
-                for (int i = 0, j = n - 1; i < n; j = i++)
-                {
-                    var vi = ring[i];
-                    var vj = ring[j];
-                    if (((vi.y > p.y) != (vj.y > p.y)) &&
-                        (p.x < (vj.x - vi.x) * (p.y - vi.y) / (vj.y - vi.y) + vi.x))
-                    {
-                        inside = !inside;
-                    }
-                }
-                return inside;
-            }
-            bool IsInsideRegion(Vector2 p)
-            {
-                if (!PointInRing(p, boundary)) return false;
-                foreach (var hole in holes)
-                    if (PointInRing(p, hole))
-                        return false;
-                return true;
-            }
-
-            // 4) Main flip loop
+            // 5) main loop — flip edges one-by-one; no batch conflicts
             for (int pass = 0; pass < maxPasses; pass++)
             {
+                bool changed = false;
                 var adj = BuildAdjacency();
-                var flips = new List<(int t0, int t1, int i, int j, int k, int l)>();
 
-                // collect all safe, improving flips
                 foreach (var kv in adj)
                 {
                     var edge = kv.Key;
                     var owners = kv.Value;
-                    if (owners.Count != 2) continue; // boundary or hole
-                    if (fixedEdges.Contains(edge)) continue; // do not flip fixed edges
+                    if (owners.Count != 2) continue;
+                    if (fixedEdges.Contains(edge)) continue;
 
                     int t0 = owners[0], t1 = owners[1];
                     int o0 = t0 * 3, o1 = t1 * 3;
@@ -118,94 +165,44 @@ namespace UC
                     int k = OtherVertex(tris, o0, i, j);
                     int l = OtherVertex(tris, o1, i, j);
 
-                    // compute min-angle before/after
-                    float oldMin = Mathf.Min(
-                        MinAngle(vertices[k], vertices[i], vertices[j]),
-                        MinAngle(vertices[l], vertices[j], vertices[i])
-                    );
-                    float newMin = Mathf.Min(
-                        MinAngle(vertices[k], vertices[l], vertices[i]),
-                        MinAngle(vertices[l], vertices[k], vertices[j])
-                    );
-                    if (newMin <= oldMin + epsilonDeg)
-                        continue;
+                    var vi = (Vector2)vertices[i];
+                    var vj = (Vector2)vertices[j];
+                    var vk = (Vector2)vertices[k];
+                    var vl = (Vector2)vertices[l];
 
-                    // ensure new tris stay CCW (no inversion)
-                    if (SignedArea(vertices[k], vertices[i], vertices[l]) <= 0) continue;
-                    if (SignedArea(vertices[l], vertices[j], vertices[k]) <= 0) continue;
+                    // convexity across (i,j)
+                    float s1 = Orient2D(vi, vj, vk);
+                    float s2 = Orient2D(vi, vj, vl);
+                    if (s1 == 0f || s2 == 0f) continue;
+                    if (s1 * s2 >= 0f) continue; // not convex
 
-                    // ensure midpoint of new edge is inside region
-                    var mid = 0.5f * ((Vector2)vertices[k] + (Vector2)vertices[l]);
+                    // Delaunay: ensure (i,k,j) is CCW for test
+                    Vector2 a = vi, b = vk, c = vj, d = vl;
+                    if (Orient2D(a, b, c) <= 0f) { b = vj; c = vk; }
+                    if (InCircle(a, b, c, d) <= 0f) continue; // no improvement
+
+                    // new tris CCW
+                    if (SignedArea(vertices[k], vertices[i], vertices[l]) <= 0f) continue;
+                    if (SignedArea(vertices[l], vertices[j], vertices[k]) <= 0f) continue;
+
+                    // keep inside region
+                    var mid = 0.5f * (vk + vl);
                     if (!IsInsideRegion(mid)) continue;
 
-                    flips.Add((t0, t1, i, j, k, l));
+                    // apply flip immediately and restart this pass (local adj changed)
+                    int o0i0 = tris[o0 + 0], o0i1 = tris[o0 + 1], o0i2 = tris[o0 + 2];
+                    int o1i0 = tris[o1 + 0], o1i1 = tris[o1 + 1], o1i2 = tris[o1 + 2];
+
+                    tris[o0 + 0] = k; tris[o0 + 1] = i; tris[o0 + 2] = l;
+                    tris[o1 + 0] = l; tris[o1 + 1] = j; tris[o1 + 2] = k;
+
+                    changed = true;
+                    // rebuild adjacency after each successful flip to avoid conflicts
+                    adj = BuildAdjacency();
                 }
 
-                if (flips.Count == 0)
-                    break;
-
-                // apply all collected flips
-                foreach (var f in flips)
-                    PerformFlip(tris, f.t0, f.t1, f.i, f.j, f.k, f.l);
+                if (!changed) break;
             }
-        }
-
-        // ———————— Helpers ————————
-
-        // Find the index of the closest vertex to 'p'
-        static int FindNearestIndex(List<Vector3> verts, Vector2 p)
-        {
-            int best = 0;
-            float bestDist2 = float.MaxValue;
-            for (int i = 0; i < verts.Count; i++)
-            {
-                var v2 = new Vector2(verts[i].x, verts[i].y);
-                float d2 = (v2 - p).sqrMagnitude;
-                if (d2 < bestDist2)
-                {
-                    bestDist2 = d2;
-                    best = i;
-                }
-            }
-            return best;
-        }
-
-        // Given tri at offset 'o' (o = triIndex*3), return the vert != a,b
-        static int OtherVertex(List<int> tris, int o, int a, int b)
-        {
-            for (int e = 0; e < 3; e++)
-            {
-                int v = tris[o + e];
-                if (v != a && v != b) return v;
-            }
-            throw new InvalidOperationException("Degenerate triangle in OtherVertex");
-        }
-
-        // Signed area *2 of (A->B->C). >0 if CCW
-        static float SignedArea(Vector3 A, Vector3 B, Vector3 C)
-        {
-            return (B.x - A.x) * (C.y - A.y)
-                 - (B.y - A.y) * (C.x - A.x);
-        }
-
-        // Minimum interior angle at B in triangle (A,B,C) in degrees
-        static float MinAngle(Vector3 A, Vector3 B, Vector3 C)
-        {
-            var AB = (A - B);
-            var CB = (C - B);
-            float cos = Vector3.Dot(AB.normalized, CB.normalized);
-            cos = Mathf.Clamp(cos, -1f, 1f);
-            return Mathf.Acos(cos) * Mathf.Rad2Deg;
-        }
-
-        // Replace diagonal (i,j) with (k,l) in triangles t0 and t1
-        static void PerformFlip(List<int> tris, int t0, int t1, int i, int j, int k, int l)
-        {
-            int o0 = t0 * 3;
-            int o1 = t1 * 3;
-            // new triangles: (k,i,l) and (l,j,k)
-            tris[o0 + 0] = k; tris[o0 + 1] = i; tris[o0 + 2] = l;
-            tris[o1 + 0] = l; tris[o1 + 1] = j; tris[o1 + 2] = k;
         }
     }
 }

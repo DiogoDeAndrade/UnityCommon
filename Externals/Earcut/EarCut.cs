@@ -592,7 +592,7 @@ namespace MadWorldNL
 
                 if (o1.X - o2.X < 0.0f)
                 {
-                    return -2;
+                    return -1;
                 }
 
                 return 0;

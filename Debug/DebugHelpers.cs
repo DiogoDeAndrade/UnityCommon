@@ -160,10 +160,11 @@ namespace UC
 #if UNITY_EDITOR
             GUIStyle style = new GUIStyle();
             style.fontSize = fontSize;
-            if (centerY) style.alignment = TextAnchor.UpperCenter;
+            if (centerY) style.alignment = TextAnchor.MiddleCenter;
+            else style.alignment = TextAnchor.UpperCenter;
 
-            // Convert the world position to screen space
-            Vector3 screenPos = Camera.current.WorldToScreenPoint(pos);
+                // Convert the world position to screen space
+                Vector3 screenPos = Camera.current.WorldToScreenPoint(pos);
 
             // Draw the label at the new world position
             if (shadow)
