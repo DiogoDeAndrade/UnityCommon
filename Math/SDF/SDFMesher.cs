@@ -1,14 +1,17 @@
 using NaughtyAttributes;
 using System.Collections.Generic;
-using System.Runtime.InteropServices.WindowsRuntime;
+using System.Collections.Specialized;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace UC
 {
 
     public class SDFMesher : MonoBehaviour
     {
-        public enum NormalMode { Simple, Estimated };
+        public enum NormalMode { Simple, Estimated, HardEdges };
+        public enum FilterMode { Box2, Box3, Tent3, Gaussian5 };
+        public enum NoiseMode { None, Perlin };
 
         [SerializeField]
         private SDFComponent        sdf;
@@ -17,46 +20,118 @@ namespace UC
         [SerializeField]
         private float               voxelsPerUnit = 1.0f;
         [SerializeField]
+        private bool                filter;
+        [SerializeField, ShowIf(nameof(filter)), Range(1, 4)]
+        private int                 filterIterations;
+        [SerializeField, ShowIf(nameof(filter))]
+        private FilterMode          filterMode;
+        [SerializeField] 
+        private NoiseMode           noiseMode;
+        [SerializeField, ShowIf(nameof(isPerlinNoise))] 
+        private float               noiseStrength;
+        [SerializeField, ShowIf(nameof(isPerlinNoise))] 
+        private Vector3             perAxisStrength = Vector3.one;
+        [SerializeField, ShowIf(nameof(isPerlinNoise))] 
+        private float               noiseFrequency;
+        [SerializeField]
         private Material            defaultMaterial;
+        [SerializeField]
+        private bool                simplify;
+        [SerializeField, Range(0.0f, 1.0f), ShowIf(nameof(simplify))]
+        private float               quality = 0.5f;        
+        [SerializeField, ShowIf(nameof(simplify))]
+        private bool                preserveBorderEdges = false;
+        [SerializeField, ShowIf(nameof(simplify))]
+        private bool                preserveSurfaceCurvature = false;
+        [SerializeField, Range(0.0f, 180.0f), ShowIf(nameof(hasHardEdges))]
+        private float               hardEdgeTolerance = 45.0f;
         [SerializeField]
         private bool                debugEnabled;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool                debugShowGrid;
+        [SerializeField, ShowIf(nameof(isShowGrid))]
+        private bool                debugShowVoxelData;
         [SerializeField, ShowIf(nameof(isShowGrid))]
         private bool                debugShowGridLines;
         [SerializeField, ShowIf(nameof(isShowGrid))]
         private Gradient            debugColorRange;
         [SerializeField, ShowIf(nameof(isShowGrid))]
         private Vector2             debugFilterRange;
+        [SerializeField, ShowIf(nameof(debugEnabled))]
+        private bool                showNormals;
 
         [SerializeField, HideInInspector]
-        private VoxelData<float> voxelData;
+        private VoxelDataFloat  voxelData;
         [SerializeField, ReadOnly]
-        private Vector2          distanceRange;
+        private Vector2         distanceRange;
 
         bool isShowGrid => debugEnabled && debugShowGrid;
+        bool hasHardEdges => normalMode == NormalMode.HardEdges;
+        bool isPerlinNoise => noiseMode == NoiseMode.Perlin;
 
-        public float voxelSizeF => 1.0f / voxelsPerUnit;
+        public float voxelSizeF => (1.0f / voxelsPerUnit) * ((filter) ? (1 << filterIterations ) : (1));
         public Vector3 voxelSize => Vector3.one * voxelSizeF;
 
+
+        int NextDivisible(int startNumber, int divisionCount)
+        {
+            int m = 1 << divisionCount; 
+            return ((startNumber + m - 1) / m) * m;
+        }
 
         [Button("Build")]
         public void Build()
         {
             // Create the voxel field
             Bounds bounds = sdf.GetBounds();
+            if (filter)
+            {
+                // Give some margin to the bounds - 10% margin
+                bounds.Expand(bounds.size * 0.1f);
+            }
 
             Vector3Int gs = new Vector3Int(Mathf.CeilToInt(bounds.size.x * voxelsPerUnit) + 1,
                                            Mathf.CeilToInt(bounds.size.y * voxelsPerUnit) + 1,
                                            Mathf.CeilToInt(bounds.size.z * voxelsPerUnit) + 1);
+            if (filter)
+            {
+                gs.x = NextDivisible(gs.x, filterIterations);
+                gs.y = NextDivisible(gs.y, filterIterations);
+                gs.z = NextDivisible(gs.z, filterIterations);
+            }
 
-            voxelData = new VoxelData<float>();
+            voxelData = new VoxelDataFloat();
             voxelData.Init(gs, Vector3.one / voxelsPerUnit);
             voxelData.minBound = bounds.min;
 
             distanceRange = new Vector2(-1.0f, 1.0f);
 
             SampleSDF();
+            if (filter)
+            {
+                VoxelDataFloat.VoxelFilterKernel<float> filterKernel = null;
+                switch (filterMode)
+                {
+                    case FilterMode.Box2:
+                        filterKernel = VoxelDataFloat.FilterKernel_Box2;
+                        break;
+                    case FilterMode.Box3:
+                        filterKernel = VoxelDataFloat.FilterKernel_Box3;
+                        break;
+                    case FilterMode.Tent3:
+                        filterKernel = VoxelDataFloat.FilterKernel_Tent3;
+                        break;
+                    case FilterMode.Gaussian5:
+                        filterKernel = VoxelDataFloat.FilterKernel_Gaussian5;
+                        break;
+                    default:
+                        break;
+                }
+                for (int i = 0; i < filterIterations; i++)
+                {
+                    voxelData.HalfSize(filterKernel, false);
+                }
+            }
             BuildMesh();
         }
 
@@ -96,6 +171,8 @@ namespace UC
 
             meshFilter.mesh = CreateSDFMesh();
         }
+
+        bool computeNormals => (normalMode == NormalMode.Simple) || (normalMode == NormalMode.HardEdges);
 
         Mesh CreateSDFMesh()
         {
@@ -246,7 +323,7 @@ namespace UC
                 float sz = Mathf.Max(voxelData.size.z, 1e-6f);
                 return new Vector2(local.x / sx, local.z / sz);
             }
-            #endregion
+        #endregion
 
             // Precompute a small differential step for SDF gradient estimation
             float h = Mathf.Min(voxelData.voxelSize.x, Mathf.Min(voxelData.voxelSize.y, voxelData.voxelSize.z)) * 0.5f;
@@ -266,7 +343,7 @@ namespace UC
 
                         for (int i = 0; i < 8; i++)
                         {
-                            p[i] = GetPos(x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]);
+                            p[i] = GetPosWithNoise(x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]);
                             val[i] = voxelData[x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]];
                             if (val[i] < iso) cubeIndex |= (1 << i);
                         }
@@ -318,79 +395,301 @@ namespace UC
             mesh.SetUVs(0, uvs);
             mesh.SetTriangles(tris, 0, true);
             mesh.RecalculateBounds();
-            if (normalMode == NormalMode.Simple) mesh.RecalculateNormals();
+            if (computeNormals) mesh.RecalculateNormals();
             mesh.RecalculateTangents();
+
+            if (simplify)
+            {
+                var simplificationOptions = UnityMeshSimplifier.SimplificationOptions.Default;
+                simplificationOptions.PreserveSurfaceCurvature = preserveSurfaceCurvature;
+                simplificationOptions.PreserveBorderEdges = preserveBorderEdges || (normalMode == NormalMode.HardEdges);
+
+                var meshSimplifier = new UnityMeshSimplifier.MeshSimplifier();
+                meshSimplifier.Initialize(mesh);
+                meshSimplifier.SimplificationOptions = simplificationOptions;
+                meshSimplifier.SimplifyMesh(quality);
+
+                var newMesh = meshSimplifier.ToMesh();
+                newMesh.name = mesh.name + "_Simplified";
+                if (normalMode == NormalMode.Simple)
+                {
+                    newMesh.RecalculateNormals();
+                    newMesh.RecalculateTangents();
+                }
+                else if (normalMode == NormalMode.HardEdges)
+                {
+                    // e.g. 45° crease; make this a serialized field if you want
+                    MeshHardEdgeSplitter.SplitVerticesByFaceNormalAngle(newMesh, hardEdgeTolerance);
+                }
+
+                mesh = newMesh;
+            }
 
             return mesh;
         }
 
 
         private Vector3 GetPos(int x, int y, int z) => new Vector3(voxelData.minBound.x + x * voxelData.voxelSize.x,
-                                                                       voxelData.minBound.y + y * voxelData.voxelSize.y,
-                                                                       voxelData.minBound.z + z * voxelData.voxelSize.z);
+                                                                   voxelData.minBound.y + y * voxelData.voxelSize.y,
+                                                                   voxelData.minBound.z + z * voxelData.voxelSize.z);
+        private Vector3 GetPosWithNoise(int x, int y, int z)
+        {
+            var p = new Vector3(voxelData.minBound.x + x * voxelData.voxelSize.x,
+                                voxelData.minBound.y + y * voxelData.voxelSize.y,
+                                voxelData.minBound.z + z * voxelData.voxelSize.z);
+            if (noiseMode == NoiseMode.Perlin)
+            {
+                var delta = Noise.PerlinDirection3d(p * noiseFrequency);
+                return p + new Vector3(noiseStrength * perAxisStrength.x * delta.x, noiseStrength * perAxisStrength.y * delta.y, noiseStrength * perAxisStrength.z * delta.z);
+            }
+
+            return p;
+        }
+
+        public static class MeshHardEdgeSplitter
+        {
+            /// <summary>
+            /// Splits vertices where incident triangle face normals differ by more than angleDeg.
+            /// Operates in-place on the given mesh.
+            /// </summary>
+            public static void SplitVerticesByFaceNormalAngle(Mesh mesh, float angleDeg)
+            {
+                if (!mesh) return;
+
+                // Pull data
+                var verts = mesh.vertices;
+                var tris = mesh.triangles;
+                var uv0 = mesh.uv;
+                var uv2 = mesh.uv2;
+                var uv3 = mesh.uv3;
+                var uv4 = mesh.uv4;
+                var colors = mesh.colors;
+                var tangents = mesh.tangents;
+
+                int triCount = tris.Length / 3;
+                if (triCount == 0) return;
+
+                // 1) Per-triangle (face) normals
+                var faceN = new Vector3[triCount];
+                for (int t = 0; t < triCount; t++)
+                {
+                    int i0 = tris[3 * t + 0];
+                    int i1 = tris[3 * t + 1];
+                    int i2 = tris[3 * t + 2];
+                    Vector3 a = verts[i0];
+                    Vector3 b = verts[i1];
+                    Vector3 c = verts[i2];
+                    Vector3 n = Vector3.Cross(b - a, c - a);
+                    float m = n.magnitude;
+                    faceN[t] = (m > 1e-20f) ? (n / m) : Vector3.up; // fallback
+                }
+
+                // 2) Build corner lists per vertex (each corner is a "slot" in tris[])
+                var cornersPerVertex = new List<int>[verts.Length];
+                for (int c = 0; c < tris.Length; c++)
+                {
+                    int v = tris[c];
+                    (cornersPerVertex[v] ??= new List<int>(4)).Add(c);
+                }
+
+                float cosThresh = Mathf.Cos(angleDeg * Mathf.Deg2Rad);
+
+                // Output buffers (start as copies of original)
+                var newVerts = new List<Vector3>(verts);
+                var newUv0 = (uv0 is { Length: > 0 }) ? new List<Vector2>(uv0) : null;
+                var newUv2 = (uv2 is { Length: > 0 }) ? new List<Vector2>(uv2) : null;
+                var newUv3 = (uv3 is { Length: > 0 }) ? new List<Vector2>(uv3) : null;
+                var newUv4 = (uv4 is { Length: > 0 }) ? new List<Vector2>(uv4) : null;
+                var newColors = (colors is { Length: > 0 }) ? new List<Color>(colors) : null;
+                var newTangents = (tangents is { Length: > 0 }) ? new List<Vector4>(tangents) : null;
+
+                int splitsDone = 0;
+
+                // 3) For each original vertex, cluster its incident triangle corners by face-normal angle
+                for (int v = 0; v < cornersPerVertex.Length; v++)
+                {
+                    var cornerList = cornersPerVertex[v];
+                    if (cornerList == null || cornerList.Count <= 1) continue; // nothing to split
+
+                    int n = cornerList.Count;
+
+                    // Union-Find over corners: connect if angle <= threshold (dot >= cosThresh)
+                    int[] parent = new int[n];
+                    for (int i = 0; i < n; i++) parent[i] = i;
+
+                    int Find(int x) { while (parent[x] != x) x = parent[x] = parent[parent[x]]; return x; }
+                    void Union(int a, int b) { a = Find(a); b = Find(b); if (a != b) parent[a] = b; }
+
+                    for (int i = 0; i < n; i++)
+                    {
+                        int triI = cornerList[i] / 3;
+                        Vector3 Ni = faceN[triI];
+                        for (int j = i + 1; j < n; j++)
+                        {
+                            int triJ = cornerList[j] / 3;
+                            Vector3 Nj = faceN[triJ];
+                            float d = Vector3.Dot(Ni, Nj);
+                            if (d >= cosThresh) Union(i, j);
+                        }
+                    }
+
+                    // Group corners by root
+                    var groups = new Dictionary<int, List<int>>();
+                    for (int i = 0; i < n; i++)
+                    {
+                        int r = Find(i);
+                        if (!groups.TryGetValue(r, out var g)) groups[r] = g = new List<int>();
+                        g.Add(i);
+                    }
+
+                    if (groups.Count <= 1) continue; // still one smooth group, no split
+
+                    // Keep first group on original vertex index v; new groups duplicate v
+                    bool first = true;
+                    foreach (var kv in groups)
+                    {
+                        var groupCornerIndices = kv.Value; // list of indices into cornerList
+
+                        if (first) { first = false; continue; }
+
+                        // Duplicate vertex v -> newIdx and copy attributes
+                        int newIdx = newVerts.Count;
+                        newVerts.Add(verts[v]);
+                        if (newUv0 != null) newUv0.Add(uv0[v]);
+                        if (newUv2 != null) newUv2.Add(uv2[v]);
+                        if (newUv3 != null) newUv3.Add(uv3[v]);
+                        if (newUv4 != null) newUv4.Add(uv4[v]);
+                        if (newColors != null) newColors.Add(colors[v]);
+                        if (newTangents != null) newTangents.Add(tangents[v]);
+
+                        // Rewire the triangle corners in this group to the new vertex index
+                        foreach (int localCornerIdx in groupCornerIndices)
+                        {
+                            int triCornerSlot = cornerList[localCornerIdx]; // index into tris[]
+                            tris[triCornerSlot] = newIdx;
+                        }
+
+                        splitsDone++;
+                    }
+                }
+
+                if (splitsDone == 0)
+                {
+                    // Nothing met the threshold — either geometry is already “smooth” at that angle,
+                    // or inputs weren’t wired as expected.
+                    return;
+                }
+
+                // 4) If vertex count grows > 65k, ensure 32-bit indices are used
+                if (newVerts.Count > 65535)
+                    mesh.indexFormat = IndexFormat.UInt32;
+
+                // 5) Push data back and recompute derived attributes
+                mesh.SetVertices(newVerts);
+                if (newUv0 != null) mesh.SetUVs(0, newUv0);
+                if (newUv2 != null) mesh.SetUVs(1, newUv2);
+                if (newUv3 != null) mesh.SetUVs(2, newUv3);
+                if (newUv4 != null) mesh.SetUVs(3, newUv4);
+                if (newColors != null) mesh.SetColors(newColors);
+                if (newTangents != null) mesh.SetTangents(newTangents);
+
+                mesh.triangles = tris;                 // IMPORTANT: assign back
+                mesh.RecalculateBounds();
+                mesh.RecalculateNormals();            // will keep hard edges because indices are now split
+                mesh.RecalculateTangents();
+            }
+        }
+
 
         private void OnDrawGizmos()
         {
-            if (!debugEnabled || !debugShowGrid || voxelData == null)
-                return;
+            if (!debugEnabled) return;
 
-            Vector3Int gs = voxelData.gridSize;
-
-            // 1) Draw grid lines by marching between corner points:
-
-            if (debugShowGridLines)
+            if ((debugShowGrid) && (voxelData != null))
             {
-                Gizmos.color = Color.gray;
+                Vector3Int gs = voxelData.gridSize;
 
-                // — lines along Z (vary x,y, connect z=0 -> z=gs.z-1)
-                for (int x = 0; x < gs.x; x++)
+                // 1) Draw grid lines by marching between corner points:
+
+                if (debugShowGridLines)
                 {
+                    Gizmos.color = Color.gray;
+
+                    // Helper
+                    Vector3 P(int xi, int yi, int zi) => GetPosWithNoise(xi, yi, zi);
+
+                    // 1) For every cell, draw the 3 edges from its min corner: +X, +Y, +Z.
+                    for (int z = 0; z < gs.z - 1; z++)
+                        for (int y = 0; y < gs.y - 1; y++)
+                            for (int x = 0; x < gs.x - 1; x++)
+                            {
+                                var p = P(x, y, z);
+                                Gizmos.DrawLine(p, P(x + 1, y, z)); // +X
+                                Gizmos.DrawLine(p, P(x, y + 1, z)); // +Y
+                                Gizmos.DrawLine(p, P(x, y, z + 1)); // +Z
+                            }
+
+                    // 2) Stitch the three "max" faces that have no owning cell:
+                    int Xmax = gs.x - 1, Ymax = gs.y - 1, Zmax = gs.z - 1;
+
+                    // Face x = Xmax: draw +Y and +Z edges
+                    for (int y = 0; y < gs.y - 1; y++)
+                        for (int z = 0; z < gs.z; z++) Gizmos.DrawLine(P(Xmax, y, z), P(Xmax, y + 1, z));
                     for (int y = 0; y < gs.y; y++)
-                    {
-                        Vector3 p1 = GetPos(x, y, 0);
-                        Vector3 p2 = GetPos(x, y, gs.z - 1);
-                        Gizmos.DrawLine(p1, p2);
-                    }
-                }
+                        for (int z = 0; z < gs.z - 1; z++) Gizmos.DrawLine(P(Xmax, y, z), P(Xmax, y, z + 1));
 
-                // — lines along Y (vary x,z, connect y=0 -> y=gs.y-1)
-                for (int x = 0; x < gs.x; x++)
-                {
-                    for (int z = 0; z < gs.z; z++)
-                    {
-                        Vector3 p1 = GetPos(x, 0, z);
-                        Vector3 p2 = GetPos(x, gs.y - 1, z);
-                        Gizmos.DrawLine(p1, p2);
-                    }
-                }
+                    // Face y = Ymax: draw +X and +Z edges
+                    for (int x = 0; x < gs.x - 1; x++)
+                        for (int z = 0; z < gs.z; z++) Gizmos.DrawLine(P(x, Ymax, z), P(x + 1, Ymax, z));
+                    for (int x = 0; x < gs.x; x++)
+                        for (int z = 0; z < gs.z - 1; z++) Gizmos.DrawLine(P(x, Ymax, z), P(x, Ymax, z + 1));
 
-                // — lines along X (vary y,z, connect x=0 -> x=gs.x-1)
-                for (int y = 0; y < gs.y; y++)
+                    // Face z = Zmax: draw +X and +Y edges
+                    for (int x = 0; x < gs.x - 1; x++)
+                        for (int y = 0; y < gs.y; y++) Gizmos.DrawLine(P(x, y, Zmax), P(x + 1, y, Zmax));
+                    for (int x = 0; x < gs.x; x++)
+                        for (int y = 0; y < gs.y - 1; y++) Gizmos.DrawLine(P(x, y, Zmax), P(x, y + 1, Zmax));
+                }
+                // 2) Draw a small colored sphere at each corner sample:
+                if (debugShowVoxelData)
                 {
-                    for (int z = 0; z < gs.z; z++)
+                    float sphereRadius = voxelData.voxelSize.magnitude * 0.20f;
+                    for (int x = 0; x < gs.x; x++)
                     {
-                        Vector3 p1 = GetPos(0, y, z);
-                        Vector3 p2 = GetPos(gs.x - 1, y, z);
-                        Gizmos.DrawLine(p1, p2);
+                        for (int y = 0; y < gs.y; y++)
+                        {
+                            for (int z = 0; z < gs.z; z++)
+                            {
+                                float val = voxelData[x, y, z];
+                                if ((val >= debugFilterRange.x) && (val <= debugFilterRange.y))
+                                {
+                                    float t = Mathf.InverseLerp(distanceRange.x, distanceRange.y, val);
+                                    Color c = debugColorRange.Evaluate(t);
+
+                                    Gizmos.color = c;
+                                    Gizmos.DrawSphere(GetPos(x, y, z), sphereRadius);
+                                }
+                            }
+                        }
                     }
                 }
             }
-            // 2) Draw a small colored sphere at each corner sample:
-            float sphereRadius = voxelData.voxelSize.magnitude * 0.20f;
-            for (int x = 0; x < gs.x; x++)
-            {
-                for (int y = 0; y < gs.y; y++)
-                {
-                    for (int z = 0; z < gs.z; z++)
-                    {
-                        float val = voxelData[x, y, z];
-                        if ((val >= debugFilterRange.x) && (val <= debugFilterRange.y))
-                        {
-                            float t = Mathf.InverseLerp(distanceRange.x, distanceRange.y, val);
-                            Color c = debugColorRange.Evaluate(t);
 
-                            Gizmos.color = c;
-                            Gizmos.DrawSphere(GetPos(x, y, z), sphereRadius);
+            if (showNormals)
+            {
+                MeshFilter mf = GetComponent<MeshFilter>();
+                if (mf != null)
+                {
+                    Mesh mesh = mf.sharedMesh;
+                    if (mesh != null)
+                    {
+                        var vertices = mesh.vertices;
+                        var normals = mesh.normals;
+
+                        for (int i = 0; i < vertices.Length; i++)
+                        {
+                            Gizmos.color = Color.green;
+                            DebugHelpers.DrawArrow(vertices[i], normals[i], 0.1f, 0.025f, normals[i].Perpendicular());
                         }
                     }
                 }
