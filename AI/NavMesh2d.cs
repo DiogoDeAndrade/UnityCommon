@@ -3,8 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.UI.Extensions.Tweens;
-
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -2034,7 +2032,7 @@ namespace UC
 
         public static NavMesh2d Get(NavMeshAgentType2d agentType)
         {
-            if (NavigationMeshes.TryGetValue(agentType, out var navMesh))
+            if ((NavigationMeshes != null) && (NavigationMeshes.TryGetValue(agentType, out var navMesh)))
             {
                 return navMesh;
             }
@@ -2043,6 +2041,21 @@ namespace UC
             {
                 return Get(agentType.parentType);
             }
+
+#if UNITY_EDITOR
+            if (!EditorApplication.isPlaying)
+            {
+                var navMeshes = FindObjectsByType<NavMesh2d>(FindObjectsSortMode.None);
+                foreach (var nm in navMeshes)
+                {
+                    if (nm.agentType == agentType) return nm;
+                }
+                if (agentType.parentType != null)
+                {
+                    return Get(agentType.parentType);
+                }
+            }
+#endif
 
             return null;
         }

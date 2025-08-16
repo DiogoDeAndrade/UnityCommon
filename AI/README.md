@@ -10,15 +10,14 @@
     * It can search within a region, or just any region
   * It can query the navmesh for the polygon path between two points in a region
   * Can do pathfinding queries, with or without funneling, and with or without biasing
-  * NavMeshAgent2d class now can follow a path, using pursuit follow
   * NavMesh2d can now do LoS queries (raycast)
-  * There's two follow modes: pursuit (which is more physical, based on acceleration and velocity), and direct (in which we follow the path, with a possible offset and some path smoothing)
+  * There's two follow modes: pursuit (which is more physical, based on acceleration and velocity, and has some parameters to slow down in tight turns, etc), and direct (in which we follow the path, with a possible offset)
+  * Paths can be smoothed using cubic beziers at corners, with checks for LoS to stop the curve from going inside the walls.
   * Pathfinding can now account for costs, using class NavMeshModifier2d, you can condition the cost of the parts of the environment - this is now done through the use of NavMeshTerrainType2d, which can be used to override costs by agent
     * Imagine an agent that moves faster on water - this way it's easier to implement costs in a hierarchical fashion
   * Agent types can be hierarchical, since it's mostly required to guarantee that the right NavMesh can be found for an agent.
 * Still to do:
   * Pathfinding
-    * Bug: Pursuit follow is not working well, needs tweaking of parameters, which is terrible.
     * Offmesh links - Doors (conditionals)
     * Offmesh links - Holes (link fields)
     * Obstacle avoidance
