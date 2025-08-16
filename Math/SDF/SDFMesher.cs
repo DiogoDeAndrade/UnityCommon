@@ -15,6 +15,8 @@ namespace UC
 
         [SerializeField]
         private SDFComponent        sdf;
+        [SerializeField]
+        private float               isoValue = 0.0f;
         [SerializeField] 
         private NormalMode          normalMode;
         [SerializeField]
@@ -86,6 +88,7 @@ namespace UC
         {
             // Create the voxel field
             Bounds bounds = sdf.GetBounds();
+            if (isoValue > 0.0f) bounds.Expand(isoValue * 2.2f);
             if (filter)
             {
                 // Give some margin to the bounds - 10% margin
@@ -341,13 +344,12 @@ namespace UC
                         Vector3[] p = new Vector3[8];
                         float[] val = new float[8];
                         int cubeIndex = 0;
-                        const float iso = 0f;
 
                         for (int i = 0; i < 8; i++)
                         {
                             p[i] = GetPosWithNoise(x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]);
                             val[i] = voxelData[x + MCTables.MC_INCS[i, 0], y + MCTables.MC_INCS[i, 1], z + MCTables.MC_INCS[i, 2]];
-                            if (val[i] < iso) cubeIndex |= (1 << i);
+                            if (val[i] < isoValue) cubeIndex |= (1 << i);
                         }
 
                         if (cubeIndex == 0 || cubeIndex == 255) continue;
@@ -365,7 +367,7 @@ namespace UC
                         // For each edge, compute intersection by linear interpolation
                         for (int i = 0; i < 12; i++)
                         {
-                            if ((edgeFlags & (1 << i)) != 0) edgeVert[i] = InterpolateVertex(iso, p[MCTables.MC_EDGE_INTERPOLATION[i, 0]], p[MCTables.MC_EDGE_INTERPOLATION[i, 1]], val[MCTables.MC_EDGE_INTERPOLATION[i, 0]] + epsBias, val[MCTables.MC_EDGE_INTERPOLATION[i, 1]] + epsBias);
+                            if ((edgeFlags & (1 << i)) != 0) edgeVert[i] = InterpolateVertex(isoValue, p[MCTables.MC_EDGE_INTERPOLATION[i, 0]], p[MCTables.MC_EDGE_INTERPOLATION[i, 1]], val[MCTables.MC_EDGE_INTERPOLATION[i, 0]] + epsBias, val[MCTables.MC_EDGE_INTERPOLATION[i, 1]] + epsBias);
 
                         }
 
@@ -376,9 +378,9 @@ namespace UC
                             int e1 = MCTables.MC_TRI_TABLE[cubeIndex, i + 1];
                             int e2 = MCTables.MC_TRI_TABLE[cubeIndex, i + 2];
 
-                            int ia = GetOrCreateEdgeVertex(e0, x, y, z, iso, epsBias, p, val, verts, norms, uvs, h);
-                            int ib = GetOrCreateEdgeVertex(e1, x, y, z, iso, epsBias, p, val, verts, norms, uvs, h);
-                            int ic = GetOrCreateEdgeVertex(e2, x, y, z, iso, epsBias, p, val, verts, norms, uvs, h);
+                            int ia = GetOrCreateEdgeVertex(e0, x, y, z, isoValue, epsBias, p, val, verts, norms, uvs, h);
+                            int ib = GetOrCreateEdgeVertex(e1, x, y, z, isoValue, epsBias, p, val, verts, norms, uvs, h);
+                            int ic = GetOrCreateEdgeVertex(e2, x, y, z, isoValue, epsBias, p, val, verts, norms, uvs, h);
 
                             // keep your winding flip
                             tris.Add(ia); tris.Add(ic); tris.Add(ib);
