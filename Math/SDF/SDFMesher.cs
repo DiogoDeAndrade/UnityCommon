@@ -21,6 +21,8 @@ namespace UC
         private float               voxelsPerUnit = 1.0f;
         [SerializeField]
         private bool                filter;
+        [SerializeField, ShowIf(nameof(filter)), Range(0, 1)]
+        private float               boundExtension = 0.25f;
         [SerializeField, ShowIf(nameof(filter)), Range(1, 4)]
         private int                 filterIterations;
         [SerializeField, ShowIf(nameof(filter))]
@@ -87,7 +89,7 @@ namespace UC
             if (filter)
             {
                 // Give some margin to the bounds - 10% margin
-                bounds.Expand(bounds.size * 0.1f);
+                bounds.Expand(bounds.size * boundExtension);
             }
 
             Vector3Int gs = new Vector3Int(Mathf.CeilToInt(bounds.size.x * voxelsPerUnit) + 1,

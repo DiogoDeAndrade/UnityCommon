@@ -204,15 +204,30 @@ namespace UC
 
         public static Vector3 Perpendicular(this Vector3 v)
         {
-            // If v is zero, just return zero to avoid NaN
             if (v == Vector3.zero)
                 return Vector3.zero;
 
-            // Pick an arbitrary axis not parallel to v
-            Vector3 other = Mathf.Abs(v.x) < Mathf.Abs(v.z) ? Vector3.right : Vector3.up;
+            v.Normalize();
 
-            // Cross product to get a perpendicular
-            return Vector3.Cross(v, other).normalized;
+            // Candidate axes
+            Vector3[] axes = { Vector3.right, Vector3.up, Vector3.forward };
+
+            // Pick the axis least aligned with v (smallest dot)
+            Vector3 bestAxis = axes[0];
+            float minDot = Mathf.Abs(Vector3.Dot(v, bestAxis));
+
+            for (int i = 1; i < axes.Length; i++)
+            {
+                float d = Mathf.Abs(Vector3.Dot(v, axes[i]));
+                if (d < minDot)
+                {
+                    minDot = d;
+                    bestAxis = axes[i];
+                }
+            }
+
+            // Cross to get a perpendicular
+            return Vector3.Cross(v, bestAxis).normalized;
         }
 
         public static Vector2Int xy(this Vector3Int v)
