@@ -1,30 +1,35 @@
 using NaughtyAttributes;
+using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace UC
 {
 
-    public class SDFMesher : MonoBehaviour
+    public class SDFMarchingCubesMesher : MonoBehaviour
     {
+        delegate Vector3 FindIsoRoot(float iso, Vector3 p1, Vector3 p2, float v1, float v2);
+
         public enum NormalMode { Simple, Estimated, HardEdges };
         public enum FilterMode { Box2, Box3, Tent3, Gaussian5 };
         public enum NoiseMode { None, Perlin };
+        public enum InterpolationMode { Linear, IterativeIso };
 
         [SerializeField]
         private SDFComponent        sdf;
         [SerializeField]
         private float               isoValue = 0.0f;
+        [SerializeField]
+        private InterpolationMode   interpolationMode = InterpolationMode.Linear;
         [SerializeField] 
         private NormalMode          normalMode;
         [SerializeField]
         private float               voxelsPerUnit = 1.0f;
+        [SerializeField, Range(0, 1)]
+        private float               boundExtension = 0.25f;
         [SerializeField]
         private bool                filter;
-        [SerializeField, ShowIf(nameof(filter)), Range(0, 1)]
-        private float               boundExtension = 0.25f;
         [SerializeField, ShowIf(nameof(filter)), Range(1, 4)]
         private int                 filterIterations;
         [SerializeField, ShowIf(nameof(filter))]
@@ -63,6 +68,10 @@ namespace UC
         private Vector2             debugFilterRange;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool                showNormals;
+        [SerializeField, ShowIf(nameof(debugEnabled))]
+        private Transform           debugPoint;
+        [SerializeField, ShowIf(nameof(hasDebugPoint))]
+        private bool                displayMarchingCube;
 
         [SerializeField, HideInInspector]
         private VoxelDataFloat  voxelData;
@@ -72,6 +81,8 @@ namespace UC
         bool isShowGrid => debugEnabled && debugShowGrid;
         bool hasHardEdges => normalMode == NormalMode.HardEdges;
         bool isPerlinNoise => noiseMode == NoiseMode.Perlin;
+        bool hasDebugPoint => (debugPoint != null) && (debugEnabled);
+        bool computeNormals => (normalMode == NormalMode.Simple) || (normalMode == NormalMode.HardEdges);
 
         public float voxelSizeF => (1.0f / voxelsPerUnit) * ((filter) ? (1 << filterIterations ) : (1));
         public Vector3 voxelSize => Vector3.one * voxelSizeF;
@@ -89,11 +100,9 @@ namespace UC
             // Create the voxel field
             Bounds bounds = sdf.GetBounds();
             if (isoValue > 0.0f) bounds.Expand(isoValue * 2.2f);
-            if (filter)
-            {
-                // Give some margin to the bounds - 10% margin
-                bounds.Expand(bounds.size * boundExtension);
-            }
+
+            // Give some margin to the bounds
+            bounds.Expand(bounds.size * boundExtension);
 
             Vector3Int gs = new Vector3Int(Mathf.CeilToInt(bounds.size.x * voxelsPerUnit) + 1,
                                            Mathf.CeilToInt(bounds.size.y * voxelsPerUnit) + 1,
@@ -177,11 +186,15 @@ namespace UC
             meshFilter.mesh = CreateSDFMesh();
         }
 
-        bool computeNormals => (normalMode == NormalMode.Simple) || (normalMode == NormalMode.HardEdges);
-
         Mesh CreateSDFMesh()
         {
             if (voxelData == null) return null;
+
+            FindIsoRoot InterpolateVertex = VertexLinearInterpolation;
+            if (interpolationMode == InterpolationMode.IterativeIso)
+            {
+                InterpolateVertex = (iso, p1, p2, v1, v2) => EdgeIsoPoint((pos) => sdf.Sample(pos), p1, p2, v1, v2, iso, 5);
+            }
 
             var verts = new List<Vector3>(8192);
             var norms = new List<Vector3>(8192);
@@ -199,21 +212,7 @@ namespace UC
             FillArray(vy, -1);
             FillArray(vz, -1);
 
-            #region Helper Functions (FillArray, GetOrCreateEdgeVertex, ResolveAmbiguityHint, InterpolateVertex, EstimateNormal, ProjectUV)
-            void FillArray(int[,,] a, int v)
-            {
-                for (int i = a.GetLowerBound(0); i <= a.GetUpperBound(0); i++)
-                {
-                    for (int j = a.GetLowerBound(1); j <= a.GetUpperBound(1); j++)
-                    {
-                        for (int k = a.GetLowerBound(2); k <= a.GetUpperBound(2); k++)
-                        {
-                            a[i, j, k] = v;
-                        }
-                    }
-                }
-            }
-
+            #region Helper Functions (GetOrCreateEdgeVertex, ResolveAmbiguityHint, InterpolateVertex, EstimateNormal, ProjectUV)
             int GetOrCreateEdgeVertex(int edgeId, int x, int y, int z,
                                       float iso, float epsBias,
                                       Vector3[] p, float[] val,
@@ -293,21 +292,6 @@ namespace UC
                 // Change magnitude if your SDF ranges are tiny/huge.
                 const float baseEps = 1e-6f;
                 return (centerVal >= 0f) ? +baseEps : -baseEps;
-            }
-
-            Vector3 InterpolateVertex(float iso, Vector3 p1, Vector3 p2, float v1, float v2)
-            {
-                // Handle edge cases explicitly to avoid NaNs
-                float d1 = v1 - iso;
-                float d2 = v2 - iso;
-
-                if (Mathf.Abs(d1) < 1e-12f) return p1;
-                if (Mathf.Abs(d2) < 1e-12f) return p2;
-                float denom = (d1 - d2);
-                if (Mathf.Abs(denom) < 1e-12f) return (p1 + p2) * 0.5f;
-
-                float t = d1 / (d1 - d2); // linear interpolation factor
-                return p1 + t * (p2 - p1);
             }
 
             Vector3 EstimateNormal(Vector3 pos, float h)
@@ -432,6 +416,77 @@ namespace UC
             return mesh;
         }
 
+        void FillArray(int[,,] a, int v)
+        {
+            for (int i = a.GetLowerBound(0); i <= a.GetUpperBound(0); i++)
+            {
+                for (int j = a.GetLowerBound(1); j <= a.GetUpperBound(1); j++)
+                {
+                    for (int k = a.GetLowerBound(2); k <= a.GetUpperBound(2); k++)
+                    {
+                        a[i, j, k] = v;
+                    }
+                }
+            }
+        }
+
+        // Linear interpolation to find surface root
+        Vector3 VertexLinearInterpolation(float iso, Vector3 p1, Vector3 p2, float v1, float v2)
+        {
+            // Handle edge cases explicitly to avoid NaNs
+            float d1 = v1 - iso;
+            float d2 = v2 - iso;
+
+            if (Mathf.Abs(d1) < 1e-12f) return p1;
+            if (Mathf.Abs(d2) < 1e-12f) return p2;
+            float denom = (d1 - d2);
+            if (Mathf.Abs(denom) < 1e-12f) return (p1 + p2) * 0.5f;
+
+            float t = d1 / (d1 - d2); // linear interpolation factor
+            return p1 + t * (p2 - p1);
+        }
+
+
+        // Iterative interpolation to find surface root
+        // Uses Illinois (regula falsi with endpoint damping). 3–5 iters are plenty.
+        Vector3 EdgeIsoPoint(Func<Vector3, float> sample, Vector3 A, Vector3 B, float fA, float fB, float iso, int iters = 5)
+        {
+            // Shift to zero-iso for the solver
+            float gA = fA - iso, gB = fB - iso;
+
+            // If an endpoint is (almost) on the surface, keep it deterministic
+            const float eps = 1e-8f;
+            if (Mathf.Abs(gA) < eps) return A;
+            if (Mathf.Abs(gB) < eps) return B;
+
+            Vector3 a = A, b = B;
+            float ga = gA, gb = gB;
+
+            // Guarantee opposite signs (MC should ensure this)
+            if (ga * gb > 0f)
+            {
+                // Fallback to linear lerp to avoid NaNs in degenerate cases
+                float tlin = ga / (ga - gb);
+                return a + tlin * (b - a);
+            }
+
+            // Illinois iterations
+            for (int i = 0; i < iters; i++)
+            {
+                float t = ga / (ga - gb);              // regula falsi
+                Vector3 m = a + t * (b - a);
+                float gm = sample(m) - iso;
+
+                if (Mathf.Abs(gm) < eps) return m;
+
+                if (ga * gm > 0f) { a = m; ga = gm; gb *= 0.5f; }  // damp the stagnant endpoint
+                else { b = m; gb = gm; ga *= 0.5f; }
+            }
+
+            // Final refined point (one more linear step between bracketing ends)
+            float tf = ga / (ga - gb);
+            return a + tf * (b - a);
+        }
 
         private Vector3 GetPos(int x, int y, int z) => new Vector3(voxelData.minBound.x + x * voxelData.voxelSize.x,
                                                                    voxelData.minBound.y + y * voxelData.voxelSize.y,
@@ -696,6 +751,104 @@ namespace UC
                             DebugHelpers.DrawArrow(vertices[i], normals[i], 0.1f, 0.025f, normals[i].Perpendicular());
                         }
                     }
+                }
+            }
+
+            if ((debugPoint) && (voxelData != null))
+            {
+                if (displayMarchingCube)
+                {
+                    // Displays the marching cube that encapsulates this debug point (wireframe)
+                    if (voxelData != null)
+                    {
+                        Vector3Int gs = voxelData.gridSize;
+                        // Find cell indices that contain the point (clamped to valid cube range)
+                        int cx = Mathf.Clamp(Mathf.FloorToInt((debugPoint.position.x - voxelData.minBound.x) / voxelData.voxelSize.x), 0, gs.x - 2);
+                        int cy = Mathf.Clamp(Mathf.FloorToInt((debugPoint.position.y - voxelData.minBound.y) / voxelData.voxelSize.y), 0, gs.y - 2);
+                        int cz = Mathf.Clamp(Mathf.FloorToInt((debugPoint.position.z - voxelData.minBound.z) / voxelData.voxelSize.z), 0, gs.z - 2);
+
+                        // Corner positions and values for this cube
+                        Vector3[] p = new Vector3[8];
+                        float[] v = new float[8];
+                        for (int i = 0; i < 8; i++)
+                        {
+                            int ox = MCTables.MC_INCS[i, 0];
+                            int oy = MCTables.MC_INCS[i, 1];
+                            int oz = MCTables.MC_INCS[i, 2];
+
+                            p[i] = GetPos(cx + ox, cy + oy, cz + oz);
+                            v[i] = voxelData[cx + ox, cy + oy, cz + oz];
+                        }
+
+                        // Helper: draw the 12 cube edges
+                        void DrawEdge(int a, int b)
+                        {
+                            Gizmos.DrawLine(p[a], p[b]);
+                        }
+
+                        Gizmos.color = Color.yellow;
+                        // Bottom face (z-)
+                        DrawEdge(0, 1); DrawEdge(1, 2); DrawEdge(2, 3); DrawEdge(3, 0);
+                        // Top face (z+)
+                        DrawEdge(4, 5); DrawEdge(5, 6); DrawEdge(6, 7); DrawEdge(7, 4);
+                        // Vertical edges
+                        DrawEdge(0, 4); DrawEdge(1, 5); DrawEdge(2, 6); DrawEdge(3, 7);
+
+                        // --- Existing LERP helper stays the same ---
+                        Vector3 LerpIso(Vector3 a, Vector3 b, float va, float vb, float iso)
+                        {
+                            float d1 = va - iso, d2 = vb - iso;
+                            if (Mathf.Abs(d1) < 1e-12f) return a;
+                            if (Mathf.Abs(d2) < 1e-12f) return b;
+                            float denom = (d1 - d2);
+                            if (Mathf.Abs(denom) < 1e-12f) return (a + b) * 0.5f;
+                            float t = d1 / (d1 - d2);
+                            return a + t * (b - a);
+                        }
+
+                        // --- Draw both versions on all active edges ---
+                        int[,] E = MCTables.MC_EDGE_INTERPOLATION; // [12,2]
+                        int cubeIndex = 0;
+                        for (int i = 0; i < 8; i++) if (v[i] < isoValue) cubeIndex |= (1 << i);
+                        int edgeMask = MCTables.MC_EDGE_TABLE[cubeIndex];
+
+                        float r = voxelData.voxelSize.magnitude * 0.08f;
+                        var sampleFn = new Func<Vector3, float>(pos => sdf.Sample(pos));
+
+                        for (int e = 0; e < 12; e++)
+                        {
+                            if ((edgeMask & (1 << e)) == 0) continue;
+
+                            int ia = E[e, 0], ib = E[e, 1];
+                            Vector3 A = p[ia], B = p[ib];
+                            float fA = v[ia], fB = v[ib];
+
+                            // Linear MC interpolation (your baseline)
+                            Vector3 qLerp = LerpIso(A, B, fA, fB, isoValue);
+                            Gizmos.color = (fA < isoValue) ? Color.red : Color.green;  // keep your sign cue
+                            Gizmos.DrawSphere(qLerp, r * 0.85f);
+
+                            // Root-found “true” intersection on the SDF
+                            Vector3 qRoot = EdgeIsoPoint(sampleFn, A, B, fA, fB, isoValue);
+
+                            // Yellow overlay sphere for the refined point
+                            Gizmos.color = Color.yellow;
+                            Gizmos.DrawSphere(qRoot, r * 0.6f);
+
+                            // Visualize the delta between both (thin line)
+                            Gizmos.color = new Color(1f, 1f, 0f, 0.5f); // translucent yellow
+                            Gizmos.DrawLine(qLerp, qRoot);
+                        }
+
+#if UNITY_EDITOR
+                        // Optional: label values to spot outliers fast
+                        for (int i = 0; i < 8; i++)
+                        {
+                            DebugHelpers.DrawTextAt(p[i] + Vector3.up * r * 1.2f, Vector3.zero, 12, Color.white, v[i].ToString("0.###"), true, true);
+                        }
+#endif
+                    }
+
                 }
             }
         }
