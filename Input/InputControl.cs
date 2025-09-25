@@ -188,6 +188,8 @@ namespace UC
 
         void RefreshAction()
         {
+            if (_type != InputType.NewInput) return;
+
             if (_playerInput == null) Debug.LogWarning($"Trying to fetch axis {inputAction}, but player input is not set!");
             else
             {

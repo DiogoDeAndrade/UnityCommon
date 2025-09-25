@@ -31,6 +31,8 @@ namespace UC
 
         static void AddToHypertagList(HypertaggedObject obj)
         {
+            if (obj.hypertag == null) return;
+
             if (allHypertagObjects.TryGetValue(obj.hypertag, out var l))
             {
                 l.Add(obj);
