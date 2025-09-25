@@ -8,3 +8,5 @@
     - Different types of noise - Perlin, Simplex, Worley, Celular, fBM    
   - Improve blends over surfaces (instead of min/max)
   - Lattice noise with different grid size (allows to preserve resolution but have less noisy distortion)
+  - Add all of these: https://iquilezles.org/articles/distfunctions/
+    - FUN!

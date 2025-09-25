@@ -17,7 +17,7 @@ namespace UC
         public enum InterpolationMode { Linear, IterativeIso };
 
         [SerializeField]
-        private SDFComponent        sdf;
+        private SDFComponent        _sdf;
         [SerializeField]
         private float               isoValue = 0.0f;
         [SerializeField]
@@ -87,6 +87,11 @@ namespace UC
         public float voxelSizeF => (1.0f / voxelsPerUnit) * ((filter) ? (1 << filterIterations ) : (1));
         public Vector3 voxelSize => Vector3.one * voxelSizeF;
 
+        public SDFComponent sdf
+        {
+            get { return _sdf; }
+            set { _sdf = value; }
+        }
 
         int NextDivisible(int startNumber, int divisionCount)
         {
@@ -98,7 +103,7 @@ namespace UC
         public void Build()
         {
             // Create the voxel field
-            Bounds bounds = sdf.GetBounds();
+            Bounds bounds = _sdf.GetBounds();
             if (isoValue > 0.0f) bounds.Expand(isoValue * 2.2f);
 
             // Give some margin to the bounds
@@ -165,7 +170,7 @@ namespace UC
                     for (int z = 0; z < gs.z; z++)
                     {
                         var worldPoint = GetPos(x, y, z);
-                        var value = sdf.Sample(worldPoint);
+                        var value = _sdf.Sample(worldPoint);
                         if (value < distanceRange.x) distanceRange.x = value;
                         if (value > distanceRange.y) distanceRange.y = value;
 
@@ -193,7 +198,7 @@ namespace UC
             FindIsoRoot InterpolateVertex = VertexLinearInterpolation;
             if (interpolationMode == InterpolationMode.IterativeIso)
             {
-                InterpolateVertex = (iso, p1, p2, v1, v2) => EdgeIsoPoint((pos) => sdf.Sample(pos), p1, p2, v1, v2, iso, 5);
+                InterpolateVertex = (iso, p1, p2, v1, v2) => EdgeIsoPoint((pos) => _sdf.Sample(pos), p1, p2, v1, v2, iso, 5);
             }
 
             var verts = new List<Vector3>(8192);
@@ -297,9 +302,9 @@ namespace UC
             Vector3 EstimateNormal(Vector3 pos, float h)
             {
                 // Central differences on SDF
-                float dx = sdf.Sample(new Vector3(pos.x + h, pos.y, pos.z)) - sdf.Sample(new Vector3(pos.x - h, pos.y, pos.z));
-                float dy = sdf.Sample(new Vector3(pos.x, pos.y + h, pos.z)) - sdf.Sample(new Vector3(pos.x, pos.y - h, pos.z));
-                float dz = sdf.Sample(new Vector3(pos.x, pos.y, pos.z + h)) - sdf.Sample(new Vector3(pos.x, pos.y, pos.z - h));
+                float dx = _sdf.Sample(new Vector3(pos.x + h, pos.y, pos.z)) - _sdf.Sample(new Vector3(pos.x - h, pos.y, pos.z));
+                float dy = _sdf.Sample(new Vector3(pos.x, pos.y + h, pos.z)) - _sdf.Sample(new Vector3(pos.x, pos.y - h, pos.z));
+                float dz = _sdf.Sample(new Vector3(pos.x, pos.y, pos.z + h)) - _sdf.Sample(new Vector3(pos.x, pos.y, pos.z - h));
                 var n = new Vector3(dx, dy, dz);
                 return n.sqrMagnitude > 0f ? n.normalized : Vector3.up;
             }
@@ -339,7 +344,7 @@ namespace UC
                         if (cubeIndex == 0 || cubeIndex == 255) continue;
 
                         // Optional: center-sample hint for ambiguity resolution / tiebreaks
-                        float centerVal = sdf.Sample(GetPos(x, y, z) + voxelSize * 0.5f);
+                        float centerVal = _sdf.Sample(GetPos(x, y, z) + voxelSize * 0.5f);
                         float epsBias = ResolveAmbiguityHint(centerVal); // small bias for interpolation/ties
 
                         int edgeFlags = MCTables.MC_EDGE_TABLE[cubeIndex];
@@ -813,7 +818,7 @@ namespace UC
                         int edgeMask = MCTables.MC_EDGE_TABLE[cubeIndex];
 
                         float r = voxelData.voxelSize.magnitude * 0.08f;
-                        var sampleFn = new Func<Vector3, float>(pos => sdf.Sample(pos));
+                        var sampleFn = new Func<Vector3, float>(pos => _sdf.Sample(pos));
 
                         for (int e = 0; e < 12; e++)
                         {

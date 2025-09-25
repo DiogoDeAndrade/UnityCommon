@@ -67,6 +67,11 @@ namespace UC
 #if UNITY_6000_0_OR_NEWER
         public override void DrawGizmos()
         {
+            if (ownerGameObject == null)
+            {
+                Debug.LogWarning($"No owner object on SDFBox {name}, cannot draw gizmos.");
+                return;
+            }
             Gizmos.matrix = ownerGameObject.transform.localToWorldMatrix * Matrix4x4.TRS(offset, rotation, Vector3.one);
             Gizmos.DrawCube(Vector3.zero, size);
         }

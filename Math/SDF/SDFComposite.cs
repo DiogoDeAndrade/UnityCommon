@@ -51,6 +51,9 @@ namespace UC
 #if UNITY_6000_0_OR_NEWER
         public override void DrawGizmos()
         {
+            if (operands == null) return;
+            if (operands.Length == 0) return;
+
             switch (op)
             {
                 case Operation.Union:
