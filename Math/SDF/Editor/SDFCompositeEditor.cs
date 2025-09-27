@@ -8,11 +8,15 @@ namespace UC
     public class SDFCompositeEditor : Editor
     {
         SerializedProperty op;
+        SerializedProperty smoothK;
+        SerializedProperty localMaskRadius;
         SerializedProperty operands;
 
         void OnEnable()
         {
             op = serializedObject.FindProperty("op");
+            smoothK = serializedObject.FindProperty("smoothK");
+            localMaskRadius = serializedObject.FindProperty("localMaskRadius");
             operands = serializedObject.FindProperty("operands");
         }
 
@@ -21,6 +25,12 @@ namespace UC
             serializedObject.Update();
 
             EditorGUILayout.PropertyField(op);
+
+            if (op.enumValueIndex == (int)SDFComposite.Operation.SmoothUnion)
+            {
+                EditorGUILayout.PropertyField(smoothK);
+                EditorGUILayout.PropertyField(localMaskRadius);
+            }
 
             // Manually draw each element of 'operands'
             EditorGUILayout.LabelField("Operands:");

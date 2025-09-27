@@ -230,6 +230,21 @@ namespace UC
             return Vector3.Cross(v, bestAxis).normalized;
         }
 
+        public static Vector2 ComponentScale(this Vector2 v, Vector2 scale)
+        {
+            return new Vector2(v.x * scale.x, v.y * scale.y);
+        }
+
+        public static Vector3 ComponentScale(this Vector3 v, Vector3 scale)
+        {
+            return new Vector3(v.x * scale.x, v.y * scale.y, v.z * scale.z);
+        }
+
+        public static Vector4 ComponentScale(this Vector4 v, Vector4 scale)
+        {
+            return new Vector4(v.x * scale.x, v.y * scale.y, v.z * scale.z, v.w * scale.w);
+        }
+
         public static Vector2Int xy(this Vector3Int v)
         {
             return new Vector2Int(v.x, v.y);

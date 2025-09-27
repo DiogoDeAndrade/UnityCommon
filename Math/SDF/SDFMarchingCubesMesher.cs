@@ -26,8 +26,8 @@ namespace UC
         private NormalMode          normalMode;
         [SerializeField]
         private float               voxelsPerUnit = 1.0f;
-        [SerializeField, Range(0, 1)]
-        private float               boundExtension = 0.25f;
+        [SerializeField]
+        private Vector3             boundExtension = new Vector3(0.25f, 0.25f, 0.25f);
         [SerializeField]
         private bool                filter;
         [SerializeField, ShowIf(nameof(filter)), Range(1, 4)]
@@ -102,12 +102,17 @@ namespace UC
         [Button("Build")]
         public void Build()
         {
+            if (_sdf == null)
+            {
+                Debug.LogWarning("No SDF assigned to SDFMarchingCubesMesher.");
+                return;
+            }
             // Create the voxel field
             Bounds bounds = _sdf.GetBounds();
             if (isoValue > 0.0f) bounds.Expand(isoValue * 2.2f);
 
             // Give some margin to the bounds
-            bounds.Expand(bounds.size * boundExtension);
+            bounds.Expand(bounds.size.ComponentScale(boundExtension));
 
             Vector3Int gs = new Vector3Int(Mathf.CeilToInt(bounds.size.x * voxelsPerUnit) + 1,
                                            Mathf.CeilToInt(bounds.size.y * voxelsPerUnit) + 1,

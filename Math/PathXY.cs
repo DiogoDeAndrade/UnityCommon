@@ -784,7 +784,7 @@ namespace UC
             {
                 Vector3 a = renderPoints[i - 1];
                 Vector3 b = renderPoints[i];
-                float d = Line.Distance(a, b, point, out var pt);
+                float d = LineHelpers.Distance(a, b, point, out var pt);
                 if (d < minDist)
                 {
                     minDist = d;
@@ -800,28 +800,31 @@ namespace UC
         private void OnDrawGizmos()
         {
             Handles.color = Color.yellow;
+            DrawHandles(5, true);
+        }
+#endif
 
-            int everyNth = 5;
-
+        public void DrawHandles(int everyNthDrawPerpendicular = 0, bool drawPoints = false)
+        {
             var renderPoints = GetPoints();
             for (int i = 1; i < renderPoints.Count; i++)
             {
                 Handles.DrawLine(renderPoints[i - 1], renderPoints[i], 1.0f);
 
-                if ((i % everyNth) == 0)
+                if ((everyNthDrawPerpendicular > 0) && ((i % everyNthDrawPerpendicular) == 0))
                 {
                     var dir = (renderPoints[i] - renderPoints[i - 1]);
                     var length = dir.magnitude;
                     dir = dir.normalized.PerpendicularXY();
 
-                    Handles.color = Color.yellow.ChangeAlpha(0.25f);
+                    Handles.color = Handles.color.ChangeAlpha(0.25f);
                     Handles.DrawLine(renderPoints[i], renderPoints[i - 1] + dir * length * 0.5f, 2.0f);
                     Handles.DrawLine(renderPoints[i], renderPoints[i - 1] - dir * length * 0.5f, 2.0f);
-                    Handles.color = Color.yellow;
+                    Handles.color = Handles.color;
                 }
             }
 
-            if ((points != null) && (type != Type.Bezier))
+            if ((points != null) && (type != Type.Bezier) && (drawPoints))
             {
                 float s = 1.0f;
                 for (int i = 0; i < points.Count; i++)
@@ -834,6 +837,5 @@ namespace UC
                 }
             }
         }
-#endif
     }
 }

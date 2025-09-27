@@ -122,7 +122,7 @@ namespace UC
                 Vector3 p1 = vertices[i1];
                 Vector3 p2 = vertices[i2];
 
-                float dist = Line.Distance(p0, p2, p1);
+                float dist = LineHelpers.Distance(p0, p2, p1);
                 float error = (dist * (p2 - p0).magnitude) * 0.5f;
                 if ((error + currentError) <= maxDistance)
                 {
