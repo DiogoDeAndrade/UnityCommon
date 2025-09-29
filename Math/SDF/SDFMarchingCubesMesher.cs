@@ -669,6 +669,26 @@ namespace UC
             }
         }
 
+        [Button("Test SDF at Debug Point")]
+        void TestSDFAtDebugPoint()
+        {
+            if (debugPoint != null)
+            {
+                if (_sdf != null)
+                {
+                    float v = _sdf.Sample(debugPoint.position);
+                    Debug.Log($"SDF at {debugPoint.position} = {v}");
+                }
+                else
+                {
+                    Debug.LogWarning("No SDF assigned to SDFMarchingCubesMesher.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("No debug point assigned to SDFMarchingCubesMesher.");
+            }
+        }
 
         private void OnDrawGizmos()
         {

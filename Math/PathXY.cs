@@ -845,6 +845,96 @@ namespace UC
             return inside ? -dist : dist;
         }
 
+        public bool IsInside(Vector2 p, float thickness = 0f)
+        {
+            var pts = GetPoints();            // world-space polyline/polygon
+            int n = pts.Count;
+            if (n == 0) return false;
+
+            if (isClosed)
+            {
+                // Even-odd ray cast to +X using LineHelpers.Raycast on each edge
+                int hits = 0;
+                // Small vertical bias to avoid hitting vertices exactly
+                Vector3 origin = new Vector3(p.x, p.y + 1e-5f, 0f);
+                Vector3 dir = Vector3.right;
+                const float Range = 1e6f;
+
+                float minEdgeDist = float.PositiveInfinity;
+
+                for (int i = 0, j = n - 1; i < n; j = i, ++i)
+                {
+                    Vector3 a = new Vector3(pts[j].x, pts[j].y, 0f);
+                    Vector3 b = new Vector3(pts[i].x, pts[i].y, 0f);
+
+                    // Track minimum distance to treat a tolerance band as "inside"
+                    {
+                        Vector3 cp;
+                        float tSeg;
+                        LineHelpers.GetClosestPoint(a, b, origin, out tSeg);
+                        cp = a + (b - a) * tSeg;
+                        float d = (origin - cp).magnitude; // ~ distance in 2D
+                        if (d < minEdgeDist) minEdgeDist = d;
+                    }
+
+                    Vector3 isect;
+                    float tRay;
+                    if (LineHelpers.Raycast(origin, dir, Range, a, b, out isect, out tRay))
+                        ++hits;
+                }
+
+                bool inside = (hits & 1) == 1;
+                if (inside) return true;
+                return (thickness > 0f) && (minEdgeDist <= thickness);
+            }
+            else
+            {
+                // Open curve: inside means within "thickness" of the polyline
+                if (thickness <= 0f) return false;
+
+                float best = float.PositiveInfinity;
+                for (int i = 1; i < n; ++i)
+                {
+                    Vector3 a = new Vector3(pts[i - 1].x, pts[i - 1].y, 0f);
+                    Vector3 b = new Vector3(pts[i].x, pts[i].y, 0f);
+                    float d = LineHelpers.Distance(a, b, new Vector3(p.x, p.y, 0f));
+                    if (d < best) best = d;
+                }
+                return best <= thickness;
+            }
+        }
+
+        public Vector2 GetClosestPoint(Vector2 p)
+        {
+            var pts = GetPoints();
+            int n = pts.Count;
+            if (n == 0) return p;
+            if (n == 1) return pts[0];
+
+            float best = float.PositiveInfinity;
+            Vector2 bestPt = pts[0];
+            Vector3 Pw = new Vector3(p.x, p.y, 0f);
+
+            // Search edges (for closed paths, the last edge (n-1)->0 is already present if GetPoints closed;
+            // if not, add it by looping j=n-1 separately as needed).
+            for (int i = 1; i < n; ++i)
+            {
+                Vector3 a = new Vector3(pts[i - 1].x, pts[i - 1].y, 0f);
+                Vector3 b = new Vector3(pts[i].x, pts[i].y, 0f);
+
+                float t;
+                Vector3 cp = LineHelpers.GetClosestPoint(a, b, Pw, out t);
+                float d = (cp - Pw).sqrMagnitude;
+                if (d < best)
+                {
+                    best = d;
+                    bestPt = new Vector2(cp.x, cp.y);
+                }
+            }
+
+            return bestPt;
+        }
+
 
 #if UNITY_EDITOR
         private void OnDrawGizmos()
@@ -886,6 +976,6 @@ namespace UC
                     Handles.DrawLine(p + new Vector2(s, -s), p + new Vector2(-s, s), 1.0f);
                 }
             }
-        }
+        }        
     }
 }

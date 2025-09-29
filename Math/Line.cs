@@ -62,7 +62,7 @@ namespace UC
             return LineHelpers.Raycast(origin, dir, range, p0, p1, out intersection, out tRay, out tLine);
         }
 
-        public (Vector3 center, Vector3 dir, Vector3 up, Vector3 right) GetTangentSpace(float t)
+        public TangentFrame GetTangentSpace(float t)
         {
             // Clamp t for safety
             t = Mathf.Clamp01(t);
@@ -75,7 +75,13 @@ namespace UC
             if (dir.sqrMagnitude < 1e-6f)
             {
                 // Degenerate line: return defaults
-                return (center, Vector3.forward, Vector3.up, Vector3.right);
+                return new TangentFrame
+                {
+                    center = center,
+                    dir = Vector3.forward,
+                    up = Vector3.up,
+                    right = Vector3.right
+                };
             }
 
             // Try to align up with world-up, but keep orthogonal to dir
@@ -97,9 +103,13 @@ namespace UC
             // Recompute up for full orthogonality (stable frame)
             up = Vector3.Cross(right, dir).normalized;
 
-            return (center, dir, up, right);
+            return new TangentFrame
+            {
+                center = center,
+                dir = dir,
+                up = up,
+                right = right
+            };
         }
-
-
     }
 }

@@ -35,3 +35,4 @@ The text and all the other files are made available through the
 [NaughtyAttributes]:https://github.com/dbrizov/NaughtyAttributes
 [UnityUIExtensions]:https://bitbucket.org/UnityUIExtensions/unity-ui-extensions/src/release/
 [UnityMeshSimplifier]:https://github.com/Whinarn/UnityMeshSimplifier
+[MadWorldNL EarCut]:https://github.com/MadWorldNL/EarCut
