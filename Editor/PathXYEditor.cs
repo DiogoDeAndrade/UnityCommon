@@ -32,7 +32,9 @@ namespace UC
 
         static void UpdatePathEditors(SceneView sceneView)
         {
-            Event e = Event.current;
+            // Enabling this code makes all PathXY that are close (in world coordinates) to the mouse click to activate, which
+            // sometimes makes it hard to use the viewport - need a better solution for this 
+           /* Event e = Event.current;
 
             if ((e.type == EventType.MouseDown) && (e.button == 0))
             {
@@ -56,7 +58,7 @@ namespace UC
                         break;
                     }
                 }
-            }
+            }*/
         }
 
         protected override void OnEnable()
@@ -454,20 +456,6 @@ namespace UC
             if (t == null) return;
 
             RenderPath(t, false);
-        }
-
-        void DrawPath(PathXY.Type type, List<Vector3> points, Color color, bool drawDirection)
-        {
-            if (points == null) return;
-
-            Handles.color = color;
-
-            for (int i = 1; i < points.Count; i++)
-            {
-                Vector2 p = points[i - 1];
-
-                Handles.DrawLine(p, points[i], 1.0f);
-            }
         }
 
         protected override GUIStyle GetTitleSyle()

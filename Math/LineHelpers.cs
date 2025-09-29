@@ -214,5 +214,16 @@ namespace UC
 
             return p0 + dp * t;
         }
+
+        public static Vector3 GetClosestPoint(Vector3 p0, Vector3 p1, Vector3 p, out float t)
+        {
+            Vector3 dp = (p1 - p0).normalized;
+            float len = (p1 - p0).magnitude;
+            t = Mathf.Clamp(Vector3.Dot(dp, p - p0), 0, len);
+
+            var ret = p0 + dp * t;
+            t /= len;
+            return ret;
+        }
     }
 }

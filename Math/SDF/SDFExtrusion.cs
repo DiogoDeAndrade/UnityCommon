@@ -1,8 +1,10 @@
 using NaughtyAttributes;
+using NUnit.Framework.Internal;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace UC
 {
@@ -46,17 +48,22 @@ namespace UC
             Bounds bounds = new Bounds();
             bool first = true;
 
+            // Convert all segments to world space
+            List<Line> worldSegments = new();
             foreach (var seg in segments)
             {
                 TransformEndpointsLocalToWorld(seg, offset, rotation, M, out var aW, out var bW);
 
-                // build a temporary world-space line so we can reuse GetTangentSpace
-                Line wLine = new Line { p0 = aW, p1 = bW };
+                worldSegments.Add(new Line { p0 = aW, p1 = bW });
+            }
 
+            // Check all segments points and updated bounds appropriately
+            foreach (var seg in worldSegments)
+            {
                 float[] ts = { 0f, 0.5f, 1f };
                 foreach (float t in ts)
                 {
-                    var (center, dir, up, right) = wLine.GetTangentSpace(t);  
+                    var (center, dir, up, right) = seg.GetTangentSpace(t);  
 
                     foreach (var p in profile)
                     {
@@ -99,124 +106,131 @@ namespace UC
                 hasClosedProfile = extrusionShape.isClosed;
             }
 
-            float best = float.PositiveInfinity;
-
+            // Convert all segments to world space, and find closest one
+            Line        closestSegment = null;
+            float       closestDistanceToSegment = float.PositiveInfinity;
+            List<Line>  worldSegments = new();
             foreach (var seg in segments)
             {
                 TransformEndpointsLocalToWorld(seg, offset, rotation, M, out var aW, out var bW);
 
-                Vector3 T = bW - aW;
+                var worldLine = new Line { p0 = aW, p1 = bW };
+                worldSegments.Add(worldLine);
+
+                float d = worldLine.GetDistance(worldPoint);
+                if (d < closestDistanceToSegment)
+                {
+                    closestSegment = worldLine;
+                    closestDistanceToSegment = d;
+                }
+            }
+
+            // Found the best segment, now compute distance to profile at that segment/point
+            float bestDistance = float.PositiveInfinity;
+
+            Vector3 cp; // Closest point on segment
+            cp = closestSegment.GetClosestPoint(worldPoint, out float t);
+
+            (var center, var dir, var up, var right) = closestSegment.GetTangentSpace(t);
+
+            Vector3 rel = worldPoint - center;
+            Vector2 q2 = new Vector2(Vector3.Dot(rel, right), Vector3.Dot(rel, up));
+
+            // Rescale q2 based on scale
+            if (extrusionShapeScale.x != 0.0f) q2.x /= extrusionShapeScale.x;
+            else q2.x = 0.0f;
+            if (extrusionShapeScale.y != 0.0f) q2.y /= extrusionShapeScale.y;
+            else q2.y = 0.0f;
+
+            float distance = 0.0f;
+            if (extrusionShape == null)
+            {
+                // Make extrusion shape be a circle with the given thickness
+                distance = q2.magnitude - thickness;
+            }
+            else
+            {
+                distance = extrusionShape.GetSignedDistance(q2);
+                if (!extrusionShape.isClosed) distance -= thickness;
+            }
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                /*bestLine = seg;
+                bestPoint = cp;
+                bestT = t;
+                bestPlaneNormal = dir;*/
+            }
+
+            // Find closest point on any segment
+            /*float   bestDistance = float.PositiveInfinity;
+            Line    bestLine = null;
+            Vector3 bestPoint = Vector3.zero;
+            float   bestT = 0.0f;
+            Vector3 bestPlaneNormal = Vector2.zero;
+
+            foreach (var seg in worldSegments)
+            {
+                Vector3 T = seg.p1 - seg.p0;
                 float L = T.magnitude;
                 if (L < 1e-6f) continue;
-                Vector3 dir = T / L;
 
                 Vector3 cp; // Closest point on segment
-                LineHelpers.Distance(aW, bW, worldPoint, out cp);
+                cp = seg.GetClosestPoint(worldPoint, out float t);
 
-                // Build an "up-ish" frame (dir = tangent, up = world up projected, right = dir × up)
-                Vector3 worldUp = Vector3.up;
-                Vector3 up = worldUp - Vector3.Dot(worldUp, dir) * dir;
-                if (up.sqrMagnitude < 1e-6f) // near-vertical fallback
-                {
-                    worldUp = Vector3.forward;
-                    up = worldUp - Vector3.Dot(worldUp, dir) * dir;
-                }
-                up.Normalize();
-                Vector3 right = Vector3.Cross(dir, up).normalized;
-                // Re-orthogonalize up for numerical stability
-                up = Vector3.Cross(right, dir).normalized;
+                (var center, var dir, var up, var right) = seg.GetTangentSpace(t);
 
-                Vector3 rel = worldPoint - cp;
+                Vector3 rel = worldPoint - center;
                 Vector2 q2 = new Vector2(Vector3.Dot(rel, right), Vector3.Dot(rel, up));
 
-                float d2D;
+                // Rescale q2 based on scale
+                if (extrusionShapeScale.x != 0.0f) q2.x /= extrusionShapeScale.x;
+                else q2.x = 0.0f;
+                if (extrusionShapeScale.y != 0.0f) q2.y /= extrusionShapeScale.y;
+                else q2.y = 0.0f;
 
-                if ((profile != null) && (profile.Count > 0))
+                float distance = 0.0f;
+                if (extrusionShape == null)
                 {
-                    if (hasClosedProfile)
-                    {
-                        d2D = SignedDistanceToPolygon2D(q2, profile, extrusionShapeScale);
-                    }
-                    else
-                    {
-                        d2D = DistanceToPolyline2D(q2, profile, extrusionShapeScale) - thickness;
-                    }
+                    // Make extrusion shape be a circle with the given thickness
+                    distance = q2.magnitude - thickness;
                 }
                 else
                 {
-                    // No profile provided -> treat as a circular tube with radius = thickness
-                    d2D = q2.magnitude - thickness;
+                    distance = extrusionShape.GetSignedDistance(q2);
+                    if (!extrusionShape.isClosed) distance -= thickness;
                 }
 
-                if (d2D < best) best = d2D;
-            }
-
-            return best;
-        }
-
-        // Distance from a point to an open polyline (scaled)
-        private static float DistanceToPolyline2D(in Vector2 p, List<Vector3> poly, in Vector2 scale)
-        {
-            float best = float.PositiveInfinity;
-
-            if (poly.Count == 1)
-            {
-                Vector2 a = new Vector2(poly[0].x * scale.x, poly[0].y * scale.y);
-                return Vector2.Distance(p, a);
-            }
-
-            for (int i = 1; i < poly.Count; ++i)
-            {
-                Vector2 a = new Vector2(poly[i - 1].x * scale.x, poly[i - 1].y * scale.y);
-                Vector2 b = new Vector2(poly[i].x * scale.x, poly[i].y * scale.y);
-
-                // point -> segment distance in 2D
-                Vector2 ab = b - a;
-                float ab2 = Vector2.Dot(ab, ab);
-                if (ab2 < 1e-12f)
+                if (distance < bestDistance)
                 {
-                    best = Mathf.Min(best, Vector2.Distance(p, a));
-                    continue;
+                    bestDistance = distance;
+                    bestLine = seg;
+                    bestPoint = cp;
+                    bestT = t;
+                    bestPlaneNormal = dir;
                 }
-                float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab2);
-                Vector2 c = a + t * ab;
-                best = Mathf.Min(best, Vector2.Distance(p, c));
             }
-            return best;
-        }
 
-        // Signed distance to a closed polygon (scaled):
-        // outside -> positive, inside -> negative. Uses edge distance with even-odd inside test.
-        private static float SignedDistanceToPolygon2D(in Vector2 p, List<Vector3> poly, in Vector2 scale)
-        {
-            int n = poly.Count;
-            if (n == 0) return float.PositiveInfinity;
-
-            float dist = float.PositiveInfinity;
-
-            bool inside = false;
-
-            // We iterate edges (i -> j), where j = (i+1) % n.
-            for (int i = 0, j = n - 1; i < n; j = i, ++i)
+            if (bestDistance != float.PositiveInfinity)
             {
-                Vector2 Pi = new Vector2(poly[i].x * scale.x, poly[i].y * scale.y);
-                Vector2 Pj = new Vector2(poly[j].x * scale.x, poly[j].y * scale.y);
+                if ((bestT < 1e-6) || (bestT > (1.0f - 1e-6)))
+                {
+                    // Closest point is on an endpoint of a segment, we need to add the caps
+                    if (bestDistance < 0.0f)
+                    {
+                        // The projected point is inside the profile, the distance is the distance to the plane of the segment
+                        if (bestT <= 0.0f) bestPlaneNormal = -bestPlaneNormal;
+                        bestDistance = Vector3.Dot(worldPoint - bestPoint, bestPlaneNormal);
+                    }
+                    else
+                    {
+                        // The distance is the distance to the segment itself
+                    }
+                }
+            }*/
 
-                // Edge distance
-                Vector2 e = Pj - Pi;
-                float e2 = Vector2.Dot(e, e);
-                float t = (e2 > 1e-12f) ? Mathf.Clamp01(Vector2.Dot(p - Pi, e) / e2) : 0f;
-                Vector2 c = Pi + t * e;
-                dist = Mathf.Min(dist, Vector2.Distance(p, c));
-
-                // Inside test (ray cast on Y)
-                // Toggle inside if edge straddles the horizontal ray to the right of p.
-                bool cond = ((Pi.y > p.y) != (Pj.y > p.y)) &&
-                            (p.x < (Pj.x - Pi.x) * (p.y - Pi.y) / (Pj.y - Pi.y + Mathf.Epsilon) + Pi.x);
-                if (cond) inside = !inside;
-            }
-
-            return inside ? -dist : dist;
+            return bestDistance;
         }
 
 #if UNITY_6000_0_OR_NEWER

@@ -37,6 +37,11 @@ namespace UC
             return LineHelpers.GetClosestPoint(p0, p1, p);
         }
 
+        public Vector3 GetClosestPoint(Vector3 p, out float t)
+        {
+            return LineHelpers.GetClosestPoint(p0, p1, p, out t);
+        }
+
         public bool Intersect(Line otherLine, out Vector3 intersection)
         {
             return LineHelpers.Intersect2d(p0, p1, otherLine.p0, otherLine.p1, out intersection);

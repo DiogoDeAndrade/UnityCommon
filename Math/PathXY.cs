@@ -796,6 +796,56 @@ namespace UC
             return (minDist, closestPoint, direction);
         }
 
+        public float GetSignedDistance(Vector2 pt)
+        {
+            if (isClosed)
+            {
+                return GetSignedDistanceToPolygon2D(pt);
+            }
+            else
+            {
+                var ret = GetDistance(pt);
+                return ret.distance;
+            }
+        }
+
+        // Signed distance to a closed polygon (scaled):
+        // outside -> positive, inside -> negative. Uses edge distance with even-odd inside test.
+        private float GetSignedDistanceToPolygon2D(in Vector2 p)
+        {
+            var poly = GetPoints();
+
+            int n = poly.Count;
+            if (n == 0) return float.PositiveInfinity;
+
+            float dist = float.PositiveInfinity;
+
+            bool inside = false;
+
+            // We iterate edges (i -> j), where j = (i+1) % n.
+            for (int i = 0, j = n - 1; i < n; j = i, ++i)
+            {
+                Vector2 Pi = new Vector2(poly[i].x, poly[i].y);
+                Vector2 Pj = new Vector2(poly[j].x, poly[j].y);
+
+                // Edge distance
+                Vector2 e = Pj - Pi;
+                float e2 = Vector2.Dot(e, e);
+                float t = (e2 > 1e-12f) ? Mathf.Clamp01(Vector2.Dot(p - Pi, e) / e2) : 0f;
+                Vector2 c = Pi + t * e;
+                dist = Mathf.Min(dist, Vector2.Distance(p, c));
+
+                // Inside test (ray cast on Y)
+                // Toggle inside if edge straddles the horizontal ray to the right of p.
+                bool cond = ((Pi.y > p.y) != (Pj.y > p.y)) &&
+                            (p.x < (Pj.x - Pi.x) * (p.y - Pi.y) / (Pj.y - Pi.y + Mathf.Epsilon) + Pi.x);
+                if (cond) inside = !inside;
+            }
+
+            return inside ? -dist : dist;
+        }
+
+
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
