@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -165,6 +166,11 @@ namespace UC
             horizontalControl.playerInput = playerInput;
             verticalControl.playerInput = playerInput;
             interactControl.playerInput = playerInput;
+        }
+
+        public void SetEnable(bool b)
+        {
+            _uiEnable = b;
         }
     }
 }

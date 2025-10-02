@@ -303,6 +303,8 @@ namespace UC
         const float c3 = c1 + 1;
 
         static public float OutBack(float t) => 1 + c3 * Mathf.Pow(t - 1, 3) + c1 * Mathf.Pow(t - 1, 2);
+
+        static public float Bounce(float t) => 1 - Mathf.Pow(2.0f * t - 1, 2);
     }
 
 
