@@ -64,7 +64,7 @@ namespace UC
             return Vector3.Dot(ToLocalPoint(worldPoint), normal) - d;
         }
 
-#if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER && UNITY_EDITOR
         public override void DrawGizmos()
         {
             Gizmos.matrix = ownerGameObject.transform.localToWorldMatrix * Matrix4x4.TRS(normal * d, Quaternion.LookRotation(normal.Perpendicular(), normal), Vector3.one);

@@ -82,7 +82,7 @@ namespace UC
             return Mathf.Min(a, b) - h * h * h * k * (1.0f / 6.0f); // variant with C2 continuity
         }
 
-#if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER && UNITY_EDITOR
         public override void DrawGizmos()
         {
             if (operands == null) return;

@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 
 namespace UC
 {
@@ -942,7 +944,6 @@ namespace UC
             Handles.color = Color.yellow;
             DrawHandles(5, true);
         }
-#endif
 
         public void DrawHandles(int everyNthDrawPerpendicular = 0, bool drawPoints = false)
         {
@@ -976,6 +977,7 @@ namespace UC
                     Handles.DrawLine(p + new Vector2(s, -s), p + new Vector2(-s, s), 1.0f);
                 }
             }
-        }        
+        }
+#endif
     }
 }

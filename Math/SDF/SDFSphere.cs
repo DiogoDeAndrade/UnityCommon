@@ -23,7 +23,7 @@ namespace UC
             return Vector3.Distance(offset, ToLocalPoint(worldPoint)) - radius;
         }
 
-#if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER && UNITY_EDITOR
         public override void DrawGizmos()
         {
             Gizmos.matrix = ownerGameObject.transform.localToWorldMatrix;
