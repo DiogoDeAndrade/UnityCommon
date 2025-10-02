@@ -27,7 +27,7 @@ namespace UC
         public Vector3 ToLocalPoint(Vector3 worldPoint) => worldPoint;
 #endif
 
-#if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER && UNITY_EDITOR
         public GameObject ownerGameObject;
 
         public abstract void DrawGizmos();

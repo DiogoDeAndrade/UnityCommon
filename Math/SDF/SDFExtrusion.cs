@@ -448,7 +448,7 @@ namespace UC
         }*/
 
 
-#if UNITY_6000_0_OR_NEWER
+#if UNITY_6000_0_OR_NEWER && UNITY_EDITOR
         public override void DrawGizmos()
         {
             if (ownerGameObject == null)
