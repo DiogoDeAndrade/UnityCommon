@@ -14,6 +14,7 @@ namespace UC
         public delegate void OnChange(BaseUIControl control);
         public delegate void OnInteract(BaseUIControl control);
         public delegate void OnUIEnableToggle(bool value, BaseUIControl control);
+        public delegate bool CanSelect(BaseUIControl control);
 
         [SerializeField] protected Image highlighterImage;
         [SerializeField] protected TextMeshProUGUI highlighterText;
@@ -24,12 +25,24 @@ namespace UC
         [SerializeField] protected BaseUIControl _navRight;
         [SerializeField] protected AudioClip changeSnd;
 
-        protected UIGroup parentGroup;
-        Color defaultTextColor;
+        protected UIGroup   parentGroup;
+        Color               defaultTextColor;
+        CanvasGroup         canvasGroup;
 
         private bool needHighlightColor => highlighterText != null;
 
         public bool isSelected => (parentGroup.uiEnable) && (parentGroup.selectedControl == this);
+        public bool isSelectable
+        {
+            get
+            {
+                if (canSelect == null) return true;
+                bool ok = true;
+                foreach (CanSelect handler in canSelect.GetInvocationList())
+                    ok &= handler(this);
+                return ok;
+            }
+        }
         public BaseUIControl navUp => _navUp;
         public BaseUIControl navDown => _navDown;
         public BaseUIControl navLeft => _navLeft;
@@ -40,10 +53,12 @@ namespace UC
         public event OnChange onChange;
         public event OnInteract onInteract;
         public event OnUIEnableToggle onUIToggle;
+        public event CanSelect canSelect;
 
         protected virtual void Start()
         {
             parentGroup = GetComponentInParent<UIGroup>();
+            canvasGroup = GetComponent<CanvasGroup>();
 
             if (highlighterText)
             {
@@ -53,6 +68,23 @@ namespace UC
 
         protected virtual void Update()
         {
+            if (canSelect != null)
+            {
+                var result = true;
+                foreach (CanSelect handler in canSelect.GetInvocationList())
+                {
+                    result &= handler(this);
+                }
+
+                if (result)
+                {
+                    if (canvasGroup) canvasGroup.alpha = 1.0f;
+                }
+                else
+                {
+                    if (canvasGroup) canvasGroup.alpha = 0.25f;
+                }
+            }
             if (highlighterImage)
             {
                 highlighterImage.enabled = isSelected && parentGroup.uiEnable;
@@ -102,9 +134,26 @@ namespace UC
         {
             if (isDown)
             {
-                if ((dz < -0.1f) && (_navLeft)) parentGroup.SetControl(_navLeft);
-                else if ((dz > 0.1f) && (_navRight)) parentGroup.SetControl(_navRight);
+                if ((dz < -0.1f) && (_navLeft)) parentGroup.SetControl(NextSelectable(_navLeft, c => c._navLeft));
+                else if ((dz > 0.1f) && (_navRight)) parentGroup.SetControl(NextSelectable(_navRight, c => c._navRight));
             }
+        }
+
+        private BaseUIControl NextSelectable(BaseUIControl from, Func<BaseUIControl, BaseUIControl> step)
+        {
+            if (from == null) return null;
+            var start = from;
+            var cur = step(from);
+            int hops = 0;
+
+            while (cur != null && !cur.isSelectable && cur != start && hops < 128)
+            {
+                cur = step(cur);
+                hops++;
+            }
+
+            // If we found a selectable control, use it; otherwise, stay where we are.
+            return (cur != null && cur.isSelectable) ? cur : from;
         }
 
         public virtual void Interact()

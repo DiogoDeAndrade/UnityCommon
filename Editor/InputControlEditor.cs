@@ -221,29 +221,26 @@ namespace UC
         {
             // Retrieve the InputPlayer attribute, if it exists
             InputPlayerAttribute inputPlayerAttr = fieldInfo.GetCustomAttribute<InputPlayerAttribute>();
+            string playerInputFieldName = inputPlayerAttr != null ? inputPlayerAttr.PlayerInputFieldName : "playerInput";
 
             PlayerInput playerInputReference = null;
 
-            // Attempt to retrieve the PlayerInput reference if InputPlayerAttribute is present
-            if (inputPlayerAttr != null)
+            // Get the object (e.g., the MonoBehaviour instance) that contains this property
+            object targetObject = property.serializedObject.targetObject;
+
+            // Use reflection to get the specified field by name
+            FieldInfo playerInputField = targetObject.GetType().GetField(playerInputFieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (playerInputField != null)
             {
-                // Get the object (e.g., the MonoBehaviour instance) that contains this property
-                object targetObject = property.serializedObject.targetObject;
-
-                // Use reflection to get the specified field by name
-                FieldInfo playerInputField = targetObject.GetType().GetField(inputPlayerAttr.PlayerInputFieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-                if (playerInputField != null)
+                playerInputReference = playerInputField.GetValue(targetObject) as PlayerInput;
+            }
+            else
+            {
+                if (!alreadyWarned)
                 {
-                    playerInputReference = playerInputField.GetValue(targetObject) as PlayerInput;
-                }
-                else
-                {
-                    if (!alreadyWarned)
-                    {
-                        Debug.LogWarning($"Field '{inputPlayerAttr.PlayerInputFieldName}' not found on {targetObject.GetType().Name}");
-                        alreadyWarned = true;
-                    }
+                    Debug.LogWarning($"Field '{playerInputFieldName}' not found on {targetObject.GetType().Name}");
+                    alreadyWarned = true;
                 }
             }
 
