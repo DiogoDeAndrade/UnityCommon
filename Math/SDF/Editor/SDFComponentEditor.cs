@@ -5,14 +5,14 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
-namespace UC
+namespace UC.Editor
 {
 
     /// Custom editor for the SDFComponent.  
     [CustomEditor(typeof(SDFComponent))]
-    public class SDFComponentEditor : Editor
+    public class SDFComponentEditor : UnityEditor.Editor
     {
-        private Editor _sdfEditor;
+        private UnityEditor.Editor _sdfEditor;
 
         SerializedProperty sdf;
         SerializedProperty debugDisplay;

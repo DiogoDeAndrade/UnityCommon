@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace UC
+namespace UC.Editor
 {
     [CustomEditor(typeof(HypertaggedObject), true)]
     [CanEditMultipleObjects]

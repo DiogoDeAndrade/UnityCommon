@@ -2,11 +2,11 @@ using UnityEditor;
 using UnityEngine;
 using UC;
 
-namespace UC
+namespace UC.Editor
 {
 
     [CustomEditor(typeof(Order2dConfig))]
-    public class Order2dConfigEditor : Editor
+    public class Order2dConfigEditor : UnityEditor.Editor
     {
         SerializedProperty _orderMode;
         SerializedProperty _orderScaleY;

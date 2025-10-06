@@ -2,10 +2,10 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace UC
+namespace UC.Editor
 {
     [CustomEditor(typeof(SDFSphere), true)]
-    public class SDFSphereEditor : Editor
+    public class SDFSphereEditor : UnityEditor.Editor
     {
         SerializedProperty offsetProp;
         SerializedProperty radiusProp;

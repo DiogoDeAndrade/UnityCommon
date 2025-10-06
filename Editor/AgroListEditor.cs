@@ -1,11 +1,11 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace UC
+namespace UC.Editor
 {
 
     [CustomEditor(typeof(AgroList))]
-    public class AgroListEditor : Editor
+    public class AgroListEditor : UnityEditor.Editor
     {
         private const int MaxDisplayed = 10;
         private SerializedProperty refreshTimeProp;

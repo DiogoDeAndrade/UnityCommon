@@ -2,14 +2,14 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace UC
+namespace UC.Editor
 {
 
     public static class EditorHelpers
     {
         public static void RepaintInspector(System.Type t)
         {
-            Editor[] ed = (Editor[])Resources.FindObjectsOfTypeAll<Editor>();
+            var ed = Resources.FindObjectsOfTypeAll<UnityEditor.Editor>();
             for (int i = 0; i < ed.Length; i++)
             {
                 if (ed[i].GetType() == t)
@@ -19,9 +19,9 @@ namespace UC
                 }
             }
         }
-        public static void RepaintInspector<T>() where T : Editor
+        public static void RepaintInspector<T>() where T : UnityEditor.Editor
         {
-            Editor[] ed = (Editor[])Resources.FindObjectsOfTypeAll<Editor>();
+            var ed = Resources.FindObjectsOfTypeAll<UnityEditor.Editor>();
             for (int i = 0; i < ed.Length; i++)
             {
                 if (ed[i] as T != null)

@@ -2,10 +2,10 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace UC
+namespace UC.Editor
 {
     [CustomEditor(typeof(SDFComposite), true)]
-    public class SDFCompositeEditor : Editor
+    public class SDFCompositeEditor : UnityEditor.Editor
     {
         SerializedProperty op;
         SerializedProperty smoothK;

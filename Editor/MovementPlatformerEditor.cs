@@ -2,7 +2,7 @@ using NaughtyAttributes;
 using UnityEditor;
 using UnityEngine;
 
-namespace UC
+namespace UC.Editor
 {
 
     [CustomEditor(typeof(MovementPlatformer))]
