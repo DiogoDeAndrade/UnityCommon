@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -198,6 +200,46 @@ namespace UC
                 }
             }
             return null;
+        }
+
+        public static T[] GetComponentsInChildrenAndParent<T>(this GameObject gameObject, bool includeInactive = false) where T : Component
+        {
+            var children = gameObject.GetComponentsInChildren<T>();
+            var parent = gameObject.GetComponentsInParent<T>();
+            if (children.Length == 0)
+            {
+                return parent;
+            }
+            else if (parent.Length == 0)
+            {
+                return children;
+            }
+
+            HashSet<T> ret = new();
+            foreach (var c in children) ret.Add(c);
+            foreach (var p in parent) ret.Add(p);
+
+            return ret.ToArray();
+        }
+
+        public static T[] GetComponentsInChildrenAndParent<T>(this Component component, bool includeInactive = false) where T : Component
+        {
+            var children = component.GetComponentsInChildren<T>();
+            var parent = component.GetComponentsInParent<T>();
+            if (children.Length == 0)
+            {
+                return parent;
+            }
+            else if (parent.Length == 0)
+            {
+                return children;
+            }
+
+            HashSet<T> ret = new();
+            foreach (var c in children) ret.Add(c);
+            foreach (var p in parent) ret.Add(p);
+
+            return ret.ToArray();
         }
     }
 }
