@@ -27,4 +27,16 @@ static public class AnimatorExtensions
 
         return false;
     }
+
+    public static AnimatorControllerParameter? GetParameterByHash(this Animator animator, int hash)
+    {
+        foreach (var p in animator.parameters)
+        {
+            if (p.nameHash == hash)
+            {
+                return p;
+            }
+        }
+        return null;
+    }
 }
