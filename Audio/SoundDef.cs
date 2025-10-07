@@ -1,4 +1,6 @@
 using NaughtyAttributes;
+using System.IO;
+using UnityEditor;
 using UnityEngine;
 
 namespace UC
@@ -53,4 +55,57 @@ namespace UC
             return ret;
         }
     }
+
+#if UNITY_EDITOR
+    public static class SoundDefFromSelection
+    {
+        [MenuItem("Assets/Unity Common Tools/Create Sound Def From Selection", true)]
+        private static bool CreateFromSelectionValidate()
+        {
+            var clips = Selection.GetFiltered<AudioClip>(SelectionMode.DeepAssets);
+            return clips.Length == 1;
+        }
+
+        [MenuItem("Assets/Unity Common Tools/Create Sound Def From Selection")]
+        private static void CreateFromSelection()
+        {
+            var clips = Selection.GetFiltered<AudioClip>(SelectionMode.DeepAssets);
+            var subtitles = Selection.GetFiltered<SubtitleTrack>(SelectionMode.DeepAssets);
+            var speakers = Selection.GetFiltered<Speaker>(SelectionMode.DeepAssets);
+
+            // If user picked exactly one SubtitleTrack and/or one Speaker, treat them as defaults
+            SubtitleTrack subtitle = subtitles.Length >= 1 ? subtitles[0] : null;
+            Speaker speaker = speakers.Length >= 1 ? speakers[0] : null;
+            AudioClip clip = clips[0];
+
+            // Choose output folder (based on first selected object)
+            var firstPath = AssetDatabase.GetAssetPath(clip);
+            var outFolder = Directory.Exists(firstPath) ? firstPath : Path.GetDirectoryName(firstPath);
+            if (string.IsNullOrEmpty(outFolder)) outFolder = "Assets";
+
+            var sd = ScriptableObject.CreateInstance<SoundDef>();
+            sd.clip = clip;
+            if (speaker)
+            {
+                sd.soundType = SoundType.Voice;
+                sd.subtitleTrack = subtitle;
+                sd.speaker = speaker;
+            }
+            else
+            {
+                sd.soundType = SoundType.PrimaryFX;
+                sd.subtitleTrack = subtitle;    
+            }
+
+            var assetName = $"{clip.name}.asset";
+            var path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(outFolder, assetName));
+
+            AssetDatabase.CreateAsset(sd, path);
+            EditorUtility.SetDirty(sd);
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }        
+    }
+#endif
 }

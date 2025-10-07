@@ -70,7 +70,7 @@ namespace UC
             return false;
         }
 
-        public bool HasItems()
+        public bool HasToken()
         {
             if (tokens == null) return false;
 
@@ -82,7 +82,7 @@ namespace UC
             return false;
         }
 
-        public int GetItemCount(Hypertag token)
+        public int GetTokenCount(Hypertag token)
         {
             if (tokens == null) return 0;
 
