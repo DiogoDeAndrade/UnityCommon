@@ -8,12 +8,12 @@ namespace UC
 
     public class FullscreenFader : MonoBehaviour
     {
-        public Color faderColor;
-        public bool startFaded;
+        [SerializeField] private Color faderColor;
+        [SerializeField] private bool startFaded;
         [ShowIf("startFaded")]
-        public bool autoFadeIn;
+        [SerializeField] private bool autoFadeIn;
         [ShowIf(EConditionOperator.And, "startFaded", "autoFadeIn")]
-        public float fadeInSpeed;
+        [SerializeField] private float fadeInSpeed;
 
         Image fader;
         float fadeInc;
