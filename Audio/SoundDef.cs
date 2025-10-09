@@ -9,14 +9,15 @@ namespace UC
     [CreateAssetMenu(fileName = "SoundDef", menuName = "Unity Common/Data/SoundDef")]
     public class SoundDef : ScriptableObject
     {
-        public AudioClip clip;
-        public SoundType soundType = SoundType.PrimaryFX;
+        public AudioClip        clip;
+        public SoundType        soundType = SoundType.PrimaryFX;
         [ShowIf(nameof(isNotMusic))]
-        public bool loop = false;
-        public SubtitleTrack subtitleTrack;
-        public Speaker speaker;
-        public Vector2 volumeRange = new Vector2(1f, 1f);
-        public Vector2 pitchRange = new Vector2(1f, 1f);
+        public bool             loop = false;
+        public SubtitleTrack    subtitleTrack;
+        public Speaker          speaker;
+        public Speaker[]        additionalSpeakers;
+        public Vector2          volumeRange = new Vector2(1f, 1f);
+        public Vector2          pitchRange = new Vector2(1f, 1f);
 
         bool isNotMusic => soundType != SoundType.Music;
         bool isVoice => soundType == SoundType.Voice;
@@ -49,7 +50,7 @@ namespace UC
             if (subtitleTrack)
             {
                 // Play subtitles
-                SubtitleDisplayManager.DisplaySubtitle(subtitleTrack, speaker, ret);
+                SubtitleDisplayManager.DisplaySubtitle(subtitleTrack, speaker, ret, additionalSpeakers);
             }
 
             return ret;
@@ -59,14 +60,14 @@ namespace UC
 #if UNITY_EDITOR
     public static class SoundDefFromSelection
     {
-        [MenuItem("Assets/Unity Common Tools/Create Sound Def From Selection", true)]
+        [MenuItem("Assets/Unity Common Tools/Create SoundDef From Selection", true)]
         private static bool CreateFromSelectionValidate()
         {
             var clips = Selection.GetFiltered<AudioClip>(SelectionMode.DeepAssets);
             return clips.Length == 1;
         }
 
-        [MenuItem("Assets/Unity Common Tools/Create Sound Def From Selection")]
+        [MenuItem("Assets/Unity Common Tools/Create SoundDef From Selection")]
         private static void CreateFromSelection()
         {
             var clips = Selection.GetFiltered<AudioClip>(SelectionMode.DeepAssets);
@@ -90,6 +91,11 @@ namespace UC
                 sd.soundType = SoundType.Voice;
                 sd.subtitleTrack = subtitle;
                 sd.speaker = speaker;
+                if (speakers.Length > 1)
+                {
+                    sd.additionalSpeakers = new Speaker[speakers.Length - 1];
+                    for (int i = 1; i < speakers.Length; i++) sd.additionalSpeakers[i - 1] = speakers[i];
+                }
             }
             else
             {

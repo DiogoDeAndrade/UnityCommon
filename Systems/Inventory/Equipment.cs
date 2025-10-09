@@ -78,6 +78,16 @@ namespace UC
             return false;
         }
 
+        public bool IsEquipped(Hypertag slot, Item item)
+        {
+            if (items.ContainsKey(slot))
+            {
+                return items[slot].item == item;
+            }
+
+            return false;
+        }
+
         public void Unequip(Hypertag slot)
         {
             var prevItem = GetItem(slot);

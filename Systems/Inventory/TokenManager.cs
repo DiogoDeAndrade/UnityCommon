@@ -8,6 +8,9 @@ namespace UC
 
     public class TokenManager : MonoBehaviour, IEnumerable<(Hypertag token, int count)>
     {
+        public delegate void OnChange(bool add, Hypertag token, int quantity);
+        public event OnChange onChange;
+
         private Dictionary<Hypertag, int> tokens;
 
         public void Add(Hypertag token, int quantity)
@@ -22,6 +25,8 @@ namespace UC
             {
                 tokens[token] = quantity;
             }
+
+            onChange?.Invoke(true, token, quantity);
         }
 
         public void Add(Hypertag token)
@@ -36,15 +41,24 @@ namespace UC
             {
                 tokens[token] = 1;
             }
+
+            onChange?.Invoke(true, token, 1);
         }
 
         public void Remove(Hypertag token, int count)
         {
             if (tokens == null) return;
 
-            for (int i = 0; i < count; i++)
+            if (tokens.ContainsKey(token))
             {
-                Remove(token);
+                int toRemove = Mathf.Min(tokens[token], count);
+
+                if (toRemove > 0)
+                {                    
+                    tokens[token] = Mathf.Max(0, tokens[token] - toRemove);
+
+                    onChange?.Invoke(false, token, toRemove);
+                }
             }
         }
 
@@ -55,6 +69,8 @@ namespace UC
             if (tokens.ContainsKey(token))
             {
                 tokens[token] = Mathf.Max(0, tokens[token] - 1);
+
+                onChange?.Invoke(false, token, 1);
             }
         }
 

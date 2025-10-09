@@ -1,11 +1,17 @@
 using NaughtyAttributes;
 using UnityEngine;
+using static UC.ItemDisplay;
 
 namespace UC
 {
 
     public class InventoryDisplay : MonoBehaviour
     {
+        public delegate void OnInventoryOpen(bool open);
+        public event OnInventoryOpen onInventoryToggle;
+        public delegate void OnInventorySelect(Item item);
+        public event OnInventorySelect onInventorySelect;
+
         private enum OpenState { Unknown, Open, Close };
 
         [SerializeField] 
@@ -28,11 +34,28 @@ namespace UC
         {
             canvasGroup = GetComponent<CanvasGroup>();
             itemDisplays = itemContainer.GetComponentsInChildren<ItemDisplay>(true);
+            foreach (var id in itemDisplays)
+            {
+                id.onClick += Id_onClick;
+            }
             ClearDisplay();
             if (!isAlwaysOpen)
             {
                 if (startOpen) Open(0.1f);
                 else Close(0.1f);
+            }
+        }
+
+        private void Id_onClick(ItemDisplay itemDisplay)
+        {
+            for (int i = 0; i < itemDisplays.Length; i++)
+            {
+                if (itemDisplays[i] == itemDisplay)
+                {
+                    (var item, var count) = inventory.GetSlotContent(i);
+
+                    onInventorySelect?.Invoke(item);
+                }
             }
         }
 
@@ -133,6 +156,7 @@ namespace UC
 
             canvasGroup.FadeIn((time == 0.0f) ? (fadeTime) : (time));
             openState = OpenState.Open;
+            onInventoryToggle?.Invoke(true);
         }
         public void Close(float time = 0.0f)
         {
@@ -140,6 +164,7 @@ namespace UC
 
             canvasGroup.FadeOut((time == 0.0f) ? (fadeTime) : (time));
             openState = OpenState.Close;
+            onInventoryToggle?.Invoke(false);
         }
 
         public void Toggle(float time = 0.0f)
