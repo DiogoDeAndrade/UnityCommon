@@ -45,9 +45,7 @@ public class SubtitleDisplayManager : MonoBehaviour
     }
 
     AudioSource             currentAudio;
-    SubtitleTrack           currentTrack;
-    Speaker                 currentSpeaker;
-    Speaker[]               additionalSpeakers;
+    SoundDef                currentTrack;
     float                   defaultSpeakerFontSize;
     List<DefaultTextData>   defaultTextData;
     RectTransform           rectTransform;
@@ -76,26 +74,16 @@ public class SubtitleDisplayManager : MonoBehaviour
         defaultSpeakerFontSize = (speakerNameText) ? speakerNameText.fontSize : 0.0f;
 
         rectTransform = GetComponent<RectTransform>();
-    }
-
-    public static void DisplaySubtitle(SubtitleTrack track, Speaker speaker, AudioSource source, Speaker[] additionalSpeakers = null)
-    {
-        if (_instance == null) return;
-
-        _instance.currentTrack = track;
-        _instance.currentAudio = source;
-        _instance.currentSpeaker = speaker;
-        _instance.additionalSpeakers = additionalSpeakers;
-    }
+    }    
 
     void Update()
     {
         if ((currentTrack != null) && (currentAudio != null) && (currentAudio.isPlaying))
         {
-            var line = currentTrack.GetAtTime(currentAudio.time);
+            var line = currentTrack.subtitleTrack.GetAtTime(currentAudio.time);
             if (line != null)
             {
-                var speaker = currentSpeaker;
+                var speaker = currentTrack.speaker;
                 var lineText = line.text;
                 
                 // Get overrides
@@ -220,18 +208,20 @@ public class SubtitleDisplayManager : MonoBehaviour
     private Speaker GetSpeaker(string name)
     {
         if (string.IsNullOrEmpty(name))
-            return currentSpeaker;
+        {
+            return currentTrack.speaker;
+        }
 
         // Compare case-insensitively against the current speaker
-        if ((currentSpeaker != null) && (currentSpeaker.NameMatches(name)))
+        if ((currentTrack.speaker != null) && (currentTrack.speaker.NameMatches(name)))
         {
-            return currentSpeaker;
+            return currentTrack.speaker;
         }
 
         // Search additional speakers safely
-        if (additionalSpeakers != null)
+        if (currentTrack.additionalSpeakers != null)
         {
-            foreach (var s in additionalSpeakers)
+            foreach (var s in currentTrack.additionalSpeakers)
             {
                 if ((s != null) && (s.NameMatches(name)))
                 {
@@ -241,7 +231,7 @@ public class SubtitleDisplayManager : MonoBehaviour
         }
 
         Debug.LogWarning($"Can't find speaker '{name}' for text '{(currentAudio ? currentAudio.name : "UnknownAudio")}'!");
-        return currentSpeaker;
+        return currentTrack.speaker;
     }
 
     public void SetFont(TMP_FontAsset font, Material material, float textScale = 1.0f)
@@ -250,5 +240,39 @@ public class SubtitleDisplayManager : MonoBehaviour
         this.font = font;
         this.material = material;
         this.textScale = textScale;
+    }
+
+    public SoundDef _GetCurrentSound()
+    {
+        return currentTrack;
+    }
+
+    public void _StopCurrentSound()
+    {
+        if (currentAudio)
+        {
+            currentAudio.Stop();
+        }
+    }
+
+
+    // Statics
+
+    public static void DisplaySubtitle(SoundDef soundDef, AudioSource source)
+    {
+        if (_instance == null) return;
+
+        _instance.currentTrack = soundDef;
+        _instance.currentAudio = source;
+    }
+
+    public static SoundDef GetCurrentSound()
+    {
+        return Instance._GetCurrentSound();
+    }
+
+    public static void StopCurrentSound()
+    {
+        Instance._StopCurrentSound();
     }
 }

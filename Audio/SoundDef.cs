@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -9,10 +10,14 @@ namespace UC
     [CreateAssetMenu(fileName = "SoundDef", menuName = "Unity Common/Data/SoundDef")]
     public class SoundDef : ScriptableObject
     {
+        [Flags]
+        public enum SoundFlags { None = 0, Interruptable = 1 };
+
         public AudioClip        clip;
         public SoundType        soundType = SoundType.PrimaryFX;
         [ShowIf(nameof(isNotMusic))]
         public bool             loop = false;
+        public SoundFlags       soundFlags = SoundFlags.None;
         public SubtitleTrack    subtitleTrack;
         public Speaker          speaker;
         public Speaker[]        additionalSpeakers;
@@ -49,8 +54,14 @@ namespace UC
 
             if (subtitleTrack)
             {
+                // If subtitle is playing, and if it is an interruptable sound, interrupt it
+                var currentSnd = SubtitleDisplayManager.GetCurrentSound();
+                if (currentSnd != null)
+                {
+                    SubtitleDisplayManager.StopCurrentSound();
+                }
                 // Play subtitles
-                SubtitleDisplayManager.DisplaySubtitle(subtitleTrack, speaker, ret, additionalSpeakers);
+                SubtitleDisplayManager.DisplaySubtitle(this, ret);
             }
 
             return ret;
