@@ -48,6 +48,8 @@ namespace UC
 
         private void Id_onClick(ItemDisplay itemDisplay)
         {
+            if (inventory == null) return;
+
             for (int i = 0; i < itemDisplays.Length; i++)
             {
                 if (itemDisplays[i] == itemDisplay)

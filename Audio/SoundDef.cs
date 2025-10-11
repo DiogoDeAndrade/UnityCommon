@@ -11,13 +11,13 @@ namespace UC
     public class SoundDef : ScriptableObject
     {
         [Flags]
-        public enum SoundFlags { None = 0, Interruptable = 1 };
+        public enum SoundFlags { Interruptable = 1 };
 
         public AudioClip        clip;
         public SoundType        soundType = SoundType.PrimaryFX;
         [ShowIf(nameof(isNotMusic))]
         public bool             loop = false;
-        public SoundFlags       soundFlags = SoundFlags.None;
+        public SoundFlags       soundFlags = 0;
         public SubtitleTrack    subtitleTrack;
         public Speaker          speaker;
         public Speaker[]        additionalSpeakers;
