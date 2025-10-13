@@ -1,9 +1,10 @@
-using UnityEngine;
-using UnityEditor;
+using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Diagnostics;
 using System.Text;
+using UnityEditor;
+using UnityEngine;
 
 namespace UC
 {
@@ -44,9 +45,22 @@ namespace UC
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Version: " + buildDefs.version, EditorStyles.boldLabel);
+
             if (GUILayout.Button("Inc. Major")) { IncrementVersion(0); }
             if (GUILayout.Button("Inc. Minor")) { IncrementVersion(1); }
             if (GUILayout.Button("Inc. Rev")) { IncrementVersion(2); }
+
+            // NEW: fetch from Player Settings
+            if (GUILayout.Button(new GUIContent("Get Current Version", "Read PlayerSettings.bundleVersion")))
+            {
+                GetCurrentVersionFromPlayerSettings();
+            }
+
+            if (GUILayout.Button(new GUIContent("Update Build Date", "Updates the BuildInfo.txt file")))
+            {
+                UpdateBuildTimestamp();
+            }
+
             GUILayout.EndHorizontal();
 
             GUILayout.Space(10);
@@ -85,9 +99,11 @@ namespace UC
             }
 
             GUILayout.Space(10);
+
             if (GUILayout.Button("Build"))
             {
                 buildLog = ""; // Clear log before new build
+                UpdateBuildTimestamp();
                 BuildGame();
             }
 
@@ -115,6 +131,23 @@ namespace UC
             SaveBuildDefs();
 
             UnityEngine.Debug.Log("New Version: " + buildDefs.version);
+        }
+
+        private void GetCurrentVersionFromPlayerSettings()
+        {
+            buildDefs.version = PlayerSettings.bundleVersion;
+            SaveBuildDefs();
+            Repaint();
+            UnityEngine.Debug.Log("Fetched version from Player Settings: " + buildDefs.version);
+        }
+
+        void UpdateBuildTimestamp()
+        {
+            string path = "Assets/Resources/BuildInfo.txt";
+            string timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            File.WriteAllText(path, timestamp);
+            AssetDatabase.Refresh();
         }
 
         private void BuildGame()

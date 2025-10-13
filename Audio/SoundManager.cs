@@ -128,13 +128,14 @@ namespace UC
             return _PlayMusic(clip, volume, pitch, defaultCrossfadeTime, tag);
         }
 
-        private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f, float crossFadeTime = 0.0f, Hypertag defaultTag = null)
+        private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f, float crossFadeTime = -float.MaxValue, Hypertag defaultTag = null)
         {
             if (musicSource == null) 
             {
                 if (clip == null) return null;
 
-                musicSource = _PlaySound(SoundType.Music, clip, 1, 1, true, (defaultTag == null) ? (musicTag) : (defaultTag));
+                musicSource = _PlaySound(SoundType.Music, clip, 0.0f, 1, true, (defaultTag == null) ? (musicTag) : (defaultTag));
+                musicSource.FadeTo(1.0f, (crossFadeTime < 0.0f) ? (defaultCrossfadeTime) : (crossFadeTime));
 
                 return musicSource;
             }
