@@ -23,9 +23,12 @@ namespace UC
         public Speaker[]        additionalSpeakers;
         public Vector2          volumeRange = new Vector2(1f, 1f);
         public Vector2          pitchRange = new Vector2(1f, 1f);
+        public Hypertag         defaultTag;
 
         bool isNotMusic => soundType != SoundType.Music;
         bool isVoice => soundType == SoundType.Voice;
+
+        bool isInterruptable => (soundFlags & SoundFlags.Interruptable) != 0;
 
         public AudioSource Play()
         {
@@ -34,32 +37,36 @@ namespace UC
 
         public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f)
         {
+            if (subtitleTrack)
+            {
+                // If subtitle is playing, and if it is an interruptable sound, interrupt it
+                var currentSnd = SubtitleDisplayManager.GetCurrentSound();
+                if ((currentSnd != null) && (currentSnd.isInterruptable))
+                {
+                    SubtitleDisplayManager.StopCurrentSound();
+                }
+            }
+
             AudioSource ret = null;
 
             if (isNotMusic)
             {
                 if (loop)
                 {
-                    ret = SoundManager.PlayLoopSound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random());
+                    ret = SoundManager.PlayLoopSound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag);
                 }
                 else
                 {
-                    ret = SoundManager.PlaySound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random());
+                    ret = SoundManager.PlaySound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag);
                 }
             }
             else
             {
-                ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random());
+                ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), -float.MaxValue, defaultTag);
             }
 
             if (subtitleTrack)
             {
-                // If subtitle is playing, and if it is an interruptable sound, interrupt it
-                var currentSnd = SubtitleDisplayManager.GetCurrentSound();
-                if (currentSnd != null)
-                {
-                    SubtitleDisplayManager.StopCurrentSound();
-                }
                 // Play subtitles
                 SubtitleDisplayManager.DisplaySubtitle(this, ret);
             }

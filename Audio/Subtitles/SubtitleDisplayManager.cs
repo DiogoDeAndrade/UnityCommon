@@ -252,6 +252,8 @@ public class SubtitleDisplayManager : MonoBehaviour
         if (currentAudio)
         {
             currentAudio.Stop();
+            currentTrack = null;
+            currentAudio = null;
         }
     }
 

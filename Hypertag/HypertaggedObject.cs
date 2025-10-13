@@ -52,7 +52,7 @@ namespace UC
 
         static void RemoveFromHypertagList(HypertaggedObject obj)
         {
-            if (allHypertagObjects.TryGetValue(obj.hypertag, out var l))
+            if ((obj.hypertag != null) && (allHypertagObjects.TryGetValue(obj.hypertag, out var l)))
             {
                 l.Remove(obj);
                 return;
