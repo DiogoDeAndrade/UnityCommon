@@ -1,10 +1,10 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace UC
+namespace UC.Editor
 {
 
-    public abstract class UnityCommonEditor : Editor
+    public abstract class UnityCommonEditor : UnityEditor.Editor
     {
         protected abstract GUIStyle GetTitleSyle();
 

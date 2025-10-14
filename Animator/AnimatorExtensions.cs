@@ -27,4 +27,19 @@ static public class AnimatorExtensions
 
         return false;
     }
+
+    public static bool GetParameterByHash(this Animator animator, int hash, out AnimatorControllerParameterType parameterType)
+    {
+        foreach (var p in animator.parameters)
+        {
+            if (p.nameHash == hash)
+            {
+                parameterType = p.type;
+                return true;
+            }
+        }
+        parameterType = AnimatorControllerParameterType.Trigger;
+
+        return false;
+    }
 }

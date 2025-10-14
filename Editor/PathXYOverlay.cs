@@ -5,7 +5,7 @@ using UnityEditor.Toolbars;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace UC
+namespace UC.Editor
 {
     [Overlay(typeof(SceneView), "Path XY Edit")]
     public class PathXYOverlay : Overlay

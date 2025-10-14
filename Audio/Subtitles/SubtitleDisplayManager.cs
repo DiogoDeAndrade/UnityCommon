@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UC;
@@ -44,15 +45,14 @@ public class SubtitleDisplayManager : MonoBehaviour
     }
 
     AudioSource             currentAudio;
-    SubtitleTrack           currentTrack;
-    Speaker                 currentSpeaker;
+    SoundDef                currentTrack;
     float                   defaultSpeakerFontSize;
     List<DefaultTextData>   defaultTextData;
     RectTransform           rectTransform;
 
     void Start()
     {
-        if (_instance == null)
+        if ((_instance == null) || (_instance == this))
         {
             _instance = this;
         }
@@ -74,29 +74,26 @@ public class SubtitleDisplayManager : MonoBehaviour
         defaultSpeakerFontSize = (speakerNameText) ? speakerNameText.fontSize : 0.0f;
 
         rectTransform = GetComponent<RectTransform>();
-    }
-
-    public static void DisplaySubtitle(SubtitleTrack track, Speaker speaker, AudioSource source)
-    {
-        if (_instance == null) return;
-
-        _instance.currentTrack = track;
-        _instance.currentAudio = source;
-        _instance.currentSpeaker = speaker;
-    }
+    }    
 
     void Update()
     {
         if ((currentTrack != null) && (currentAudio != null) && (currentAudio.isPlaying))
         {
-            var line = currentTrack.GetAtTime(currentAudio.time);
+            var line = currentTrack.subtitleTrack.GetAtTime(currentAudio.time);
             if (line != null)
             {
-                if ((speakerNameText) && (currentSpeaker != null))
+                var speaker = currentTrack.speaker;
+                var lineText = line.text;
+                
+                // Get overrides
+                lineText = ProcessOverrides(lineText, ref speaker);
+
+                if ((speakerNameText) && (speaker != null))
                 {
                     speakerNameText.enabled = true;
-                    speakerNameText.text = currentSpeaker.displayName;
-                    speakerNameText.color = currentSpeaker.nameColor;
+                    speakerNameText.text = speaker.displayName;
+                    speakerNameText.color = speaker.nameColor;
                     if (overrideFonts)
                     {
                         speakerNameText.font = font;
@@ -109,7 +106,7 @@ public class SubtitleDisplayManager : MonoBehaviour
                     speakerNameText.enabled = false;
                 }
 
-                var lines = line.text.Split('\n');
+                var lines = lineText.Split('\n');
                 for (int i = 0; i < subtitleLines.Length; i++)
                 {
                     if (i < lines.Length)
@@ -124,7 +121,7 @@ public class SubtitleDisplayManager : MonoBehaviour
                             subtitleLines[i].fontSize = defaultTextData[i].size * textScale;
                             if (enableSpeakerFontColor)
                             {
-                                subtitleLines[i].color = currentSpeaker != null ? currentSpeaker.textColor : defaultTextData[i].color;
+                                subtitleLines[i].color = speaker != null ? speaker.textColor : defaultTextData[i].color;
                             }
                             
                         }
@@ -148,6 +145,7 @@ public class SubtitleDisplayManager : MonoBehaviour
         }
         else
         {
+            speakerNameText.enabled = false;
             foreach (var l in subtitleLines)
             {
                 l.text = string.Empty;
@@ -163,11 +161,120 @@ public class SubtitleDisplayManager : MonoBehaviour
         }
     }
 
+    private string ProcessOverrides(string lineText, ref Speaker speaker)
+    {
+        if (string.IsNullOrEmpty(lineText)) return lineText;
+
+        // Keep consuming leading [key=val] blocks
+        int safety = 0;
+        while ((lineText.Length > 0) && (lineText[0] == '['))
+        {
+            int close = lineText.IndexOf(']');
+            if (close <= 0) break; 
+
+            string token = lineText.Substring(1, close - 1);
+            lineText = (close + 1 < lineText.Length) ? lineText.Substring(close + 1) : string.Empty;
+
+            int eq = token.IndexOf('=');
+            string key, value;
+            if (eq >= 0)
+            {
+                key = token.Substring(0, eq).Trim();
+                value = token.Substring(eq + 1).Trim();
+            }
+            else
+            {
+                key = token.Trim();
+                value = string.Empty;
+            }
+
+            if (key.Equals("speaker", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    var s = GetSpeaker(value);
+                    if (s != null) speaker = s;
+                }
+            }
+
+            if (++safety > 32) break;
+
+            if (lineText.Length == 0 || lineText[0] != '[') break;
+        }
+
+        return lineText;
+    }
+
+    private Speaker GetSpeaker(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return currentTrack.speaker;
+        }
+
+        // Compare case-insensitively against the current speaker
+        if ((currentTrack.speaker != null) && (currentTrack.speaker.NameMatches(name)))
+        {
+            return currentTrack.speaker;
+        }
+
+        // Search additional speakers safely
+        if (currentTrack.additionalSpeakers != null)
+        {
+            foreach (var s in currentTrack.additionalSpeakers)
+            {
+                if ((s != null) && (s.NameMatches(name)))
+                {
+                    return s;
+                }
+            }
+        }
+
+        Debug.LogWarning($"Can't find speaker '{name}' for text '{(currentAudio ? currentAudio.name : "UnknownAudio")}'!");
+        return currentTrack.speaker;
+    }
+
     public void SetFont(TMP_FontAsset font, Material material, float textScale = 1.0f)
     {
         overrideFonts = true;
         this.font = font;
         this.material = material;
         this.textScale = textScale;
+    }
+
+    public SoundDef _GetCurrentSound()
+    {
+        return currentTrack;
+    }
+
+    public void _StopCurrentSound()
+    {
+        if (currentAudio)
+        {
+            currentAudio.Stop();
+            currentTrack = null;
+            currentAudio = null;
+        }
+    }
+
+
+    // Statics
+
+    public static void DisplaySubtitle(SoundDef soundDef, AudioSource source)
+    {
+        if (_instance == null) return;
+
+        _instance.currentTrack = soundDef;
+        _instance.currentAudio = source;
+    }
+
+    public static SoundDef GetCurrentSound()
+    {
+        return Instance._GetCurrentSound();
+    }
+
+    public static void StopCurrentSound()
+    {
+        Instance._StopCurrentSound();
     }
 }

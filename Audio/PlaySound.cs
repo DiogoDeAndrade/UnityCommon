@@ -18,7 +18,15 @@ namespace UC
         {
             if (trigger == SoundTrigger.OnStart)
             {
-                SoundManager.PlaySound(channel, sound, volume.Random(), pitch.Random());
+                if (channel != SoundType.Music)
+                {
+                    SoundManager.PlaySound(channel, sound, volume.Random(), pitch.Random());
+                }
+                else
+                {
+                    SoundManager.PlayMusic(sound, volume.Random(), pitch.Random());
+                }
+
                 Destroy(this);
             }
         }

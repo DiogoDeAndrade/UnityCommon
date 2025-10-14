@@ -3,11 +3,11 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace UC
+namespace UC.Editor
 {
 
     [CustomEditor(typeof(DefaultExpressionContextEvaluator), true)]
-    public class DefaultExpressionContextEvaluatorDrawer : Editor
+    public class DefaultExpressionContextEvaluatorDrawer : UnityEditor.Editor
     {
         public override void OnInspectorGUI()
         {

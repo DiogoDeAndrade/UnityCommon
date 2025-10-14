@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -89,7 +90,7 @@ namespace UC
                         {
                             if (dy < -0.5f)
                             {
-                                var next = _selectedControl.navDown;
+                                var next = NextSelectable(_selectedControl, c => c.navDown); 
                                 _selectedControl = (next) ? (next) : (_selectedControl);
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
@@ -97,7 +98,7 @@ namespace UC
                             }
                             else if (dy > 0.5f)
                             {
-                                var next = _selectedControl.navUp;
+                                var next = NextSelectable(_selectedControl, c => c.navUp);
                                 _selectedControl = (next) ? (next) : (_selectedControl);
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
@@ -127,7 +128,24 @@ namespace UC
             }
         }
 
-        internal void SetControl(BaseUIControl control)
+        private BaseUIControl NextSelectable(BaseUIControl from, Func<BaseUIControl, BaseUIControl> step)
+        {
+            if (from == null) return null;
+            var start = from;
+            var cur = step(from);
+            int hops = 0;
+
+            while (cur != null && !cur.isSelectable && cur != start && hops < 128)
+            {
+                cur = step(cur);
+                hops++;
+            }
+
+            // If we found a selectable control, use it; otherwise, stay where we are.
+            return (cur != null && cur.isSelectable) ? cur : from;
+        }
+
+        public void SetControl(BaseUIControl control)
         {
             _selectedControl = control;
             cooldownTimer = moveCooldown;
@@ -165,6 +183,11 @@ namespace UC
             horizontalControl.playerInput = playerInput;
             verticalControl.playerInput = playerInput;
             interactControl.playerInput = playerInput;
+        }
+
+        public void SetEnable(bool b)
+        {
+            _uiEnable = b;
         }
     }
 }

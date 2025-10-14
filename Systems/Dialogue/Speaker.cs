@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using UnityEngine;
 
 namespace UC
@@ -21,5 +22,20 @@ namespace UC
         public Vector2 characterSndPitch = Vector2.one;
 
         bool hasCharacterSnd => characterSnd != null;
+
+        public bool NameMatches(string name, StringComparison parameters = StringComparison.OrdinalIgnoreCase)
+        {
+            if (this.name.Equals(name, parameters)) return true;
+            if (displayName.Equals(name, parameters)) return true;
+            if (nameAlias != null)
+            {
+                foreach (var alias in nameAlias)
+                {
+                    if (alias.Equals(name, parameters)) return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

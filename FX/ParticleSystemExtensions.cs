@@ -10,5 +10,11 @@ namespace UC
             var emissionModule = ps.emission;
             emissionModule.enabled = b;
         }
+
+        public static void SetColor(this ParticleSystem ps, Color color)
+        {
+            var mainModule = ps.main;
+            mainModule.startColor = color;
+        }
     }
 }

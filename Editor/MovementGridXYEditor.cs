@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace UC
+namespace UC.Editor
 {
     [CustomEditor(typeof(MovementGridXY))]
     public class MovementGridXYEditor : UnityCommonEditor

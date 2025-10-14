@@ -1806,6 +1806,8 @@ namespace UC
         #endregion
 
         #region Debug and Gizmos
+
+#if UNITY_EDITOR
         static Color[] regionColors =
         {
             new Color(0.0f, 1.0f, 1.0f, 0.25f),
@@ -2025,6 +2027,8 @@ namespace UC
 
             }
         }
+        #endif
+
         #endregion
 
         #region NavMesh2d management
