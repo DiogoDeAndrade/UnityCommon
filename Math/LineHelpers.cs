@@ -167,6 +167,7 @@ namespace UC
             return false;
         }
 
+        // Doesn't clamp to segment - p0 and p1 are treated as points in an infinite line
         public static float Distance(Vector3 p0, Vector3 p1, Vector3 p)
         {
             Vector3 ab = p1 - p0;
@@ -202,6 +203,28 @@ namespace UC
             float t = Vector3.Dot(ap, ab) / abSqrMag;
             t = Mathf.Clamp01(t); // Clamp to segment
 
+            closestPoint = p0 + t * ab;
+            return Vector3.Distance(p, closestPoint);
+        }
+
+        public static float Distance(Vector3 p0, Vector3 p1, Vector3 p, out Vector3 closestPoint, out float closestT)
+        {
+            Vector3 ab = p1 - p0;
+            Vector3 ap = p - p0;
+
+            float abSqrMag = ab.sqrMagnitude;
+            if (abSqrMag < Mathf.Epsilon)
+            {
+                // Segment is a point
+                closestT = 0.0f;
+                closestPoint = p0;
+                return Vector3.Distance(p, p0);
+            }
+
+            float t = Vector3.Dot(ap, ab) / abSqrMag;
+            t = Mathf.Clamp01(t); // Clamp to segment
+
+            closestT = t;
             closestPoint = p0 + t * ab;
             return Vector3.Distance(p, closestPoint);
         }

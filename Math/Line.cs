@@ -24,7 +24,7 @@ namespace UC
 
         public float GetDistance(Vector3 p)
         {
-            return LineHelpers.Distance(p0, p1, p);
+           return LineHelpers.Distance(p0, p1, p, out var pt, out var t);
         }
 
         public float GetDistance(Vector3 p, out Vector3 closestPoint)
