@@ -134,8 +134,8 @@ namespace UC
         {
             if (isDown)
             {
-                if ((dz < -0.1f) && (_navLeft)) parentGroup.SetControl(NextSelectable(_navLeft, c => c._navLeft));
-                else if ((dz > 0.1f) && (_navRight)) parentGroup.SetControl(NextSelectable(_navRight, c => c._navRight));
+                if ((dz < -0.1f) && (_navLeft)) parentGroup.SetControl(NextSelectable(this, c => c._navLeft));
+                else if ((dz > 0.1f) && (_navRight)) parentGroup.SetControl(NextSelectable(this, c => c._navRight));
             }
         }
 
