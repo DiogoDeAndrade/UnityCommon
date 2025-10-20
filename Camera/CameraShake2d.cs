@@ -14,8 +14,8 @@ namespace UC
 
         public enum Mode { Random, NoiseBased };
 
-        public Mode mode;
-        public TimeScaler2d timeScaler;
+        [SerializeField] private Mode mode;
+        [SerializeField] private TimeScaler2d timeScaler;
 
         List<ShakeElem> shakeElems = new List<ShakeElem>();
         Vector3 prevDelta;
