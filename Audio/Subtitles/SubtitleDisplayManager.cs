@@ -192,8 +192,7 @@ public class SubtitleDisplayManager : MonoBehaviour
             {
                 if (!string.IsNullOrEmpty(value))
                 {
-                    var s = GetSpeaker(value);
-                    if (s != null) speaker = s;
+                    speaker = GetSpeaker(value);
                 }
             }
 
@@ -210,6 +209,11 @@ public class SubtitleDisplayManager : MonoBehaviour
         if (string.IsNullOrEmpty(name))
         {
             return currentTrack.speaker;
+        }
+
+        if (name.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
         }
 
         // Compare case-insensitively against the current speaker
