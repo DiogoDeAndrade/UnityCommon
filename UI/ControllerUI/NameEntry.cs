@@ -75,8 +75,7 @@ public class NameEntry : MonoBehaviour
             {
                 if (currentLetter == null)
                 {
-                    currentLetter = Instantiate(letterPrefab, transform);
-                    currentLetter.Activate();
+                    NextLetter();
                 }
             }
 
@@ -95,20 +94,7 @@ public class NameEntry : MonoBehaviour
                 }
                 else
                 {
-                    currentLetter.Deactivate();
-                    if (letters == null) letters = new();
-                    letters.Add(currentLetter);
-
-                    if (letters.Count >= maxLetters)
-                    {
-                        // Stop entry
-                        StopEntry();
-                    }
-                    else
-                    {
-                        currentLetter = Instantiate(letterPrefab, transform);
-                        currentLetter.Activate();
-                    }
+                    NextLetter();
                 }
             }
             if (deleteButton.IsDown())
@@ -138,6 +124,45 @@ public class NameEntry : MonoBehaviour
         }
 
         prevEnabled = currentEnabled;
+    }
+
+    private void CurrentLetter_onSelect()
+    {
+        NextLetter();
+    }
+
+    private void CurrentLetter_onFinish()
+    {
+        StopEntry();
+    }
+
+    private void CurrentLetter_onBackspace()
+    {
+        DeleteLetter();
+    }
+
+    void NextLetter()
+    {
+        if (currentLetter)
+        {
+            currentLetter.Deactivate();
+            if (letters == null) letters = new();
+            letters.Add(currentLetter);
+        }
+
+        if ((letters != null) && (letters.Count >= maxLetters))
+        {
+            // Stop entry
+            StopEntry();
+        }
+        else
+        {
+            currentLetter = Instantiate(letterPrefab, transform);
+            currentLetter.Activate();
+            currentLetter.onFinish += CurrentLetter_onFinish;
+            currentLetter.onSelect += CurrentLetter_onSelect;
+            currentLetter.onBackspace += CurrentLetter_onBackspace;
+        }
     }
 
     void DeleteLetter()

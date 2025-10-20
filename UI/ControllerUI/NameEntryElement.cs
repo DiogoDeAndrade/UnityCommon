@@ -8,6 +8,15 @@ using UnityEngine.UI;
 
 public class NameEntryElement : MonoBehaviour
 {
+    public delegate void OnFinish();
+    public event OnFinish onFinish;
+
+    public delegate void OnBackspace();
+    public event OnBackspace onBackspace;
+
+    public delegate void OnSelect();
+    public event OnSelect onSelect;
+
     [Flags]
     public enum NameEntryType
     {
@@ -113,6 +122,80 @@ public class NameEntryElement : MonoBehaviour
     {
         upArrow.enabled = false;
         downArrow.enabled = false;
+    }
+
+    private void Update()
+    {
+        if (upArrow.enabled && Input.anyKeyDown)
+        {
+            foreach (var entry in allowed)
+            {
+                if (string.IsNullOrEmpty(entry))
+                    continue;
+
+                KeyCode key;
+                if (entry.Length == 1)
+                {
+                    char c = entry[0];
+
+                    // Try letters
+                    if (char.IsLetter(c))
+                    {
+                        if (Enum.TryParse(c.ToString().ToUpper(), out key) && Input.GetKeyDown(key))
+                        {
+                            index = allowed.IndexOf(entry);
+                            letterText.text = allowed[index];
+                            FlashLetter();
+                            onSelect();
+                            break;
+                        }
+                    }
+
+                    // Try numbers
+                    else if (char.IsDigit(c))
+                    {
+                        string name = "Alpha" + c;
+                        if (Enum.TryParse(name, out key) && Input.GetKeyDown(key))
+                        {
+                            index = allowed.IndexOf(entry);
+                            letterText.text = allowed[index];
+                            FlashLetter();
+                            onSelect();
+                            break;
+                        }
+                    }
+
+                    // Handle space
+                    else if (c == ' ' && Input.GetKeyDown(KeyCode.Space))
+                    {
+                        index = allowed.IndexOf(entry);
+                        letterText.text = allowed[index];
+                        FlashLetter();
+                        onSelect();
+                        break;
+                    }
+                }
+
+                // Handle OK or special cases
+                if (entry == "OK" && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
+                {
+                    index = allowed.IndexOf(entry);
+                    letterText.text = allowed[index];
+                    FlashLetter();
+                    onFinish();
+                    break;
+                }
+
+                if (entry == "\u2190" && Input.GetKeyDown(KeyCode.Backspace))
+                {
+                    index = allowed.IndexOf(entry);
+                    letterText.text = allowed[index];
+                    FlashLetter();
+                    onBackspace();
+                    break;
+                }
+            }
+        }
     }
 
     public string letter => allowed[index];
