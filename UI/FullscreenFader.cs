@@ -8,14 +8,17 @@ namespace UC
 
     public class FullscreenFader : MonoBehaviour
     {
-        public Color faderColor;
-        public bool startFaded;
+        [SerializeField] private Color faderColor;
+        [SerializeField] private bool startFaded;
         [ShowIf("startFaded")]
-        public bool autoFadeIn;
+        [SerializeField] private bool autoFadeIn;
         [ShowIf(EConditionOperator.And, "startFaded", "autoFadeIn")]
-        public float fadeInSpeed;
+        [SerializeField] private float fadeInSpeed;
 
         Image fader;
+        float currentT;
+        Color startColor;
+        Color targetColor;
         float fadeInc;
         Action callback;
 
@@ -39,7 +42,7 @@ namespace UC
 
             if ((startFaded) && (autoFadeIn))
             {
-                fadeInc = -1.0f / fadeInSpeed;
+                FadeIn(fadeInSpeed, faderColor);
             }
             else
             {
@@ -51,37 +54,31 @@ namespace UC
         {
             if (fadeInc != 0.0f)
             {
-                float fadeAlpha = fader.color.a;
+                currentT += fadeInc * Time.deltaTime;
 
-                fadeAlpha += fadeInc * Time.deltaTime;
+                fader.color = Color.Lerp(startColor, targetColor, currentT);
 
-                if ((fadeAlpha > 1.0f) && (fadeInc > 0.0f))
+                if (currentT >= 1.0f)
                 {
-                    fadeAlpha = 1.0f;
-                    fadeInc = 0.0f;
                     if (callback != null) callback.Invoke();
-                }
-                else if ((fadeAlpha < 0.0f) && (fadeInc < 0.0f))
-                {
-                    fadeAlpha = 0.0f;
                     fadeInc = 0.0f;
-                    if (callback != null) callback.Invoke();
                 }
-
-                fader.color = faderColor.ChangeAlpha(fadeAlpha);
             }
         }
 
         void _Fade(float targetAlpha, float time, Color targetColor, Action action)
         {
-            faderColor = targetColor;
-            fadeInc = (targetAlpha - fader.color.a) / time;
+            currentT = 0.0f;
+            fader.color = targetColor.ChangeAlpha(fader.color.a);
+            startColor = fader.color;
+            this.targetColor = targetColor.ChangeAlpha(targetAlpha);
+            fadeInc = Mathf.Abs((targetAlpha - fader.color.a) / time);
             callback = action;
         }
 
         public static void FadeIn(float time)
         {
-            fsFader._Fade(0.0f, time, fsFader.faderColor, null);
+            fsFader._Fade(0.0f, time, fsFader.fader.color, null);
         }
 
         public static void FadeIn(float time, Color color)
@@ -96,7 +93,7 @@ namespace UC
 
         public static void FadeOut(float time)
         {
-            fsFader._Fade(1.0f, time, fsFader.faderColor, null);
+            fsFader._Fade(1.0f, time, fsFader.fader.color, null);
         }
 
         public static void FadeOut(float time, Color color)

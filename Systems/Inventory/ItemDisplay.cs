@@ -1,16 +1,21 @@
-using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace UC
 {
 
-    public class ItemDisplay : MonoBehaviour
+    public class ItemDisplay : MonoBehaviour, IPointerClickHandler
     {
+        public delegate void OnClick(ItemDisplay itemDisplay);
+        public event OnClick onClick;
+
         [SerializeField]
-        private Image itemImage;
+        private Image           itemImage;
         [SerializeField]
         private TextMeshProUGUI itemCountText;
+        
 
         string baseText = "x{0}";
 
@@ -53,6 +58,14 @@ namespace UC
                     itemCountText.color = item.displayTextColor;
                     itemCountText.text = string.Format(baseText, count);
                 }
+            }
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Left)
+            {
+                onClick?.Invoke(this);
             }
         }
     }

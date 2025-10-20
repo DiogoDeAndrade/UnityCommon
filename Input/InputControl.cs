@@ -9,7 +9,7 @@ namespace UC
     [Serializable]
     public class InputControl
     {
-        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3 };
+        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, Any = 4 };
 
         [SerializeField]
         private InputType _type;
@@ -75,6 +75,8 @@ namespace UC
                         }
                     }
                     break;
+                case InputType.Any:
+                    throw (new NotImplementedException($"GetAxis with type={type}"));
                 default:
                     break;
             }
@@ -89,6 +91,7 @@ namespace UC
                 case InputType.Axis:
                 case InputType.Button:
                 case InputType.Key:
+                case InputType.Any:
                     throw (new NotImplementedException($"GetAxis2D with type={type}"));
                 case InputType.NewInput:
                     if (action == null) RefreshAction();
@@ -127,6 +130,9 @@ namespace UC
                     if (action == null) RefreshAction();
                     if (action != null) ret = action.IsPressed();
                     break;
+                case InputType.Any:
+                    ret = Input.anyKey;
+                    break;
                 default:
                     break;
             }
@@ -152,6 +158,9 @@ namespace UC
                 case InputType.NewInput:
                     if (action == null) RefreshAction();
                     if (action != null) ret = action.WasPressedThisFrame();
+                    break;
+                case InputType.Any:
+                    ret = Input.anyKeyDown;
                     break;
                 default:
                     break;
@@ -179,6 +188,8 @@ namespace UC
                     if (action == null) RefreshAction();
                     if (action != null) ret = action.WasReleasedThisFrame();
                     break;
+                case InputType.Any:
+                    throw (new NotImplementedException($"IsUp with type={type}"));
                 default:
                     break;
             }
@@ -227,7 +238,8 @@ namespace UC
         Button = 1 << 1,
         Key = 1 << 2,
         NewInput = 1 << 3,
-        All = Axis | Button | Key | NewInput
+        Any = 1 << 4,
+        All = Axis | Button | Key | NewInput | Any
     }
 
     [AttributeUsage(AttributeTargets.Field, Inherited = true, AllowMultiple = false)]

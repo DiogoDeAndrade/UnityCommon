@@ -26,6 +26,13 @@ namespace UC
 
             return false;
         }
+        public bool HasAnyHypertag(Hypertag[] hypertags)
+        {
+            foreach (var t in hypertags)
+                if (hypertag == t) return true;
+
+            return false;
+        }
 
         static Dictionary<Hypertag, List<HypertaggedObject>> allHypertagObjects = new();
 
@@ -45,7 +52,7 @@ namespace UC
 
         static void RemoveFromHypertagList(HypertaggedObject obj)
         {
-            if (allHypertagObjects.TryGetValue(obj.hypertag, out var l))
+            if ((obj.hypertag != null) && (allHypertagObjects.TryGetValue(obj.hypertag, out var l)))
             {
                 l.Remove(obj);
                 return;
@@ -283,6 +290,28 @@ namespace UC
                     }
                 }
             }
+        }
+
+        public static bool CheckTags(Component component, Hypertag[] tags, bool includeParent = true)
+        {
+            HypertaggedObject[] selfTags;
+
+            if (includeParent)
+            {
+                selfTags = component.GetComponentsInParent<HypertaggedObject>();
+                foreach (var t in selfTags)
+                {
+                    if (t.HasAnyHypertag(tags)) return true;
+                }
+            }
+
+            selfTags = component.GetComponents<HypertaggedObject>();
+            foreach (var t in selfTags)
+            {
+                if (t.HasAnyHypertag(tags)) return true;
+            }
+
+            return false;
         }
     }
 }

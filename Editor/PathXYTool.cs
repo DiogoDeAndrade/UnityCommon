@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
 
-namespace UC
+namespace UC.Editor
 {
     [EditorTool("Edit Path XY", typeof(PathXY))]
     public class PathXYTool : EditorTool

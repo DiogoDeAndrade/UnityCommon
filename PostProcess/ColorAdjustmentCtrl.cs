@@ -113,5 +113,44 @@ namespace UC
                 if (alsoSet) SetValueInPlayerPrefs(saturationMode, saturationKey, value);
             }
         }
+
+        public float GetPostExposure()
+        {
+            if (colorAdjustments != null)
+            {
+                return colorAdjustments.postExposure.value;
+            }
+            return 1.0f;
+        }
+
+        public float GetContrast()
+        {
+            if (colorAdjustments != null)
+            {
+                return colorAdjustments.contrast.value;                
+            }
+
+            return 0.0f;
+        }
+
+        public float GetHueShift()
+        {
+            if (colorAdjustments != null)
+            {
+                return colorAdjustments.hueShift.value;                
+            }
+
+            return 0.0f;
+        }
+
+        public float GetSaturation()
+        {
+            if (colorAdjustments != null)
+            {
+                return colorAdjustments.saturation.value;                
+            }
+
+            return 0.0f;
+        }
     }
 }

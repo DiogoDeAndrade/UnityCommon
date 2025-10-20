@@ -6,7 +6,7 @@ using System.Linq;
 using System.IO;
 using UnityEditor.EditorTools;
 
-namespace UC
+namespace UC.Editor
 {
 
     [InitializeOnLoad]

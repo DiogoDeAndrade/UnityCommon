@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace UC
 {
@@ -15,6 +16,15 @@ namespace UC
         private bool limited = false;
         [SerializeField, ShowIf(nameof(limited))]
         private int maxSlots = 9;
+        [SerializeField]
+        private bool enableInput = false;
+        [SerializeField, ShowIf(nameof(enableInput))]
+        private PlayerInput playerInput;
+        [SerializeField, ShowIf(nameof(enableInput)), InputPlayer(nameof(playerInput)), InputButton]
+        private InputControl inventoryButton;
+
+        InventoryDisplay inventoryDisplay;
+
 
         [System.Serializable]
         public class Items
@@ -194,6 +204,26 @@ namespace UC
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
+        }
+
+        void Start()
+        {
+            if (enableInput)
+            {
+                inventoryDisplay = FindFirstObjectByType<InventoryDisplay>();
+                inventoryButton.playerInput = playerInput;
+            }
+        }
+
+        void Update()
+        {
+            if (enableInput)
+            {
+                if (inventoryButton.IsDown())
+                {
+                    inventoryDisplay.Toggle();
+                }
+            }
         }
     }
 }

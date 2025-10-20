@@ -109,7 +109,7 @@ public class NameEntryElement : MonoBehaviour
     void FlashLetter()
     {
         letterText.transform.localScale = Vector3.one * 1.2f;
-        letterText.transform.ScaleTo(Vector3.one, 0.05f, "ZoomLetter");
+        letterText.transform.LocalScaleTo(Vector3.one, 0.05f, "ZoomLetter");
     }
 
     public void Activate()

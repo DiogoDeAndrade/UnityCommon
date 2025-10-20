@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using static UnityEngine.Rendering.DebugUI;
 
 namespace UC
 {
@@ -31,6 +33,22 @@ namespace UC
         public static void SetVector4(string key, Vector4 value)
         {
             PlayerPrefs.SetString(key, $"{value.x};{value.y};{value.z};{value.w}");
+        }
+
+        public static void SetBool(string key, bool bValue)
+        {
+            PlayerPrefs.SetString(key, (bValue) ? ("true") : ("false"));
+        }
+
+        public static bool GetBool(string key, bool defaultValue)
+        {
+            if (PlayerPrefs.HasKey(key))
+            {
+                string value = PlayerPrefs.GetString(key).ToLower();
+                if (value == "true") return true;
+                return false;
+            }
+            return defaultValue;
         }
     }
 }

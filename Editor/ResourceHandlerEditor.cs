@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using UnityEditor.UIElements;
 
-namespace UC
+namespace UC.Editor
 {
 
     [CustomEditor(typeof(ResourceHandler))]
