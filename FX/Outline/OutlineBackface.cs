@@ -95,7 +95,7 @@ namespace UC
 
         private void UnsetMaterial(Renderer renderer, Material material)
         {
-            var materials = new List<Material>(renderer.materials);
+            var materials = new List<Material>(renderer.sharedMaterials);
             materials.Remove(material);
             renderer.SetMaterials(materials);
         }
