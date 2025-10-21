@@ -88,7 +88,7 @@ namespace UC
                         Vector3 p2 = points[baseAnchorIndex + 2];
                         Vector3 p3 = points[baseAnchorIndex + 3];
 
-                        Bezier.SplitCubic(p0, p1, p2, p3, 0.5f, out Vector3[] bezier1, out Vector3[] bezier2);
+                        BezierHelpers.SplitCubic(p0, p1, p2, p3, 0.5f, out Vector3[] bezier1, out Vector3[] bezier2);
 
                         points[baseAnchorIndex] = bezier1[0];
                         points[baseAnchorIndex + 1] = bezier1[1];
@@ -305,7 +305,7 @@ namespace UC
                         Vector3 p2 = points[i2];
                         Vector3 p3 = points[i3];
 
-                        return Bezier.ComputeCubic(p0, p1, p2, p3, t);
+                        return BezierHelpers.ComputeCubic(p0, p1, p2, p3, t);
                     }
                 default:
                     break;
@@ -429,7 +429,7 @@ namespace UC
                         Vector3 p2 = points[i2];
                         Vector3 p3 = points[i3];
 
-                        return Bezier.ComputeCubicDerivative(p0, p1, p2, p3, t).normalized;
+                        return BezierHelpers.ComputeCubicDerivative(p0, p1, p2, p3, t).normalized;
                     }
                 default:
                     break;
