@@ -10,16 +10,22 @@ namespace UC
         public enum Channel { UV0 = 0, UV1 = 1, UV2 = 2, UV3 = 3, UV4 = 4, UV5 = 5, UV6 = 6, UV7 = 7, Normal = 8 };
         private static readonly string[] kDirKeywords =
         {
-        "_DIRSOURCE_UV0","_DIRSOURCE_UV1","_DIRSOURCE_UV2","_DIRSOURCE_UV3",
-        "_DIRSOURCE_UV4","_DIRSOURCE_UV5","_DIRSOURCE_UV6","_DIRSOURCE_UV7",
-        "_DIRSOURCE_NORMAL"
-    };
+            "_DIRSOURCE_UV0","_DIRSOURCE_UV1","_DIRSOURCE_UV2","_DIRSOURCE_UV3",
+            "_DIRSOURCE_UV4","_DIRSOURCE_UV5","_DIRSOURCE_UV6","_DIRSOURCE_UV7",
+            "_DIRSOURCE_NORMAL"
+        };
+        
+        public enum Space{ Object, World, Clip }
+        static readonly string[] kSpaceKeywords =
+        {
+          "_EXTRUDESPACE_OBJECT","_EXTRUDESPACE_WORLD","_EXTRUDESPACE_CLIP"
+        };
 
-        [SerializeField] private Color color = Color.black;
-        [SerializeField] private float width = 0.02f;
-        [SerializeField] private Channel channel = Channel.UV7;
-        [SerializeField] private bool worldSpace = true;
-        [SerializeField] private bool continuousUpdate;
+        [SerializeField] private Color      color = Color.black;
+        [SerializeField] private float      width = 0.02f;
+        [SerializeField] private Channel    channel = Channel.UV7;
+        [SerializeField] private Space      space = Space.World;
+        [SerializeField] private bool       continuousUpdate;
 
         Dictionary<Renderer, Material> rendererOutlineMaterial = new();
 
@@ -51,12 +57,16 @@ namespace UC
                         Material material = new Material(Shader.Find("Unity Common/Effects/Outline (Backface Extrude)"));
                         material.SetColor("_OutlineColor", color);
                         material.SetFloat("_OutlineWidth", width);
-                        material.SetFloat("_Mode", (worldSpace) ? (0.0f) : (1.0f));
                         material.SetInt("_DirSource", (int)channel);
+                        material.SetInt("_ExtrudeSpace", (int)space);
 
                         for (int i = 0; i < kDirKeywords.Length; i++)
                             material.DisableKeyword(kDirKeywords[i]);
                         material.EnableKeyword(kDirKeywords[(int)channel]);
+
+                        for (int i = 0; i < kSpaceKeywords.Length; i++)
+                            material.DisableKeyword(kSpaceKeywords[i]);
+                        material.EnableKeyword(kSpaceKeywords[(int)space]);
 
                         rendererOutlineMaterial.Add(renderer, material);
                     }
@@ -98,7 +108,6 @@ namespace UC
                 var material = renderer.Value;
                 material.SetColor("_OutlineColor", color);
                 material.SetFloat("_OutlineWidth", width);
-                material.SetFloat("_Mode", (worldSpace) ? (0.0f) : (1.0f));
             }
         }
 

@@ -8,6 +8,63 @@ ShaderVariantCollection:
   m_PrefabAsset: {fileID: 0}
   m_Name: UnityCommonShaders
   m_Shaders:
+  - first: {fileID: 4800000, guid: ef1f34f9ef62e15439169df7f14b97f5, type: 3}
+    second:
+      variants:
+      - keywords: _DIRSOURCE_NORMAL _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_NORMAL _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_NORMAL _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV0 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV0 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV0 _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV1 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV1 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV1 _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV2 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV2 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV2 _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV3 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV3 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV3 _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV4 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV4 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV4 _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV5 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV5 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV5 _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV6 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV6 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV6 _EXTRUDESPACE_WORLD
+        passType: 0
+      - keywords: _DIRSOURCE_UV7 _EXTRUDESPACE_CLIP
+        passType: 0
+      - keywords: _DIRSOURCE_UV7 _EXTRUDESPACE_OBJECT
+        passType: 0
+      - keywords: _DIRSOURCE_UV7 _EXTRUDESPACE_WORLD
+        passType: 0
   - first: {fileID: -6465566751694194690, guid: dc8b51f375091d9418466c64310e5b65, type: 3}
     second:
       variants: []
@@ -20,13 +77,13 @@ ShaderVariantCollection:
   - first: {fileID: -6465566751694194690, guid: 00203c5c3cc86ce468b227e90799daea, type: 3}
     second:
       variants: []
+  - first: {fileID: -6465566751694194690, guid: 87c7f8cc731ebfe499ee07bb292a40ad, type: 3}
+    second:
+      variants: []
   - first: {fileID: -6465566751694194690, guid: 1f29407d401dd0142999b13c53bb223f, type: 3}
     second:
       variants: []
   - first: {fileID: -6465566751694194690, guid: c4a53a05f5fc8754d8f736e63ef2de57, type: 3}
-    second:
-      variants: []
-  - first: {fileID: -6465566751694194690, guid: 87c7f8cc731ebfe499ee07bb292a40ad, type: 3}
     second:
       variants: []
   - first: {fileID: -6465566751694194690, guid: 8cf3900d257be6949a06c35796cc26d1, type: 3}
