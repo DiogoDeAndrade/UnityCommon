@@ -308,15 +308,21 @@ namespace UC
             {
                 rb.gravityScale = 0.0f;
                 currentJumpCount = maxJumpCount;
-                if (airCollider) airCollider.enabled = false;
-                if (groundCollider) groundCollider.enabled = true;
+                if ((airCollider != groundCollider) && (airCollider) && (groundCollider))
+                {
+                    airCollider.enabled = false;
+                    groundCollider.enabled = true;
+                }
                 glideTimer = glideMaxTime;
             }
             else
             {
                 rb.gravityScale = gravityScale;
-                if (airCollider) airCollider.enabled = true;
-                if (groundCollider) groundCollider.enabled = false;
+                if ((airCollider != groundCollider) && (airCollider) && (groundCollider))
+                {
+                    airCollider.enabled = true;
+                    groundCollider.enabled = false;
+                }
             }
 
             var currentVelocity = rb.linearVelocity;
@@ -425,6 +431,7 @@ namespace UC
                 {
                     actualIsGrounded = true;
                     isGrounded = true;
+                    coyoteTimer = coyoteTime;
                     return;
                 }
                 else
@@ -435,11 +442,6 @@ namespace UC
                         coyoteTimer = 0;
                     }
                 }
-            }
-
-            if (actualIsGrounded)
-            {
-                coyoteTimer = coyoteTime;
             }
 
             actualIsGrounded = false;

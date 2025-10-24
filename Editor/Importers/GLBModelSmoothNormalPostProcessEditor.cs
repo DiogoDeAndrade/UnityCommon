@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
 
+#if UNITYGLTF_PRESENT
 namespace UC
 {
 
@@ -134,3 +135,4 @@ namespace UC
         }
     }
 }
+#endif
