@@ -33,6 +33,7 @@ namespace UC
             mesh.name = $"Generated rectangle";
 
             Vector3[] vertices = null;
+            Vector2[] uvs = null;
             Color[] colors = null;
             int[] indices = null;
 
@@ -47,6 +48,7 @@ namespace UC
 
                 int nVertex = (2 + subdivisions) * (2 + subdivisions);
                 vertices = new Vector3[nVertex];
+                uvs = new Vector2[nVertex];
                 colors = new Color[nVertex];
 
                 float y = -size.y * 0.5f;
@@ -57,6 +59,7 @@ namespace UC
                     {
                         int index = yi * (subdivisions + 2) + xi;
                         vertices[index] = new Vector3(x, y, 0.0f);
+                        uvs[index] = new Vector2((float)xi / (float)(subdivisions + 1), (float)yi / (float)(subdivisions + 1));
 
                         switch (colorMode)
                         {
@@ -146,16 +149,21 @@ namespace UC
                 var innerHalfSize = innerSize * 0.5f;
 
                 vertices = new Vector3[8];
+                uvs = new Vector2[8];
+
                 colors = new Color[8];
 
-                vertices[0] = new Vector3(-halfSize.x, -halfSize.y, 0.0f);
-                vertices[1] = new Vector3(halfSize.x, -halfSize.y, 0.0f);
-                vertices[2] = new Vector3(halfSize.x, halfSize.y, 0.0f);
-                vertices[3] = new Vector3(-halfSize.x, halfSize.y, 0.0f);
-                vertices[4] = new Vector3(-innerHalfSize.x, -innerHalfSize.y, 0.0f);
-                vertices[5] = new Vector3(innerHalfSize.x, -innerHalfSize.y, 0.0f);
-                vertices[6] = new Vector3(innerHalfSize.x, innerHalfSize.y, 0.0f);
-                vertices[7] = new Vector3(-innerHalfSize.x, innerHalfSize.y, 0.0f);
+                float ui = innerHalfSize.x / size.x;
+                float vi = innerHalfSize.y / size.y;
+
+                vertices[0] = new Vector3(-halfSize.x, -halfSize.y, 0.0f); uvs[0] = new Vector2(0.0f, 0.0f);
+                vertices[1] = new Vector3(halfSize.x, -halfSize.y, 0.0f); uvs[1] = new Vector2(1.0f, 0.0f);
+                vertices[2] = new Vector3(halfSize.x, halfSize.y, 0.0f); uvs[2] = new Vector2(1.0f, 1.0f);
+                vertices[3] = new Vector3(-halfSize.x, halfSize.y, 0.0f); uvs[3] = new Vector2(0.0f, 1.0f);
+                vertices[4] = new Vector3(-innerHalfSize.x, -innerHalfSize.y, 0.0f); uvs[4] = new Vector2(0.5f - ui, 0.5f - vi);
+                vertices[5] = new Vector3(innerHalfSize.x, -innerHalfSize.y, 0.0f); uvs[5] = new Vector2(0.5f + ui, 0.5f - vi);
+                vertices[6] = new Vector3(innerHalfSize.x, innerHalfSize.y, 0.0f); uvs[6] = new Vector2(0.5f + ui, 0.5f + vi);
+                vertices[7] = new Vector3(-innerHalfSize.x, innerHalfSize.y, 0.0f); uvs[7] = new Vector2(0.5f - ui, 0.5f + vi);
 
                 switch (colorMode)
                 {
@@ -250,6 +258,7 @@ namespace UC
 
             mesh.vertices = vertices;
             mesh.colors = colors;
+            mesh.uv = uvs;
             mesh.triangles = indices;
             mesh.UploadMeshData(true);
 
