@@ -76,5 +76,11 @@ namespace UC
                 dirty = true;
             }
         }//*/
+
+        public void SetMaterial(Material material)        
+        {
+            this.material = material;
+        }
+
     }
 }
