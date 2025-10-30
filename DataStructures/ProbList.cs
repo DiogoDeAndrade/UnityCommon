@@ -162,7 +162,7 @@ namespace UC
             for (int i = 0; i < elements.Count; i++)
             {
                 cumulativeWeight += elements[i].weight;
-                if (randomValue < cumulativeWeight)
+                if (randomValue <= cumulativeWeight)
                 {
                     return i;
                 }

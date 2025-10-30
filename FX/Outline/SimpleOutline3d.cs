@@ -5,7 +5,7 @@ using UnityEngine;
 namespace UC
 {
 
-    public class OutlineBackface : MonoBehaviour
+    public class SimpleOutline3d : MonoBehaviour
     {
         public enum Channel { UV0 = 0, UV1 = 1, UV2 = 2, UV3 = 3, UV4 = 4, UV5 = 5, UV6 = 6, UV7 = 7, Normal = 8 };
         private static readonly string[] kDirKeywords =
@@ -15,7 +15,7 @@ namespace UC
             "_DIRSOURCE_NORMAL"
         };
         
-        public enum Space{ Object, World, Clip }
+        public enum Space { Object, World, Clip }
         static readonly string[] kSpaceKeywords =
         {
           "_EXTRUDESPACE_OBJECT","_EXTRUDESPACE_WORLD","_EXTRUDESPACE_CLIP"
@@ -26,6 +26,7 @@ namespace UC
         [SerializeField] private Channel    channel = Channel.UV7;
         [SerializeField] private Space      space = Space.World;
         [SerializeField] private bool       continuousUpdate;
+        [SerializeField] private Renderer[] targetRenderers;
 
         Dictionary<Renderer, Material> rendererOutlineMaterial = new();
 
@@ -33,9 +34,10 @@ namespace UC
         {
             if (!Application.isPlaying) return;
 
-            var renderers = GetComponentsInChildren<Renderer>();
-
-            ToggleOutline(true, renderers);
+            if ((targetRenderers != null) && (targetRenderers.Length > 0))
+                ToggleOutline(true, targetRenderers);
+            else
+                ToggleOutline(true, GetComponentsInChildren<Renderer>());
         }
 
         private void OnDisable()
