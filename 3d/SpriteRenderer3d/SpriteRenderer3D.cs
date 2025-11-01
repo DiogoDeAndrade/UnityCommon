@@ -36,6 +36,8 @@ namespace UC
         private    bool                _receiveShadows = true;
         [SerializeField] 
         private LightProbeUsage        _lightProbeUsage = LightProbeUsage.Off; // Note: DrawMesh won't do light probes like a Renderer
+        [SerializeField]
+        private    bool                 _cacheMaterial = true;
 
         Mesh                    _mesh;
         Sprite                  _meshSprite;
@@ -44,6 +46,11 @@ namespace UC
 
         public Sprite sprite { get => _sprite; set { _sprite = value; } }
         public Color color { get => _color; set { _color = value; } }
+        public Material material
+        {
+            get => _material;
+            set { _material = value; }
+        }
 
         struct MaterialKey
         {
@@ -70,6 +77,15 @@ namespace UC
             if (_MaterialCache.TryGetValue(key, out cachedMaterial)) return cachedMaterial;
 
             cachedMaterial = new Material(material);
+            SetupMaterial(cachedMaterial, flags, sortingPriority);
+
+            _MaterialCache.Add(key, cachedMaterial);
+
+            return cachedMaterial;
+        }
+
+        void SetupMaterial(Material material, MaterialKey.Flags flags, int sortingPriority)
+        {
             if ((flags & MaterialKey.Flags.HasNormal) != 0) material.EnableKeyword("_NORMALMAP");
             else material.DisableKeyword("_NORMALMAP");
             if ((flags & MaterialKey.Flags.HasMetallic) != 0) material.EnableKeyword("_METALLICGLOSSMAP");
@@ -79,11 +95,8 @@ namespace UC
             if ((flags & MaterialKey.Flags.HasShadow) == 0) material.EnableKeyword("_RECEIVE_SHADOWS_OFF");
             else material.DisableKeyword("_RECEIVE_SHADOWS_OFF");
 
-            cachedMaterial.renderQueue = material.renderQueue + sortingPriority;
-
-            _MaterialCache.Add(key, cachedMaterial);
-
-            return cachedMaterial;
+            // Always place the Sprite Renderer in transparent queue, +/- sorting priority
+            material.renderQueue = 3000 + sortingPriority;
         }
 
         private void Start()
@@ -226,15 +239,22 @@ namespace UC
             var worldScale = transform.lossyScale;
             var matrix = Matrix4x4.TRS(worldPos, faceRot, worldScale);
 
-            Material material = GetCachedMaterial(_material, _currentFlags, _sortingPriority);
+            Material material = null;
+
+            if (_cacheMaterial)
+            {
+                material = GetCachedMaterial(_material, _currentFlags, _sortingPriority);
+            }
+            else
+            {
+                material = _material;
+                SetupMaterial(material, _currentFlags, _sortingPriority);
+            }
 
             // Draw once per camera
             // Note: Graphics.DrawMesh renders for the current frame; calling here ensures per-camera billboarding.
             Graphics.DrawMesh(_mesh, matrix, material, _layer, camera, 0, _mpb, _shadowCasting, _receiveShadows, null, _lightProbeUsage);
         }
-
-        public Material GetSharedMaterial() => _material;
-        public void SetSharedMaterial(Material m) { _material = m; }
 
         static void ApplySecondaryTexturesToMPB(Sprite sprite, MaterialPropertyBlock mpb, ref MaterialKey.Flags flags)
         {

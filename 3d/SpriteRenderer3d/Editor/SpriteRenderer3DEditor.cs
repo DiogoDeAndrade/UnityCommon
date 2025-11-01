@@ -11,7 +11,7 @@ namespace UC.Editor
     {
         SerializedProperty _sprite, _color, _material;
         SerializedProperty _billboardMode, _pivotOffset, _rotationOffsetEuler;
-        SerializedProperty _layer, _sortingPriority, _shadowCasting, _receiveShadows, _lightProbeUsage;
+        SerializedProperty _layer, _sortingPriority, _shadowCasting, _receiveShadows, _lightProbeUsage, _cacheMaterial;
 
         MaterialEditor _matEditor;
 
@@ -30,6 +30,7 @@ namespace UC.Editor
             _shadowCasting = serializedObject.FindProperty("_shadowCasting");
             _receiveShadows = serializedObject.FindProperty("_receiveShadows");
             _lightProbeUsage = serializedObject.FindProperty("_lightProbeUsage");
+            _cacheMaterial = serializedObject.FindProperty("_cacheMaterial");
         }
 
         void OnDisable()
@@ -68,6 +69,7 @@ namespace UC.Editor
             EditorGUILayout.PropertyField(_shadowCasting);
             EditorGUILayout.PropertyField(_receiveShadows);
             EditorGUILayout.PropertyField(_lightProbeUsage);
+            EditorGUILayout.PropertyField(_cacheMaterial);
 
             serializedObject.ApplyModifiedProperties();
 
