@@ -8,13 +8,11 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: EffectSpriteRenderer3d
-  m_Shader: {fileID: -6465566751694194690, guid: 13c228c96088c9d4f8eddc57c00915cd, type: 3}
+  m_Shader: {fileID: -6465566751694194690, guid: 6704143b6c0a4854ea9bfcb3ddc17e4f, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
-  m_InvalidKeywords:
-  - ABCD
-  - _receiveShadows
+  m_InvalidKeywords: []
   m_LightmapFlags: 2
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -31,6 +29,18 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Colormap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DistortMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EffectTexture:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
@@ -71,18 +81,28 @@ Material:
     - _ABCD: 0
     - _AlphaThreshould: 0.01
     - _Alpha_Threshould: 0
+    - _DistortNoiseScale: 5
+    - _DistortScaleUV: 0
     - _EMISSION: 0
+    - _EnableRemap: 0
+    - _InverseFactor: 0
     - _METALLICGLOSSMAP: 0
     - _Metallic: 0
     - _NORMALMAP: 0
     - _NormalStrength: 0
+    - _OutlineEnable: 0
+    - _OutlineWidth: 1
     - _QueueControl: 0
     - _QueueOffset: 0
     - _RECEIVE_SHADOWS_OFF: 0
     - _Smoothness: 0
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
+    - _DistortAnimSpeed: {r: 2, g: 2.1, b: 0, a: 0}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - _FlashColor: {r: 0, g: 0, b: 0, a: 0}
+    - _OutlineColor: {r: 1, g: 1, b: 1, a: 1}
+    - _OutlineTexelSize: {r: 0.00390625, g: 0.00390625, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
 --- !u!114 &1428945171618630041
