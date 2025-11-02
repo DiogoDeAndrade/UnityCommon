@@ -16,5 +16,17 @@ namespace UC
                 light.color = value;
             }, "FadeColorTo").Done(() => light.color = endColor);
         }
+
+        public static Tweener.BaseInterpolator FadeTo(this Light light, float endIntensity, float duration)
+        {
+            light.Tween().Stop("FadeIntensityTo", Tweener.StopBehaviour.SkipToEnd);
+
+            var current = light.intensity;
+
+            return light.Tween().Interpolate(current, endIntensity, duration, (value) =>
+            {
+                light.intensity = value;
+            }, "FadeIntensityTo").Done(() => light.intensity = endIntensity);
+        }
     }
 }

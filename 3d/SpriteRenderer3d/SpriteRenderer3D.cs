@@ -129,7 +129,7 @@ namespace UC
             if (_mpb == null) _mpb = new MaterialPropertyBlock();
         }
 
-        void EnsureMesh()
+        void EnsureMesh(bool force = false)
         {
             if (_sprite == null)
             {
@@ -137,7 +137,7 @@ namespace UC
                 return;
             }
 
-            if ((_mesh == null) || (_meshSprite != _sprite))
+            if ((_mesh == null) || (_meshSprite != _sprite) || (force))
             {
                 if (_mesh == null) _mesh = new Mesh { name = $"Sprite3D_{_sprite.name}" };
 
@@ -205,6 +205,16 @@ namespace UC
             if ((_mesh != null) && (_sprite != null))
             {
                 EnsureMesh();
+                UpdateMPB();
+            }
+        }
+
+        [Button("Force Refresh")]
+        public void ForceRefresh()
+        {
+            if (_sprite != null)
+            {
+                EnsureMesh(true);
                 UpdateMPB();
             }
         }

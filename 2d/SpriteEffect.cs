@@ -184,7 +184,7 @@ namespace UC
 
                 spriteRenderer.SetPropertyBlock(mpb);
             }
-            else 
+            else if (material)
             {
                 if ((palette) && (colorRemapEnable))
                 {

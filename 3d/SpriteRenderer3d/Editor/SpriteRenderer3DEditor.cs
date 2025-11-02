@@ -73,8 +73,14 @@ namespace UC.Editor
 
             serializedObject.ApplyModifiedProperties();
 
+            if (GUILayout.Button("Force Refresh"))
+            {
+                var sr = target as SpriteRenderer3D;
+                sr?.ForceRefresh();
+            }
+
             // --- Embedded Material inspector (with standard material preview, if you open the material itself) ---
-            var mat = (Material)_material.objectReferenceValue;
+                var mat = (Material)_material.objectReferenceValue;
             if (mat != null)
             {
                 if (_matEditor == null || _matEditor.target != mat)
@@ -84,7 +90,7 @@ namespace UC.Editor
                 }
 
                 EditorGUILayout.Space();
-                using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                using (new EditorGUILayout.VerticalScope())
                 {
                     _matEditor.DrawHeader();
                     _matEditor.OnInspectorGUI();
