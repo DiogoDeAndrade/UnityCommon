@@ -14,20 +14,20 @@ namespace UC
         class Element
         {
             [SerializeField]
-            public T value;
+            public T        value;
             [SerializeField]
-            public float weight;
+            public float    weight;
         }
 
-        private List<Element> elements = new List<Element>();          // Current elements for selection
+        private List<Element>   elements = new List<Element>();          // Current elements for selection
         [SerializeField]
-        private List<Element> originalElements = new List<Element>();       // Backup of the original elements
-        private System.Random systemRandom;
+        private List<Element>   originalElements = new List<Element>();       // Backup of the original elements
+        private System.Random   systemRandom;
         [SerializeField]
-        private bool withReplacement = true;
-        private bool resetWhenEmpty = true;
-        private float totalWeight;
-        private bool init = false;
+        private bool            withReplacement = true;
+        private bool            resetWhenEmpty = true;
+        private float           totalWeight;
+        private bool            init = false;
 
         // Constructor with optional Random generator and option for with/without replacement
         public ProbList(bool withReplacement = true, bool resetWhenEmpty = true, System.Random randomGenerator = null)
@@ -70,7 +70,9 @@ namespace UC
             int index = IndexOf(item);
             if (index == -1)
             {
-                originalElements.Add(new Element { value = item, weight = weight });
+                var e = new Element { value = item, weight = weight };
+                originalElements.Add(e);
+                if (init) elements.Add(e);
             }
             else
             {
@@ -162,7 +164,7 @@ namespace UC
             for (int i = 0; i < elements.Count; i++)
             {
                 cumulativeWeight += elements[i].weight;
-                if (randomValue < cumulativeWeight)
+                if (randomValue <= cumulativeWeight)
                 {
                     return i;
                 }
@@ -174,7 +176,7 @@ namespace UC
         private int GetRandomWeightedIndex(System.Random randomGenerator)
         {
             // Generate random number in range of total weight
-            float randomValue = systemRandom.Range(0, totalWeight);
+            float randomValue = randomGenerator.Range(0, totalWeight);
 
             float cumulativeWeight = 0;
 

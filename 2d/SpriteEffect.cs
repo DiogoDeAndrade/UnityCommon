@@ -5,9 +5,6 @@ using UnityEditor;
 
 namespace UC
 {
-
-    [ExecuteAlways]
-    [RequireComponent(typeof(SpriteRenderer))]
     public class SpriteEffect : MonoBehaviour
     {
         [Flags]
@@ -34,33 +31,35 @@ namespace UC
         public bool outlineEnable => (effects & Effects.Outline) != 0;
 
 
-        private MaterialPropertyBlock mpb;
-        private SpriteRenderer spriteRenderer;
+        private MaterialPropertyBlock   mpb;
+        private SpriteRenderer          spriteRenderer;
+        private SpriteRenderer3D        spriteRenderer3D;
+        private Material                material;
+
 
         private void OnEnable()
         {
-            mpb = new();
             spriteRenderer = GetComponent<SpriteRenderer>();
+            spriteRenderer3D = GetComponent<SpriteRenderer3D>();
+            if (spriteRenderer) mpb = new();
 
             if (createMaterialCopy)
             {
-#if UNITY_EDITOR
-                if (EditorApplication.isPlaying)
-                {
-#endif
-                    spriteRenderer.material = new Material(spriteRenderer.material);
-#if UNITY_EDITOR
-                }
-#endif
+                GenerateMaterialCopy();
             }
-#if UNITY_EDITOR
+            else
+            {
+                if (spriteRenderer) material = spriteRenderer.material;
+                else if (spriteRenderer3D) material = spriteRenderer3D.material;
+            }
+
             // Check if material has the right shader (a bit hard coded)
-            string shaderName = spriteRenderer.sharedMaterial.shader.name;
+            string shaderName = material.shader.name;
             if (shaderName.IndexOf("Effect", StringComparison.InvariantCultureIgnoreCase) == -1)
             {
                 Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
             }
-#endif
+
             ConfigureMaterial();
         }
 
@@ -111,60 +110,135 @@ namespace UC
             ConfigureMaterial();
         }
 
+        [Button("Generate Material Copy")]
+        void GenerateMaterialCopy()
+        {
+            if (spriteRenderer)
+            {
+                material = spriteRenderer.material = new Material(spriteRenderer.material);
+            }
+            else
+            {
+                material = spriteRenderer3D.material = new Material(spriteRenderer3D.material);
+            }
+            material.name = $"{material.name} Copy ({name})";
+
+            if (SpriteEffectConfig.Instance != null)
+            {
+                material.shader = SpriteEffectConfig.Instance.GetShader(material.shader);
+            }
+        }
+
         [Button("Update Material")]
         private void ConfigureMaterial()
         {
-            //spriteRenderer.GetPropertyBlock(mpb);
-
-            if ((palette) && (colorRemapEnable))
+            if (mpb != null)
             {
-                var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
-                if (texture != null) mpb.SetTexture("_Colormap", texture);
-                mpb.SetFloat("_EnableRemap", 1.0f);
-            }
-            else
-            {
-                mpb.SetFloat("_EnableRemap", 0.0f);
-            }
-
-            if (inverseEnable)
-            {
-                mpb.SetFloat("_InverseFactor", inverseFactor);
-            }
-            else
-            {
-                mpb.SetFloat("_InverseFactor", 0.0f);
-            }
-
-            if (flashEnable)
-            {
-                mpb.SetColor("_FlashColor", flashColor);
-            }
-            else
-            {
-                mpb.SetColor("_FlashColor", flashColor.ChangeAlpha(0));
-            }
-
-            if (outlineEnable)
-            {
-                Vector2 texelSize = Vector2.zero;
-                if ((spriteRenderer) && (spriteRenderer.sprite) && (spriteRenderer.sprite.texture))
+                if ((palette) && (colorRemapEnable))
                 {
-                    var texture = spriteRenderer.sprite.texture;
-                    texelSize = new Vector2(1.0f / texture.width, 1.0f / texture.height);
+                    var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
+                    if (texture != null) mpb.SetTexture("_Colormap", texture);
+                    mpb.SetFloat("_EnableRemap", 1.0f);
+                }
+                else
+                {
+                    mpb.SetFloat("_EnableRemap", 0.0f);
                 }
 
-                mpb.SetColor("_OutlineColor", outlineColor);
-                mpb.SetFloat("_OutlineWidth", outlineWidth);
-                mpb.SetVector("_OutlineTexelSize", texelSize);
-                mpb.SetFloat("_OutlineEnable", 1.0f);
-            }
-            else
-            {
-                mpb.SetFloat("_OutlineEnable", 0.0f);
-            }
+                if (inverseEnable)
+                {
+                    mpb.SetFloat("_InverseFactor", inverseFactor);
+                }
+                else
+                {
+                    mpb.SetFloat("_InverseFactor", 0.0f);
+                }
 
-            spriteRenderer.SetPropertyBlock(mpb);
+                if (flashEnable)
+                {
+                    mpb.SetColor("_FlashColor", flashColor);
+                }
+                else
+                {
+                    mpb.SetColor("_FlashColor", flashColor.ChangeAlpha(0));
+                }
+
+                if (outlineEnable)
+                {
+                    Vector2 texelSize = Vector2.zero;
+                    if ((spriteRenderer) && (spriteRenderer.sprite) && (spriteRenderer.sprite.texture))
+                    {
+                        var texture = spriteRenderer.sprite.texture;
+                        texelSize = new Vector2(1.0f / texture.width, 1.0f / texture.height);
+                    }
+
+                    mpb.SetColor("_OutlineColor", outlineColor);
+                    mpb.SetFloat("_OutlineWidth", outlineWidth);
+                    mpb.SetVector("_OutlineTexelSize", texelSize);
+                    mpb.SetFloat("_OutlineEnable", 1.0f);
+                }
+                else
+                {
+                    mpb.SetFloat("_OutlineEnable", 0.0f);
+                }
+
+                spriteRenderer.SetPropertyBlock(mpb);
+            }
+            else if (material)
+            {
+                if ((palette) && (colorRemapEnable))
+                {
+                    var texture = palette.GetTexture(ColorPalette.TextureLayoutMode.Horizontal, 4);
+                    if (texture != null) material.SetTexture("_Colormap", texture);
+                    material.SetFloat("_EnableRemap", 1.0f);
+                }
+                else
+                {
+                    material.SetFloat("_EnableRemap", 0.0f);
+                }
+
+                if (inverseEnable)
+                {
+                    material.SetFloat("_InverseFactor", inverseFactor);
+                }
+                else
+                {
+                    material.SetFloat("_InverseFactor", 0.0f);
+                }
+
+                if (flashEnable)
+                {
+                    material.SetColor("_FlashColor", flashColor);
+                }
+                else
+                {
+                    material.SetColor("_FlashColor", flashColor.ChangeAlpha(0));
+                }
+
+                if (outlineEnable)
+                {
+                    Vector2 texelSize = Vector2.zero;
+                    if ((spriteRenderer) && (spriteRenderer.sprite) && (spriteRenderer.sprite.texture))
+                    {
+                        var texture = spriteRenderer.sprite.texture;
+                        texelSize = new Vector2(1.0f / texture.width, 1.0f / texture.height);
+                    }
+                    else if ((spriteRenderer3D) && (spriteRenderer3D.sprite) && (spriteRenderer3D.sprite.texture))
+                    {
+                        var texture = spriteRenderer3D.sprite.texture;
+                        texelSize = new Vector2(1.0f / texture.width, 1.0f / texture.height);
+                    }
+
+                    material.SetColor("_OutlineColor", outlineColor);
+                    material.SetFloat("_OutlineWidth", outlineWidth);
+                    material.SetVector("_OutlineTexelSize", texelSize);
+                    material.SetFloat("_OutlineEnable", 1.0f);
+                }
+                else
+                {
+                    material.SetFloat("_OutlineEnable", 0.0f);
+                }
+            }
         }
     }
 

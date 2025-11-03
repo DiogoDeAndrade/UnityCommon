@@ -72,7 +72,10 @@ Shader "Unity Common/Effects/Outline (Backface Extrude)"
                 #endif
             }
 
-            struct Varyings { float4 positionCS : SV_POSITION; };
+            struct Varyings 
+            { 
+                float4 positionCS : SV_POSITION; 
+            };
 
             // Transform like a normal (handles non-uniform scale)
             float3 TransformObjectToWorldDirSafe(float3 dirOS)
@@ -91,7 +94,7 @@ Shader "Unity Common/Effects/Outline (Backface Extrude)"
                     // Extrude directly in OBJECT space by _OutlineWidth units
                     float3 posOS = IN.positionOS.xyz;
                     float3 outOS = posOS + normalize(dirOS) * _OutlineWidth;
-                    OUT.positionCS = TransformObjectToHClip(float4(outOS, 1));
+                    OUT.positionCS = TransformObjectToHClip(outOS);
 
                 #elif defined(_EXTRUDESPACE_WORLD)
                     // Extrude in WORLD space by _OutlineWidth units

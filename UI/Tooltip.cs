@@ -4,6 +4,7 @@ using UnityEngine;
 namespace UC
 {
 
+    [RequireComponent(typeof(CanvasGroup))]
     public class Tooltip : MonoBehaviour
     {
         TextMeshProUGUI text;

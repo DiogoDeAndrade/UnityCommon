@@ -36,9 +36,9 @@ namespace UC
             }
         }
 
-        public Material GetMaterial(Shader shader)
+        void BuildMap()
         {
-            if (shaderMap == null)
+            if ((shaderMap == null) || (shaderMap.Count == 0))
             {
                 shaderMap = new();
                 foreach (var m in shaderToMaterial)
@@ -46,6 +46,11 @@ namespace UC
                     shaderMap.Add(m.srcMaterial.shader, m.destMaterial);
                 }
             }
+        }
+
+        public Material GetMaterial(Shader shader)
+        {
+            BuildMap();
 
             if (shaderMap.TryGetValue(shader, out var material))
             {
@@ -53,6 +58,18 @@ namespace UC
             }
 
             return null;
+        }
+
+        public Shader GetShader(Shader shader)
+        {
+            BuildMap();
+
+            if (shaderMap.TryGetValue(shader, out var material))
+            {
+                return material.shader;
+            }
+
+            return shader;
         }
     }
 }

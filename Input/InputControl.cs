@@ -9,7 +9,7 @@ namespace UC
     [Serializable]
     public class InputControl
     {
-        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, Any = 4 };
+        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, Any = 4, MousePosition = 5 };
 
         [SerializeField]
         private InputType _type;
@@ -104,6 +104,8 @@ namespace UC
                         else return new Vector2(action.ReadValue<float>(), 0.0f);
                     }
                     break;
+                case InputType.MousePosition:
+                    return Input.mousePosition;
                 default:
                     break;
             }
