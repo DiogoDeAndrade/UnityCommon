@@ -275,6 +275,15 @@ namespace UC
             currentJumpCount--;
         }
 
+        public void Bounce(float multiplier)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, speed.y * multiplier);
+            jumpBufferingTimer = 0.0f;
+            coyoteTimer = 0;
+            jumpTime = Time.time;
+            currentJumpCount--;
+        }
+
         bool GetJumpPressed()
         {
             return jumpInput.IsPressed();
