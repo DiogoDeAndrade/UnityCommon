@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -58,6 +59,75 @@ namespace UC
                 allLayers.Add(SortingLayer.NameToID(layer.name));
             }
             sortingLayersField.SetValue(light, allLayers.ToArray());
+        }
+
+        public static float GetLighting(this Light2D light, Vector2 worldPos)
+        {
+            if (light == null || !light.enabled)
+                return 0f;
+
+            if (light.lightCookieSprite != null)
+                throw new System.NotImplementedException("Get lighting with lights with cookies not supported!");
+
+            switch (light.lightType)
+            {
+                case Light2D.LightType.Point:
+                    return ComputePointLighting(light, worldPos);
+
+                case Light2D.LightType.Global:
+                    return light.intensity;
+
+                default:
+                    return 0f;
+            }
+        }
+
+        private static float ComputePointLighting(Light2D light, Vector2 worldPos)
+        {
+            Vector2 lightPos = light.transform.position;
+            Vector2 dir = worldPos - lightPos;
+            float dist = dir.magnitude;
+
+            // --- Distance falloff ---
+            float rOuter = Mathf.Max(0f, light.pointLightOuterRadius);
+            if (rOuter <= 0.0001f)
+                return 0f;
+
+            float rInner = Mathf.Clamp(light.pointLightInnerRadius, 0f, rOuter);
+
+            float distanceFactor;
+            if (dist <= rInner) distanceFactor = 1f;
+            else if (dist >= rOuter) distanceFactor = 0f;
+            else
+            {
+                float t = Mathf.InverseLerp(rOuter, rInner, dist);
+                distanceFactor = SmoothStep01(t);
+            }
+
+            // --- Angle falloff (if using cone) ---
+            float angleFactor = 1f;
+            if (light.pointLightOuterAngle < 360f)
+            {
+                Vector2 fwd = light.transform.up;
+                float ang = Vector2.Angle(fwd, dir);
+                float halfOuter = light.pointLightOuterAngle * 0.5f;
+                float halfInner = Mathf.Min(light.pointLightInnerAngle * 0.5f, halfOuter);
+
+                if (ang > halfOuter) angleFactor = 0f;
+                else if (ang > halfInner)
+                {
+                    float t = Mathf.InverseLerp(halfOuter, halfInner, ang);
+                    angleFactor = SmoothStep01(t);
+                }
+            }
+
+            return light.intensity * distanceFactor * angleFactor;
+        }
+
+        private static float SmoothStep01(float t)
+        {
+            t = Mathf.Clamp01(t);
+            return t * t * (3f - 2f * t);
         }
     }
 }
