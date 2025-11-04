@@ -6,7 +6,6 @@ using UnityEditor;
 
 namespace UC
 {
-
     public class PathXY : MonoBehaviour
     {
         [SerializeField] public enum Type { Linear = 0, CatmulRom = 1, Circle = 2, Arc = 3, Polygon = 4, Bezier = 5 };
@@ -935,6 +934,78 @@ namespace UC
             }
 
             return bestPt;
+        }
+
+        // Walkes the path until a certain worldDistance is traversed
+        // kMinSeg = minimum desired segment length in world units (for stability)
+        // kMaxDt = cap on param step
+        // kMaxIters = maximum iterations
+        public float Walk(float startT, float worldDistance, float kMinSeg = 0.01f, float kMaxDt = 0.05f, int kMaxIters = 20000)
+        {
+            if (points == null || points.Count < 2 || Mathf.Approximately(worldDistance, 0f))
+                return startT;
+
+            // Helpers
+            static float Wrap01(float x) => x - Mathf.Floor(x);
+            float Clamp01(float x) => Mathf.Clamp01(x);
+
+            // For closed paths we keep an unwrapped param; for open we clamp as usual
+            bool isClosed = closed;
+
+            // Start as raw (unwrapped) t
+            float rawT = isClosed ? startT : Mathf.Clamp01(startT);
+            float remaining = Mathf.Abs(worldDistance);
+            float dir = Mathf.Sign(worldDistance);
+
+            const float kProbeDt = 1e-3f;
+
+            // Evaluate at wrapped t for positions
+            Vector2 EvalAtRaw(float rT) => EvaluateWorld(isClosed ? Wrap01(rT) : Clamp01(rT));
+
+            Vector2 p = EvalAtRaw(rawT);
+
+            for (int iter = 0; iter < kMaxIters; ++iter)
+            {
+                if (remaining <= 1e-4f)
+                    return isClosed ? Wrap01(rawT) : Clamp01(rawT);
+
+                // Open path: stop at ends
+                if (!isClosed)
+                {
+                    if (dir > 0f && rawT >= 1f - 1e-8f) return 1f;
+                    if (dir < 0f && rawT <= 0f + 1e-8f) return 0f;
+                }
+
+                // Estimate local speed |dP/dt| using a tiny step (on raw param)
+                float probeDt = Mathf.Min(kProbeDt, kMaxDt);
+                float rawTProbe = rawT + probeDt * dir;
+                float denom = Mathf.Abs(rawTProbe - rawT);
+                float speed = denom > 0f ? (EvalAtRaw(rawTProbe) - p).magnitude / denom : 0f;
+
+                // Choose dt aiming for segment length ~= max(kMinSeg, remaining)
+                float targetSeg = Mathf.Max(kMinSeg, remaining);
+                float dt = (speed > 1e-6f) ? Mathf.Clamp(targetSeg / speed, probeDt, kMaxDt) : kMaxDt;
+                dt *= dir;
+
+                float rawTNext = rawT + dt;
+                Vector2 pNext = EvalAtRaw(rawTNext);
+                float segLen = (pNext - p).magnitude;
+
+                if (segLen >= remaining - 1e-6f)
+                {
+                    // Interpolate on the *unwrapped* param, then wrap once at the end
+                    float f = segLen > 1e-8f ? (remaining / segLen) : 0f;
+                    float rawTFinal = Mathf.LerpUnclamped(rawT, rawTNext, f);
+                    return isClosed ? Wrap01(rawTFinal) : Clamp01(rawTFinal);
+                }
+
+                remaining -= segLen;
+                rawT = rawTNext;
+                p = pNext;
+            }
+
+            // Safety fallback
+            return isClosed ? Wrap01(rawT) : Clamp01(rawT);
         }
 
 
