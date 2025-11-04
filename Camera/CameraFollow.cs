@@ -1,5 +1,6 @@
 ﻿using NaughtyAttributes;
 using System.Linq;
+using UnityEditor.Tilemaps;
 using UnityEngine;
 
 namespace UC
@@ -158,23 +159,36 @@ namespace UC
 
             Bounds r = cameraLimits.bounds;
 
+            // 1) Ensure the camera size can actually fit inside r
+            float maxHalfH = r.extents.y;
+            float maxHalfW = r.extents.x;
             float halfHeight = mainCamera.orthographicSize;
             float halfWidth = mainCamera.aspect * halfHeight;
 
-            float xMin = transform.position.x - halfWidth;
-            float xMax = transform.position.x + halfWidth;
-            float yMin = transform.position.y - halfHeight;
-            float yMax = transform.position.y + halfHeight;
+            // If too big, shrink ortho size so we can fit (no zoom feature required for this)
+            if ((halfHeight > maxHalfH) || (halfWidth > maxHalfW))
+            {
+                float fitHalfH = Mathf.Min(maxHalfH, maxHalfW / mainCamera.aspect);
+                mainCamera.orthographicSize = halfHeight = Mathf.Max(0.0001f, fitHalfH);
+                halfWidth = mainCamera.aspect * halfHeight;
+            }
 
-            Vector3 position = transform.position;
+            // 2) Clamp position on BOTH sides independently
+            Vector3 p = transform.position;
 
-            if (xMin <= r.min.x) position.x = r.min.x + halfWidth;
-            else if (xMax >= r.max.x) position.x = r.max.x - halfWidth;
-            if (yMin <= r.min.y) position.y = r.min.y + halfHeight;
-            else if (yMax >= r.max.y) position.y = r.max.y - halfHeight;
+            float xMin = p.x - halfWidth;
+            float xMax = p.x + halfWidth;
+            float yMin = p.y - halfHeight;
+            float yMax = p.y + halfHeight;
 
-            transform.position = position;
+            if (xMin < r.min.x) p.x = r.min.x + halfWidth;
+            if (xMax > r.max.x) p.x = r.max.x - halfWidth;
+            if (yMin < r.min.y) p.y = r.min.y + halfHeight;
+            if (yMax > r.max.y) p.y = r.max.y - halfHeight;
+
+            transform.position = p;
         }
+
 
         public Vector3 GetTargetPos()
         {
@@ -197,6 +211,7 @@ namespace UC
                     var minDist = float.MaxValue;
                     foreach (var obj in potentialTransforms)
                     {
+                        if (!obj.gameObject.activeInHierarchy) continue;
                         var d = Vector3.Distance(obj.position, transform.position);
                         if (d < minDist)
                         {
@@ -212,6 +227,7 @@ namespace UC
                     var maxDist = 0.0f;
                     foreach (var obj in potentialTransforms)
                     {
+                        if (!obj.gameObject.activeInHierarchy) continue;
                         var d = Vector3.Distance(obj.position, transform.position);
                         if (d > maxDist)
                         {
@@ -226,19 +242,30 @@ namespace UC
                 {
                     if (potentialTransforms.Count > 0)
                     {
-                        cft = potentialTransforms[0].GetComponent<CameraFollowTarget>();
-                        if (cft) allObjectsBound = new Bounds(cft.followPos, Vector3.zero);
-                        else allObjectsBound = new Bounds(potentialTransforms[0].position, Vector3.zero);
+                        bool    init = false;
+                        int     count = 0;
                         selectedPosition = Vector3.zero;
                         foreach (var obj in potentialTransforms)
                         {
+                            if (!obj.gameObject.activeInHierarchy) continue;
+
                             var d = Vector3.Distance(obj.position, transform.position);
                             cft = obj.GetComponent<CameraFollowTarget>();
-                            if (cft) selectedPosition += cft.followPos;
-                            else selectedPosition += obj.position;
-                            allObjectsBound.Encapsulate(obj.position);
+                            Vector3 p = (cft) ? (cft.followPos) : (obj.position);
+                            if (init)
+                            {
+                                allObjectsBound.Encapsulate(obj.position);
+                            }
+                            else
+                            {
+                                allObjectsBound = new Bounds(p, Vector3.zero);
+                                init = true;
+                            }
+
+                            selectedPosition += p;
+                            count++;
                         }
-                        selectedPosition /= potentialTransforms.Count;
+                        selectedPosition /= (count > 0) ? (count) : (1);
                     }
                 }
 

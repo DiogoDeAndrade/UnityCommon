@@ -1,3 +1,4 @@
+using NaughtyAttributes;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -5,8 +6,14 @@ public class ComputePlatformerLimits : MonoBehaviour
 {
     [SerializeField] Renderer[] renderers;
 
-    void Start()  
+    private void OnEnable()
     {
+        ComputeExtents();
+    }
+
+    [Button("Compute Extents")]
+    void ComputeExtents()
+    { 
         if ((renderers != null) && (renderers.Length > 0))
         {
             var worldBounds = renderers[0].bounds;
