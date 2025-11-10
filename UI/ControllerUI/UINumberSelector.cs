@@ -9,7 +9,7 @@ namespace UC
     public class UIFloatSelector : UIControl<float>
     {
         public enum DisplayMode { Text, ScaleX, ScaleY };
-        public enum AutoEvent { None, SetPlayerPref };
+        public enum AutoEvent { None, SetPlayerPref, SetSoundVolume };
         public enum ValueType { Float, Vec4_W };
 
         [SerializeField] protected Image leftArrow;
@@ -22,10 +22,12 @@ namespace UC
         [SerializeField] protected TextMeshProUGUI valueIndicatorText;
         [SerializeField] protected RectTransform valueIndicatorTransform;
         [SerializeField] private AutoEvent valueChangeEvent;
-        [SerializeField, ShowIf("needKey")] private ValueType valueType;
-        [SerializeField, ShowIf("needKey")] private string key;
+        [SerializeField, ShowIf(nameof(needKey))] private ValueType valueType;
+        [SerializeField, ShowIf(nameof(needKey))] private string key;
+        [SerializeField, ShowIf(nameof(needSoundType))] private SoundType soundType;
 
         bool needKey => valueChangeEvent == AutoEvent.SetPlayerPref;
+        bool needSoundType => valueChangeEvent == AutoEvent.SetSoundVolume;
 
 
         string originalText;
@@ -48,6 +50,11 @@ namespace UC
                     default:
                         break;
                 }
+            }
+            else if (valueChangeEvent == AutoEvent.SetSoundVolume)
+            {
+                _value = _prevValue = SoundManager.GetVolume(soundType);
+                SoundManager.SetVolume(soundType, _value, true);
             }
             else
             {
@@ -119,7 +126,7 @@ namespace UC
 
                 cooldownTimer = changeCooldown;
 
-                UpdatePlayerPref();
+                UpdateValue();
             }
             else if (dz < 0.0f)
             {
@@ -129,11 +136,11 @@ namespace UC
 
                 cooldownTimer = changeCooldown;
 
-                UpdatePlayerPref();
+                UpdateValue();
             }
         }
 
-        void UpdatePlayerPref()
+        void UpdateValue()
         {
             if ((valueChangeEvent == AutoEvent.SetPlayerPref) && (!string.IsNullOrEmpty(key)))
             {
@@ -150,6 +157,10 @@ namespace UC
                 }
 
                 PlayerPrefs.Save();
+            }
+            else if (valueChangeEvent == AutoEvent.SetSoundVolume)
+            {
+                SoundManager.SetVolume(soundType, value, true);
             }
         }
     }

@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 7188273591843593817}
   - component: {fileID: 7760820982413708735}
   m_Layer: 5
-  m_Name: Credits
+  m_Name: CreditsMouse
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

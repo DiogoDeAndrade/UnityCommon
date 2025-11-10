@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -7,17 +8,23 @@ namespace UC
 
     public class UIButton : BaseUIControl
     {
-        public enum AutoEvent { None, SwitchPanel, CloseThisPanel, ChangeScene = 10, QuitApplication = 20 };
+        public enum AutoEvent { None, SwitchPanel, CloseThisPanel, ShowCredits = 8, ChangeScene = 10, QuitApplication = 20 };
 
         [SerializeField] 
-        private AutoEvent   interactEvent;
+        private AutoEvent       interactEvent;
         [SerializeField, ShowIf(nameof(needPanel))] 
-        private UIGroup     panel;
+        private UIGroup         panel;
         [SerializeField, ShowIf(nameof(needScene)), Scene] 
-        private string      sceneName;
+        private string          sceneName;
+        [SerializeField, ShowIf(nameof(needFadeTime))]
+        private float           fadeTime = 0.5f;
+        [SerializeField, ShowIf(nameof(needCredits))]
+        private BigTextScroll   creditsScroll;
 
         bool needPanel => interactEvent == AutoEvent.SwitchPanel;
         bool needScene => interactEvent == AutoEvent.ChangeScene;
+        bool needFadeTime => (interactEvent != AutoEvent.None);
+        bool needCredits => (interactEvent == AutoEvent.ShowCredits);  
 
         public override void Interact()
         {
@@ -32,34 +39,23 @@ namespace UC
                     if (panel)
                     {
                         CanvasGroup cg = parentGroup.GetComponent<CanvasGroup>();
-                        if (cg) cg.FadeOut(0.5f).SetUnscaledTime(parentGroup.useUnscaledTime);
+                        if (cg) cg.FadeOut(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
                         parentGroup.SetUI(false);
                         cg = panel.GetComponent<CanvasGroup>();
-                        if (cg) cg.FadeIn(0.5f).SetUnscaledTime(parentGroup.useUnscaledTime);
+                        if (cg) cg.FadeIn(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
                         panel.SetUI(true);
                     }
                     break;
                 case AutoEvent.CloseThisPanel:
                     {
-                        CanvasGroup cg;
-
-                        UIGroup topGroup = parentGroup.GetComponentInParent<UIGroup>();
-                        if (topGroup)
-                        {
-                            cg = topGroup.GetComponent<CanvasGroup>();
-                            if (cg) cg.FadeIn(0.5f)?.SetUnscaledTime(parentGroup.useUnscaledTime);
-                            topGroup.SetUI(true);
-                        }
-                        cg = parentGroup.GetComponent<CanvasGroup>();
-                        if (cg) cg.FadeOut(0.5f).SetUnscaledTime(parentGroup.useUnscaledTime);
-                        parentGroup.SetUI(false);
+                        CloseThisPanel();
                     }
                     break;
                 case AutoEvent.ChangeScene:
-                    FullscreenFader.FadeOut(0.5f, Color.black, () => SceneManager.LoadScene(sceneName));
+                    FullscreenFader.FadeOut(fadeTime, Color.black, () => SceneManager.LoadScene(sceneName));
                     break;
                 case AutoEvent.QuitApplication:
-                    FullscreenFader.FadeOut(0.5f, Color.black, () =>
+                    FullscreenFader.FadeOut(fadeTime, Color.black, () =>
                     {
 #if UNITY_EDITOR
                         UnityEditor.EditorApplication.isPlaying = false;
@@ -68,9 +64,51 @@ namespace UC
 #endif
                     });
                     break;
+                case AutoEvent.ShowCredits:
+                    {
+                        var cg = parentGroup.GetComponent<CanvasGroup>();
+                        if (cg) cg.FadeOut(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
+                        parentGroup.SetUI(false);
+
+                        var creditsCanvasGroup = creditsScroll.GetComponent<CanvasGroup>();
+                        creditsCanvasGroup.FadeIn(fadeTime);
+
+                        creditsScroll.Reset();
+
+                        creditsScroll.onEndScroll += CreditsScroll_onEndScroll;
+                    }
+                    break;
                 default:
                     break;
             }
+        }
+
+        private void CreditsScroll_onEndScroll()
+        {
+            CanvasGroup cg = parentGroup.GetComponent<CanvasGroup>();
+            if (cg) cg.FadeIn(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
+            parentGroup.SetUI(true);
+
+            var creditsCanvasGroup = creditsScroll.GetComponent<CanvasGroup>();
+            creditsCanvasGroup.FadeOut(fadeTime);
+
+            creditsScroll.onEndScroll -= CreditsScroll_onEndScroll;
+        }
+
+        void CloseThisPanel()
+        {
+            CanvasGroup cg;
+
+            UIGroup topGroup = parentGroup.GetComponentInParent<UIGroup>();
+            if (topGroup)
+            {
+                cg = topGroup.GetComponent<CanvasGroup>();
+                if (cg) cg.FadeIn(fadeTime)?.SetUnscaledTime(parentGroup.useUnscaledTime);
+                topGroup.SetUI(true);
+            }
+            cg = parentGroup.GetComponent<CanvasGroup>();
+            if (cg) cg.FadeOut(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
+            parentGroup.SetUI(false);
         }
     }
 }
