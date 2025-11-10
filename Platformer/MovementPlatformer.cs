@@ -1,6 +1,7 @@
 using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.InputSystem;
+using System.Collections.Generic;
 
 namespace UC
 {
@@ -35,6 +36,8 @@ namespace UC
         private float coyoteTime = 0.0f;
         [SerializeField]
         private JumpBehaviour jumpBehaviour = JumpBehaviour.None;
+        [SerializeField]
+        private List<SoundDef> jumpSounds;
         [SerializeField]
         private int maxJumpCount = 1;
         [SerializeField]
@@ -268,6 +271,12 @@ namespace UC
 
         void Jump()
         {
+            if ((jumpSounds != null) && (jumpSounds.Count > 0))
+            {
+                var snd = jumpSounds.Random();
+                snd?.Play();
+            }
+
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, speed.y);
             jumpBufferingTimer = 0.0f;
             coyoteTimer = 0;

@@ -16,6 +16,7 @@ namespace UC.Editor
         SerializedProperty propTerminalVelocity;
         SerializedProperty propCoyoteTime;
         SerializedProperty propJumpBehaviour;
+        SerializedProperty propJumpSounds;
         SerializedProperty propMaxJumpCount;
         SerializedProperty propJumpBufferingTime;
         SerializedProperty propJumpHoldMaxTime;
@@ -59,6 +60,7 @@ namespace UC.Editor
             propTerminalVelocity = serializedObject.FindProperty("terminalVelocity");
             propCoyoteTime = serializedObject.FindProperty("coyoteTime");
             propJumpBehaviour = serializedObject.FindProperty("jumpBehaviour");
+            propJumpSounds = serializedObject.FindProperty("jumpSounds");
             propMaxJumpCount = serializedObject.FindProperty("maxJumpCount");
             propJumpBufferingTime = serializedObject.FindProperty("jumpBufferingTime");
             propJumpHoldMaxTime = serializedObject.FindProperty("jumpHoldMaxTime");
@@ -128,6 +130,7 @@ namespace UC.Editor
                 {
                     EditorGUILayout.PropertyField(propJumpInput, new GUIContent("Jump Input Type", "What's the input to jump?\nAxis: Use an axis for movement\nButton: Use a button for the movement\nKey: Use a key for the movement"));
 
+                    EditorGUILayout.PropertyField(propJumpSounds, new GUIContent("Jump Sounds", "What sounds to use while jumping, sounds get randomized in the available options"));                    
                     EditorGUILayout.PropertyField(propMaxJumpCount, new GUIContent("Max Jump Count", "How many jumps can the player do before having to touch the ground?\nFor example, for double jump, use 2.\nIf zero, no jumping allowed."));
                     EditorGUILayout.PropertyField(propJumpBufferingTime, new GUIContent("Jump Buffering Time", "If the player presses the jump key before being on the ground, but hits the ground in less than this time, he will jump automatically.\nThis reduces player frustration and provides tighter controls."));
                     if (propJumpBehaviour.intValue == (int)MovementPlatformer.JumpBehaviour.Variable)

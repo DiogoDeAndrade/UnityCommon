@@ -99,23 +99,14 @@ namespace UC
 
         private void Start()
         {
-            float[] defaultVolumes =
-            {
-                defaultMusicVolume > 0 ? defaultMusicVolume : defaultVolume,
-                defaultFX1Volume    > 0 ? defaultFX1Volume   : defaultVolume,
-                defaultFX2Volume    > 0 ? defaultFX2Volume   : defaultVolume,
-                defaultBackgroundVolume > 0 ? defaultBackgroundVolume : defaultVolume,
-                defaultVoiceVolume  > 0 ? defaultVoiceVolume : defaultVolume
-            };
-
             for (int i = 0; i < mixerGroups.Length; i++)
             {
                 SoundType type = (SoundType)i;
 
                 // Try to get saved value, otherwise use defaults
-                float volume = (PlayerPrefs.HasKey($"{type}Volume")) ? (PlayerPrefs.GetFloat($"{type}Volume")) : (defaultVolumes[i]);
+                float volume = PlayerPrefs.GetFloat($"{type}Volume", GetDefaultVolume(type));
 
-                _SetVolume(type, volume, false);
+                _SetVolume(type, volume, true);
             }
 
             if (startMusic)
@@ -299,39 +290,29 @@ namespace UC
         private float _GetVolume(SoundType soundType)
         {
             string key = $"{soundType}Volume";
-            if (PlayerPrefs.HasKey(key))
-            {
-                return PlayerPrefs.GetFloat(key);
-            }
 
-            var group = mixerGroups[(int)soundType];
-            var mixer = (group != null) ? group.audioMixer : null;
-            if (mixer != null)
-            {
-                string paramName = $"{soundType}Volume";
-                if (mixer.GetFloat(paramName, out float dB))
-                {
-                    // dB -> linear: lin = 10^(dB/20)
-                    float lin = Mathf.Pow(10f, dB / 20f);
-                    return Mathf.Clamp01(lin);
-                }
-            }
-
-            switch (soundType)
-            {
-                case SoundType.Music: return (defaultMusicVolume > 0f) ? defaultMusicVolume : defaultVolume;
-                case SoundType.PrimaryFX: return (defaultFX1Volume > 0f) ? defaultFX1Volume : defaultVolume;
-                case SoundType.SecondaryFX: return (defaultFX2Volume > 0f) ? defaultFX2Volume : defaultVolume;
-                case SoundType.Background: return (defaultBackgroundVolume > 0f) ? defaultBackgroundVolume : defaultVolume;
-                case SoundType.Voice: return (defaultVoiceVolume > 0f) ? defaultVoiceVolume : defaultVolume;
-                default: return defaultVolume;
-            }
+            return PlayerPrefs.GetFloat(key, GetDefaultVolume(soundType));
         }
 
-        [Button("Clear Player Prefs")]
+        float GetDefaultVolume(SoundType soundType)
+        {
+            switch (soundType)
+            {
+                case SoundType.Music: return defaultMusicVolume;
+                case SoundType.PrimaryFX: return defaultFX1Volume;
+                case SoundType.SecondaryFX: return defaultFX2Volume;
+                case SoundType.Background: return defaultBackgroundVolume;
+                case SoundType.Voice: return defaultVoiceVolume;
+            }
+
+            return defaultVolume;
+        }
+
+        [Button(nameof(ClearPlayerPrefs))]
         void ClearPlayerPrefs()
         {
             PlayerPrefs.DeleteAll();
+            PlayerPrefs.Save();
         }
 
         static public AudioSource PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null)
