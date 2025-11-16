@@ -5,22 +5,26 @@ using UnityEngine.Tilemaps;
 namespace UC
 {
 
-    [RequireComponent(typeof(GridObject))]
     public class GridCollider : MonoBehaviour
     {
-        GridSystem gridSystem;
-        SpriteRenderer spriteRenderer;
-        TilemapCollider2D tilemapCollider;
-        CompositeCollider2D compositeCollider;
+        [SerializeField] private SpriteRenderer spriteRenderer;
+
+        GridSystem              gridSystem;
+        TilemapCollider2D       tilemapCollider;
+        CompositeCollider2D     compositeCollider;
+        GridObject              _gridObject;
 
         bool isTilemapCollider = false;
         Vector3 tolerance = new Vector3(1.0f, 1.0f, 0.0f);
 
+        public GridObject gridObject => _gridObject;
+
         void OnEnable()
         {
+            _gridObject = GetComponent<GridObject>();
             gridSystem = GetComponentInParent<GridSystem>();
             gridSystem?.Register(this);
-            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
 
             if (GetComponent<Tilemap>())
             {
@@ -59,6 +63,34 @@ namespace UC
                 else if (tilemapCollider)
                 {
                     var worldPoint = gridSystem.GridToWorld(endPosGrid);
+                    return tilemapCollider.OverlapPoint(worldPoint);
+                }
+            }
+
+            return false;
+        }
+
+        virtual public bool IsIntersecting(Vector2 worldPoint)
+        {
+            if (spriteRenderer)
+            {
+                var bounds = spriteRenderer.bounds;
+                bounds.Expand(tolerance);
+
+                if ((bounds.min.x < worldPoint.x) && (bounds.max.x > worldPoint.x) &&
+                    (bounds.min.y < worldPoint.y) && (bounds.max.y > worldPoint.y))
+                {
+                    return true;
+                }
+            }
+            if (isTilemapCollider)
+            {
+                if (compositeCollider)
+                {
+                    return compositeCollider.OverlapPoint(worldPoint);
+                }
+                else if (tilemapCollider)
+                {
                     return tilemapCollider.OverlapPoint(worldPoint);
                 }
             }

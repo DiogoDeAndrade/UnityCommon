@@ -1,9 +1,8 @@
 ﻿using NaughtyAttributes;
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace UC
+namespace UC.RPG
 {
 
     public class ResourceHandler : MonoBehaviour
@@ -29,37 +28,65 @@ namespace UC
         [SerializeField]
         private float       initialValue;
 
-        protected float _resource = 100.0f;
-        protected bool _resourceEmpty;
+        protected ResourceInstance resourceInstance;
+
+        protected bool _fromInstance;
 
         bool isOverrideInitialResource => (overrideMode & OverrideMode.InitialResource) != 0;
 
-        public float resource
+        public float resource => instance.value;
+        public float maxValue => instance.maxValue;
+        public float normalizedResource => instance.value / instance.maxValue;
+        public bool fromInstance => _fromInstance;
+
+        public ResourceInstance instance
         {
-            get { return _resource; }
+            get
+            {
+                if (resourceInstance == null)
+                {
+                    resourceInstance = new(type);
+                    resourceInstance.onChange += ResourceInstance_onChange;
+                    resourceInstance.onResourceEmpty += ResourceInstance_onResourceEmpty;
+                    resourceInstance.onResourceNotEmpty += ResourceInstance_onResourceNotEmpty;
+                    _fromInstance = false;
+                }
+                return resourceInstance;
+            }
+            set
+            {
+                type = value.type;
+                resourceInstance = value;
+                _fromInstance = true;
+            }
         }
 
-        public float normalizedResource
-        {
-            get { return _resource / type.maxValue; }
-        }
-
-        public bool isResourceEmpty => _resourceEmpty;
-        public bool isResourceNotEmpty => !_resourceEmpty;
-
-        void Awake()
-        {
-        }
+        public bool isResourceEmpty => instance.isResourceEmpty;
+        public bool isResourceNotEmpty => instance.isResourceNotEmpty;
 
         void Start()
         {
-            ResetResource();
-            _resourceEmpty = false;
+            if (!_fromInstance) ResetResource();
+        }
+
+        private void ResourceInstance_onResourceNotEmpty(GameObject healSource)
+        {
+            onResourceNotEmpty?.Invoke(healSource);
+        }
+
+        private void ResourceInstance_onResourceEmpty(GameObject changeSource)
+        {
+            onResourceEmpty?.Invoke(changeSource);
+        }
+
+        private void ResourceInstance_onChange(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource)
+        {
+            onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
         }
 
         void RenderCombatText(float prevValue)
         {
-            float actualDelta = _resource - prevValue;
+            float actualDelta = resourceInstance.value - prevValue;
             if (actualDelta != 0.0f)
             {
                 if (type.useCombatText)
@@ -83,57 +110,8 @@ namespace UC
 
         public bool Change(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
         {
-            float prevValue = _resource;
-            bool ret = true;
-
-            if (deltaValue < 0)
-            {
-                if (_resourceEmpty) ret = false;
-                else
-                {
-                    _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
-                    if (_resource <= 0.0f)
-                    {
-                        _resource = 0.0f;
-                        _resourceEmpty = true;
-
-                        onResourceEmpty?.Invoke(changeSource);
-                    }
-                    else
-                    {
-                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
-                    }
-                }
-            }
-            else if (deltaValue > 0)
-            {
-                if (canAddOnEmpty)
-                {
-                    if (_resource < type.maxValue)
-                    {
-                        _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
-
-                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
-
-                        if ((_resource > 0.0f) && (_resourceEmpty))
-                        {
-                            onResourceNotEmpty?.Invoke(changeSource);
-                            _resourceEmpty = false;
-                        }
-                    }
-                }
-                else if (_resourceEmpty) ret = false;
-                else
-                {
-                    if (_resource < type.maxValue)
-                    {
-                        _resource = Mathf.Clamp(_resource + deltaValue, 0.0f, type.maxValue);
-
-                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
-                    }
-                    else ret = false;
-                }
-            }
+            float prevValue = instance.value;
+            bool ret = instance.Change(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource, canAddOnEmpty);
 
             if (ret) RenderCombatText(prevValue);
 
@@ -169,19 +147,17 @@ namespace UC
 
         public void SetResource(float r)
         {
-            _resource = r;
-            _resourceEmpty = (_resource <= 0.0f);
+            resourceInstance.SetResource(r);
         }
 
         public void ResetResource(bool combatText = false)
         {
-            float prevValue = _resource;
+            float prevValue = resourceInstance.value;
 
             if (isOverrideInitialResource)
-                _resource = initialValue;
+                resourceInstance.value = initialValue;
             else
-                _resource = type.defaultValue;
-            _resourceEmpty = (_resource == 0.0f);
+                resourceInstance.value = type.defaultValue;
 
             if (combatText) RenderCombatText(prevValue);
         }

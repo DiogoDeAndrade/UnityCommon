@@ -1,5 +1,6 @@
 using NaughtyAttributes;
 using UnityEngine;
+using UC.RPG;
 
 namespace UC
 {

@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
+using UC.RPG;
 
-namespace UC
+namespace UC.RPG
 {
 
     public class HealthBar : ResourceBar

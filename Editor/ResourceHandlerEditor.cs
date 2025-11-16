@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.UIElements;
+using UC.Editor;
 
-namespace UC.Editor
+namespace UC.RPG.Editor
 {
 
     [CustomEditor(typeof(ResourceHandler))]
@@ -40,10 +40,10 @@ namespace UC.Editor
                     // Progress Bar for resource
                     /*float normalizedValue = handler.normalizedResource;
                     EditorGUILayout.LabelField("Resource Level", EditorStyles.boldLabel);
-                    EditorGUI.ProgressBar(EditorGUILayout.GetControlRect(false, 20), normalizedValue, $"{handler.resource}/{handler.type.maxValue}");*/
+                    EditorGUI.ProgressBar(EditorGUILayout.GetControlRect(false, 20), normalizedValue, $"{handler.resource}/{handler.maxValue}");*/
 
                     // Editable resource value (slider)
-                    float newResource = EditorGUILayout.Slider(handler.type.displayName, handler.resource, 0, handler.type.maxValue);
+                    float newResource = EditorGUILayout.Slider(handler.type.displayName, handler.resource, 0, handler.maxValue);
 
                     if (newResource != handler.resource)
                     {
@@ -52,10 +52,13 @@ namespace UC.Editor
                         EditorUtility.SetDirty(handler);
                     }
 
-                    EditorGUILayout.PropertyField(overrideModeProperty);
-                    var overrideMode = (ResourceHandler.OverrideMode)overrideModeProperty.enumValueFlag;
-                    if ((overrideMode & ResourceHandler.OverrideMode.InitialResource) != 0)
-                        EditorGUILayout.PropertyField(initialValueProperty);
+                    if (!handler.fromInstance)
+                    {
+                        EditorGUILayout.PropertyField(overrideModeProperty);
+                        var overrideMode = (ResourceHandler.OverrideMode)overrideModeProperty.enumValueFlag;
+                        if ((overrideMode & ResourceHandler.OverrideMode.InitialResource) != 0)
+                            EditorGUILayout.PropertyField(initialValueProperty);
+                    }
 
                     // Progress Bar Section
                     DrawProgressBar(handler);
@@ -72,7 +75,7 @@ namespace UC.Editor
         private void DrawProgressBar(ResourceHandler handler)
         {
             float normalizedValue = handler.normalizedResource;
-            string progressText = $"{handler.resource}/{handler.type.maxValue}";
+            string progressText = $"{handler.resource}/{handler.maxValue}";
 
             // Define color based on resource level
             Color barColor = handler.type.displayBarColor;

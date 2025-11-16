@@ -10,11 +10,11 @@ namespace UC
     [RequireComponent(typeof(Grid))]
     public class GridSystem : MonoBehaviour
     {
-        private Grid grid;
-        private List<GridObject> gridObjects = new();
-        private List<GridCollider> gridColliders = new();
-        private Vector3 gridOffset;
-        private List<Tilemap> tilemaps;
+        private Grid                    grid;
+        private List<GridObject>        gridObjects = new();
+        private List<GridCollider>      gridColliders = new();
+        private Vector3                 gridOffset;
+        private List<Tilemap>           tilemaps;
 
         public Vector2 cellSize => grid.cellSize;
 
@@ -216,13 +216,13 @@ namespace UC
             return false;
         }
 
-        public bool FindRadius(float radius, Vector3 worldPosition, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
+        public bool FindInRadius(float radius, Vector3 worldPosition, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
         {
             Vector2Int center = WorldToGrid(worldPosition);
-            return FindRadius(radius, center, predicate, out ret, out retPos);
+            return FindInRadius(radius, center, predicate, out ret, out retPos);
         }
 
-        public bool FindRadius(float radius, Vector2Int center, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
+        public bool FindInRadius(float radius, Vector2Int center, Func<GridObject, Vector2Int, bool> predicate, out GridObject ret, out Vector2Int retPos)
         {
             ret = null;
             retPos = Vector2Int.zero;
@@ -263,6 +263,78 @@ namespace UC
             }
 
             return false;
+        }
+
+        public List<GridObject> GetGridObjectsAt(Vector2Int gridPos)
+        {
+            List<GridObject> result = new List<GridObject>();
+
+            foreach (var obj in gridObjects)
+            {
+                if (WorldToGrid(obj.transform.position) == gridPos)
+                {
+                    result.Add(obj);
+                }
+            }
+
+            return result;
+        }
+
+        public List<GridObject> GetGridObjectsAt(Vector2 worldPos)
+        {
+            List<GridObject> result = new List<GridObject>();
+
+            foreach (var obj in gridColliders)
+            {
+                if (obj.IsIntersecting(worldPos))
+                {
+                    result.Add(obj.gridObject);
+                }
+            }
+
+            return result;
+        }
+
+        public GridObject GetFirstGridObjectAt(Vector2Int gridPos)
+        {
+            foreach (var obj in gridObjects)
+            {
+                if (WorldToGrid(obj.transform.position) == gridPos)
+                {
+                    return obj;
+                }
+            }
+
+            return null;
+        }
+
+        public GridObject GetFirstGridObjectAt(Vector2 worldPos)
+        {
+            foreach (var obj in gridColliders)
+            {
+                if (obj.IsIntersecting(worldPos))
+                {
+                    return obj.gridObject;
+                }
+            }
+
+            return null;
+        }
+
+        public List<GridObject> GetGridObjectsAt(Vector3 worldPos, bool tileBasedPosition)
+        {
+            if (tileBasedPosition)
+                return GetGridObjectsAt(WorldToGrid(worldPos));
+            else
+                return GetGridObjectsAt(worldPos);
+        }
+
+        public GridObject GetFirstGridObjectAt(Vector3 worldPos, bool tileBasedPosition)
+        {
+            if (tileBasedPosition)
+                return GetFirstGridObjectAt(WorldToGrid(worldPos));
+            else
+                return GetFirstGridObjectAt(worldPos);
         }
 
         public List<TileBase> GetTiles(Vector2Int pos)

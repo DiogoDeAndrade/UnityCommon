@@ -1,7 +1,7 @@
 using NaughtyAttributes;
 using UnityEngine;
 
-namespace UC
+namespace UC.RPG
 {
 
     [CreateAssetMenu(fileName = "ResourceType", menuName = "Unity Common/Data/Resource Type")]
