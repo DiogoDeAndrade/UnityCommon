@@ -10,19 +10,19 @@ namespace UC
     public class GridObject : MonoBehaviour
     {
         [SerializeField]
-        private bool snapOnStart = false;
+        private bool        snapOnStart = false;
         [SerializeField]
-        private bool checkCollisionOnMove = true;
+        private bool        checkCollisionOnMove = true;
         [SerializeField, Range(-1.0f, 1.0f), ShowIf(nameof(checkCollisionOnMove))]
-        private float moveAnimationOnCollision = 0.0f;
+        private float       moveAnimationOnCollision = 0.0f;
         [SerializeField]
-        private AudioClip moveSnd;
+        private AudioClip   moveSnd;
         [SerializeField, ShowIf(nameof(checkCollisionOnMove))]
-        private AudioClip moveFailSnd;
+        private AudioClip   moveFailSnd;
 
         public delegate void OnMove(Vector2Int sourcePos, Vector2Int destPos);
         public event OnMove onMove;
-        public delegate void OnMoveEnd(Vector2Int sourcePos, Vector2Int destPos);
+        public delegate void OnMoveEnd(Vector2Int sourcePos, Vector2Int destPos, bool success);
         public event OnMoveEnd onMoveEnd;
         public delegate void OnTurnTo(Vector2Int sourcePos, Vector2Int destPos);
         public event OnTurnTo onTurnTo;
@@ -111,7 +111,7 @@ namespace UC
                         () =>
                         {
                             moveInterpolator = null;
-                            onMoveEnd?.Invoke(originalGridPos, endPosGrid);
+                            onMoveEnd?.Invoke(originalGridPos, endPosGrid, false);
                         });
 
                         if (moveFailSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveFailSnd, 1.0f, UnityEngine.Random.Range(0.7f, 1.3f));
@@ -128,7 +128,7 @@ namespace UC
                 () =>
                 {
                     moveInterpolator = null;
-                    onMoveEnd?.Invoke(originalGridPos, endPosGrid);
+                    onMoveEnd?.Invoke(originalGridPos, endPosGrid, true);
                 });
 
             ComputeFacingFromVector(deltaPos);
