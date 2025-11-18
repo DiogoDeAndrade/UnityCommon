@@ -12,6 +12,14 @@ namespace UC.RPG
         public Color    displaySpriteColor = Color.white;
         public Sprite   displaySprite;
         public Color    displayTextColor = Color.white;
-        public int      baseValue = 1;
+        public float    baseValue = 1;
+        public bool     isPercentage = false;
+        [ShowIf(nameof(isNotPercentage))]
+        public bool     hasMaxValue = false;
+        [ShowIf(nameof(needMaxValue))]
+        public float    maxValue = 100;
+
+        bool isNotPercentage => !isPercentage;
+        bool needMaxValue => isNotPercentage && hasMaxValue;
     }
 }

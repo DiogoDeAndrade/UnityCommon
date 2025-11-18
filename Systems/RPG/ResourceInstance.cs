@@ -1,12 +1,10 @@
-using UC.RPG;
 using UnityEngine;
-using static UC.RPG.ResourceHandler;
 
 namespace UC.RPG
 {
     public class ResourceInstance
     {
-        public delegate void OnChange(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource);
+        public delegate void OnChange(ResourceHandler.ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource);
         public event OnChange onChange;
         public delegate void OnResourceEmpty(GameObject changeSource);
         public event OnResourceEmpty onResourceEmpty;
@@ -52,11 +50,11 @@ namespace UC.RPG
                 _maxValue = value;
                 this._value = _maxValue * p;
 
-                onChange?.Invoke(ChangeType.Burst, this._value - prevValue, Vector3.zero, Vector3.zero, null);
+                onChange?.Invoke(ResourceHandler.ChangeType.Burst, this._value - prevValue, Vector3.zero, Vector3.zero, null);
             }
         }
 
-        public bool Change(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
+        public bool Change(ResourceHandler.ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
         {
             float prevValue = value;
             bool ret = true;
@@ -119,7 +117,7 @@ namespace UC.RPG
             value = r;
             _resourceEmpty = (value <= 0.0f);
 
-            if (notify) onChange?.Invoke(ChangeType.Burst, value - prevValue, Vector3.zero, Vector3.zero, null);
+            if (notify) onChange?.Invoke(ResourceHandler.ChangeType.Burst, value - prevValue, Vector3.zero, Vector3.zero, null);
         }
     }
 }

@@ -6,7 +6,7 @@ namespace UC.RPG
     public class StatInstance 
     {
         public StatType type;
-        public int      value;
+        public float    value;
 
         public StatInstance(StatType type)
         {

@@ -30,6 +30,8 @@ namespace UC.RPG
                 stats.Add(s.type, statInstance);
             }
 
+            archetype.UpdateDerivedStats(this);
+
             resources = new();
             foreach (var r in archetype.resources)
             {

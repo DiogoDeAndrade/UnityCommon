@@ -10,7 +10,9 @@ namespace UC.RPG
         [Serializable]
         public struct Stat
         {
-            public StatType     type;
+            public StatType                 type;
+            [SerializeReference]
+            public ResourceValueFunction    calculator;
         }
 
         [Serializable]
@@ -46,7 +48,22 @@ namespace UC.RPG
             {
                 if ((g.type == type) && (g.calculator != null))
                 {
-                    statInstance.value = Mathf.FloorToInt(g.calculator.GetValue(character));
+                    statInstance.value = g.calculator.GetValue(character);
+                }
+            }
+        }
+
+        public void UpdateDerivedStats(RPGEntity entity)
+        {
+            foreach (var s in primaryStats)
+            {
+                if (s.calculator != null)
+                {
+                    var statInstance = entity.Get(s.type);
+                    if (statInstance != null)
+                    {
+                        statInstance.value = s.calculator.GetValue(entity);
+                    }
                 }
             }
         }
