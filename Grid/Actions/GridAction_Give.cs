@@ -62,8 +62,8 @@ namespace UC
                 var thisHandler = this.FindResourceHandler(resourceType);
                 var thatHandler = subject.FindResourceHandler(resourceType);
 
-                thisHandler.Change(ResourceHandler.ChangeType.Burst, quantity, subject.transform.position, Vector3.zero, subject.gameObject, true);
-                thatHandler.Change(ResourceHandler.ChangeType.Burst, -quantity, transform.position, Vector3.zero, gameObject, true);
+                thisHandler.Change(new ChangeData { deltaValue = quantity, changeSrcPosition = subject.transform.position, source = subject.gameObject }, true);
+                thatHandler.Change(new ChangeData { deltaValue = -quantity, changeSrcPosition = transform.position, source = gameObject }, true);
 
                 return true;
             }

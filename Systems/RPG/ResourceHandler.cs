@@ -7,14 +7,13 @@ namespace UC.RPG
 
     public class ResourceHandler : MonoBehaviour
     {
-        public enum ChangeType { Burst, OverTime };
         public enum OverrideMode
         {
             None = 0,
             InitialResource = 1
         }
 
-        public delegate void OnChange(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource);
+        public delegate void OnChange(ChangeData changeData);
         public event OnChange onChange;
         public delegate void OnResourceEmpty(GameObject changeSource);
         public event OnResourceEmpty onResourceEmpty;
@@ -79,9 +78,9 @@ namespace UC.RPG
             onResourceEmpty?.Invoke(changeSource);
         }
 
-        private void ResourceInstance_onChange(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource)
+        private void ResourceInstance_onChange(ChangeData changeData)
         {
-            onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+            onChange?.Invoke(changeData);
         }
 
         void RenderCombatText(float prevValue)
@@ -108,10 +107,10 @@ namespace UC.RPG
             }
         }
 
-        public bool Change(ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
+        public bool Change(ChangeData changeData, bool canAddOnEmpty = true)
         {
             float prevValue = instance.value;
-            bool ret = instance.Change(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource, canAddOnEmpty);
+            bool ret = instance.Change(changeData, canAddOnEmpty);
 
             if (ret) RenderCombatText(prevValue);
 

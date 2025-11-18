@@ -16,6 +16,7 @@ namespace UC
             public Color endColor;
             public float elapsedTime;
             public float totalTime;
+            public float scaleModifier;
             public float speedModifier;
             public float number;
             public bool isNumber;
@@ -81,7 +82,7 @@ namespace UC
                     Color c = Color.Lerp(tElem.startColor, tElem.endColor, t);
 
                     tElem.textObject.color = c;
-
+                    tElem.textTransform.localScale = Vector3.one * Mathf.Lerp(tElem.scaleModifier, 1.0f, Mathf.Clamp01(2.0f * tElem.elapsedTime / tElem.totalTime));
                     tElem.textTransform.anchoredPosition += movementVector * tElem.speedModifier * Time.deltaTime;
                 }
             }
@@ -130,7 +131,7 @@ namespace UC
             return NewText(ownerObject, offset);
         }
 
-        void _SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+        void _SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
         {
             TextElem newText = NewText(ownerObject, offset);
             newText.isNumber = false;
@@ -138,13 +139,14 @@ namespace UC
             newText.startColor = startColor;
             newText.endColor = endColor;
             newText.speedModifier = moveSpeedModifier;
+            newText.scaleModifier = scaleModifier;
             newText.totalTime = (time > 0.0f) ? (time) : (defaultTime);
 
             newText.textObject.text = newText.baseText;
             newText.textObject.color = startColor;
         }
 
-        void _SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+        void _SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
         {
             TextElem newText = FindNumberTextOfColor(startColor, ownerObject, Vector2.zero);
             newText.isNumber = true;
@@ -153,13 +155,14 @@ namespace UC
             newText.startColor = startColor;
             newText.endColor = endColor;
             newText.speedModifier = moveSpeedModifier;
+            newText.scaleModifier = scaleModifier;
             newText.totalTime = (time > 0.0f) ? (time) : (defaultTime);
 
             newText.textObject.text = string.Format(text, newText.number);
             newText.textObject.color = startColor;
         }
 
-        void _SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+        void _SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
         {
             TextElem newText = FindNumberTextOfColor(startColor, ownerObject, offset);
             newText.isNumber = true;
@@ -168,29 +171,30 @@ namespace UC
             newText.startColor = startColor;
             newText.endColor = endColor;
             newText.speedModifier = moveSpeedModifier;
+            newText.scaleModifier = scaleModifier;
             newText.totalTime = (time > 0.0f) ? (time) : (defaultTime);
 
             newText.textObject.text = string.Format(text, newText.number);
             newText.textObject.color = startColor;
         }
 
-        public static void SpawnText(GameObject ownerObject, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+        public static void SpawnText(GameObject ownerObject, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
         {
-            instance._SpawnText(ownerObject, Vector2.zero, text, startColor, endColor, time, moveSpeedModifier);
+            instance._SpawnText(ownerObject, Vector2.zero, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
         }
-        public static void SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+        public static void SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
         {
-            instance._SpawnText(ownerObject, offset, text, startColor, endColor, time, moveSpeedModifier);
-        }
-
-        public static void SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
-        {
-            instance._SpawnText(ownerObject, Vector2.zero, value, text, startColor, endColor, time, moveSpeedModifier);
+            instance._SpawnText(ownerObject, offset, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
         }
 
-        public static void SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f)
+        public static void SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
         {
-            instance._SpawnText(ownerObject, offset, value, text, startColor, endColor, time, moveSpeedModifier);
+            instance._SpawnText(ownerObject, Vector2.zero, value, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
+        }
+
+        public static void SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
+        {
+            instance._SpawnText(ownerObject, offset, value, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
         }
     }
 }

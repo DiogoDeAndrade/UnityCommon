@@ -13,7 +13,8 @@ namespace UC
         public Color        displaySpriteColor = Color.white;
         public Sprite       displaySprite;
         public Color        displayTextColor = Color.white;
-        public GameObject   scenePrefab;
+        [SerializeField] 
+        protected GameObject  scenePrefab;
         public bool         isStackable = false;
         [ShowIf(nameof(isStackable))]
         public int          maxStack = 1;
@@ -30,6 +31,19 @@ namespace UC
             }
 
             return false;
+        }
+
+        public GameObject GetScenePrefab()
+        {
+            if (scenePrefab) return scenePrefab;
+
+            foreach (var parent in parentItems)
+            {
+                var prefab = parent.GetScenePrefab();
+                if (prefab) return prefab;
+            }
+
+            return null;
         }
     }
 }

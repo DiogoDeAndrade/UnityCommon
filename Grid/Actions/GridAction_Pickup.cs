@@ -75,7 +75,7 @@ namespace UC
             {
                 var resHandler = subject.FindResourceHandler(resourceType);
                 if (resHandler == null) return false;
-                resHandler.Change(ResourceHandler.ChangeType.Burst, quantity, transform.position, Vector3.zero, gameObject, true);
+                resHandler.Change(new ChangeData { deltaValue = quantity, changeSrcPosition = transform.position, source = gameObject }, true);
             }
 
             switch (type)

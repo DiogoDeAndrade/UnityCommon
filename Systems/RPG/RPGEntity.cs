@@ -75,7 +75,7 @@ namespace UC.RPG
 
         public bool Attack(Weapon weapon, RPGEntity source, Vector2Int destPos)
         {
-            return weapon.attackModule.Attack(weapon, source, destPos);
+            return weapon.GetAttackModule()?.Attack(weapon, source, destPos) ?? false;
         }
     }
 }

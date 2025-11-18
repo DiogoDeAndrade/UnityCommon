@@ -1,3 +1,4 @@
+using System;
 using UC.RPG;
 using UnityEngine;
 
@@ -8,12 +9,36 @@ namespace UC
     public partial class Weapon : Item
     {
         [Header("Weapon")]
-        [SerializeReference] 
-        public AttackModule attackModule;
-        public SoundDef     attackSound;
+        [SerializeField]
+        protected DamageType   damageType;
+        [SerializeReference]
+        protected AttackModule attackModule;
+        [SerializeField]
+        protected SoundDef     attackSound;
+
+        private RetObjType Get<RetObjType, OwnerObjType>(Func<OwnerObjType, RetObjType> func) where OwnerObjType : class
+        {
+            var ret = func(this as OwnerObjType);
+            if (ret != null) return ret;
+
+            foreach (var item in parentItems)
+            {
+                if (item is OwnerObjType ownerObj)
+                {
+                    ret = func(ownerObj);
+                    if (ret != null) return ret;
+                }
+            }
+
+            return default;
+        }
+
+        public DamageType GetDamageType() => Get<DamageType, Weapon>((obj) => obj.damageType);
+        public AttackModule GetAttackModule() => Get<AttackModule, Weapon>((obj) => obj.attackModule);
+        public SoundDef GetAttackSound() => Get<SoundDef, Weapon>((obj) => obj.attackSound);
     }
 
-    [System.Serializable]
+    [Serializable]
     public abstract class AttackModule
     {
         public abstract bool Attack(Weapon weapon, RPGEntity source, Vector2Int destPos);

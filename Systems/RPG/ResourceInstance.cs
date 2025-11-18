@@ -4,7 +4,7 @@ namespace UC.RPG
 {
     public class ResourceInstance
     {
-        public delegate void OnChange(ResourceHandler.ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource);
+        public delegate void OnChange(ChangeData data);
         public event OnChange onChange;
         public delegate void OnResourceEmpty(GameObject changeSource);
         public event OnResourceEmpty onResourceEmpty;
@@ -50,47 +50,47 @@ namespace UC.RPG
                 _maxValue = value;
                 this._value = _maxValue * p;
 
-                onChange?.Invoke(ResourceHandler.ChangeType.Burst, this._value - prevValue, Vector3.zero, Vector3.zero, null);
+                onChange?.Invoke(new ChangeData { deltaValue = this._value - prevValue });
             }
         }
 
-        public bool Change(ResourceHandler.ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource, bool canAddOnEmpty = true)
+        public bool Change(ChangeData changeData, bool canAddOnEmpty = true)
         {
             float prevValue = value;
             bool ret = true;
 
-            if (deltaValue < 0)
+            if (changeData.deltaValue < 0)
             {
                 if (_resourceEmpty) ret = false;
                 else
                 {
-                    value = Mathf.Clamp(value + deltaValue, 0.0f, type.maxValue);
+                    value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, type.maxValue);
                     if (value <= 0.0f)
                     {
                         value = 0.0f;
                         _resourceEmpty = true;
 
-                        onResourceEmpty?.Invoke(changeSource);
+                        onResourceEmpty?.Invoke(changeData.source);
                     }
                     else
                     {
-                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+                        onChange?.Invoke(changeData);
                     }
                 }
             }
-            else if (deltaValue > 0)
+            else if (changeData.deltaValue > 0)
             {
                 if (canAddOnEmpty)
                 {
                     if (value < type.maxValue)
                     {
-                        value = Mathf.Clamp(value + deltaValue, 0.0f, type.maxValue);
+                        value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, type.maxValue);
 
-                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+                        onChange?.Invoke(changeData);
 
                         if ((value > 0.0f) && (_resourceEmpty))
                         {
-                            onResourceNotEmpty?.Invoke(changeSource);
+                            onResourceNotEmpty?.Invoke(changeData.source);
                             _resourceEmpty = false;
                         }
                     }
@@ -100,9 +100,9 @@ namespace UC.RPG
                 {
                     if (value < type.maxValue)
                     {
-                        value = Mathf.Clamp(value + deltaValue, 0.0f, type.maxValue);
+                        value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, type.maxValue);
 
-                        onChange?.Invoke(changeType, deltaValue, changeSrcPosition, changeSrcDirection, changeSource);
+                        onChange?.Invoke(changeData);
                     }
                     else ret = false;
                 }
@@ -117,7 +117,7 @@ namespace UC.RPG
             value = r;
             _resourceEmpty = (value <= 0.0f);
 
-            if (notify) onChange?.Invoke(ResourceHandler.ChangeType.Burst, value - prevValue, Vector3.zero, Vector3.zero, null);
+            if (notify) onChange?.Invoke(new ChangeData { deltaValue = value - prevValue });
         }
     }
 }

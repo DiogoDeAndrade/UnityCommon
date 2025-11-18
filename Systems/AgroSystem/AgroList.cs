@@ -55,10 +55,10 @@ namespace UC
             }
         }
 
-        private void OnDamage_AddAgro(ResourceHandler.ChangeType changeType, float deltaValue, Vector3 changeSrcPosition, Vector3 changeSrcDirection, GameObject changeSource)
+        private void OnDamage_AddAgro(ChangeData changeData)
         {
-            if (deltaValue < 0.0f)
-                AddAgro(changeSource, -deltaValue * agroGainOnDamage);
+            if (changeData.deltaValue < 0.0f)
+                AddAgro(changeData.source, -changeData.deltaValue * agroGainOnDamage);
         }
 
         public void AddAgro(GameObject source, float agro)
