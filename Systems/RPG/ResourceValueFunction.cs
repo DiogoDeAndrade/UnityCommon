@@ -5,7 +5,7 @@ namespace UC.RPG
     [System.Serializable]
     public abstract class ResourceValueFunction
     {
-        public abstract float GetValue(RPGCharacter character);
+        public abstract float GetValue(RPGEntity character);
     }
 
     [System.Serializable]
@@ -13,7 +13,7 @@ namespace UC.RPG
     {
         public float baseValue = 1.0f;
 
-        public override float GetValue(RPGCharacter character)
+        public override float GetValue(RPGEntity character)
         {
             return baseValue;
         }
@@ -25,7 +25,7 @@ namespace UC.RPG
         public float baseValue = 1.0f;
         public float valuePerLevel = 1.0f;
 
-        public override float GetValue(RPGCharacter character)
+        public override float GetValue(RPGEntity character)
         {
             return Mathf.FloorToInt(baseValue + character.level * valuePerLevel);
         }
@@ -38,7 +38,7 @@ namespace UC.RPG
         public float    valuePerLevel = 1.0f;
         public StatType stat;
 
-        public override float GetValue(RPGCharacter character)
+        public override float GetValue(RPGEntity character)
         {
             return Mathf.FloorToInt(baseValue + character.Get(stat).value * valuePerLevel);
         }

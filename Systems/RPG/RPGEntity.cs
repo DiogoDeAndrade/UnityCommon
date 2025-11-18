@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace UC.RPG
 {
-    public class RPGCharacter
+    public class RPGEntity
     {
         public int          level;
         public Archetype    archetype;
@@ -12,7 +12,7 @@ namespace UC.RPG
         protected Dictionary<StatType, StatInstance>            stats;
         protected Dictionary<ResourceType, ResourceInstance>    resources;
 
-        public RPGCharacter(int level, Archetype archetype)
+        public RPGEntity(int level, Archetype archetype)
         {
             this.level = level;
             this.archetype = archetype;
@@ -51,6 +51,23 @@ namespace UC.RPG
             if (resources.TryGetValue(r, out var instance)) return instance;
 
             return null;
+        }
+
+        public bool DefaultAttack(Vector2Int destPos)
+        {
+            // Get weapon
+            var weapon = archetype.defaultWeapon;
+            if (weapon)
+            {
+                return Attack(weapon, this, destPos);
+            }
+
+            return false;
+        }
+
+        public bool Attack(Weapon weapon, RPGEntity source, Vector2Int destPos)
+        {
+            return weapon.attackModule.Attack(source, destPos);
         }
     }
 }

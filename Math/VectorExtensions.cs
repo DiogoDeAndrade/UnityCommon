@@ -305,6 +305,16 @@ namespace UC
         {
             return new Vector4(v.x, v.y, v.z, value);
         }
+
+        public static int ManhattanDistance(this Vector2Int v1, Vector2Int v2)
+        {
+            return Mathf.Abs(v1.x - v2.x) + Mathf.Abs(v1.y - v2.y);
+        }
+
+        public static float ManhattanDistance(this Vector2 v1, Vector2 v2)
+        {
+            return Mathf.Abs(v1.x - v2.x) + Mathf.Abs(v1.y - v2.y);
+        }
     };
 
 }

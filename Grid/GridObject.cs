@@ -73,6 +73,7 @@ namespace UC
             transform.position = Snap(transform.position);
         }
 
+        public Vector2Int gridPosition => gridSystem.WorldToGrid(transform.position);
         public Vector3 Snap(Vector3 position) => gridSystem.Snap(position);
         public Vector2Int WorldToGrid(Vector3 worldPosition) => gridSystem.WorldToGrid(worldPosition);
         public Vector2 GridToWorld(Vector3Int gridPosition) => gridSystem.GridToWorld(gridPosition);

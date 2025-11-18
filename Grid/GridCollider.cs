@@ -17,8 +17,12 @@ namespace UC
         private SpriteRenderer spriteRenderer;
         [SerializeField, ShowIf(nameof(isBoxCollider))]
         private Rect           rectangle = new Rect(0.0f, 0.0f, 1.0f, 1.0f);
+        [SerializeField]
+        private bool           separateForInteraction = false;
+        [SerializeField, ShowIf(nameof(separateForInteraction))]
+        private Type           colliderTypeForInteraction = Type.Sprite;
 
-        GridSystem gridSystem;
+        GridSystem              gridSystem;
         TilemapCollider2D       tilemapCollider;
         CompositeCollider2D     compositeCollider;
         GridObject              _gridObject;
@@ -27,8 +31,8 @@ namespace UC
         Vector3 tolerance = new Vector3(1.0f, 1.0f, 0.0f);
 
         private bool isNotTilemap => !isTilemapCollider;
-        private bool isSpriteCollider => isNotTilemap && (colliderType == Type.Sprite);
-        private bool isBoxCollider => isNotTilemap && (colliderType == Type.Box);
+        private bool isSpriteCollider => (isNotTilemap && (colliderType == Type.Sprite)) || ((separateForInteraction) && (colliderTypeForInteraction == Type.Sprite));
+        private bool isBoxCollider => isNotTilemap && (colliderType == Type.Box) || ((separateForInteraction) && (colliderTypeForInteraction == Type.Box));
 
         public GridObject gridObject => _gridObject;
 
@@ -94,9 +98,15 @@ namespace UC
             return false;
         }
 
-        virtual public bool IsIntersecting(Vector2 worldPoint)
+        virtual public bool IsIntersecting(Vector2 worldPoint, bool forInteraction)
         {
-            if ((colliderType == Type.Sprite) && (spriteRenderer))
+            var ct = colliderType;
+            if ((forInteraction) && (separateForInteraction))
+            {
+                ct = colliderTypeForInteraction;
+            }
+
+            if ((ct == Type.Sprite) && (spriteRenderer))
             {
                 var bounds = spriteRenderer.bounds;
                 bounds.Expand(tolerance);
@@ -118,7 +128,7 @@ namespace UC
                     return tilemapCollider.OverlapPoint(worldPoint);
                 }
             }
-            if (isBoxCollider)
+            if (ct == Type.Box)
             {
                 var localPos = worldPoint - transform.position.xy();
 

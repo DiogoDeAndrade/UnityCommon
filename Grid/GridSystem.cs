@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UC.RPG;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -280,13 +281,13 @@ namespace UC
             return result;
         }
 
-        public List<GridObject> GetGridObjectsAt(Vector2 worldPos)
+        public List<GridObject> GetGridObjectsAt(Vector2 worldPos, bool forInteraction = false)
         {
             List<GridObject> result = new List<GridObject>();
 
             foreach (var obj in gridColliders)
             {
-                if (obj.IsIntersecting(worldPos))
+                if (obj.IsIntersecting(worldPos, forInteraction))
                 {
                     result.Add(obj.gridObject);
                 }
@@ -308,11 +309,11 @@ namespace UC
             return null;
         }
 
-        public GridObject GetFirstGridObjectAt(Vector2 worldPos)
+        public GridObject GetFirstGridObjectAt(Vector2 worldPos, bool forInteraction)
         {
             foreach (var obj in gridColliders)
             {
-                if (obj.IsIntersecting(worldPos))
+                if (obj.IsIntersecting(worldPos, forInteraction))
                 {
                     return obj.gridObject;
                 }
@@ -329,12 +330,12 @@ namespace UC
                 return GetGridObjectsAt(worldPos);
         }
 
-        public GridObject GetFirstGridObjectAt(Vector3 worldPos, bool tileBasedPosition)
+        public GridObject GetFirstGridObjectAt(Vector3 worldPos, bool tileBasedPosition, bool forInteraction)
         {
             if (tileBasedPosition)
                 return GetFirstGridObjectAt(WorldToGrid(worldPos));
             else
-                return GetFirstGridObjectAt(worldPos);
+                return GetFirstGridObjectAt(worldPos, forInteraction);
         }
 
         public List<TileBase> GetTiles(Vector2Int pos)

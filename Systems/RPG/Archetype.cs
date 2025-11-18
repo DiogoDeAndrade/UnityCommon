@@ -29,15 +29,18 @@ namespace UC.RPG
             public ResourceValueFunction calculator;
         }
 
+        [Header("Visuals")]
         public string                       displayName;
         public Color                        highlightColor = Color.white;
         public RuntimeAnimatorController    controller;
+        [Header("RPG")]
         public Stat[]                       primaryStats;
         public Resource[]                   resources;
+        public Weapon                       defaultWeapon;
         [Header("Generator")]
         public Generator[]                  statGenerators;
 
-        public void RunGenerator(StatType type, RPGCharacter character, StatInstance statInstance)
+        public void RunGenerator(StatType type, RPGEntity character, StatInstance statInstance)
         {
             foreach (var g in statGenerators)
             {
