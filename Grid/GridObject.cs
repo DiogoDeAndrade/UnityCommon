@@ -108,7 +108,7 @@ namespace UC
                         // Midway to the position
                         endPos = transform.position + (endPos - transform.position) * moveAnimationOnCollision;
 
-                        moveInterpolator = transform.MoveToWorld(endPos, moveTime, "Move").EaseFunction(HalfwayInAndOut).Done(
+                        moveInterpolator = transform.MoveToWorld(endPos, moveTime, "Move").EaseFunction(HalfwayInAndOut).Event(0.5f,
                         () =>
                         {
                             moveInterpolator = null;

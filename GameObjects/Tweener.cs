@@ -11,13 +11,19 @@ namespace UC
 
         public class BaseInterpolator
         {
+            protected struct EventAction
+            {
+                public float    time;
+                public Action   action;
+            }
+
             public string name;
             public float currentTime;
             public float totalTime;
             public float delayStartTime;
             public bool unscaledTime;
             public EaseFunction easeFunction;
-            public List<Action> doneActions;
+            protected List<EventAction> eventActions;
 
             public bool isFinished => (currentTime >= totalTime);
 
@@ -34,10 +40,13 @@ namespace UC
                     }
                     else return;
                 }
+                float prevTime = currentTime;
                 currentTime += elapsedTime;
                 float t = Mathf.Clamp01(currentTime / totalTime);
                 t = easeFunction(t);
                 EvaluateAndSet(t);
+
+                RunEvents(prevTime / totalTime, currentTime / totalTime);
             }
 
             internal virtual void EvaluateAndSet(float t) {; }
@@ -48,11 +57,17 @@ namespace UC
                 return this;
             }
 
+            public BaseInterpolator Event(float normalizedTime, Action action)
+            {
+                if (eventActions == null) eventActions = new();
+                eventActions.Add(new EventAction() { time = normalizedTime, action = action });
+                return this;
+            }
+
+
             public BaseInterpolator Done(Action action)
             {
-                if (doneActions == null) doneActions = new();
-                doneActions.Add(action);
-                return this;
+                return Event(-1.0f, action);
             }
 
             public BaseInterpolator DelayStart(float time)
@@ -78,7 +93,7 @@ namespace UC
                 }
                 if (!runDone)
                 {
-                    doneActions = null;
+                    eventActions = null;
                 }
             }
 
@@ -86,6 +101,19 @@ namespace UC
             {
                 Complete(false, runDone);
             }
+
+            public void RunEvents(float prevNormalizedTime, float currentNormalizedTime)
+            {
+                if (eventActions == null) return;
+
+                foreach (var ea in eventActions)
+                {
+                    if ((ea.time > prevNormalizedTime) && (ea.time <= currentNormalizedTime))
+                    {
+                        ea.action?.Invoke();
+                    }
+                }
+            }   
         }
 
         public class Interpolator<T> : BaseInterpolator
@@ -212,20 +240,14 @@ namespace UC
 
         private void CompleteAction(int index)
         {
-            var doneActions = interpolators[index].doneActions;
+            var interpolator = interpolators[index];
             if (!string.IsNullOrEmpty(interpolators[index].name))
             {
                 namedInterpolators.Remove(interpolators[index].name);
             }
             interpolators[index] = null;
 
-            if (doneActions != null)
-            {
-                foreach (var a in doneActions)
-                {
-                    a.Invoke();
-                }
-            }
+            interpolator.RunEvents(-2.0f, -1.0f);
         }
 
         private BaseInterpolator Add(BaseInterpolator interpolator)

@@ -12,6 +12,10 @@ namespace UC.RPG
         protected Dictionary<StatType, StatInstance>            stats;
         protected Dictionary<ResourceType, ResourceInstance>    resources;
 
+        private ResourceInstance healthRes;
+
+        public bool isDead => healthRes.isResourceEmpty;
+
         public RPGEntity(int level, Archetype archetype)
         {
             this.level = level;
@@ -21,7 +25,7 @@ namespace UC.RPG
         public void Init()
         {
             stats = new();
-            foreach (var s in archetype.primaryStats)
+            foreach (var s in archetype.GetStats())
             {
                 var statInstance = new StatInstance(s.type);
 
@@ -33,11 +37,13 @@ namespace UC.RPG
             archetype.UpdateDerivedStats(this);
 
             resources = new();
-            foreach (var r in archetype.resources)
+            foreach (var r in archetype.GetResources())
             {
                 var res = new ResourceInstance(r.type);
                 res.maxValue = r.calculator.GetValue(this);
                 resources.Add(r.type, res);
+
+                if (r.type == Globals.healthResource) healthRes = res;
             }
         }
 
@@ -58,7 +64,7 @@ namespace UC.RPG
         public bool DefaultAttack(Vector2Int destPos)
         {
             // Get weapon
-            var weapon = archetype.defaultWeapon;
+            var weapon = archetype.GetDefaultWeapon();
             if (weapon)
             {
                 return Attack(weapon, this, destPos);
@@ -69,7 +75,7 @@ namespace UC.RPG
 
         public bool Attack(Weapon weapon, RPGEntity source, Vector2Int destPos)
         {
-            return weapon.attackModule.Attack(source, destPos);
+            return weapon.attackModule.Attack(weapon, source, destPos);
         }
     }
 }

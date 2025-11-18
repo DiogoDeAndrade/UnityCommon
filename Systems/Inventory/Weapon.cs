@@ -8,12 +8,14 @@ namespace UC
     public partial class Weapon : Item
     {
         [Header("Weapon")]
-        [SerializeReference] public AttackModule attackModule;
+        [SerializeReference] 
+        public AttackModule attackModule;
+        public SoundDef     attackSound;
     }
 
     [System.Serializable]
     public abstract class AttackModule
     {
-        public abstract bool Attack(RPGEntity source, Vector2Int destPos);
+        public abstract bool Attack(Weapon weapon, RPGEntity source, Vector2Int destPos);
     }
 }
