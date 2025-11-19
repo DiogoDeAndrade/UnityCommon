@@ -4,7 +4,7 @@ using UnityEngine;
 namespace UC.RPG
 {
 
-    [CreateAssetMenu(fileName = "StatType", menuName = "Unity Common/Data/Stat Type")]
+    [CreateAssetMenu(fileName = "StatType", menuName = "Unity Common/RPG/Stat Type")]
     public class StatType : ScriptableObject
     {
         public string   displayName;

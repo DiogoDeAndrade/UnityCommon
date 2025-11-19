@@ -4,7 +4,7 @@ using UnityEngine;
 namespace UC.RPG
 {
 
-    [CreateAssetMenu(fileName = "ResourceType", menuName = "Unity Common/Data/Resource Type")]
+    [CreateAssetMenu(fileName = "ResourceType", menuName = "Unity Common/RPG/Resource Type")]
     public class ResourceType : ScriptableObject
     {
         public string displayName;

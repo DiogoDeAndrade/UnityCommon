@@ -6,7 +6,7 @@ using UnityEditor;
 namespace UC
 {
 
-    [CreateAssetMenu(fileName = "Faction", menuName = "Unity Common/Data/Faction")]
+    [CreateAssetMenu(fileName = "Faction", menuName = "Unity Common/RPG/Faction")]
     public class Faction : ScriptableObject
     {
         [SerializeField] private List<Faction> hostileFaction;

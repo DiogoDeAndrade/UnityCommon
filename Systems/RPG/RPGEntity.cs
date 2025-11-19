@@ -8,6 +8,7 @@ namespace UC.RPG
     {
         public int          level;
         public Archetype    archetype;
+        public Item         item;
 
         protected Dictionary<StatType, StatInstance>            stats;
         protected Dictionary<ResourceType, ResourceInstance>    resources;

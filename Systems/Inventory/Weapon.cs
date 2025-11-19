@@ -5,7 +5,7 @@ using UnityEngine;
 namespace UC
 {
 
-    [CreateAssetMenu(fileName = "Weapon", menuName = "Unity Common/Data/Weapon")]
+    [CreateAssetMenu(fileName = "Weapon", menuName = "Unity Common/RPG/Weapon")]
     public partial class Weapon : Item
     {
         [Header("Weapon")]
@@ -15,23 +15,6 @@ namespace UC
         protected AttackModule attackModule;
         [SerializeField]
         protected SoundDef     attackSound;
-
-        private RetObjType Get<RetObjType, OwnerObjType>(Func<OwnerObjType, RetObjType> func) where OwnerObjType : class
-        {
-            var ret = func(this as OwnerObjType);
-            if (ret != null) return ret;
-
-            foreach (var item in parentItems)
-            {
-                if (item is OwnerObjType ownerObj)
-                {
-                    ret = func(ownerObj);
-                    if (ret != null) return ret;
-                }
-            }
-
-            return default;
-        }
 
         public DamageType GetDamageType() => Get<DamageType, Weapon>((obj) => obj.damageType);
         public AttackModule GetAttackModule() => Get<AttackModule, Weapon>((obj) => obj.attackModule);

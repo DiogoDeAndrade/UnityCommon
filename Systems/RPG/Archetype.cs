@@ -1,11 +1,13 @@
+using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Android;
 
 namespace UC.RPG
 {
 
-    [CreateAssetMenu(fileName = "Archetype", menuName = "Unity Common/Data/Archetype")]
+    [CreateAssetMenu(fileName = "Archetype", menuName = "Unity Common/RPG/Archetype")]
     public class Archetype : ScriptableObject
     {
         [Serializable]
@@ -34,8 +36,12 @@ namespace UC.RPG
 
         public Archetype baseArchetype;
         [Header("Visuals")]
-        public string displayName;
-        public Color highlightColor = Color.white;
+        public string   displayName;
+        [SerializeField, ResizableTextArea]
+        private string  _description;
+        [SerializeField]
+        private Sprite  _displaySprite;
+        public Color    highlightColor = Color.white;
         [SerializeField]
         private RuntimeAnimatorController controller;
         [Header("Sounds")]
@@ -146,28 +152,24 @@ namespace UC.RPG
             return cachedStats;
         }
 
-        public RuntimeAnimatorController GetAnimatorController()
+        protected RetObjType Get<RetObjType, OwnerObjType>(Func<OwnerObjType, RetObjType> func) where OwnerObjType : class
         {
-            if (controller != null) return controller;
-            
-            return baseArchetype?.GetAnimatorController() ?? null;
+            var ret = func(this as OwnerObjType);
+            if (ret != null) return ret;
+
+            if (baseArchetype)
+            {
+                return baseArchetype.Get<RetObjType, OwnerObjType>(func);
+            }
+
+            return default;
         }
 
-        public Weapon GetDefaultWeapon()
-        {
-            if (defaultWeapon != null) return defaultWeapon;
-            return baseArchetype?.GetDefaultWeapon() ?? null;
-        }
-
-        public SoundDef GetHitSound()
-        {
-            if (hitSound != null) return hitSound;
-            return baseArchetype?.GetHitSound() ?? null;
-        }
-        public SoundDef GetDeathSound()
-        {
-            if (deathSound != null) return deathSound;
-            return baseArchetype?.GetDeathSound() ?? null;
-        }
+        public string description => string.IsNullOrEmpty(_description) ? (baseArchetype?.description ?? "") : (_description);
+        public Sprite displaySprite => Get<Sprite, Archetype>((obj) => obj._displaySprite);
+        public RuntimeAnimatorController GetAnimatorController() => Get<RuntimeAnimatorController, Archetype>((obj) => obj.controller);
+        public Weapon GetDefaultWeapon() => Get<Weapon, Archetype>((obj) => obj.defaultWeapon);
+        public SoundDef GetHitSound() => Get<SoundDef, Archetype>((obj) => obj.hitSound);
+        public SoundDef GetDeathSound() => Get<SoundDef, Archetype>((obj) => obj.deathSound);
     }
 }

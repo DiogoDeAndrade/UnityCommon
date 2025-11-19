@@ -1,10 +1,11 @@
 using NaughtyAttributes;
+using System;
 using UnityEngine;
 
 namespace UC
 {
 
-    [CreateAssetMenu(fileName = "Item", menuName = "Unity Common/Data/Item")]
+    [CreateAssetMenu(fileName = "Item", menuName = "Unity Common/RPG/Item")]
     public class Item : ScriptableObject
     {
         [Header("Item Stats")]
@@ -13,6 +14,8 @@ namespace UC
         public Color        displaySpriteColor = Color.white;
         public Sprite       displaySprite;
         public Color        displayTextColor = Color.white;
+        [ResizableTextArea]
+        public string       description;
         [SerializeField] 
         protected GameObject  scenePrefab;
         public bool         isStackable = false;
@@ -33,17 +36,23 @@ namespace UC
             return false;
         }
 
-        public GameObject GetScenePrefab()
+        protected RetObjType Get<RetObjType, OwnerObjType>(Func<OwnerObjType, RetObjType> func) where OwnerObjType : class
         {
-            if (scenePrefab) return scenePrefab;
+            var ret = func(this as OwnerObjType);
+            if (ret != null) return ret;
 
-            foreach (var parent in parentItems)
+            foreach (var item in parentItems)
             {
-                var prefab = parent.GetScenePrefab();
-                if (prefab) return prefab;
+                if (item is OwnerObjType ownerObj)
+                {
+                    ret = func(ownerObj);
+                    if (ret != null) return ret;
+                }
             }
 
-            return null;
+            return default;
         }
+
+        public GameObject GetScenePrefab() => Get<GameObject, Item>((obj) => obj.scenePrefab);
     }
 }

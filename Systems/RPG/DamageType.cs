@@ -4,7 +4,7 @@ using UnityEngine;
 namespace UC.RPG
 {
 
-    [CreateAssetMenu(fileName = "DamageType", menuName = "Unity Common/Data/Damage Type")]
+    [CreateAssetMenu(fileName = "DamageType", menuName = "Unity Common/RPG/Damage Type")]
     public class DamageType : ScriptableObject
     {
         public string   displayName;

@@ -82,6 +82,7 @@ namespace UC
             {
                 // Check if this collider is on the same object as the given object
                 if (collider.transform.IsChildOf(gridObject.transform)) continue;
+                if ((collider.gridObject) && (!collider.gridObject.isSolid)) continue;
 
                 if (collider.IsIntersecting(endPosGrid))
                 {

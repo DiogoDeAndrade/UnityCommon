@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.Tilemaps;
 
 namespace UC
@@ -11,13 +12,13 @@ namespace UC
     {
         [SerializeField]
         private bool        snapOnStart = false;
-        [SerializeField]
-        private bool        checkCollisionOnMove = true;
-        [SerializeField, Range(-1.0f, 1.0f), ShowIf(nameof(checkCollisionOnMove))]
+        [SerializeField, FormerlySerializedAs("checkCollisionOnMove")]
+        private bool        solidObject = true;
+        [SerializeField, Range(-1.0f, 1.0f), ShowIf(nameof(solidObject))]
         private float       moveAnimationOnCollision = 0.0f;
         [SerializeField]
         private AudioClip   moveSnd;
-        [SerializeField, ShowIf(nameof(checkCollisionOnMove))]
+        [SerializeField, ShowIf(nameof(solidObject))]
         private AudioClip   moveFailSnd;
 
         public delegate void OnMove(Vector2Int sourcePos, Vector2Int destPos);
@@ -33,6 +34,11 @@ namespace UC
         private Tweener.BaseInterpolator moveInterpolator;
 
         public bool isMoving => (moveInterpolator != null) && (!moveInterpolator.isFinished);
+        public bool isSolid
+        {
+            get => solidObject;
+            set => solidObject = value;
+        }
         public Vector2 lastDelta { get; private set; }
         public Vector2 cellSize => gridSystem.cellSize;
 
@@ -99,7 +105,7 @@ namespace UC
             var worldDistance = (endPos - transform.position).magnitude;
             float moveTime = worldDistance / speed.magnitude;
 
-            if (checkCollisionOnMove)
+            if (solidObject)
             {
                 if (gridSystem.CheckCollision(endPosGrid, this))
                 {
