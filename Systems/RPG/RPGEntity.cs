@@ -44,7 +44,7 @@ namespace UC.RPG
                 res.maxValue = r.calculator.GetValue(this);
                 resources.Add(r.type, res);
 
-                if (r.type == Globals.healthResource) healthRes = res;
+                if (r.type == GlobalsBase.healthResource) healthRes = res;
             }
         }
 
