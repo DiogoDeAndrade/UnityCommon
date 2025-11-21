@@ -26,6 +26,7 @@ namespace UC.Interaction
         }
 
         protected virtual void SetDefaultValues() { }
+        public virtual bool NeedWait() { return true; }
 
         public abstract IEnumerator Execute(GameObject go);
     }
