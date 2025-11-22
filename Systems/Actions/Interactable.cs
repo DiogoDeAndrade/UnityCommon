@@ -9,6 +9,8 @@ namespace UC.Interaction
         [SerializeField] 
         protected InteractionVerb   interactionVerb;
         [SerializeField]
+        protected GameObject        _referenceObject;
+        [SerializeField]
         protected int               _priority = 0;
         [SerializeField] 
         protected bool              overrideCursor;
@@ -37,6 +39,9 @@ namespace UC.Interaction
                 return interactionVerb.cursorDef;
             }
         }
+        public InteractionVerb verb => interactionVerb;
+        public GameObject referenceObject => _referenceObject ? _referenceObject : gameObject;
+
         public int priority => _priority;
 
         public virtual bool CanInteract(GameObject referenceObject)
@@ -58,15 +63,15 @@ namespace UC.Interaction
             return true;
         }
 
-        public bool Interact(GameObject referenceObject, MonoBehaviour interactionHandler)
+        public bool Interact(GameObject actionSource, GameObject actionTarget, MonoBehaviour runnerObject)
         {
-            MonoBehaviour runner = interactionHandler ? interactionHandler : this;
-            runner.StartCoroutine(RunActionsCR(interactionHandler));
+            MonoBehaviour runner = runnerObject ? runnerObject : this;
+            runner.StartCoroutine(RunActionsCR(actionSource, actionTarget, runner));
 
             return true;
         }
 
-        IEnumerator RunActionsCR(MonoBehaviour runner)
+        IEnumerator RunActionsCR(GameObject actionSource, GameObject actionTarget, MonoBehaviour runner)
         {
             isRunning = true;
 
@@ -76,7 +81,7 @@ namespace UC.Interaction
                     continue;
 
                 // Run the action
-                IEnumerator routine = a.Execute(gameObject);
+                IEnumerator routine = a.Execute(actionSource, actionTarget);
 
                 if ((a.shouldWait) && (routine != null))
                 {

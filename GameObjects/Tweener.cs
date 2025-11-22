@@ -14,7 +14,7 @@ namespace UC
             protected struct EventAction
             {
                 public float    time;
-                public Action   action;
+                public System.Action   action;
             }
 
             public string name;
@@ -57,7 +57,7 @@ namespace UC
                 return this;
             }
 
-            public BaseInterpolator Event(float normalizedTime, Action action)
+            public BaseInterpolator Event(float normalizedTime, System.Action action)
             {
                 if (eventActions == null) eventActions = new();
                 eventActions.Add(new EventAction() { time = normalizedTime, action = action });
@@ -65,7 +65,7 @@ namespace UC
             }
 
 
-            public BaseInterpolator Done(Action action)
+            public BaseInterpolator Done(System.Action action)
             {
                 return Event(-1.0f, action);
             }

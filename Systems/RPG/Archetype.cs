@@ -10,6 +10,8 @@ namespace UC.RPG
     [CreateAssetMenu(fileName = "Archetype", menuName = "Unity Common/RPG/Archetype")]
     public class Archetype : ScriptableObject
     {
+        public enum YesNoInherit { No, Yes, Inherit };
+
         [Serializable]
         public struct Stat
         {
@@ -56,9 +58,15 @@ namespace UC.RPG
         private Resource[] resources;
         [SerializeField]
         private Weapon defaultWeapon;
+        [SerializeField]
+        private YesNoInherit _hasInventory = YesNoInherit.Inherit;
+        [SerializeField, Tooltip("Max inventory slots, -1 to unlimited."), ShowIf(nameof(needsInventoryData))]
+        private int          inventorySize = -1;
         [Header("Generator")]
         [SerializeField]
         private Generator[] statGenerators;
+
+        bool needsInventoryData => _hasInventory == YesNoInherit.Yes;
 
         private Resource[] _cachedResources;
         private Resource[] cachedResources
@@ -171,5 +179,23 @@ namespace UC.RPG
         public Weapon GetDefaultWeapon() => Get<Weapon, Archetype>((obj) => obj.defaultWeapon);
         public SoundDef GetHitSound() => Get<SoundDef, Archetype>((obj) => obj.hitSound);
         public SoundDef GetDeathSound() => Get<SoundDef, Archetype>((obj) => obj.deathSound);
+        public bool hasInventory => (_hasInventory == YesNoInherit.Yes) || ((_hasInventory == YesNoInherit.Inherit) && (baseArchetype?.hasInventory ?? false));
+        public int inventoryMaxSlots
+        {
+            get
+            {
+                switch (_hasInventory)
+                {
+                    case YesNoInherit.Yes:
+                        return inventorySize;
+                    case YesNoInherit.No:
+                        return 0;
+                    case YesNoInherit.Inherit:
+                        return baseArchetype?.inventoryMaxSlots ?? -1;
+                    default:
+                        return -1;
+                }
+            }
+        }
     }
 }

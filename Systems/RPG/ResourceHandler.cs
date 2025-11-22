@@ -54,8 +54,18 @@ namespace UC.RPG
             }
             set
             {
+                if (resourceInstance != null)
+                {
+                    resourceInstance.onChange -= ResourceInstance_onChange;
+                    resourceInstance.onResourceEmpty -= ResourceInstance_onResourceEmpty;
+                    resourceInstance.onResourceNotEmpty -= ResourceInstance_onResourceNotEmpty;
+                }   
+
                 type = value.type;
                 resourceInstance = value;
+                resourceInstance.onChange += ResourceInstance_onChange;
+                resourceInstance.onResourceEmpty += ResourceInstance_onResourceEmpty;
+                resourceInstance.onResourceNotEmpty += ResourceInstance_onResourceNotEmpty;
                 _fromInstance = true;
             }
         }

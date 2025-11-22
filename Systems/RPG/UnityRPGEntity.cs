@@ -1,9 +1,13 @@
 using UnityEngine;
+using UC.Interaction;
 
 namespace UC.RPG
 {
     public abstract class UnityRPGEntity : MonoBehaviour
     {
+        public delegate void OnActionPerformed(UnityRPGEntity entity);
+        public event OnActionPerformed onActionPerformed;
+
         [SerializeField] protected Archetype        _archetype;
         [SerializeField] protected int              _level = 1;
 
@@ -32,7 +36,9 @@ namespace UC.RPG
             }
 
             if (health != null)
+            {
                 health.onResourceEmpty += Entity_OnDeath;
+            }
         }
 
         protected abstract void Entity_OnDeath(GameObject changeSource);
@@ -57,8 +63,31 @@ namespace UC.RPG
                 var handler = gameObject.AddComponent<ResourceHandler>();
                 handler.instance = _rpgEntity.Get(r.type);
             }
+
+            if (archetype.hasInventory)
+            {          
+                var invHandler = gameObject.AddComponent<Inventory>();
+                invHandler.instance = _rpgEntity.inventory;
+            }
         }
 
         public float GetStat(StatType type) => _rpgEntity.Get(type).value;
+        public InventoryInstance GetInventory() => _rpgEntity.inventory;
+
+        public bool RunAction(Interactable interactable)
+        {
+            if (interactable.Interact(gameObject, interactable.referenceObject, this))
+            {
+                RunActionPerformed();
+
+                return true;
+            }
+            return false;
+        }
+
+        protected void RunActionPerformed()
+        {
+            onActionPerformed?.Invoke(this);
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,6 +8,11 @@ namespace UC
     [CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Hypertag")]
     public class Hypertag : ScriptableObject
     {
+        public T FindFirst<T>() where T: Component
+        {
+            return FindFirstObjectWithHypertag<T>(this);
+        }
+
         public static T FindFirstObjectWithHypertag<T>(Hypertag tag) where T : Component
         {
             List<T> ret = new List<T>();

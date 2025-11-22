@@ -47,9 +47,6 @@ namespace UC.Interaction.Editor
             // Height for the foldout line
             float height = EditorGUIUtility.singleLineHeight;
 
-            if (!property.isExpanded)
-                return height;
-
             // Add height for all visible children
             SerializedProperty iterator = property.Copy();
             SerializedProperty endProperty = iterator.GetEndProperty();

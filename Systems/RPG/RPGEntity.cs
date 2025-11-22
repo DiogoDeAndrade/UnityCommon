@@ -13,7 +13,10 @@ namespace UC.RPG
         protected Dictionary<StatType, StatInstance>            stats;
         protected Dictionary<ResourceType, ResourceInstance>    resources;
 
-        private ResourceInstance healthRes;
+        private ResourceInstance    healthRes;
+        private InventoryInstance   _inventory;
+
+        public InventoryInstance inventory => _inventory;
 
         public bool isDead => healthRes.isResourceEmpty;
 
@@ -21,6 +24,20 @@ namespace UC.RPG
         {
             this.level = level;
             this.archetype = archetype;
+            if (archetype.hasInventory)
+            {
+                AddInventory(archetype.inventoryMaxSlots != -1, archetype.inventoryMaxSlots);
+            }
+        }
+
+        public void AddInventory(InventoryInstance inventoryInstance)
+        {
+            _inventory = inventoryInstance;
+        }
+
+        public void AddInventory(bool limited = false, int maxSlots = 9)
+        {
+            _inventory = new InventoryInstance(limited, maxSlots);
         }
 
         public void Init()

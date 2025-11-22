@@ -20,7 +20,7 @@ namespace UC
         Color startColor;
         Color targetColor;
         float fadeInc;
-        Action callback;
+        System.Action callback;
 
         static FullscreenFader fsFader;
 
@@ -66,7 +66,7 @@ namespace UC
             }
         }
 
-        void _Fade(float targetAlpha, float time, Color targetColor, Action action)
+        void _Fade(float targetAlpha, float time, Color targetColor, System.Action action)
         {
             currentT = 0.0f;
             fader.color = targetColor.ChangeAlpha(fader.color.a);
@@ -86,7 +86,7 @@ namespace UC
             fsFader._Fade(0.0f, time, color, null);
         }
 
-        public static void FadeIn(float time, Color color, Action action)
+        public static void FadeIn(float time, Color color, System.Action action)
         {
             fsFader._Fade(0.0f, time, color, action);
         }
@@ -101,7 +101,7 @@ namespace UC
             fsFader._Fade(1.0f, time, color, null);
         }
 
-        public static void FadeOut(float time, Color color, Action action)
+        public static void FadeOut(float time, Color color, System.Action action)
         {
             fsFader._Fade(1.0f, time, color, action);
         }
