@@ -156,6 +156,12 @@ namespace UC
             return t;
         }
 
+        public void TurnTo(Vector2 dir)
+        {
+            ComputeFacingFromVector(dir);
+            onTurnTo?.Invoke(gridPosition, gridPosition);
+        }
+
         public void TeleportTo(Vector2 target)
         {
             var originalPos = WorldToGrid(transform.position);

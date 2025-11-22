@@ -13,8 +13,10 @@ namespace UC.Editor
         SerializedProperty propMaxTurnSpeed;
         SerializedProperty propAxisToAlign;
         SerializedProperty propInputEnabled;
+        SerializedProperty propTurnEnabled;
         SerializedProperty propPlayerInput;
         SerializedProperty propMovementInput;
+        SerializedProperty propTurnModifier;
 
         protected override void OnEnable()
         {
@@ -27,8 +29,10 @@ namespace UC.Editor
             propMaxTurnSpeed = serializedObject.FindProperty("maxTurnSpeed");
             propAxisToAlign = serializedObject.FindProperty("axisToAlign");
             propInputEnabled = serializedObject.FindProperty("inputEnabled");
+            propTurnEnabled = serializedObject.FindProperty("turnEnabled");
             propPlayerInput = serializedObject.FindProperty("playerInput");
             propMovementInput = serializedObject.FindProperty("movementInput");
+            propTurnModifier = serializedObject.FindProperty("turnModifier");
         }
 
         public override void OnInspectorGUI()
@@ -62,6 +66,10 @@ namespace UC.Editor
                         EditorGUILayout.PropertyField(propPlayerInput, new GUIContent("Player Input", "Player Input to use, when needed"));
 
                     EditorGUILayout.PropertyField(propMovementInput, new GUIContent("Movement Input", "Dual axis movement for tile-based movement"));
+
+                    EditorGUILayout.PropertyField(propTurnEnabled, new GUIContent("Enable Turn", "Enable turning in place, using a modifier key"));
+                    if (propTurnEnabled.boolValue)
+                        EditorGUILayout.PropertyField(propTurnModifier, new GUIContent("Turn Modifier", "Key to use to turn instead of move"));
                 }
 
                 EditorGUI.EndChangeCheck();

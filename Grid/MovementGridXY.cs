@@ -25,10 +25,14 @@ namespace UC
         private float maxTurnSpeed = 360.0f;
         [SerializeField]
         private bool inputEnabled;
-        [SerializeField, HideIf("needNewInputSystem")]
+        [SerializeField]
+        private bool turnEnabled;
+        [SerializeField]
         private PlayerInput playerInput;
         [SerializeField, InputPlayer(nameof(playerInput))]
         private InputControl movementInput;
+        [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
+        private InputControl turnModifier;
 
         protected SpriteRenderer spriteRenderer;
         protected GridObject gridObject;
@@ -39,13 +43,14 @@ namespace UC
 
         public Vector2 GetSpeed() => speed;
         public void SetSpeed(Vector2 speed) { this.speed = speed; }
-        public bool needNewInputSystem => (movementInput.type == InputControl.InputType.NewInput);
+        public bool needNewInputSystem => (movementInput.type == InputControl.InputType.NewInput) || (turnEnabled) && (turnModifier.type == InputControl.InputType.NewInput);
 
         protected void Awake()
         {
             rb = GetComponent<Rigidbody2D>();
             gridObject = GetComponent<GridObject>();
             movementInput.playerInput = playerInput;
+            turnModifier.playerInput = playerInput;
 
             if (rb)
             {
@@ -97,7 +102,10 @@ namespace UC
                     moveVector = speed;
                 }
 
-                MoveInDirection(moveVector, useRotation);
+                if ((turnEnabled) && (turnModifier.IsPressed()))
+                    TurnInDirection(moveVector);
+                else
+                    MoveInDirection(moveVector, useRotation);
             }
         }
 
@@ -145,6 +153,34 @@ namespace UC
                 {
                     moveCooldownTimer = cooldown;
                 }
+            }
+            else
+            {
+                // This code forces a direction after the movement
+                if (currentVelocity.magnitude > 1e-3f)
+                {
+                    currentVelocity = currentVelocity.normalized * 0.5f;
+                }
+                else currentVelocity = Vector2.zero;
+            }
+        }
+
+        protected void TurnInDirection(Vector2 moveVector)
+        {
+            if (moveVector != Vector2.zero)
+            {
+                Vector2 posInc = Vector2.zero;
+                if (moveVector.x < 0) posInc.x -= 1.0f;
+                if (moveVector.x > 0) posInc.x += 1.0f;
+                if (moveVector.y < 0) posInc.y -= 1.0f;
+                if (moveVector.y > 0) posInc.y += 1.0f;
+
+                if (posInc.x != 0.0f)
+                {
+                    posInc.y = 0.0f;
+                }
+
+                gridObject.TurnTo(posInc);
             }
             else
             {
