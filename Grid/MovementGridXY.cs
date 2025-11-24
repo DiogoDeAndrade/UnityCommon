@@ -1,6 +1,7 @@
 using UnityEngine;
 using NaughtyAttributes;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 
 namespace UC
 {
@@ -49,8 +50,11 @@ namespace UC
         {
             rb = GetComponent<Rigidbody2D>();
             gridObject = GetComponent<GridObject>();
-            movementInput.playerInput = playerInput;
-            turnModifier.playerInput = playerInput;
+            if (inputEnabled)
+            {
+                movementInput.playerInput = playerInput;
+                turnModifier.playerInput = playerInput;
+            }
 
             if (rb)
             {
