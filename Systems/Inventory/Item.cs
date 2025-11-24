@@ -16,11 +16,15 @@ namespace UC
         public Color        displayTextColor = Color.white;
         [ResizableTextArea]
         public string       description;
+        [ResizableTextArea]
+        private string      _tooltip;
         [SerializeField] 
         protected GameObject  scenePrefab;
         public bool         isStackable = false;
         [ShowIf(nameof(isStackable))]
         public int          maxStack = 1;
+
+        public string tooltip => (string.IsNullOrEmpty(_tooltip)) ? (description) : (_tooltip);
 
         internal bool IsA(Item itemType)
         {

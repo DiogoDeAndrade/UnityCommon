@@ -7,30 +7,20 @@ namespace UC
     [RequireComponent(typeof(CanvasGroup))]
     public class Tooltip : MonoBehaviour
     {
-        TextMeshProUGUI text;
-        CanvasGroup canvasGroup;
-        Canvas parentCanvas;
-        RectTransform rectTransform;
+        protected TextMeshProUGUI text;
+        protected CanvasGroup canvasGroup;
+        protected RectTransform rectTransform;
 
         private void Awake()
         {
             text = GetComponentInChildren<TextMeshProUGUI>();
             canvasGroup = GetComponent<CanvasGroup>();
-            parentCanvas = GetComponentInParent<Canvas>();
             rectTransform = transform as RectTransform;
             canvasGroup.alpha = 0.0f;
         }
 
-        void Start()
+        protected virtual void Start()
         {
-            if (parentCanvas.renderMode != RenderMode.WorldSpace)
-            {
-                if ((parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ||
-                    (parentCanvas.worldCamera == null))
-                {
-                    Debug.LogWarning("Tooltip won't work correctly if using overlay mode on canvas, or if camera is not set");
-                }
-            }
         }
 
         public void SetText(string text)
@@ -51,28 +41,18 @@ namespace UC
             Vector2 screenPosition;
             Vector2 localPoint;
 
-            switch (parentCanvas.renderMode)
+            switch (TooltipManager.parentCanvas.renderMode)
             {
                 case RenderMode.ScreenSpaceOverlay:
-                    RectTransform canvasTransform = parentCanvas.transform as RectTransform;
+                    RectTransform canvasTransform = TooltipManager.parentCanvas.transform as RectTransform;
                     screenPosition = RectTransformUtility.WorldToScreenPoint(null, worldPos);
-                    RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                        canvasTransform,
-                        screenPosition,
-                        null, // Null because Overlay mode does not use a camera
-                        out localPoint
-                    );
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasTransform, screenPosition, null, out localPoint);
                     float canvasScaleFactor = canvasTransform.lossyScale.x;
                     rectTransform.anchoredPosition = localPoint / canvasScaleFactor;
                     break;
                 case RenderMode.ScreenSpaceCamera:
-                    screenPosition = RectTransformUtility.WorldToScreenPoint(parentCanvas.worldCamera, worldPos);
-                    RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                        parentCanvas.transform as RectTransform,
-                        screenPosition,
-                        parentCanvas.worldCamera,
-                        out localPoint
-                    );
+                    screenPosition = RectTransformUtility.WorldToScreenPoint(TooltipManager.referenceCamera, worldPos);
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(TooltipManager.parentCanvas.transform as RectTransform, screenPosition, TooltipManager.parentCanvas.worldCamera, out localPoint);
                     rectTransform.anchoredPosition = localPoint;
                     break;
                 case RenderMode.WorldSpace:
@@ -81,6 +61,11 @@ namespace UC
                 default:
                     break;
             }
+        }
+
+        public void Remove()
+        {
+            canvasGroup.FadeOut(0.1f).Done(() => { Destroy(gameObject); });
         }
     }
 }

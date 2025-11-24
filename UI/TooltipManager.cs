@@ -5,7 +5,11 @@ namespace UC
 
     public class TooltipManager : MonoBehaviour
     {
-        [SerializeField] private Tooltip tooltipPrefab;
+        [SerializeField] private Tooltip        tooltipPrefab;
+        [SerializeField] private RectTransform  tooltipParent;
+        [SerializeField] private Camera         _referenceCamera;
+
+        protected Canvas _parentCanvas;
 
         static TooltipManager instance;
 
@@ -22,9 +26,25 @@ namespace UC
             }
         }
 
+        private void Start()
+        {
+            _parentCanvas = GetComponentInParent<Canvas>();
+
+            if (_parentCanvas.renderMode != RenderMode.WorldSpace)
+            {
+                if ((_parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ||
+                    (_parentCanvas.worldCamera == null))
+                {
+                    Debug.LogWarning("Tooltip won't work correctly if using overlay mode on canvas, or if camera is not set");
+                }
+            }
+
+            if (tooltipParent == null) tooltipParent = transform as RectTransform;
+        }
+
         private Tooltip _CreateTooltip()
         {
-            var tooltip = Instantiate(tooltipPrefab, transform);
+            var tooltip = Instantiate(tooltipPrefab, tooltipParent);
             return tooltip;
         }
 
@@ -32,5 +52,8 @@ namespace UC
         {
             return instance._CreateTooltip();
         }
+
+        public static Camera referenceCamera => instance._referenceCamera;
+        public static Canvas parentCanvas => instance._parentCanvas;
     }
 }

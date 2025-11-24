@@ -3,30 +3,41 @@ using UnityEngine.UI;
 using NaughtyAttributes;
 using TMPro;
 using UC.RPG;
+using UnityEngine.EventSystems;
 
 namespace UC
 {
-    public class SlotDisplay : MonoBehaviour
+    public class SlotDisplay : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
         public enum Source { RPGInventory, Inventory, RPGEquipment, Equipment };
 
         [SerializeField]
-        private Source source;
+        private Source          source;
         [SerializeField]
-        private Hypertag sourceTag;
+        private Hypertag        sourceTag;
         [SerializeField, ShowIf(nameof(isEquipped))]
-        private Hypertag equipmentSlot;
+        private Hypertag        equipmentSlot;
         [SerializeField, ShowIf(nameof(isInventory))]
-        private int slotIndex;
+        private int             slotIndex;
         [SerializeField]
-        private Image itemImage;
+        private Image           itemImage;
         [SerializeField]
         private TextMeshProUGUI itemText;
+        [SerializeField]
+        private bool            enableTooltip = false;
+        [SerializeField, ShowIf(nameof(enableTooltip))]
+        private Color           highlightColor = Color.yellow;
+        [SerializeField, ShowIf(nameof(enableTooltip))]
+        private float           highlightWidth = 1;
 
-        UnityRPGEntity rpgEntity;
-        Inventory inventory;
-        Equipment equipment;
-        string baseText;
+        UnityRPGEntity  rpgEntity;
+        Inventory       inventory;
+        Equipment       equipment;
+        string          baseText;
+        UIImageEffect   uiEffect;
+        TooltipPanel    tooltip;
+        Item            currentItem;
+        int             currentCount;
 
         bool isEquipped() => source == Source.RPGEquipment || source == Source.Equipment;
         bool isInventory() => source == Source.RPGInventory || source == Source.Inventory;
@@ -44,8 +55,9 @@ namespace UC
 
         public void UpdateSlotUI()
         {
-            var item = GetItem();
-            if (item.item == null)
+            (currentItem, currentCount) = GetItem();
+            
+            if (currentItem == null)
             {
                 if (itemImage) itemImage.enabled = false;
                 if (itemText) itemText.enabled = false;
@@ -55,19 +67,19 @@ namespace UC
                 if (itemImage)
                 {
                     itemImage.enabled = true;
-                    itemImage.sprite = item.item.displaySprite;
-                    itemImage.color = item.item.displaySpriteColor;
+                    itemImage.sprite = currentItem.displaySprite;
+                    itemImage.color = currentItem.displaySpriteColor;
                 }
 
                 if (itemText)
                 {
-                    itemText.enabled = (item.count > 1);
-                    itemText.text = string.Format(baseText, item.count);
+                    itemText.enabled = (currentCount > 1);
+                    itemText.text = string.Format(baseText, currentCount);
                 }
             }
         }
 
-        private (UC.Item item, int count) GetItem()
+        private (Item item, int count) GetItem()
         {
             switch (source)
             {
@@ -80,6 +92,8 @@ namespace UC
                             if (rpgEntity == null)
                                 return (null, 0);
                         }
+                        if (rpgEntity.rpgEntity == null)
+                            return (null, 0);
                         var inventory = rpgEntity.rpgEntity.inventory;
                         if (inventory == null) return (null, 0);
                         return inventory.GetSlotContent(slotIndex);
@@ -113,6 +127,35 @@ namespace UC
                     }
             }
             return (null, 0);
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (!enableTooltip) return;
+            if (currentItem == null) return;
+
+            if (uiEffect == null) uiEffect = itemImage.GetComponent<UIImageEffect>();
+            uiEffect?.SetOutline(highlightWidth, highlightColor);
+
+            if (tooltip == null)
+            {
+                tooltip = TooltipManager.CreateTooltip() as TooltipPanel;
+            }
+            tooltip?.Set(currentItem);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (!enableTooltip) return;
+
+            if (uiEffect == null) uiEffect = itemImage.GetComponent<UIImageEffect>();
+            uiEffect?.SetOutline(0.0f, highlightColor);
+
+            if ((tooltip) && (tooltip.CurrentItem == currentItem))
+            {
+                tooltip.Remove();
+                tooltip = null;
+            }
         }
     }
 }

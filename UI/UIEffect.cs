@@ -52,6 +52,36 @@ namespace UC
             }
         }
 
+        public void SetInverseFactor(float factor)
+        {
+            inverseFactor = factor;
+
+            if (factor > 0.0f) effects |= Effects.Inverse;
+            else effects &= ~Effects.Inverse;
+        }
+        public float GetInverseFactor() => inverseFactor;
+        public void SetFlashColor(Color color)
+        {
+            flashColor = color;
+
+            if (color.a > 0.0f) effects |= Effects.ColorFlash;
+            else effects &= ~Effects.ColorFlash;
+        }
+        public Color GetFlashColor() => flashColor;
+        public float flashAlpha
+        {
+            get { return flashColor.a; }
+            set { SetFlashColor(flashColor.ChangeAlpha(value)); }
+        }
+
+        public void SetOutline(float width, Color color)
+        {
+            outlineColor = color;
+            outlineWidth = width;
+            if (width > 0.0f) effects |= Effects.Outline;
+            else effects &= ~Effects.Outline;
+        }
+
         private void Update()
         {
             ConfigureMaterial();
