@@ -92,7 +92,7 @@ namespace UC
             return true;
         }
 
-        public (Item, int) GetSlotContent(int slot)
+        public (Item item, int count) GetSlotContent(int slot)
         {
             if ((items == null) || (items.Count <= slot)) return (null, 0);
 
