@@ -27,6 +27,15 @@ namespace UC.RPG
             if (archetype.hasInventory)
             {
                 AddInventory(archetype.inventoryMaxSlots != -1, archetype.inventoryMaxSlots);
+                
+                var items = archetype.GetDefaultItems();
+                if (items != null)
+                {
+                    foreach (var item in items)
+                    {
+                        _inventory.Add(item);
+                    }
+                }
             }
         }
 

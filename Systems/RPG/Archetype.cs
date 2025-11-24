@@ -59,9 +59,11 @@ namespace UC.RPG
         [SerializeField]
         private Weapon defaultWeapon;
         [SerializeField]
-        private YesNoInherit _hasInventory = YesNoInherit.Inherit;
+        private YesNoInherit    _hasInventory = YesNoInherit.Inherit;
         [SerializeField, Tooltip("Max inventory slots, -1 to unlimited."), ShowIf(nameof(needsInventoryData))]
-        private int          inventorySize = -1;
+        private int             inventorySize = -1;
+        [SerializeField, ShowIf(nameof(hasInventory))]
+        private Item[]          defaultInventory;
         [Header("Generator")]
         [SerializeField]
         private Generator[] statGenerators;
@@ -196,6 +198,17 @@ namespace UC.RPG
                         return -1;
                 }
             }
+        }
+        public List<Item> GetDefaultItems()
+        {
+            List<Item> ret = new();
+            if (baseArchetype != null)
+            {
+                ret.AddRange(baseArchetype.GetDefaultItems());
+            }
+            if (defaultInventory != null) ret.AddRange(defaultInventory);
+
+            return ret;
         }
     }
 }
