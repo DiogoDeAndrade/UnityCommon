@@ -35,6 +35,12 @@ namespace UC.RPG
             [SerializeReference]
             public ResourceValueFunction calculator;
         }
+        [Serializable]
+        public struct EquipmentSlot
+        {
+            public Hypertag slot;
+            public Item     item;
+        }   
 
         public Archetype baseArchetype;
         [Header("Visuals")]
@@ -64,6 +70,13 @@ namespace UC.RPG
         private int             inventorySize = -1;
         [SerializeField, ShowIf(nameof(hasInventory))]
         private Item[]          defaultInventory;
+        [SerializeField]
+        private YesNoInherit    _hasEquipment = YesNoInherit.Inherit;
+        [SerializeField, ShowIf(nameof(hasEquipment))]
+        private Hypertag[]      availableEquipmentSlots;
+        [SerializeField, ShowIf(nameof(hasInventory))]
+        private EquipmentSlot[] defaultEquipment;
+
         [Header("Generator")]
         [SerializeField]
         private Generator[] statGenerators;
@@ -199,14 +212,51 @@ namespace UC.RPG
                 }
             }
         }
-        public List<Item> GetDefaultItems()
+        public List<Item> GetDefaultInventory()
         {
             List<Item> ret = new();
             if (baseArchetype != null)
             {
-                ret.AddRange(baseArchetype.GetDefaultItems());
+                ret.AddRange(baseArchetype.GetDefaultInventory());
             }
             if (defaultInventory != null) ret.AddRange(defaultInventory);
+
+            return ret;
+        }
+        public bool hasEquipment => (_hasEquipment == YesNoInherit.Yes) || ((_hasEquipment == YesNoInherit.Inherit) && (baseArchetype?.hasEquipment ?? false));
+
+        public List<Hypertag> GetAvailableSlots()
+        {
+            List<Hypertag> ret = new();
+            if (baseArchetype != null)
+            {
+                ret.AddRange(baseArchetype.GetAvailableSlots());
+            }
+            if (availableEquipmentSlots != null)
+            {
+                foreach (var slot in availableEquipmentSlots)
+                {
+                    if (!ret.Contains(slot)) ret.Add(slot);
+                }
+            }
+            return ret;
+        }
+        public List<EquipmentSlot> GetDefaultEquipment()
+        {
+            List<EquipmentSlot> ret = new();
+            if (baseArchetype != null)
+            {
+                ret.AddRange(baseArchetype.GetDefaultEquipment());
+            }
+            if (defaultEquipment != null)
+            {
+                foreach (var item in defaultEquipment)
+                {
+                    var index = ret.FindIndex(x => x.slot == item.slot);
+                    if (index == -1) ret.Add(item);
+                    else ret[index] = item;
+                }
+            }
 
             return ret;
         }

@@ -4,6 +4,7 @@ using NaughtyAttributes;
 using TMPro;
 using UC.RPG;
 using UnityEngine.EventSystems;
+using System;
 
 namespace UC
 {
@@ -30,14 +31,15 @@ namespace UC
         [SerializeField, ShowIf(nameof(enableTooltip))]
         private float           highlightWidth = 1;
 
-        UnityRPGEntity  rpgEntity;
-        Inventory       inventory;
-        Equipment       equipment;
-        string          baseText;
-        UIImageEffect   uiEffect;
-        TooltipPanel    tooltip;
-        Item            currentItem;
-        int             currentCount;
+        UnityRPGEntity      rpgEntity;
+        Inventory           inventory;
+        Equipment           equipment;
+        string              baseText;
+        UIImageEffect       uiEffect;
+        TooltipPanel        tooltip;
+        Item                currentItem;
+        int                 currentCount;
+        InventoryInstance   inventoryInstance;
 
         bool isEquipped() => source == Source.RPGEquipment || source == Source.Equipment;
         bool isInventory() => source == Source.RPGInventory || source == Source.Inventory;
@@ -85,18 +87,22 @@ namespace UC
             {
                 case Source.RPGInventory:
                     {
-                        if (rpgEntity == null)
+                        if (inventoryInstance == null)
                         {
-                            rpgEntity = sourceTag.FindFirst<UnityRPGEntity>();
+                            var tmp = sourceTag.FindFirst<UnityRPGEntity>();
 
-                            if (rpgEntity == null)
+                            if (tmp == null)
                                 return (null, 0);
+
+                            if (tmp.rpgEntity == null)
+                                return (null, 0);
+
+                            inventoryInstance = tmp.GetInventory();
+                            if (inventoryInstance == null) return (null, 0);
+
+                            inventoryInstance.onChange += SlotDisplay_onChange;
                         }
-                        if (rpgEntity.rpgEntity == null)
-                            return (null, 0);
-                        var inventory = rpgEntity.rpgEntity.inventory;
-                        if (inventory == null) return (null, 0);
-                        return inventory.GetSlotContent(slotIndex);
+                        return inventoryInstance.GetSlotContent(slotIndex);
                     }
                 case Source.Inventory:
                     {
@@ -106,6 +112,8 @@ namespace UC
 
                             if (inventory == null)
                                 return (null, 0);
+
+                            inventory.onChange += SlotDisplay_onChange;
                         }
                         return inventory.GetSlotContent(slotIndex);
                     }
@@ -121,12 +129,30 @@ namespace UC
 
                             if (equipment == null)
                                 return (null, 0);
+
+                            equipment.onChange += SlotDisplay_onChange;
                         }
                         var item = equipment.GetItem(equipmentSlot);
                         return (item, item != null ? 1 : 0);
                     }
             }
             return (null, 0);
+        }
+
+        private void SlotDisplay_onChange(bool equip, Hypertag slot, Item item)
+        {
+            if (slot == equipmentSlot)
+            {
+                UpdateSlotUI();
+            }
+        }
+
+        private void SlotDisplay_onChange(bool add, Item item, int slot)
+        {
+            if (slot == slotIndex)
+            {
+                UpdateSlotUI();
+            }   
         }
 
         public void OnPointerEnter(PointerEventData eventData)

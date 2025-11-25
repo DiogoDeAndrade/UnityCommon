@@ -15,8 +15,10 @@ namespace UC.RPG
 
         private ResourceInstance    healthRes;
         private InventoryInstance   _inventory;
+        private EquipmentInstance   _equipment;
 
-        public InventoryInstance inventory => _inventory;
+        public InventoryInstance    inventory => _inventory;
+        public EquipmentInstance    equipment => _equipment;
 
         public bool isDead => healthRes.isResourceEmpty;
 
@@ -28,12 +30,29 @@ namespace UC.RPG
             {
                 AddInventory(archetype.inventoryMaxSlots != -1, archetype.inventoryMaxSlots);
                 
-                var items = archetype.GetDefaultItems();
+                var items = archetype.GetDefaultInventory();
                 if (items != null)
                 {
                     foreach (var item in items)
                     {
                         _inventory.Add(item);
+                    }
+                }
+            }
+            if (archetype.hasEquipment)
+            {
+                _equipment = new EquipmentInstance();
+                foreach (var slot in archetype.GetAvailableSlots())
+                {
+                    _equipment.AddSlot(slot);
+                }
+
+                var items = archetype.GetDefaultEquipment();
+                if (items != null)
+                {
+                    foreach (var item in items)
+                    {
+                        _equipment.Equip(item.slot, item.item);
                     }
                 }
             }

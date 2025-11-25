@@ -69,10 +69,17 @@ namespace UC.RPG
                 var invHandler = gameObject.AddComponent<Inventory>();
                 invHandler.instance = _rpgEntity.inventory;
             }
+
+            if (archetype.hasEquipment)
+            {
+                var equipmentHandler = gameObject.AddComponent<Equipment>();
+                equipmentHandler.instance = _rpgEntity.equipment;
+            }
         }
 
         public float GetStat(StatType type) => _rpgEntity.Get(type).value;
         public InventoryInstance GetInventory() => _rpgEntity.inventory;
+        public EquipmentInstance GetEquipment() => _rpgEntity.equipment;
 
         public bool RunAction(Interactable interactable)
         {
