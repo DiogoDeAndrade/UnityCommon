@@ -1,5 +1,5 @@
-using System;
 using NaughtyAttributes;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -59,6 +59,25 @@ namespace UC
             return true;
         }
 
+        public void SetOnSlot(int slotIndex, Item item, int count)
+        {
+            if (items.Count <= slotIndex)
+            {
+                for (int i = items.Count; i <= slotIndex; i++)
+                {
+                    items.Add(new Items
+                    {
+                        item = null,
+                        count = 0
+                    });
+                }
+            }
+            items[slotIndex].count = count;
+            items[slotIndex].item = item;
+
+            onChange?.Invoke(true, item, slotIndex);
+        }
+
         public int Remove(Item item, int count)
         {
             int ret = 0;
@@ -79,7 +98,15 @@ namespace UC
                 return false;
             }
 
-            items[slotIndex].count--;
+            return RemoveBySlot(slotIndex, 1);
+        }
+
+        public bool RemoveBySlot(int slotIndex, int count)
+        {
+            var item = items[slotIndex].item;
+            if (item == null) return false;
+
+            items[slotIndex].count -= count;
 
             if (items[slotIndex].count <= 0)
             {
@@ -91,6 +118,7 @@ namespace UC
 
             return true;
         }
+
 
         public (Item item, int count) GetSlotContent(int slot)
         {

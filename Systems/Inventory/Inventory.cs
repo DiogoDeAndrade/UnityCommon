@@ -1,4 +1,6 @@
+using JetBrains.Annotations;
 using NaughtyAttributes;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UC.RPG;
@@ -85,5 +87,9 @@ namespace UC
         public int GetItemCount(Item item) => inventoryInstance.GetItemCount(item);
         public IEnumerator<(int slot, Item item, int count)> GetEnumerator() => inventoryInstance.GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public bool RemoveBySlot(int slotIndex, int count) => inventoryInstance.RemoveBySlot(slotIndex, count);
+
+        public void SetOnSlot(int slotIndex, Item item, int count) => inventoryInstance.SetOnSlot(slotIndex, item, count);
     }
 }

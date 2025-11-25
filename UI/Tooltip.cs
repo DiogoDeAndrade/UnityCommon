@@ -11,7 +11,7 @@ namespace UC
         protected CanvasGroup canvasGroup;
         protected RectTransform rectTransform;
 
-        private void Awake()
+        protected virtual void Awake()
         {
             text = GetComponentInChildren<TextMeshProUGUI>();
             canvasGroup = GetComponent<CanvasGroup>();

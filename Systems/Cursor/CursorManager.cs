@@ -1,5 +1,7 @@
+using NaughtyAttributes;
 using System;
 using UC;
+using UnityEditor.ShaderKeywordFilter;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,23 +9,60 @@ namespace UC
 {
     public class CursorManager : MonoBehaviour
     {
-        [SerializeField] private Sprite defaultCursor;
-        [SerializeField] private float fadeTime = 0.15f;
-        [SerializeField] private bool  hwCursor = false;
+        public interface ICursorGrabData
+        {
 
+        }
+
+        [SerializeField] 
+        private Sprite     defaultCursor;
+        [SerializeField] 
+        private float      fadeTime = 0.15f;
+        [SerializeField] 
+        private bool       hwCursor = false;
+        [SerializeField] 
+        private GameObject attachedObject;
+        [SerializeField, ShowIf(nameof(hasCanvas))] 
+        private Camera     uiCamera;
+
+        bool hasCanvas() => GetComponentInParent<Canvas>() != null;
+
+        Canvas          topLevelCanvas;
         Image           cursorImage;
         RectTransform   rectTransform;
         CanvasGroup     canvasGroup;
         Vector2         defaultSize = Vector2.zero;
         Color           defaultColor = Color.white;
-        Camera          uiCamera;
 
-        Sprite  currentCursor;
-        Color   currentColor;
-        Vector2 currentSize;
+        Sprite          currentCursor;
+        Color           currentColor;
+        Vector2         currentSize;
+        ICursorGrabData _cursorGrabData;
+
+        static CursorManager _instance;
+
+        public ICursorGrabData cursorGrabData
+        {
+            get { return _cursorGrabData; }
+            set { _cursorGrabData = value; }
+        }
+
+        void Awake()
+        {
+            if (_instance == null)
+            {
+                _instance = this;
+            }
+            else 
+            { 
+                Destroy(gameObject);
+                return;
+            }
+        }
 
         void Start()
         {
+            topLevelCanvas = GetComponentInParent<Canvas>();
             cursorImage = GetComponent<Image>();
             canvasGroup = GetComponent<CanvasGroup>();
             rectTransform = transform as RectTransform;
@@ -35,13 +74,6 @@ namespace UC
 
                 SetCursor(defaultCursor, defaultColor, defaultSize);
                 SetCursor(true);
-            }
-
-            Canvas canvas = GetComponentInParent<Canvas>();
-            if (canvas)
-            {
-                if (canvas.renderMode == RenderMode.ScreenSpaceCamera)
-                    uiCamera = canvas.worldCamera;
             }
         }
 
@@ -107,6 +139,62 @@ namespace UC
             {
                 Cursor.visible = show;
             }
+        }
+
+        public GameObject AttachToCursor(Sprite displaySprite, Color displaySpriteColor)
+        {
+            if (attachedObject == null) return null;
+
+            if (displaySprite == null)
+            {
+                attachedObject.SetActive(false);
+                return attachedObject;
+            }
+
+            attachedObject.SetActive(true);
+
+            Image image = attachedObject.GetComponent<Image>();
+            if (image)
+            {
+                image.sprite = displaySprite;
+                image.color = displaySpriteColor;
+            }
+            else
+            {
+                SpriteRenderer spriteRenderer = attachedObject.GetComponent<SpriteRenderer>();
+                if (spriteRenderer)
+                {
+                    spriteRenderer.sprite = displaySprite;
+                    spriteRenderer.color = displaySpriteColor;
+                }
+            }
+
+            return attachedObject;
+        }
+
+        private void Update()
+        {
+            if ((attachedObject) && (attachedObject.gameObject.activeInHierarchy))
+            {
+                RectTransform rt = attachedObject.transform as RectTransform;
+                if (rt)
+                {
+                    Camera c = (topLevelCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? (null) : (topLevelCanvas.worldCamera);
+                    Vector2 cursorPos;
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, Input.mousePosition, c, out cursorPos);
+                    attachedObject.transform.localPosition = cursorPos;
+                }
+                else
+                {
+                    var pt = uiCamera.ScreenToWorldPoint(Input.mousePosition);
+                    attachedObject.transform.position = new Vector3(pt.x, pt.y, attachedObject.transform.position.z);
+                }
+            }
+        }
+
+        public static CursorManager instance
+        {
+            get { return _instance; }
         }
     }
 }

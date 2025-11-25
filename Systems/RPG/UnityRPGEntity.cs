@@ -17,6 +17,7 @@ namespace UC.RPG
         public Archetype archetype => _archetype;
         public RPGEntity rpgEntity => _rpgEntity;
         public bool isDead => rpgEntity.isDead;
+        public int level => _level;
 
         protected virtual void Start()
         {

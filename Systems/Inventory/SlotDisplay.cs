@@ -1,16 +1,25 @@
-using UnityEngine;
-using UnityEngine.UI;
 using NaughtyAttributes;
+using System;
 using TMPro;
 using UC.RPG;
+using UnityEngine;
 using UnityEngine.EventSystems;
-using System;
+using UnityEngine.UI;
+using static UnityEditor.Progress;
 
 namespace UC
 {
-    public class SlotDisplay : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    public class SlotDisplay : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
     {
+        class SlotDisplayGrabData : CursorManager.ICursorGrabData
+        {
+            public SlotDisplay source;
+            public Item item;
+            public int  count;
+        }
+
         public enum Source { RPGInventory, Inventory, RPGEquipment, Equipment };
+        public enum DragMode { None, Click, Drag };
 
         [SerializeField]
         private Source          source;
@@ -30,8 +39,9 @@ namespace UC
         private Color           highlightColor = Color.yellow;
         [SerializeField, ShowIf(nameof(enableTooltip))]
         private float           highlightWidth = 1;
+        [SerializeField]
+        private DragMode        dragMode = DragMode.None;
 
-        UnityRPGEntity      rpgEntity;
         Inventory           inventory;
         Equipment           equipment;
         string              baseText;
@@ -58,7 +68,14 @@ namespace UC
 
         public void UpdateSlotUI()
         {
+            var prevItem = currentItem;
             (currentItem, currentCount) = GetItem();
+
+            if ((currentItem != prevItem) && (tooltip))
+            {
+                tooltip.Remove();
+                tooltip = null;
+            }
             
             if (currentItem == null)
             {
@@ -194,11 +211,107 @@ namespace UC
             if (uiEffect == null) uiEffect = itemImage.GetComponent<UIImageEffect>();
             uiEffect?.SetOutline(0.0f, highlightColor);
 
-            if ((tooltip) && (tooltip.CurrentItem == currentItem))
+            if (tooltip)
             {
                 tooltip.Remove();
                 tooltip = null;
             }
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (dragMode != DragMode.Click) return;
+
+            // Has the player any item on the cursor?
+            if (CursorManager.instance.cursorGrabData == null)
+            {
+                var item = GetItem();
+                if (item.item == null)
+                {
+                    // Nothing to grab
+                    return;
+                }
+
+                // Grab the item
+                GrabItem();
+            }
+            else
+            {
+                var grabData = CursorManager.instance.cursorGrabData as SlotDisplayGrabData;
+                if (grabData != null)
+                {
+                    // Data created by a slot
+                    CursorManager.instance.SetCursor(true);
+                    CursorManager.instance.AttachToCursor(null, Color.white);
+
+                    CursorManager.instance.cursorGrabData = null;
+
+                    // Grab item on slot, if there is something there
+                    var item = GetItem();
+                    if (item.item != null)
+                    {
+                        // Grab the item
+                        GrabItem();
+                    }
+
+                    // Add whatever is on the cursor to the slot
+                    switch (source)
+                    {
+                        case Source.RPGInventory:
+                            inventoryInstance.SetOnSlot(slotIndex, grabData.item, grabData.count);
+                            break;
+                        case Source.Inventory:
+                            inventory.SetOnSlot(slotIndex, grabData.item, grabData.count);
+                            break;
+                        case Source.RPGEquipment:
+                            equipmentInstance.Equip(equipmentSlot, grabData.item, Time.time);
+                            break;
+                        case Source.Equipment:
+                            equipment.Equip(equipmentSlot, grabData.item);
+                            break;
+                        default:
+                            break;
+                    }
+
+                    UpdateSlotUI();
+                    // This gets updated because we're on top of this item, so we can consider it as being on top
+                    OnPointerEnter(null);
+                }
+            }
+
+        }
+
+        void GrabItem()
+        {
+            var item = GetItem();
+            CursorManager.instance.cursorGrabData = new SlotDisplayGrabData()
+            {
+                source = this,
+                item = item.item,
+                count = item.count
+            };
+            CursorManager.instance.SetCursor(false);
+            CursorManager.instance.AttachToCursor(item.item.displaySprite, item.item.displaySpriteColor);
+
+            // Remove item from slot, it's on the mouse
+            switch (source)
+            {
+                case Source.RPGInventory:
+                    inventoryInstance.RemoveBySlot(slotIndex, item.count);
+                    break;
+                case Source.Inventory:
+                    inventory.RemoveBySlot(slotIndex, item.count);
+                    break;
+                case Source.RPGEquipment:
+                    equipmentInstance.Unequip(equipmentSlot);
+                    break;
+                case Source.Equipment:
+                    equipment.Unequip(equipmentSlot);
+                    break;
+            }
+            UpdateSlotUI();
+            // This gets updated because we're on top of this item, so we can consider it as being on top
+            OnPointerEnter(null);
         }
     }
 }

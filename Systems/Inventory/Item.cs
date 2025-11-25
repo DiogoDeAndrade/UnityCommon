@@ -10,6 +10,7 @@ namespace UC
     {
         [Header("Item Stats")]
         public Item[]       parentItems;
+        public int          level = 1;
         public string       displayName = "Item Display Name";
         public Color        displaySpriteColor = Color.white;
         public Sprite       displaySprite;
