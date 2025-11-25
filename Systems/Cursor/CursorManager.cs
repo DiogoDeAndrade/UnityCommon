@@ -3,6 +3,7 @@ using System;
 using UC;
 using UnityEditor.ShaderKeywordFilter;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace UC
@@ -11,7 +12,7 @@ namespace UC
     {
         public interface ICursorGrabData
         {
-
+            public bool Return();
         }
 
         [SerializeField] 
@@ -24,6 +25,10 @@ namespace UC
         private GameObject attachedObject;
         [SerializeField, ShowIf(nameof(hasCanvas))] 
         private Camera     uiCamera;
+        [SerializeField]
+        private PlayerInput     playerInput;
+        [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
+        private InputControl    returnAttachedObjectControl;
 
         bool hasCanvas() => GetComponentInParent<Canvas>() != null;
 
@@ -75,6 +80,10 @@ namespace UC
                 SetCursor(defaultCursor, defaultColor, defaultSize);
                 SetCursor(true);
             }
+
+            if ((returnAttachedObjectControl.needPlayerInput) && (playerInput == null))
+                playerInput = FindFirstObjectByType<PlayerInput>();
+            returnAttachedObjectControl.playerInput = playerInput;
         }
 
         public void SetCursor(CursorDef def)
@@ -188,6 +197,17 @@ namespace UC
                 {
                     var pt = uiCamera.ScreenToWorldPoint(Input.mousePosition);
                     attachedObject.transform.position = new Vector3(pt.x, pt.y, attachedObject.transform.position.z);
+                }
+            }
+
+            if (returnAttachedObjectControl.IsDown())
+            {
+                if (_cursorGrabData != null)
+                {
+                    if (_cursorGrabData.Return())
+                    {
+                        _cursorGrabData = null;
+                    }                    
                 }
             }
         }

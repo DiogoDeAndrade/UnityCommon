@@ -140,7 +140,7 @@ namespace UC.RPG
             {
                 if ((g.type == type) && (g.calculator != null))
                 {
-                    statInstance.value = g.calculator.GetValue(character);
+                    statInstance.SetValue(g.calculator.GetValue(character));
                     return true;
                 }
             }
@@ -159,7 +159,7 @@ namespace UC.RPG
                     var statInstance = entity.Get(s.type);
                     if (statInstance != null)
                     {
-                        statInstance.value = s.calculator.GetValue(entity);
+                        statInstance.SetValue(s.calculator.GetValue(entity));
                     }
                 }
             }

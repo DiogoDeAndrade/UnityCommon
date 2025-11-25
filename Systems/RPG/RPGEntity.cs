@@ -110,7 +110,13 @@ namespace UC.RPG
         public bool DefaultAttack(Vector2Int destPos)
         {
             // Get weapon
-            var weapon = archetype.GetDefaultWeapon();
+            Weapon weapon = null;
+            if (equipment != null)
+            {
+                weapon = equipment.GetItem(Globals.defaultWeaponSlot) as Weapon;
+            }
+                
+            if (weapon == null) weapon = archetype.GetDefaultWeapon();
             if (weapon)
             {
                 return Attack(weapon, this, destPos);

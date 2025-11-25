@@ -6,7 +6,7 @@ namespace UC
 {
 
     [CreateAssetMenu(fileName = "Weapon", menuName = "Unity Common/RPG/Weapon")]
-    public partial class Weapon : Item
+    public partial class Weapon : Gear
     {
         [Header("Weapon")]
         [SerializeField]

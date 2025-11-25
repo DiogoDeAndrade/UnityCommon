@@ -78,7 +78,7 @@ namespace UC.RPG
             }
         }
 
-        public float GetStat(StatType type) => _rpgEntity.Get(type).value;
+        public float GetStat(StatType type) => _rpgEntity.Get(type).GetValue();
         public InventoryInstance GetInventory() => _rpgEntity.inventory;
         public EquipmentInstance GetEquipment() => _rpgEntity.equipment;
 

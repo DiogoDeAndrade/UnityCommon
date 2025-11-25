@@ -42,7 +42,7 @@ namespace UC.RPG
 
         public override float GetValue(RPGEntity character)
         {
-            return Mathf.FloorToInt(baseValue + character.Get(stat).value * valuePerLevel);
+            return Mathf.FloorToInt(baseValue + character.Get(stat).GetValue() * valuePerLevel);
         }
     }
 
@@ -66,7 +66,7 @@ namespace UC.RPG
         public override float GetValue(RPGEntity character)
         {
             // 1) Read the stat (clamped to non-negative to avoid curve inversion)
-            float statValue = Mathf.Max(0, character.Get(stat).value);
+            float statValue = Mathf.Max(0, character.Get(stat).GetValue());
 
             // 2) Asymptotic curve: 1 - exp(-k * x)
             float t = 1.0f - Mathf.Exp(-curveStrength * statValue);

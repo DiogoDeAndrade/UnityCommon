@@ -12,9 +12,13 @@ namespace UC
         private LayerMask   _obstacleMask;
         [SerializeField]
         private ResourceType _healthResource;
+        [SerializeField] 
+        private Hypertag    _weaponSlot;
 
         public static LayerMask obstacleMask => instanceBase?._obstacleMask ?? ~0;
         public static ResourceType healthResource => instanceBase?._healthResource ?? null;
+        public static Hypertag defaultWeaponSlot => instanceBase._weaponSlot;
+
 
         protected static GlobalsBase _instanceBase = null;
 

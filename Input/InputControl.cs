@@ -9,7 +9,7 @@ namespace UC
     [Serializable]
     public class InputControl
     {
-        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, Any = 4, MousePosition = 5 };
+        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, Any = 4, MousePosition = 5, None = 6 };
 
         [SerializeField]
         private InputType _type;
@@ -33,6 +33,7 @@ namespace UC
         float prevValue;
 
         public PlayerInput playerInput { get => _playerInput; set { _playerInput = value; RefreshAction(); } }
+        public bool needPlayerInput => _type == InputType.NewInput;
 
         public float GetAxis()
         {

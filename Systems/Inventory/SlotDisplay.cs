@@ -1,11 +1,9 @@
 using NaughtyAttributes;
-using System;
 using TMPro;
 using UC.RPG;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using static UnityEditor.Progress;
 
 namespace UC
 {
@@ -16,6 +14,13 @@ namespace UC
             public SlotDisplay source;
             public Item item;
             public int  count;
+
+            public bool Return()
+            {
+                source.Return(this);
+
+                return true;
+            }
         }
 
         public enum Source { RPGInventory, Inventory, RPGEquipment, Equipment };
@@ -49,11 +54,36 @@ namespace UC
         TooltipPanel        tooltip;
         Item                currentItem;
         int                 currentCount;
+        RPGEntity           _entity;
         InventoryInstance   inventoryInstance;
         EquipmentInstance   equipmentInstance;
 
-        bool isEquipped() => source == Source.RPGEquipment || source == Source.Equipment;
-        bool isInventory() => source == Source.RPGInventory || source == Source.Inventory;
+        bool isEquipped => source == Source.RPGEquipment || source == Source.Equipment;
+        bool isInventory => source == Source.RPGInventory || source == Source.Inventory;
+
+        RPGEntity entity
+        {
+            get
+            {
+                if (_entity == null)
+                {
+                    switch (source)
+                    {
+                        case Source.RPGInventory:
+                        case Source.RPGEquipment:
+                            {
+                                var tmp = sourceTag.FindFirst<UnityRPGEntity>();
+                                if (tmp) _entity = tmp.rpgEntity;
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                return _entity;
+            }
+        }
 
         private void Start()
         {
@@ -240,6 +270,21 @@ namespace UC
                 var grabData = CursorManager.instance.cursorGrabData as SlotDisplayGrabData;
                 if (grabData != null)
                 {
+                    if (isEquipped)
+                    {
+                        // Check if the object is gear
+                        Gear gear = grabData.item as Gear;
+                        if (gear == null) return;
+                        if (entity != null)
+                        {
+                            // Check if this object can go to this slot
+                            if (!gear.CanEquip(equipmentSlot, entity))
+                            {
+                                return;
+                            }
+                        }
+                    }
+
                     // Data created by a slot
                     CursorManager.instance.SetCursor(true);
                     CursorManager.instance.AttachToCursor(null, Color.white);
@@ -312,6 +357,31 @@ namespace UC
             UpdateSlotUI();
             // This gets updated because we're on top of this item, so we can consider it as being on top
             OnPointerEnter(null);
+        }
+
+        private void Return(SlotDisplayGrabData grabData)
+        {
+            CursorManager.instance.SetCursor(true);
+            CursorManager.instance.AttachToCursor(null, Color.white);
+
+            // Add whatever is on the cursor to the slot
+            switch (source)
+            {
+                case Source.RPGInventory:
+                    inventoryInstance.SetOnSlot(slotIndex, grabData.item, grabData.count);
+                    break;
+                case Source.Inventory:
+                    inventory.SetOnSlot(slotIndex, grabData.item, grabData.count);
+                    break;
+                case Source.RPGEquipment:
+                    equipmentInstance.Equip(equipmentSlot, grabData.item, Time.time);
+                    break;
+                case Source.Equipment:
+                    equipment.Equip(equipmentSlot, grabData.item);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 }

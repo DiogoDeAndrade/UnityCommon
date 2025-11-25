@@ -5,18 +5,17 @@ using UnityEngine;
 
 namespace UC.RPG.Editor
 {
-    [CustomPropertyDrawer(typeof(AttackModule), true)]
-    public class AttackModuleDrawer : PropertyDrawer
+    public class BaseFunctionDrawer<T> : PropertyDrawer
     {
-        private static Type[] _types;
+        private static Type[]   _types;
         private static string[] _displayNames;
 
-        static AttackModuleDrawer()
+        static BaseFunctionDrawer()
         {
-            // Find all non-abstract AttackModule types in the project
+            // Find all non-abstract T types in the project
             var list = new List<Type>();
 
-            foreach (var t in TypeCache.GetTypesDerivedFrom<AttackModule>())
+            foreach (var t in TypeCache.GetTypesDerivedFrom<T>())
             {
                 if (!t.IsAbstract && !t.IsGenericType && t.IsClass)
                     list.Add(t);
@@ -94,7 +93,7 @@ namespace UC.RPG.Editor
                 }
             }
 
-            // Draw fields of the selected AttackModule below
+            // Draw fields of the selected T below
             if (property.managedReferenceValue != null)
             {
                 EditorGUI.indentLevel++;
@@ -142,7 +141,7 @@ namespace UC.RPG.Editor
             string name = t.Name;
 
             // Strip common suffix, similar to your ResourceValueFunction case
-            const string suffix = "AttackModule";
+            const string suffix = nameof(T);
             if (name.EndsWith(suffix, StringComparison.Ordinal))
             {
                 name = name.Substring(0, name.Length - suffix.Length);

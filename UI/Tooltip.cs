@@ -65,7 +65,10 @@ namespace UC
 
         public void Remove()
         {
-            canvasGroup.FadeOut(0.1f).Done(() => { Destroy(gameObject); });
+            if (canvasGroup)
+                canvasGroup.FadeOut(0.1f).Done(() => { Destroy(gameObject); });
+            else
+                Destroy(gameObject);
         }
     }
 }
