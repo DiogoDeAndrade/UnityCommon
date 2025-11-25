@@ -40,6 +40,7 @@ namespace UC
         Item                currentItem;
         int                 currentCount;
         InventoryInstance   inventoryInstance;
+        EquipmentInstance   equipmentInstance;
 
         bool isEquipped() => source == Source.RPGEquipment || source == Source.Equipment;
         bool isInventory() => source == Source.RPGInventory || source == Source.Inventory;
@@ -119,7 +120,23 @@ namespace UC
                     }
                 case Source.RPGEquipment:
                     {
-                        throw new System.NotImplementedException();
+                        if (equipmentInstance == null)
+                        {
+                            var tmp = sourceTag.FindFirst<UnityRPGEntity>();
+
+                            if (tmp == null)
+                                return (null, 0);
+
+                            if (tmp.rpgEntity == null)
+                                return (null, 0);
+
+                            equipmentInstance = tmp.GetEquipment();
+                            if (equipmentInstance == null) return (null, 0);
+
+                            equipmentInstance.onChange += SlotDisplay_onChange;
+                        }
+                        var item = equipmentInstance.GetItem(equipmentSlot);
+                        return (item, item != null ? 1 : 0);
                     }
                 case Source.Equipment:
                     {
