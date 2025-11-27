@@ -13,12 +13,12 @@ namespace UC.RPG
         protected Dictionary<StatType, StatInstance>            stats;
         protected Dictionary<ResourceType, ResourceInstance>    resources;
 
-        private ResourceInstance    healthRes;
-        private InventoryInstance   _inventory;
-        private EquipmentInstance   _equipment;
+        private ResourceInstance        healthRes;
+        private InventoryRPGInstance    _inventory;
+        private EquipmentRPGInstance    _equipment;
 
-        public InventoryInstance    inventory => _inventory;
-        public EquipmentInstance    equipment => _equipment;
+        public InventoryRPGInstance     inventory => _inventory;
+        public EquipmentRPGInstance     equipment => _equipment;
 
         public bool isDead => healthRes.isResourceEmpty;
 
@@ -35,13 +35,16 @@ namespace UC.RPG
                 {
                     foreach (var item in items)
                     {
-                        _inventory.Add(item);
+                        RPGEntity itemEntity = new RPGEntity(item);
+                        itemEntity.Init();
+
+                        _inventory.Add(itemEntity);
                     }
                 }
             }
             if (archetype.hasEquipment)
             {
-                _equipment = new EquipmentInstance();
+                _equipment = new EquipmentRPGInstance();
                 foreach (var slot in archetype.GetAvailableSlots())
                 {
                     _equipment.AddSlot(slot);
@@ -52,44 +55,59 @@ namespace UC.RPG
                 {
                     foreach (var item in items)
                     {
-                        _equipment.Equip(item.slot, item.item);
+                        var itemEntity = new RPGEntity(item.item);
+                        itemEntity.Init();
+                        
+                        _equipment.Equip(item.slot, itemEntity);
                     }
                 }
             }
         }
 
-        public void AddInventory(InventoryInstance inventoryInstance)
+        public RPGEntity(Item item)
+        {
+            this.level = item.level;
+            this.item = item;
+        }
+
+        public void AddInventory(InventoryRPGInstance inventoryInstance)
         {
             _inventory = inventoryInstance;
         }
 
         public void AddInventory(bool limited = false, int maxSlots = 9)
         {
-            _inventory = new InventoryInstance(limited, maxSlots);
+            _inventory = new InventoryRPGInstance(limited, maxSlots);
         }
 
         public void Init()
         {
             stats = new();
-            foreach (var s in archetype.GetStats())
+            if (archetype)
             {
-                var statInstance = new StatInstance(s.type);
+                foreach (var s in archetype.GetStats())
+                {
+                    var statInstance = new StatInstance(s.type);
 
-                archetype.RunGenerator(s.type, this, statInstance);
+                    archetype.RunGenerator(s.type, this, statInstance);
 
-                stats.Add(s.type, statInstance);
+                    stats.Add(s.type, statInstance);
+                }
+
+                archetype.UpdateDerivedStats(this);
             }
 
-            archetype.UpdateDerivedStats(this);
-
-            resources = new();
-            foreach (var r in archetype.GetResources())
+            if (archetype)
             {
-                var res = new ResourceInstance(r.type);
-                res.maxValue = r.calculator.GetValue(this);
-                resources.Add(r.type, res);
+                resources = new();
+                foreach (var r in archetype.GetResources())
+                {
+                    var res = new ResourceInstance(r.type);
+                    res.maxValue = r.calculator.GetValue(this);
+                    resources.Add(r.type, res);
 
-                if (r.type == GlobalsBase.healthResource) healthRes = res;
+                    if (r.type == GlobalsBase.healthResource) healthRes = res;
+                }
             }
         }
 
@@ -113,7 +131,8 @@ namespace UC.RPG
             Weapon weapon = null;
             if (equipment != null)
             {
-                weapon = equipment.GetItem(Globals.defaultWeaponSlot) as Weapon;
+                var entity = equipment.GetItem(Globals.defaultWeaponSlot);
+                if (entity != null) weapon = entity.item as Weapon;
             }
                 
             if (weapon == null) weapon = archetype.GetDefaultWeapon();

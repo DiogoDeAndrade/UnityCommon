@@ -1,5 +1,6 @@
 using UnityEngine;
 using UC.Interaction;
+using NaughtyAttributes;
 
 namespace UC.RPG
 {
@@ -8,8 +9,12 @@ namespace UC.RPG
         public delegate void OnActionPerformed(UnityRPGEntity entity);
         public event OnActionPerformed onActionPerformed;
 
-        [SerializeField] protected Archetype        _archetype;
-        [SerializeField] protected int              _level = 1;
+        [SerializeField, ShowIf(nameof(shouldDisplayArchetype))] 
+        protected Archetype        _archetype;
+        [SerializeField, ShowIf(nameof(shouldDisplayItem))] 
+        protected Item              _item;
+        [SerializeField] 
+        protected int              _level = 1;
 
         protected RPGEntity         _rpgEntity;
         protected ResourceInstance  health;
@@ -19,26 +24,36 @@ namespace UC.RPG
         public bool isDead => rpgEntity.isDead;
         public int level => _level;
 
+        public bool isCharacter => archetype != null;
+        public bool isNotCharacter => !isCharacter;
+        public bool isItem => _item != null;
+        public bool isNotItem => !isItem;
+        public bool shouldDisplayArchetype => (_archetype != null) || ((_archetype == null) && (_item == null));
+        public bool shouldDisplayItem => (_item != null) || ((_archetype == null) && (_item == null));
+
         protected virtual void Start()
         {
             SetupEntity();
 
-            foreach (var r in archetype.GetResources())
+            if (archetype)
             {
-                var res = rpgEntity.Get(r.type);
-                res.onChange += (changeData) =>
+                foreach (var r in archetype.GetResources())
                 {
-                    Entity_onChange(r.type, changeData);
-                };
-                if (r.type == GlobalsBase.healthResource)
-                {
-                    health = res;
+                    var res = rpgEntity.Get(r.type);
+                    res.onChange += (changeData) =>
+                    {
+                        Entity_onChange(r.type, changeData);
+                    };
+                    if (r.type == GlobalsBase.healthResource)
+                    {
+                        health = res;
+                    }
                 }
-            }
 
-            if (health != null)
-            {
-                health.onResourceEmpty += Entity_OnDeath;
+                if (health != null)
+                {
+                    health.onResourceEmpty += Entity_OnDeath;
+                }
             }
         }
 
@@ -50,37 +65,43 @@ namespace UC.RPG
 
         protected virtual void SetupEntity()
         {
-            if (_archetype == null)
+            if ((_archetype == null) && (_item == null))
             {
-                Debug.Log($"Can't setup character {name}: No archetype defined!");
+                Debug.Log($"Can't setup entity {name}: No archetype or item defined!");
                 return;
             }
 
-            _rpgEntity = new RPGEntity(_level, _archetype);
+            if (isCharacter)
+                _rpgEntity = new RPGEntity(_level, _archetype);
+            else
+                _rpgEntity = new RPGEntity(_item);
             _rpgEntity.Init();
 
-            foreach (var r in _archetype.GetResources())
+            if (_archetype)
             {
-                var handler = gameObject.AddComponent<ResourceHandler>();
-                handler.instance = _rpgEntity.Get(r.type);
-            }
+                foreach (var r in _archetype.GetResources())
+                {
+                    var handler = gameObject.AddComponent<ResourceHandler>();
+                    handler.instance = _rpgEntity.Get(r.type);
+                }
 
-            if (archetype.hasInventory)
-            {          
-                var invHandler = gameObject.AddComponent<Inventory>();
-                invHandler.instance = _rpgEntity.inventory;
-            }
+                if (archetype.hasInventory)
+                {
+                    var invHandler = gameObject.AddComponent<InventoryRPG>();
+                    invHandler.instance = _rpgEntity.inventory;
+                }
 
-            if (archetype.hasEquipment)
-            {
-                var equipmentHandler = gameObject.AddComponent<Equipment>();
-                equipmentHandler.instance = _rpgEntity.equipment;
+                if (archetype.hasEquipment)
+                {
+                    var equipmentHandler = gameObject.AddComponent<EquipmentRPG>();
+                    equipmentHandler.instance = _rpgEntity.equipment;
+                }
             }
         }
 
         public float GetStat(StatType type) => _rpgEntity.Get(type).GetValue();
-        public InventoryInstance GetInventory() => _rpgEntity.inventory;
-        public EquipmentInstance GetEquipment() => _rpgEntity.equipment;
+        public InventoryRPGInstance GetInventory() => _rpgEntity.inventory;
+        public EquipmentRPGInstance GetEquipment() => _rpgEntity.equipment;
 
         public bool RunAction(Interactable interactable)
         {

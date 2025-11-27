@@ -1,5 +1,6 @@
 using NaughtyAttributes;
 using System;
+using TMPro;
 using UC;
 using UnityEditor.ShaderKeywordFilter;
 using UnityEngine;
@@ -84,6 +85,8 @@ namespace UC
             if ((returnAttachedObjectControl.needPlayerInput) && (playerInput == null))
                 playerInput = FindFirstObjectByType<PlayerInput>();
             returnAttachedObjectControl.playerInput = playerInput;
+
+            attachedObject?.SetActive(false);
         }
 
         public void SetCursor(CursorDef def)

@@ -11,53 +11,59 @@ namespace UC
     {
         class SlotDisplayGrabData : CursorManager.ICursorGrabData
         {
-            public SlotDisplay source;
-            public Item item;
-            public int  count;
+            public SlotDisplay  source;
+            public RPGEntity    entity;
+            public int          count;
 
             public bool Return()
             {
                 source.Return(this);
-
                 return true;
             }
         }
 
-        public enum Source { RPGInventory, Inventory, RPGEquipment, Equipment };
-        public enum DragMode { None, Click, Drag };
+        struct SlotContent
+        {
+            public RPGEntity    item;
+            public int          count;
 
-        [SerializeField]
+            public bool IsEmpty => ((item == null) || (count <= 0));
+        }
+
+        public enum Source { RPGInventory, Inventory, RPGEquipment, Equipment }
+        public enum DragMode { None, Click }
+
+        [SerializeField] 
         private Source          source;
-        [SerializeField]
+        [SerializeField] 
         private Hypertag        sourceTag;
         [SerializeField, ShowIf(nameof(isEquipped))]
         private Hypertag        equipmentSlot;
         [SerializeField, ShowIf(nameof(isInventory))]
         private int             slotIndex;
-        [SerializeField]
+        [SerializeField] 
         private Image           itemImage;
-        [SerializeField]
+        [SerializeField] 
         private TextMeshProUGUI itemText;
-        [SerializeField]
+        [SerializeField] 
         private bool            enableTooltip = false;
         [SerializeField, ShowIf(nameof(enableTooltip))]
         private Color           highlightColor = Color.yellow;
         [SerializeField, ShowIf(nameof(enableTooltip))]
         private float           highlightWidth = 1;
-        [SerializeField]
+        [SerializeField] 
         private DragMode        dragMode = DragMode.None;
 
-        Inventory           inventory;
-        Equipment           equipment;
-        string              baseText;
-        UIImageEffect       uiEffect;
-        TooltipPanel        tooltip;
-        Item                currentItem;
-        int                 currentCount;
-        RPGEntity           _entity;
-        InventoryInstance   inventoryInstance;
-        EquipmentInstance   equipmentInstance;
-
+        InventoryRPG            inventory;
+        EquipmentRPG            equipment;
+        string                  baseText;
+        UIImageEffect           uiEffect;
+        TooltipPanel            tooltip;
+        RPGEntity               currentItem;
+        int                     currentCount;
+        RPGEntity               _entity;
+        InventoryRPGInstance    inventoryInstance;
+        EquipmentRPGInstance    equipmentInstance;
         bool isEquipped => source == Source.RPGEquipment || source == Source.Equipment;
         bool isInventory => source == Source.RPGInventory || source == Source.Inventory;
 
@@ -71,12 +77,8 @@ namespace UC
                     {
                         case Source.RPGInventory:
                         case Source.RPGEquipment:
-                            {
-                                var tmp = sourceTag.FindFirst<UnityRPGEntity>();
-                                if (tmp) _entity = tmp.rpgEntity;
-                            }
-                            break;
-                        default:
+                            var tmp = sourceTag.FindFirst<UnityRPGEntity>();
+                            if (tmp) _entity = tmp.rpgEntity;
                             break;
                     }
                 }
@@ -84,6 +86,8 @@ namespace UC
                 return _entity;
             }
         }
+
+        SlotDisplayGrabData CurrentGrab => CursorManager.instance.cursorGrabData as SlotDisplayGrabData;
 
         private void Start()
         {
@@ -99,14 +103,17 @@ namespace UC
         public void UpdateSlotUI()
         {
             var prevItem = currentItem;
-            (currentItem, currentCount) = GetItem();
+            var slot = GetSlotContent();
 
-            if ((currentItem != prevItem) && (tooltip))
+            currentItem = slot.item;
+            currentCount = slot.count;
+
+            if ((currentItem != prevItem) && tooltip)
             {
                 tooltip.Remove();
                 tooltip = null;
             }
-            
+
             if (currentItem == null)
             {
                 if (itemImage) itemImage.enabled = false;
@@ -117,8 +124,8 @@ namespace UC
                 if (itemImage)
                 {
                     itemImage.enabled = true;
-                    itemImage.sprite = currentItem.displaySprite;
-                    itemImage.color = currentItem.displaySpriteColor;
+                    itemImage.sprite = currentItem.item.displaySprite;
+                    itemImage.color = currentItem.item.displaySpriteColor;
                 }
 
                 if (itemText)
@@ -129,7 +136,7 @@ namespace UC
             }
         }
 
-        private (Item item, int count) GetItem()
+        private (RPGEntity item, int count) GetItemRaw()
         {
             switch (source)
             {
@@ -138,11 +145,7 @@ namespace UC
                         if (inventoryInstance == null)
                         {
                             var tmp = sourceTag.FindFirst<UnityRPGEntity>();
-
-                            if (tmp == null)
-                                return (null, 0);
-
-                            if (tmp.rpgEntity == null)
+                            if (tmp == null || tmp.rpgEntity == null)
                                 return (null, 0);
 
                             inventoryInstance = tmp.GetInventory();
@@ -150,31 +153,30 @@ namespace UC
 
                             inventoryInstance.onChange += SlotDisplay_onChange;
                         }
+
                         return inventoryInstance.GetSlotContent(slotIndex);
                     }
+
                 case Source.Inventory:
                     {
                         if (inventory == null)
                         {
-                            inventory = sourceTag.FindFirst<Inventory>();
-
+                            inventory = sourceTag.FindFirst<InventoryRPG>();
                             if (inventory == null)
                                 return (null, 0);
 
                             inventory.onChange += SlotDisplay_onChange;
                         }
+
                         return inventory.GetSlotContent(slotIndex);
                     }
+
                 case Source.RPGEquipment:
                     {
                         if (equipmentInstance == null)
                         {
                             var tmp = sourceTag.FindFirst<UnityRPGEntity>();
-
-                            if (tmp == null)
-                                return (null, 0);
-
-                            if (tmp.rpgEntity == null)
+                            if (tmp == null || tmp.rpgEntity == null)
                                 return (null, 0);
 
                             equipmentInstance = tmp.GetEquipment();
@@ -182,28 +184,80 @@ namespace UC
 
                             equipmentInstance.onChange += SlotDisplay_onChange;
                         }
+
                         var item = equipmentInstance.GetItem(equipmentSlot);
                         return (item, item != null ? 1 : 0);
                     }
+
                 case Source.Equipment:
                     {
                         if (equipment == null)
                         {
-                            equipment = sourceTag.FindFirst<Equipment>();
-
+                            equipment = sourceTag.FindFirst<EquipmentRPG>();
                             if (equipment == null)
                                 return (null, 0);
 
                             equipment.onChange += SlotDisplay_onChange;
                         }
+
                         var item = equipment.GetItem(equipmentSlot);
                         return (item, item != null ? 1 : 0);
                     }
             }
+
             return (null, 0);
         }
 
-        private void SlotDisplay_onChange(bool equip, Hypertag slot, Item item)
+        private SlotContent GetSlotContent()
+        {
+            var (item, count) = GetItemRaw();
+            return new SlotContent { item = item, count = count };
+        }
+
+        private void WriteSlot(RPGEntity item, int count)
+        {
+            // Make sure backing instances exist
+            GetItemRaw();
+
+            switch (source)
+            {
+                case Source.RPGInventory:
+                    inventoryInstance.SetOnSlot(slotIndex, item, item == null ? 0 : count);
+                    break;
+
+                case Source.Inventory:
+                    inventory.SetOnSlot(slotIndex, item, item == null ? 0 : count);
+                    break;
+
+                case Source.RPGEquipment:
+                    if (item == null || count <= 0)
+                        equipmentInstance.Unequip(equipmentSlot);
+                    else
+                        equipmentInstance.Equip(equipmentSlot, item, Time.time);
+                    break;
+
+                case Source.Equipment:
+                    if (item == null || count <= 0)
+                        equipment.Unequip(equipmentSlot);
+                    else
+                        equipment.Equip(equipmentSlot, item);
+                    break;
+            }
+        }
+
+        private int GetMaxStackForSlot(Item item)
+        {
+            if (item == null) return 0;
+
+            // Equipment slots always behave as "single item" slots.
+            if (isEquipped) return 1;
+
+            if (!item.isStackable) return 1;
+
+            return Mathf.Max(1, item.maxStack);
+        }
+
+        private void SlotDisplay_onChange(bool equip, Hypertag slot, RPGEntity item)
         {
             if (slot == equipmentSlot)
             {
@@ -211,12 +265,12 @@ namespace UC
             }
         }
 
-        private void SlotDisplay_onChange(bool add, Item item, int slot)
+        private void SlotDisplay_onChange(bool add, RPGEntity item, int slot)
         {
             if (slot == slotIndex)
             {
                 UpdateSlotUI();
-            }   
+            }
         }
 
         public void OnPointerEnter(PointerEventData eventData)
@@ -248,140 +302,203 @@ namespace UC
             }
         }
 
+        private void ClearCursor()
+        {
+            CursorManager.instance.cursorGrabData = null;
+            CursorManager.instance.SetCursor(true);
+            CursorManager.instance.AttachToCursor(null, Color.white);
+        }
+
+        private void ApplyCursorVisuals(SlotDisplayGrabData grab)
+        {
+            if (grab == null)
+            {
+                ClearCursor();
+                return;
+            }
+
+            CursorManager.instance.cursorGrabData = grab;
+            CursorManager.instance.SetCursor(false);
+
+            var attachedObject = CursorManager.instance.AttachToCursor(grab.entity.item.displaySprite, grab.entity.item.displaySpriteColor);
+
+            var txt = attachedObject.GetComponentInChildren<TextMeshProUGUI>();
+            if (txt != null)
+            {
+                if (grab.count > 1)
+                {
+                    txt.text = $"x{grab.count}";
+                    txt.enabled = true;
+                }
+                else
+                {
+                    txt.enabled = false;
+                }
+            }
+        }
+
+        private SlotDisplayGrabData CreateGrabFromSlot(SlotContent slot)
+        {
+            return new SlotDisplayGrabData
+            {
+                source = this,
+                entity = slot.item,
+                count = slot.count
+            };
+        }
+
         public void OnPointerClick(PointerEventData eventData)
         {
             if (dragMode != DragMode.Click) return;
 
-            // Has the player any item on the cursor?
-            if (CursorManager.instance.cursorGrabData == null)
-            {
-                var item = GetItem();
-                if (item.item == null)
-                {
-                    // Nothing to grab
-                    return;
-                }
+            var slot = GetSlotContent();
+            var grab = CurrentGrab;
 
-                // Grab the item
-                GrabItem();
+            if (grab == null)
+            {
+                HandleClickWithoutCursor(slot);
             }
             else
             {
-                var grabData = CursorManager.instance.cursorGrabData as SlotDisplayGrabData;
-                if (grabData != null)
-                {
-                    if (isEquipped)
-                    {
-                        // Check if the object is gear
-                        Gear gear = grabData.item as Gear;
-                        if (gear == null) return;
-                        if (entity != null)
-                        {
-                            // Check if this object can go to this slot
-                            if (!gear.CanEquip(equipmentSlot, entity))
-                            {
-                                return;
-                            }
-                        }
-                    }
-
-                    // Data created by a slot
-                    CursorManager.instance.SetCursor(true);
-                    CursorManager.instance.AttachToCursor(null, Color.white);
-
-                    CursorManager.instance.cursorGrabData = null;
-
-                    // Grab item on slot, if there is something there
-                    var item = GetItem();
-                    if (item.item != null)
-                    {
-                        // Grab the item
-                        GrabItem();
-                    }
-
-                    // Add whatever is on the cursor to the slot
-                    switch (source)
-                    {
-                        case Source.RPGInventory:
-                            inventoryInstance.SetOnSlot(slotIndex, grabData.item, grabData.count);
-                            break;
-                        case Source.Inventory:
-                            inventory.SetOnSlot(slotIndex, grabData.item, grabData.count);
-                            break;
-                        case Source.RPGEquipment:
-                            equipmentInstance.Equip(equipmentSlot, grabData.item, Time.time);
-                            break;
-                        case Source.Equipment:
-                            equipment.Equip(equipmentSlot, grabData.item);
-                            break;
-                        default:
-                            break;
-                    }
-
-                    UpdateSlotUI();
-                    // This gets updated because we're on top of this item, so we can consider it as being on top
-                    OnPointerEnter(null);
-                }
+                HandleClickWithCursor(slot, grab);
             }
 
+            UpdateSlotUI();
+
+            if (enableTooltip)
+            {
+                OnPointerEnter(null);
+            }
         }
 
-        void GrabItem()
+        private void HandleClickWithoutCursor(SlotContent slot)
         {
-            var item = GetItem();
-            CursorManager.instance.cursorGrabData = new SlotDisplayGrabData()
-            {
-                source = this,
-                item = item.item,
-                count = item.count
-            };
-            CursorManager.instance.SetCursor(false);
-            CursorManager.instance.AttachToCursor(item.item.displaySprite, item.item.displaySpriteColor);
+            if (slot.IsEmpty) return;
 
-            // Remove item from slot, it's on the mouse
-            switch (source)
+            var grab = CreateGrabFromSlot(slot);
+
+            ApplyCursorVisuals(grab);
+            WriteSlot(null, 0);
+        }
+
+        private void HandleClickWithCursor(SlotContent slot, SlotDisplayGrabData grab)
+        {
+            if (isEquipped)
             {
-                case Source.RPGInventory:
-                    inventoryInstance.RemoveBySlot(slotIndex, item.count);
-                    break;
-                case Source.Inventory:
-                    inventory.RemoveBySlot(slotIndex, item.count);
-                    break;
-                case Source.RPGEquipment:
-                    equipmentInstance.Unequip(equipmentSlot);
-                    break;
-                case Source.Equipment:
-                    equipment.Unequip(equipmentSlot);
-                    break;
+                var gear = grab.entity.item as Gear;
+                if (gear == null) return;
+
+                if (entity != null && !gear.CanEquip(equipmentSlot, entity))
+                    return;
             }
-            UpdateSlotUI();
-            // This gets updated because we're on top of this item, so we can consider it as being on top
-            OnPointerEnter(null);
+
+            if (slot.IsEmpty)
+            {
+                PlaceIntoEmptySlot(grab);
+                return;
+            }
+
+            if (slot.item != grab.entity)
+            {
+                SwapDifferentItems(slot, grab);
+                return;
+            }
+
+            if (!grab.entity.item.isStackable)
+            {
+                SwapDifferentItems(slot, grab);
+                return;
+            }
+
+            HandleStackableSameItem(slot, grab);
+        }
+
+        private void PlaceIntoEmptySlot(SlotDisplayGrabData grab)
+        {
+            int maxHere = GetMaxStackForSlot(grab.entity.item);
+            int toPlace = Mathf.Min(maxHere, grab.count);
+
+            WriteSlot(grab.entity, toPlace);
+
+            grab.count -= toPlace;
+            if (grab.count <= 0)
+            {
+                ClearCursor();
+            }
+            else
+            {
+                ApplyCursorVisuals(grab);
+            }
+        }
+
+        private void SwapDifferentItems(SlotContent slot, SlotDisplayGrabData grab)
+        {
+            var oldItem = slot.item;
+            var oldCount = slot.count;
+
+            int maxHere = GetMaxStackForSlot(grab.entity.item);
+            int toPlace = Mathf.Min(maxHere, grab.count);
+
+            WriteSlot(grab.entity, toPlace);
+
+            int leftover = grab.count - toPlace;
+
+            grab.entity = oldItem;
+            grab.count = oldCount + Mathf.Max(0, leftover);
+
+            if (grab.entity == null || grab.count <= 0)
+                ClearCursor();
+            else
+                ApplyCursorVisuals(grab);
+        }
+
+        private void HandleStackableSameItem(SlotContent slot, SlotDisplayGrabData grab)
+        {
+            int maxHere = GetMaxStackForSlot(grab.entity.item);
+            int slotCount = slot.count;
+            int cursorCount = grab.count;
+
+            if (slotCount < maxHere)
+            {
+                int free = maxHere - slotCount;
+                int toMove = Mathf.Min(free, cursorCount);
+
+                slotCount += toMove;
+                cursorCount -= toMove;
+
+                WriteSlot(grab.entity, slotCount);
+
+                grab.count = cursorCount;
+                if (cursorCount <= 0)
+                    ClearCursor();
+                else
+                    ApplyCursorVisuals(grab);
+            }
+            else
+            {
+                int tmp = slotCount;
+                slotCount = cursorCount;
+                cursorCount = tmp;
+
+                WriteSlot(grab.entity, slotCount);
+
+                grab.count = cursorCount;
+                if (cursorCount <= 0)
+                {
+                    ClearCursor();
+                }
+                else
+                {
+                    ApplyCursorVisuals(grab);
+                }
+            }
         }
 
         private void Return(SlotDisplayGrabData grabData)
         {
-            CursorManager.instance.SetCursor(true);
-            CursorManager.instance.AttachToCursor(null, Color.white);
-
-            // Add whatever is on the cursor to the slot
-            switch (source)
-            {
-                case Source.RPGInventory:
-                    inventoryInstance.SetOnSlot(slotIndex, grabData.item, grabData.count);
-                    break;
-                case Source.Inventory:
-                    inventory.SetOnSlot(slotIndex, grabData.item, grabData.count);
-                    break;
-                case Source.RPGEquipment:
-                    equipmentInstance.Equip(equipmentSlot, grabData.item, Time.time);
-                    break;
-                case Source.Equipment:
-                    equipment.Equip(equipmentSlot, grabData.item);
-                    break;
-                default:
-                    break;
-            }
+            WriteSlot(grabData.entity, grabData.count);
+            ClearCursor();
+            UpdateSlotUI();
         }
     }
 }

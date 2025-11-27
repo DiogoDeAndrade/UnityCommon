@@ -31,7 +31,7 @@ namespace UC.RPG.Actions
                 Debug.LogWarning("No RPG entity on target object, can't get item to add!");
                 yield break;
             }
-            var item = targetEntity.rpgEntity.item;
+            var item = targetEntity.rpgEntity;
             if (item == null)
             {
                 Debug.LogWarning("No item on target entity, can't add item!");
