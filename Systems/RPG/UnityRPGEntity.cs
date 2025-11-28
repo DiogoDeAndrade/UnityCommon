@@ -1,6 +1,7 @@
-using UnityEngine;
-using UC.Interaction;
 using NaughtyAttributes;
+using UC.Interaction;
+using UnityEngine;
+using static UnityEngine.EventSystems.EventTrigger;
 
 namespace UC.RPG
 {
@@ -37,7 +38,7 @@ namespace UC.RPG
 
             if (archetype)
             {
-                foreach (var r in archetype.GetResources())
+                foreach (var r in archetype.GetModules<RPGResourceModule>(true))
                 {
                     var res = rpgEntity.Get(r.type);
                     res.onChange += (changeData) =>
@@ -79,19 +80,21 @@ namespace UC.RPG
 
             if (_archetype)
             {
-                foreach (var r in _archetype.GetResources())
+                foreach (var r in _archetype.GetModules<RPGResourceModule>(true))
                 {
                     var handler = gameObject.AddComponent<ResourceHandler>();
                     handler.instance = _rpgEntity.Get(r.type);
                 }
 
-                if (archetype.hasInventory)
+                var inventoryModule = archetype.GetModule<RPGInventoryModule>(true);
+
+                if (inventoryModule.hasInventory)
                 {
                     var invHandler = gameObject.AddComponent<InventoryRPG>();
                     invHandler.instance = _rpgEntity.inventory;
                 }
 
-                if (archetype.hasEquipment)
+                if (inventoryModule.hasEquipment)
                 {
                     var equipmentHandler = gameObject.AddComponent<EquipmentRPG>();
                     equipmentHandler.instance = _rpgEntity.equipment;

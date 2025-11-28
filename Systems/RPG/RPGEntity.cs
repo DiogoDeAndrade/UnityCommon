@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -26,11 +27,13 @@ namespace UC.RPG
         {
             this.level = level;
             this.archetype = archetype;
-            if (archetype.hasInventory)
+
+            var inventoryModule = archetype.GetModule<RPGInventoryModule>(true);
+            if (inventoryModule.hasInventory)
             {
-                AddInventory(archetype.inventoryMaxSlots != -1, archetype.inventoryMaxSlots);
+                AddInventory(inventoryModule.inventorySize != -1, inventoryModule.inventorySize);
                 
-                var items = archetype.GetDefaultInventory();
+                var items = inventoryModule.defaultInventory;
                 if (items != null)
                 {
                     foreach (var item in items)
@@ -42,15 +45,15 @@ namespace UC.RPG
                     }
                 }
             }
-            if (archetype.hasEquipment)
+            if (inventoryModule.hasEquipment)
             {
                 _equipment = new EquipmentRPGInstance();
-                foreach (var slot in archetype.GetAvailableSlots())
+                foreach (var slot in inventoryModule.availableEquipmentSlots)
                 {
                     _equipment.AddSlot(slot);
                 }
 
-                var items = archetype.GetDefaultEquipment();
+                var items = inventoryModule.defaultEquipment;
                 if (items != null)
                 {
                     foreach (var item in items)
@@ -85,11 +88,13 @@ namespace UC.RPG
             stats = new();
             if (archetype)
             {
-                foreach (var s in archetype.GetStats())
+                foreach (var s in archetype.GetModules<RPGStatModule>(true))
                 {
                     var statInstance = new StatInstance(s.type);
 
-                    archetype.RunGenerator(s.type, this, statInstance);
+                    var generator = archetype.GetModule<RPGStatGenerator>(true);
+                    if (generator != null)
+                        generator.RunGenerator(s.type, this, statInstance);
 
                     stats.Add(s.type, statInstance);
                 }
@@ -100,7 +105,7 @@ namespace UC.RPG
             if (archetype)
             {
                 resources = new();
-                foreach (var r in archetype.GetResources())
+                foreach (var r in archetype.GetModules<RPGResourceModule>(true))
                 {
                     var res = new ResourceInstance(r.type);
                     res.maxValue = r.calculator.GetValue(this);
@@ -134,8 +139,10 @@ namespace UC.RPG
                 var entity = equipment.GetItem(Globals.defaultWeaponSlot);
                 if (entity != null) weapon = entity.item as Weapon;
             }
-                
-            if (weapon == null) weapon = archetype.GetDefaultWeapon();
+
+            var inventoryModule = archetype.GetModule<RPGInventoryModule>(true);
+
+            if (weapon == null) weapon = inventoryModule.unnarmedWeapon;
             if (weapon)
             {
                 return Attack(weapon, this, destPos);

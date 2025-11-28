@@ -34,9 +34,7 @@ namespace UC.Interaction.Editor
         private static string GetDisplayName(Type type, Type baseType)
         {
             // Any attribute derived from PolymorphicNameAttribute is accepted:
-            var attr = type
-                .GetCustomAttributes(typeof(PolymorphicNameAttribute), inherit: false)
-                .FirstOrDefault() as PolymorphicNameAttribute;
+            var attr = type.GetCustomAttributes(typeof(PolymorphicNameAttribute), inherit: false).FirstOrDefault() as PolymorphicNameAttribute;
 
             if (attr != null && !string.IsNullOrWhiteSpace(attr.Path))
                 return attr.Path; // e.g. "WSL/Tokens/Add" -> GenericMenu creates submenus

@@ -4,8 +4,8 @@ using UC.RPG;   // adjust if Archetype is in a different namespace
 
 namespace UC.RPG.Editor
 {
-    [CustomPropertyDrawer(typeof(Archetype.EquipmentSlot))]
-    public class EquipmentSlotDrawer : PropertyDrawer
+    [CustomPropertyDrawer(typeof(RPGInventoryModule.EquipmentSlot))]
+    public class RPGInventoryModule_EquipmentSlotDrawer : PropertyDrawer
     {
         bool IsArrayElementLabel(GUIContent label)
         {
