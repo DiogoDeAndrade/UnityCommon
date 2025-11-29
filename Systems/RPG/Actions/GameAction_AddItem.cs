@@ -12,10 +12,10 @@ namespace UC.RPG.Actions
 
         public override bool NeedWait() { return false; }
 
-        public override IEnumerator Execute(GameObject source, GameObject target)
+        public override IEnumerator Execute(IGameActionObject source, IGameActionObject target)
         {
             // Get action entity
-            var sourceEntity = source.GetComponent<UnityRPGEntity>();
+            var sourceEntity = source.GetTargetGameObject()?.GetComponent<UnityRPGEntity>();
             var inventoryInstance = sourceEntity?.rpgEntity?.inventory ?? null;
 
             if (inventoryInstance == null)
@@ -25,7 +25,7 @@ namespace UC.RPG.Actions
             }
 
             // Find item to add
-            var targetEntity = (entity) ? (entity) : (target.GetComponent<UnityRPGEntity>());
+            var targetEntity = (entity) ? (entity) : (target.GetTargetGameObject()?.GetComponent<UnityRPGEntity>());
             if (targetEntity == null)
             {
                 Debug.LogWarning("No RPG entity on target object, can't get item to add!");

@@ -1,7 +1,6 @@
 using NaughtyAttributes;
 using UC.Interaction;
 using UnityEngine;
-using static UnityEngine.EventSystems.EventTrigger;
 
 namespace UC.RPG
 {
@@ -20,8 +19,19 @@ namespace UC.RPG
         protected RPGEntity         _rpgEntity;
         protected ResourceInstance  health;
 
-        public Archetype archetype => _archetype;
-        public RPGEntity rpgEntity => _rpgEntity;
+        public Archetype                archetype => _archetype;
+        public RPGEntity                rpgEntity => _rpgEntity;
+        public ModularScriptableObject  data
+        {
+            get
+            {
+                if (archetype) return archetype;
+                if (_item) return _item;
+
+                return null;
+            }
+        }
+
         public bool isDead => rpgEntity.isDead;
         public int level => _level;
 
@@ -36,15 +46,13 @@ namespace UC.RPG
         {
             SetupEntity();
 
-            if (archetype)
+            if (data)
             {
-                foreach (var r in archetype.GetModules<RPGResourceModule>(true))
+                foreach (var r in data.GetModules<RPGResourceModule>(true))
                 {
                     var res = rpgEntity.Get(r.type);
-                    res.onChange += (changeData) =>
-                    {
-                        Entity_onChange(r.type, changeData);
-                    };
+                    res.onChange += Entity_onChange;
+                        
                     if (r.type == GlobalsBase.healthResource)
                     {
                         health = res;
@@ -58,15 +66,30 @@ namespace UC.RPG
             }
         }
 
-        protected abstract void Entity_OnDeath(GameObject changeSource);
+        protected abstract void Entity_OnDeath(ResourceInstance resourceInstance, GameObject changeSource);
 
-        protected abstract void Entity_onChange(ResourceType resourceType, ChangeData changeData);
+        protected abstract void Entity_onChange(ResourceInstance resourceInstance, ChangeData changeData);
 
-        protected abstract void OnDestroy();
+        protected virtual void OnDestroy()
+        {
+            if (data)
+            {
+                foreach (var r in data.GetModules<RPGResourceModule>(true))
+                {
+                    var res = rpgEntity.Get(r.type);
+                    res.onChange -= Entity_onChange;
+                }
+
+                if (health != null)
+                {
+                    health.onResourceEmpty -= Entity_OnDeath;
+                }
+            }
+        }
 
         protected virtual void SetupEntity()
         {
-            if ((_archetype == null) && (_item == null))
+            if (!data)
             {
                 Debug.Log($"Can't setup entity {name}: No archetype or item defined!");
                 return;
@@ -78,31 +101,37 @@ namespace UC.RPG
                 _rpgEntity = new RPGEntity(_item);
             _rpgEntity.Init();
 
-            if (_archetype)
+            if (data)
             {
-                foreach (var r in _archetype.GetModules<RPGResourceModule>(true))
+                foreach (var r in data.GetModules<RPGResourceModule>(true))
                 {
                     var handler = gameObject.AddComponent<ResourceHandler>();
                     handler.instance = _rpgEntity.Get(r.type);
                 }
 
-                var inventoryModule = archetype.GetModule<RPGInventoryModule>(true);
-
-                if (inventoryModule.hasInventory)
+                var inventoryModule = data.GetModule<RPGInventoryModule>(true);
+                if (inventoryModule)
                 {
-                    var invHandler = gameObject.AddComponent<InventoryRPG>();
-                    invHandler.instance = _rpgEntity.inventory;
-                }
+                    if (inventoryModule.hasInventory)
+                    {
+                        var invHandler = gameObject.AddComponent<InventoryRPG>();
+                        invHandler.instance = _rpgEntity.inventory;
+                    }
 
-                if (inventoryModule.hasEquipment)
-                {
-                    var equipmentHandler = gameObject.AddComponent<EquipmentRPG>();
-                    equipmentHandler.instance = _rpgEntity.equipment;
+                    if (inventoryModule.hasEquipment)
+                    {
+                        var equipmentHandler = gameObject.AddComponent<EquipmentRPG>();
+                        equipmentHandler.instance = _rpgEntity.equipment;
+                    }
                 }
             }
         }
 
         public float GetStat(StatType type) => _rpgEntity.Get(type).GetValue();
+
+        public StatInstance GetStatInstance(StatType type) => _rpgEntity.Get(type);
+        public ResourceInstance GetResourceInstance(ResourceType type) => _rpgEntity.Get(type);
+
         public InventoryRPGInstance GetInventory() => _rpgEntity.inventory;
         public EquipmentRPGInstance GetEquipment() => _rpgEntity.equipment;
 

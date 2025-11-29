@@ -5,7 +5,7 @@ using UnityEngine;
 namespace UC.RPG
 {
 
-    public class ResourceHandler : MonoBehaviour
+    public class ResourceHandler : MonoBehaviour, IRPGOwner
     {
         public enum OverrideMode
         {
@@ -13,11 +13,11 @@ namespace UC.RPG
             InitialResource = 1
         }
 
-        public delegate void OnChange(ChangeData changeData);
+        public delegate void OnChange(ResourceInstance resourceInstance, ChangeData changeData);
         public event OnChange onChange;
-        public delegate void OnResourceEmpty(GameObject changeSource);
+        public delegate void OnResourceEmpty(ResourceInstance resourceInstance, GameObject changeSource);
         public event OnResourceEmpty onResourceEmpty;
-        public delegate void OnResourceNotEmpty(GameObject healSource);
+        public delegate void OnResourceNotEmpty(ResourceInstance resourceInstance, GameObject healSource);
         public event OnResourceNotEmpty onResourceNotEmpty;
 
         [Expandable]
@@ -44,7 +44,7 @@ namespace UC.RPG
             {
                 if (resourceInstance == null)
                 {
-                    resourceInstance = new(type);
+                    resourceInstance = new(type, this);
                     resourceInstance.onChange += ResourceInstance_onChange;
                     resourceInstance.onResourceEmpty += ResourceInstance_onResourceEmpty;
                     resourceInstance.onResourceNotEmpty += ResourceInstance_onResourceNotEmpty;
@@ -78,19 +78,19 @@ namespace UC.RPG
             if (!_fromInstance) ResetResource();
         }
 
-        private void ResourceInstance_onResourceNotEmpty(GameObject healSource)
+        private void ResourceInstance_onResourceNotEmpty(ResourceInstance resourceInstance, GameObject healSource)
         {
-            onResourceNotEmpty?.Invoke(healSource);
+            onResourceNotEmpty?.Invoke(resourceInstance, healSource);
         }
 
-        private void ResourceInstance_onResourceEmpty(GameObject changeSource)
+        private void ResourceInstance_onResourceEmpty(ResourceInstance resourceInstance, GameObject changeSource)
         {
-            onResourceEmpty?.Invoke(changeSource);
+            onResourceEmpty?.Invoke(resourceInstance, changeSource);
         }
 
-        private void ResourceInstance_onChange(ChangeData changeData)
+        private void ResourceInstance_onChange(ResourceInstance resourceInstance, ChangeData changeData)
         {
-            onChange?.Invoke(changeData);
+            onChange?.Invoke(resourceInstance, changeData);
         }
 
         void RenderCombatText(float prevValue)

@@ -66,12 +66,13 @@ namespace UC.Interaction
         public bool Interact(GameObject actionSource, GameObject actionTarget, MonoBehaviour runnerObject)
         {
             MonoBehaviour runner = runnerObject ? runnerObject : this;
-            runner.StartCoroutine(RunActionsCR(actionSource, actionTarget, runner));
+            
+            runner.StartCoroutine(RunActionsCR(actionSource.GetComponent<GameActionObject>(), actionTarget.GetComponent<GameActionObject>(), runner));
 
             return true;
         }
 
-        IEnumerator RunActionsCR(GameObject actionSource, GameObject actionTarget, MonoBehaviour runner)
+        IEnumerator RunActionsCR(IGameActionObject actionSource, IGameActionObject actionTarget, MonoBehaviour runner)
         {
             isRunning = true;
 

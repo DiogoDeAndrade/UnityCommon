@@ -30,7 +30,7 @@ namespace UC.RPG.Editor
         {
             serializedObject.Update();
 
-            Equipment equip = (Equipment)target;
+            EquipmentRPG equip = (EquipmentRPG)target;
 
             if (WriteTitle())
             {
@@ -61,10 +61,7 @@ namespace UC.RPG.Editor
                     int count = availableSlotsProperty.arraySize;
                     if (count == 0)
                     {
-                        EditorGUILayout.HelpBox(
-                            "No available slots configured.",
-                            MessageType.Info
-                        );
+                        EditorGUILayout.HelpBox("No available slots configured.", MessageType.Info);
                     }
                     else
                     {
@@ -77,16 +74,14 @@ namespace UC.RPG.Editor
 
                             string slotName = slot != null ? slot.name : "<None>";
 
-                            Item equippedItem = null;
+                            RPGEntity equippedItem = null;
                             if (slot != null)
                             {
                                 // Will also ensure the instance exists internally
                                 equippedItem = equip.GetItem(slot);
                             }
 
-                            string itemLabel = (equippedItem != null)
-                                ? equippedItem.name
-                                : "Empty";
+                            string itemLabel = (equippedItem != null) ? equippedItem.item.name : "Empty";
 
                             // slotName : itemLabel
                             EditorGUILayout.LabelField(slotName, itemLabel);
@@ -97,10 +92,7 @@ namespace UC.RPG.Editor
                 }
                 else
                 {
-                    EditorGUILayout.HelpBox(
-                        "Enter Play Mode to see which item is equipped in each slot.",
-                        MessageType.None
-                    );
+                    EditorGUILayout.HelpBox("Enter Play Mode to see which item is equipped in each slot.", MessageType.None);
                 }
 
                 EditorGUI.EndChangeCheck();

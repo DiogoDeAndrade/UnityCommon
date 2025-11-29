@@ -12,9 +12,9 @@ namespace UC.RPG.Actions
 
         public override bool NeedWait() { return false; }
 
-        public override IEnumerator Execute(GameObject source, GameObject target)
+        public override IEnumerator Execute(IGameActionObject source, IGameActionObject target)
         {
-            var targetEntity = (entity) ? (entity) : (target.GetComponent<UnityRPGEntity>());
+            var targetEntity = (entity) ? (entity) : (target.GetTargetGameObject()?.GetComponent<UnityRPGEntity>());
             if (targetEntity == null)
             {
                 Debug.LogWarning("No RPG entity on target object, can't destroy entity!");

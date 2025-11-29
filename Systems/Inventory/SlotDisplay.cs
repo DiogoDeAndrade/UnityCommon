@@ -386,7 +386,7 @@ namespace UC
             if (isEquipped)
             {
                 var gearModule = grab.entity.item.GetModule<RPGItemGear>(true);
-                if (gearModule) return;
+                if (!gearModule) return;
 
                 if ((entity != null) && (!gearModule.CanEquip(equipmentSlot, entity)))
                     return;

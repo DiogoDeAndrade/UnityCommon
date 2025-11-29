@@ -257,7 +257,9 @@ public class ModularScriptableObjectEditor : Editor
         }
 
         EditorGUI.indentLevel++;
-        DrawManagedReferenceChildren(element);
+
+        EditorGUILayout.PropertyField(element, GUIContent.none, includeChildren: true);
+
         EditorGUI.indentLevel--;
     }
     private static MonoScript FindScriptForType(Type type)
@@ -276,34 +278,6 @@ public class ModularScriptableObjectEditor : Editor
         }
 
         return null;
-    }
-
-    private static void DrawManagedReferenceChildren(SerializedProperty managedRefProp)
-    {
-        if (managedRefProp == null)
-        {
-            return;
-        }
-
-        SerializedProperty iterator = managedRefProp.Copy();
-        SerializedProperty end = managedRefProp.GetEndProperty();
-
-        bool enterChildren = true;
-
-        while (iterator.NextVisible(enterChildren) && !SerializedProperty.EqualContents(iterator, end))
-        {
-            enterChildren = false;
-
-            // Skip the internal SerializeReference bookkeeping fields
-            if ((iterator.name == "managedReferenceFullTypename") || (iterator.name == "managedReferenceData"))
-                continue;
-
-            // Skip the enabled field - we already show it in the header
-            if ((iterator.name == "_enabled") || (iterator.name == "enabled"))
-                continue;
-
-            NaughtyEditorGUI.PropertyField_Layout(iterator, true);
-        }
     }
 
     private void RemoveModuleAt(ModularScriptableObject mso, int index)

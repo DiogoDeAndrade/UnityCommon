@@ -28,7 +28,7 @@ namespace UC.RPG.Editor
         {
             serializedObject.Update();
 
-            Inventory inv = (Inventory)target;
+            InventoryRPG inv = (InventoryRPG)target;
 
             if (WriteTitle())
             {
@@ -70,7 +70,7 @@ namespace UC.RPG.Editor
                         if (item == null || count <= 0)
                             continue;
 
-                        string label = $"Slot {slot}: {item.name}";
+                        string label = $"Slot {slot}: {item.item.name}";
                         if (count > 1)
                             label += $" x{count}";
 

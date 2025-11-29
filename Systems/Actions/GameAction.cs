@@ -28,6 +28,6 @@ namespace UC.Interaction
         protected virtual void SetDefaultValues() { }
         public virtual bool NeedWait() { return true; }
 
-        public abstract IEnumerator Execute(GameObject source, GameObject target);
+        public abstract IEnumerator Execute(IGameActionObject source, IGameActionObject target);
     }
 }

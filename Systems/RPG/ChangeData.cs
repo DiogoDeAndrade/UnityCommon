@@ -6,6 +6,9 @@ namespace UC.RPG
 
     public partial class ChangeData
     {
+        public ChangeData() { }
+        public ChangeData(float value) { deltaValue = value; }
+
         public ChangeType changeType = ChangeType.Burst;
         public float deltaValue = 0.0f;
         public Vector3 changeSrcPosition = Vector3.zero;

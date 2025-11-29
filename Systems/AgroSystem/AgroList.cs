@@ -55,7 +55,7 @@ namespace UC
             }
         }
 
-        private void OnDamage_AddAgro(ChangeData changeData)
+        private void OnDamage_AddAgro(ResourceInstance resourceInstance, ChangeData changeData)
         {
             if (changeData.deltaValue < 0.0f)
                 AddAgro(changeData.source, -changeData.deltaValue * agroGainOnDamage);
