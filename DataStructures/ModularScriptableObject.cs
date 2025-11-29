@@ -22,6 +22,10 @@ namespace UC
             _scriptableObject = owner;
         }
 
+        public static bool operator true(SOModule m) => m != null;
+        public static bool operator false(SOModule m) => m == null;
+        public static bool operator !(SOModule m) => m == null;
+
         public virtual string GetModuleHeaderString() => string.Empty;
     }
 
@@ -177,6 +181,26 @@ namespace UC
                 UnityEditor.EditorUtility.SetDirty(this);
 #endif
             }
+        }
+
+        public bool HasModule(Type moduleType, bool includeParents = false)
+        {
+            if ((moduleType == null) || (!typeof(SOModule).IsAssignableFrom(moduleType)))
+            {
+                return false;
+            }
+
+            // Re-use existing API and only consider enabled modules
+            var allModules = GetModules<SOModule>(includeParents, null);
+            for (int i = 0; i < allModules.Count; i++)
+            {
+                if (moduleType.IsInstanceOfType(allModules[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         protected virtual void OnValidate()

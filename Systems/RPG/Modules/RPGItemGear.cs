@@ -1,19 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UC.RPG;
 using UnityEngine;
 
-namespace UC
+namespace UC.RPG
 {
 
-    public partial class Gear : Item
+    [Serializable]
+    public abstract class RPGItemGear : SOModule
     {
-        [Header("Gear")]
         [SerializeField]
-        private Hypertag[] equipmentSlots;
+        private Hypertag[]          equipmentSlots;
         [SerializeReference]
-        private EquipCondition[] equipConditions;
+        private EquipCondition[]    equipConditions;
 
         List<Hypertag> cachedEquipmentSlots;
 
@@ -29,7 +28,7 @@ namespace UC
             {
                 foreach (var condition in equipConditions)
                 {
-                    if (!condition.CanEquip(slot, entity, this)) return false;
+                    if (!condition.CanEquip(slot, entity, scriptableObject as Item)) return false;
                 }
             }
 
@@ -41,14 +40,14 @@ namespace UC
             if ((cachedEquipmentSlots == null) || (cachedEquipmentSlots.Count == 0))
             {
                 HashSet<Hypertag> ret = new();
-                if (parentItems != null)
+                if (scriptableObject.parents != null)
                 {
-                    foreach (var item in parentItems)
+                    foreach (var item in scriptableObject.parents)
                     {
-                        var parentGear = item as Gear;
-                        if (parentGear != null)
+                        var parentGear = item.GetModules<RPGItemGear>(true);
+                        foreach (var p in parentGear) 
                         {
-                            var slots = parentGear.GetEquipmentSlots();
+                            var slots = p.GetEquipmentSlots();
                             foreach (var s in slots) ret.Add(s);
                         }
                     }
@@ -61,11 +60,5 @@ namespace UC
 
             return cachedEquipmentSlots;
         }
-    }
-
-    [Serializable]
-    public abstract class EquipCondition
-    {
-        public abstract bool CanEquip(Hypertag slot, RPGEntity entity, Item item);
     }
 }

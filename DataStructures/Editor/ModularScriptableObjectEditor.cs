@@ -10,6 +10,12 @@ using NaughtyAttributes.Editor;
 [CustomEditor(typeof(ModularScriptableObject), true)]
 public class ModularScriptableObjectEditor : Editor
 {
+    // "Clipboard" for modules (JSON + type name)
+    private static string s_ModuleClipboardJson;
+    private static string s_ModuleClipboardTypeName;
+
+    private static bool HasClipboard => (!string.IsNullOrEmpty(s_ModuleClipboardJson)) && (!string.IsNullOrEmpty(s_ModuleClipboardTypeName));
+
     private SerializedProperty _parentsProp;
     private SerializedProperty _modulesProp;
 
@@ -42,18 +48,11 @@ public class ModularScriptableObjectEditor : Editor
 
     private new void DrawHeader()
     {
-        EditorGUILayout.LabelField(target.name, EditorStyles.boldLabel);
     }
 
     private void DrawParentsSection()
     {
-        using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
-        {
-            EditorGUILayout.LabelField("Parents", EditorStyles.boldLabel);
-            EditorGUI.indentLevel++;
-            EditorGUILayout.PropertyField(_parentsProp, includeChildren: true);
-            EditorGUI.indentLevel--;
-        }
+        EditorGUILayout.PropertyField(_parentsProp, includeChildren: true);
     }
 
     private void DrawModulesSection(ModularScriptableObject mso)
@@ -76,10 +75,20 @@ public class ModularScriptableObjectEditor : Editor
 
         EditorGUILayout.Space();
 
-        // Big "Add Module" button at the end, like "Add Component"
-        if (GUILayout.Button("Add Module", GUILayout.Height(22)))
+        using (new EditorGUILayout.HorizontalScope())
         {
-            ShowAddModuleMenu(mso);
+            if (GUILayout.Button("Add Module", GUILayout.Height(22)))
+            {
+                ShowAddModuleMenu(mso);
+            }
+
+            using (new EditorGUI.DisabledScope(!HasClipboard))
+            {
+                if (GUILayout.Button("Paste Module from Clipboard", GUILayout.Height(22)))
+                {
+                    PasteModuleAsNew(mso);
+                }
+            }
         }
     }
 
@@ -118,9 +127,8 @@ public class ModularScriptableObjectEditor : Editor
         Rect contentRect = new Rect(headerRect.x + 4f, headerRect.y + 1f,
                                     headerRect.width - 8f, headerRect.height - 2f);
 
-        // Layout rects: [Foldout][Checkbox][Name] ...... [Up][Down][X]
+        // Layout rects: [Foldout][Checkbox][Name]
         const float iconWidth = 16f;
-        const float btnWidth = headerHeight;
         float x = contentRect.x;
         float y = contentRect.y;
         float h = contentRect.height;
@@ -131,12 +139,7 @@ public class ModularScriptableObjectEditor : Editor
         Rect toggleRect = new Rect(x, y, iconWidth, h);
         x += iconWidth + 4f;
 
-        float buttonsTotalWidth = btnWidth * 3 + 4f; // 3 buttons + small padding
-        Rect labelRect = new Rect(x, y, contentRect.xMax - x - buttonsTotalWidth, h);
-
-        Rect upRect = new Rect(contentRect.xMax - (btnWidth * 3), y, btnWidth, h);
-        Rect downRect = new Rect(contentRect.xMax - (btnWidth * 2), y, btnWidth, h);
-        Rect xRect = new Rect(contentRect.xMax - btnWidth, y, btnWidth, h);
+        Rect labelRect = new Rect(x, y, contentRect.xMax - x, h);
 
         // Foldout arrow (no label)
         expanded = EditorGUI.Foldout(foldRect, expanded, GUIContent.none, true);
@@ -161,32 +164,90 @@ public class ModularScriptableObjectEditor : Editor
         // Name label
         EditorGUI.LabelField(labelRect, headerName, EditorStyles.boldLabel);
 
-        // Up button
-        EditorGUI.BeginDisabledGroup(index <= 0);
-        if (GUI.Button(upRect, "\u25B2", EditorStyles.miniButton))
+        // Context menu on right-click anywhere on the header
+        Event e = Event.current;
+        if ((e.type == EventType.ContextClick) && (headerRect.Contains(e.mousePosition)))
         {
-            MoveModule(mso, index, index - 1);
-            return;
-        }
-        EditorGUI.EndDisabledGroup();
+            var menu = new GenericMenu();
 
-        // Down button
-        EditorGUI.BeginDisabledGroup(index >= _modulesProp.arraySize - 1);
-        if (GUI.Button(downRect, "\u25BC", EditorStyles.miniButton))
-        {
-            MoveModule(mso, index, index + 1);
-            return;
-        }
-        EditorGUI.EndDisabledGroup();
-
-        // Remove button
-        if (GUI.Button(xRect, "X", EditorStyles.miniButton))
-        {
-            if (EditorUtility.DisplayDialog("Remove Module", $"Remove module {headerName}?", "Remove", "Cancel"))
+            if (module != null)
             {
-                RemoveModuleAt(mso, index);
-                return;
+                menu.AddItem(new GUIContent("Edit Script"), false, () =>
+                {
+                    var script = FindScriptForType(type);
+                    if (script != null)
+                        AssetDatabase.OpenAsset(script);
+                });
+
+                menu.AddItem(new GUIContent("Ping Script"), false, () =>
+                {
+                    var script = FindScriptForType(type);
+                    if (script != null)
+                        EditorGUIUtility.PingObject(script);
+                });
             }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Edit Script"));
+                menu.AddDisabledItem(new GUIContent("Ping Script"));
+            }
+
+            menu.AddSeparator("");
+
+            // Copy
+            if (module != null)
+                menu.AddItem(new GUIContent("Copy"), false, () => CopyModuleToClipboard(module));
+            else
+                menu.AddDisabledItem(new GUIContent("Copy"));
+
+            // Paste (overwrite)
+            if (HasClipboard)
+            {
+                menu.AddItem(new GUIContent("Paste"), false, () =>
+                {
+                    if (EditorUtility.DisplayDialog(
+                            "Overwrite Module",
+                            $"Are you sure you want to overwrite the module {headerName}?",
+                            "Overwrite", "Cancel"))
+                    {
+                        PasteModuleOver(mso, element);
+                    }
+                });
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Paste"));
+            }
+
+            menu.AddSeparator("");
+
+            // Move Up
+            if (index > 0)
+                menu.AddItem(new GUIContent("Move Up"), false, () => MoveModule(mso, index, index - 1));
+            else
+                menu.AddDisabledItem(new GUIContent("Move Up"));
+
+            // Move Down
+            if (index < _modulesProp.arraySize - 1)
+                menu.AddItem(new GUIContent("Move Down"), false, () => MoveModule(mso, index, index + 1));
+            else
+                menu.AddDisabledItem(new GUIContent("Move Down"));
+
+            menu.AddSeparator("");
+
+            // Delete
+            menu.AddItem(new GUIContent("Delete"), false, () =>
+            {
+                if (EditorUtility.DisplayDialog("Remove Module",
+                        $"Remove module {headerName}?",
+                        "Remove", "Cancel"))
+                {
+                    RemoveModuleAt(mso, index);
+                }
+            });
+
+            menu.ShowAsContext();
+            e.Use();
         }
 
         // ---------- BODY ----------
@@ -198,6 +259,23 @@ public class ModularScriptableObjectEditor : Editor
         EditorGUI.indentLevel++;
         DrawManagedReferenceChildren(element);
         EditorGUI.indentLevel--;
+    }
+    private static MonoScript FindScriptForType(Type type)
+    {
+        if (type == null)
+            return null;
+
+        // Try to find a MonoScript asset whose class matches this type
+        string[] guids = AssetDatabase.FindAssets($"{type.Name} t:MonoScript");
+        for (int i = 0; i < guids.Length; i++)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+            var script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+            if (script != null && script.GetClass() == type)
+                return script;
+        }
+
+        return null;
     }
 
     private static void DrawManagedReferenceChildren(SerializedProperty managedRefProp)
@@ -318,5 +396,55 @@ public class ModularScriptableObjectEditor : Editor
         }
 
         return "<Null Module>";
+    }
+
+    private void CopyModuleToClipboard(SOModule module)
+    {
+        if (module == null)
+            return;
+
+        s_ModuleClipboardJson = JsonUtility.ToJson(module);
+        s_ModuleClipboardTypeName = module.GetType().AssemblyQualifiedName;
+    }
+
+    private void PasteModuleOver(ModularScriptableObject mso, SerializedProperty element)
+    {
+        if (!HasClipboard || element == null)
+            return;
+
+        var targetModule = element.managedReferenceValue as SOModule;
+        if (targetModule == null)
+            return;
+
+        Undo.RecordObject(mso, "Paste Module (Overwrite)");
+
+        JsonUtility.FromJsonOverwrite(s_ModuleClipboardJson, targetModule);
+
+        // Owner (_scriptableObject) will be corrected by OnValidate in ModularScriptableObject.
+        EditorUtility.SetDirty(mso);
+        serializedObject.Update();
+    }
+
+    private void PasteModuleAsNew(ModularScriptableObject mso)
+    {
+        if (!HasClipboard)
+            return;
+
+        var type = System.Type.GetType(s_ModuleClipboardTypeName);
+        if (type == null || !typeof(SOModule).IsAssignableFrom(type))
+            return;
+
+        Undo.RecordObject(mso, "Paste Module");
+
+        // Create a new module of the same type and then overwrite with JSON
+        var newModule = mso.AddModule(type) as SOModule;
+        if (newModule == null)
+            return;
+
+        JsonUtility.FromJsonOverwrite(s_ModuleClipboardJson, newModule);
+
+        // Owner will again be re-established in OnValidate.
+        EditorUtility.SetDirty(mso);
+        serializedObject.Update();
     }
 }

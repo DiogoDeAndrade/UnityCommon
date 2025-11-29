@@ -16,9 +16,9 @@ namespace UC.RPG
             public Hypertag slot;
             public Item     item;
         }
-
-        [SerializeField]
-        public Weapon           unnarmedWeapon;
+         
+        [SerializeField, RequireModule(typeof(RPGItemWeapon))]
+        public Item             unnarmedWeapon;
         [SerializeField]
         private bool            _hasInventory = false;
         [SerializeField, Tooltip("Max inventory slots, -1 to unlimited."), ShowIf(nameof(_hasInventory))]

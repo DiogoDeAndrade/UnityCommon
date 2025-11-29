@@ -133,11 +133,11 @@ namespace UC.RPG
         public bool DefaultAttack(Vector2Int destPos)
         {
             // Get weapon
-            Weapon weapon = null;
+            Item weapon = null;
             if (equipment != null)
             {
                 var entity = equipment.GetItem(Globals.defaultWeaponSlot);
-                if (entity != null) weapon = entity.item as Weapon;
+                if (entity != null) weapon = entity.item;
             }
 
             var inventoryModule = archetype.GetModule<RPGInventoryModule>(true);
@@ -151,9 +151,11 @@ namespace UC.RPG
             return false;
         }
 
-        public bool Attack(Weapon weapon, RPGEntity source, Vector2Int destPos)
+        public bool Attack(Item weapon, RPGEntity source, Vector2Int destPos)
         {
-            return weapon.GetAttackModule()?.Attack(weapon, source, destPos) ?? false;
+            var weaponModule = weapon.GetModule<RPGItemWeapon>(true);
+            var attackModule = weaponModule?.attackModule ?? null;
+            return attackModule?.Attack(weapon, source, destPos) ?? false;
         }
     }
 }

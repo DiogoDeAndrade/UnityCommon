@@ -1,15 +1,15 @@
 using NaughtyAttributes;
 using System;
+using System.Linq;
 using UnityEngine;
 
 namespace UC
 {
 
     [CreateAssetMenu(fileName = "Item", menuName = "Unity Common/RPG/Item")]
-    public class Item : ScriptableObject
+    public class Item : ModularScriptableObject
     {
         [Header("Item Stats")]
-        public Item[]       parentItems;
         public int          level = 1;
         public string       displayName = "Item Display Name";
         public Color        displaySpriteColor = Color.white;
@@ -31,33 +31,12 @@ namespace UC
         {
             if (this == itemType) return true;
 
-            if (parentItems == null) return false;
-
-            foreach (var item in parentItems)
+            foreach (var p in parents.OfType<Item>())
             {
-                if (item == itemType) return true;
+                if (p.IsA(itemType)) return true;
             }
 
             return false;
         }
-
-        protected RetObjType Get<RetObjType, OwnerObjType>(Func<OwnerObjType, RetObjType> func) where OwnerObjType : class
-        {
-            var ret = func(this as OwnerObjType);
-            if (ret != null) return ret;
-
-            foreach (var item in parentItems)
-            {
-                if (item is OwnerObjType ownerObj)
-                {
-                    ret = func(ownerObj);
-                    if (ret != null) return ret;
-                }
-            }
-
-            return default;
-        }
-
-        public GameObject GetScenePrefab() => Get<GameObject, Item>((obj) => obj.scenePrefab);
     }
 }
