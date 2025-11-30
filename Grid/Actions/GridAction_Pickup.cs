@@ -60,7 +60,7 @@ namespace UC
             });
         }
 
-        protected bool RunAction(GridObject subject, Vector2Int position)
+        protected bool RunAction(NamedAction namedAction, GridObject subject, Vector2Int position)
         {
             if (item)
             {

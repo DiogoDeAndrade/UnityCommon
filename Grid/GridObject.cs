@@ -28,7 +28,7 @@ namespace UC
         public delegate void OnTurnTo(Vector2Int sourcePos, Vector2Int destPos);
         public event OnTurnTo onTurnTo;
 
-        private GridSystem gridSystem;
+        private GridSystem _gridSystem;
         private Tilemap tilemap;
         private int facingDirection;
         private Tweener.BaseInterpolator moveInterpolator;
@@ -40,7 +40,8 @@ namespace UC
             set => solidObject = value;
         }
         public Vector2 lastDelta { get; private set; }
-        public Vector2 cellSize => gridSystem.cellSize;
+        public Vector2 cellSize => _gridSystem.cellSize;
+        public GridSystem gridSystem => _gridSystem;
 
         private void Awake()
         {
@@ -59,19 +60,19 @@ namespace UC
 
         private void OnEnable()
         {
-            gridSystem = GetComponentInParent<GridSystem>();
-            if (gridSystem == null)
+            _gridSystem = GetComponentInParent<GridSystem>();
+            if (_gridSystem == null)
             {
-                gridSystem = FindFirstObjectByType<GridSystem>();
-                transform.SetParent(gridSystem.transform);
+                _gridSystem = FindFirstObjectByType<GridSystem>();
+                transform.SetParent(_gridSystem.transform);
             }
-            gridSystem?.Register(this);
+            _gridSystem?.Register(this);
         }
 
         private void OnDisable()
         {
-            gridSystem = GetComponentInParent<GridSystem>();
-            gridSystem?.Unregister(this);
+            _gridSystem = GetComponentInParent<GridSystem>();
+            _gridSystem?.Unregister(this);
         }
 
         void ClampToGrid()
@@ -79,11 +80,11 @@ namespace UC
             transform.position = Snap(transform.position);
         }
 
-        public Vector2Int gridPosition => gridSystem.WorldToGrid(transform.position);
-        public Vector3 Snap(Vector3 position) => gridSystem.Snap(position);
-        public Vector2Int WorldToGrid(Vector3 worldPosition) => gridSystem.WorldToGrid(worldPosition);
-        public Vector2 GridToWorld(Vector3Int gridPosition) => gridSystem.GridToWorld(gridPosition);
-        public Vector2 GridToWorld(Vector2Int gridPosition) => gridSystem.GridToWorld(gridPosition);
+        public Vector2Int gridPosition => _gridSystem.WorldToGrid(transform.position);
+        public Vector3 Snap(Vector3 position) => _gridSystem.Snap(position);
+        public Vector2Int WorldToGrid(Vector3 worldPosition) => _gridSystem.WorldToGrid(worldPosition);
+        public Vector2 GridToWorld(Vector3Int gridPosition) => _gridSystem.GridToWorld(gridPosition);
+        public Vector2 GridToWorld(Vector2Int gridPosition) => _gridSystem.GridToWorld(gridPosition);
 
         public bool MoveToGrid(Vector2Int gridPos, Vector2 speed)
         {
@@ -107,7 +108,7 @@ namespace UC
 
             if (solidObject)
             {
-                if (gridSystem.CheckCollision(endPosGrid, this))
+                if (_gridSystem.CheckCollision(endPosGrid, this))
                 {
                     if (moveAnimationOnCollision > 0.0f)
                     {
@@ -224,7 +225,7 @@ namespace UC
             // Not a tilemap, just a single grid cell
             bool isOnTile = (tilemap) && (tilemap.GetTile(position.xy0()) != null);
 
-            if (((gridSystem.WorldToGrid(transform.position) == position) && (tilemap == null)) || (isOnTile))
+            if (((_gridSystem.WorldToGrid(transform.position) == position) && (tilemap == null)) || (isOnTile))
             {
                 foreach (var action in objActions)
                 {

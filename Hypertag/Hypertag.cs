@@ -10,7 +10,14 @@ namespace UC
     {
         [SerializeField] private string _displayName = String.Empty;
 
-        public string displayName => string.IsNullOrEmpty(_displayName) ? name : _displayName;
+        public string displayName
+        {
+            get => string.IsNullOrEmpty(_displayName) ? name : _displayName;
+            set
+            {
+                _displayName = value;
+            }
+        }
 
         public T FindFirst<T>() where T: Component
         {

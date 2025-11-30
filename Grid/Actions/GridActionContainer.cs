@@ -6,7 +6,7 @@ namespace UC
 {
     public abstract class GridActionContainer : MonoBehaviour
     {
-        public delegate bool ActualRunAction(GridObject subject, Vector2Int position);
+        public delegate bool ActualRunAction(NamedAction action, GridObject subject, Vector2Int position);
         public struct NamedAction
         {
             public string name;
@@ -22,7 +22,7 @@ namespace UC
 
             internal bool Run(GridObject subject, Vector2Int position)
             {
-                if (action(subject, position))
+                if (action(this, subject, position))
                 {
                     if (isCombatTextEnable)
                     {

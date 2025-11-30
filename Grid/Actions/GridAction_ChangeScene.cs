@@ -20,7 +20,7 @@ namespace UC
             });
         }
 
-        protected virtual bool RunAction(GridObject subject, Vector2Int position)
+        protected virtual bool RunAction(NamedAction namedAction, GridObject subject, Vector2Int position)
         {
             if (FullscreenFader.hasFader)
             {

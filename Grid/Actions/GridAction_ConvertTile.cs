@@ -32,7 +32,7 @@ namespace UC
             }
         }
 
-        protected bool RunAction(GridObject subject, Vector2Int position)
+        protected bool RunAction(NamedAction namedAction, GridObject subject, Vector2Int position)
         {
             tilemap.SetTile(position.xy0(), convertTo);
 
