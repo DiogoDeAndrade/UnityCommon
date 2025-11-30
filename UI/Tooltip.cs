@@ -23,6 +23,11 @@ namespace UC
         {
         }
 
+        public virtual void Set(object obj)
+        {
+            throw new System.NotImplementedException();
+        }
+
         public void SetText(string text)
         {
             if (text == "")

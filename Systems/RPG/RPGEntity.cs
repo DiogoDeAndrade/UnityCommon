@@ -159,7 +159,7 @@ namespace UC.RPG
             RPGEntity weapon = null;
             if (equipment != null)
             {
-                var entity = equipment.GetItem(Globals.defaultWeaponSlot);
+                var entity = equipment.GetItem(GlobalsBase.defaultWeaponSlot);
                 if (entity != null) weapon = entity;
             }
 
