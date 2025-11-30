@@ -8,7 +8,9 @@ namespace UC
     [CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Hypertag")]
     public class Hypertag : ScriptableObject
     {
-        public string displayName;
+        [SerializeField] private string _displayName = String.Empty;
+
+        public string displayName => string.IsNullOrEmpty(_displayName) ? name : _displayName;
 
         public T FindFirst<T>() where T: Component
         {
