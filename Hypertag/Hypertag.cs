@@ -8,6 +8,8 @@ namespace UC
     [CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Hypertag")]
     public class Hypertag : ScriptableObject
     {
+        public string displayName;
+
         public T FindFirst<T>() where T: Component
         {
             return FindFirstObjectWithHypertag<T>(this);
