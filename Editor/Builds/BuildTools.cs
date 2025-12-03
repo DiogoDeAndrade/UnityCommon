@@ -16,6 +16,8 @@ namespace UC
         private string buildLog = "";
         private string butlerPath;
 
+        private SerializedObject buildDefsSerializedObject;
+
         [MenuItem("Unity Common/Build")]
         public static void OpenBuildTool()
         {
@@ -31,6 +33,8 @@ namespace UC
                 buildDefs.version = PlayerSettings.bundleVersion;
                 SaveBuildDefs();
             }
+
+            buildDefsSerializedObject = new SerializedObject(buildDefs);
         }
 
         private void OnGUI()
@@ -86,6 +90,24 @@ namespace UC
                 {
                     buildDefs.username = EditorGUILayout.TextField("Itch.io Username", buildDefs.username);
                     buildDefs.projectName = EditorGUILayout.TextField("Itch.io Project Name", buildDefs.projectName);
+                }
+
+                GUILayout.Space(10);
+                GUILayout.Label("Ignore File Patterns (deleted from build output before zipping)", EditorStyles.boldLabel);
+                EditorGUILayout.HelpBox(
+                    "Patterns are relative to the build root folder.\n" +
+                    "Examples:\n" +
+                    "  StreamingAssets/Models/*.gguf\n" +
+                    "  StreamingAssets/Models/LargeModel.gguf\n" +
+                    "  *.gguf",
+                    MessageType.Info);
+
+                buildDefsSerializedObject.Update();
+                SerializedProperty ignoreListProp = buildDefsSerializedObject.FindProperty("ignoreFilePatterns");
+                EditorGUILayout.PropertyField(ignoreListProp, new GUIContent("Patterns"), true);
+                if (buildDefsSerializedObject.ApplyModifiedProperties())
+                {
+                    EditorUtility.SetDirty(buildDefs);
                 }
 
                 if (EditorGUI.EndChangeCheck())
@@ -175,6 +197,8 @@ namespace UC
                 BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, windowsPath + productName + ".exe", BuildTarget.StandaloneWindows64, BuildOptions.None);
                 Log("Windows build completed: " + windowsPath);
 
+                DeleteIgnoredStreamingAssets(windowsPath);
+
                 string burstDebugPath = windowsPath + productName + "_BurstDebugInformation_DoNotShip";
                 if (Directory.Exists(burstDebugPath))
                 {
@@ -200,6 +224,8 @@ namespace UC
                 BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, webPath, BuildTarget.WebGL, BuildOptions.None);
                 Log("WebGL build completed: " + webPath);
 
+                DeleteIgnoredStreamingAssets(webPath);
+
                 if (buildDefs.createZipFiles)
                 {
                     CreateZip(buildFolder, productName + "Web", buildFolder + productName + "Web_v" + buildDefs.version + ".zip");
@@ -222,6 +248,96 @@ namespace UC
             }
             ZipFile.CreateFromDirectory(fullFolderPath, zipFilePath, System.IO.Compression.CompressionLevel.Optimal, true);
             Log("Created zip file: " + zipFilePath);
+        }
+
+        private void DeleteIgnoredStreamingAssets(string buildRootPath)
+        {
+            if (buildDefs == null || buildDefs.ignoreFilePatterns == null || buildDefs.ignoreFilePatterns.Count == 0)
+                return;
+
+            // 1) Try Standalone layout: <buildRoot>/<ProductName>_Data/StreamingAssets
+            string dataFolderName = Application.productName + "_Data";
+            string standaloneStreamingAssets = Path.Combine(
+                buildRootPath,
+                dataFolderName,
+                "StreamingAssets"
+            );
+
+            // 2) Try WebGL layout: <buildRoot>/StreamingAssets
+            string webglStreamingAssets = Path.Combine(buildRootPath, "StreamingAssets");
+
+            string streamingAssetsRoot = null;
+            if (Directory.Exists(standaloneStreamingAssets))
+                streamingAssetsRoot = standaloneStreamingAssets;
+            else if (Directory.Exists(webglStreamingAssets))
+                streamingAssetsRoot = webglStreamingAssets;
+
+            if (streamingAssetsRoot == null)
+            {
+                Log($"No StreamingAssets folder found under '{buildRootPath}'. Skipping ignore step.");
+                return;
+            }
+
+            Log($"Using StreamingAssets root: {streamingAssetsRoot}");
+
+            foreach (var patternRaw in buildDefs.ignoreFilePatterns)
+            {
+                if (string.IsNullOrWhiteSpace(patternRaw))
+                    continue;
+
+                string pattern = patternRaw.Replace('\\', '/').Trim();
+                string dirPart = Path.GetDirectoryName(pattern)?.Replace('\\', '/');
+                string filePart = Path.GetFileName(pattern);
+
+                if (string.IsNullOrEmpty(filePart))
+                    continue;
+
+                // No directory part -> search whole StreamingAssets subtree
+                if (string.IsNullOrEmpty(dirPart) || dirPart == ".")
+                {
+                    try
+                    {
+                        var files = Directory.GetFiles(streamingAssetsRoot, filePart, SearchOption.AllDirectories);
+                        foreach (var f in files)
+                            TryDeleteStreamingAsset(f);
+                    }
+                    catch (Exception e)
+                    {
+                        Log($"Error searching pattern '{pattern}' in '{streamingAssetsRoot}': {e.Message}");
+                    }
+                }
+                else
+                {
+                    // Directory part -> treat as subfolder of StreamingAssets
+                    string targetDir = Path.Combine(streamingAssetsRoot, dirPart.Replace('/', Path.DirectorySeparatorChar));
+                    if (!Directory.Exists(targetDir))
+                        continue;
+
+                    try
+                    {
+                        var files = Directory.GetFiles(targetDir, filePart, SearchOption.TopDirectoryOnly);
+                        foreach (var f in files)
+                            TryDeleteStreamingAsset(f);
+                    }
+                    catch (Exception e)
+                    {
+                        Log($"Error searching pattern '{pattern}' in '{targetDir}': {e.Message}");
+                    }
+                }
+            }
+        }
+
+        private void TryDeleteStreamingAsset(string path)
+        {
+            try
+            {
+                File.Delete(path);
+                Log("Deleted ignored StreamingAsset: " + path);
+            }
+            catch (Exception e)
+            {
+                Log($"Failed to delete ignored StreamingAsset '{path}': {e.Message}");
+            }
         }
 
         private void Log(string message)

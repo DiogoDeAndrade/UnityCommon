@@ -1,8 +1,4 @@
 using NaughtyAttributes;
-using System;
-using TMPro;
-using UC;
-using UnityEditor.ShaderKeywordFilter;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;

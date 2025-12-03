@@ -188,6 +188,7 @@ namespace UC
         public void SetEnable(bool b)
         {
             _uiEnable = b;
+
         }
     }
 }

@@ -9,6 +9,8 @@ namespace UC
 
     public class BaseUIControl : MonoBehaviour
     {
+        public enum HighlightMode { ImageEnable, ColorSwitch };
+
         public delegate void OnSelect(BaseUIControl newCntrol, BaseUIControl prevControl);
         public delegate void OnDeselect(BaseUIControl control);
         public delegate void OnChange(BaseUIControl control);
@@ -16,20 +18,31 @@ namespace UC
         public delegate void OnUIEnableToggle(bool value, BaseUIControl control);
         public delegate bool CanSelect(BaseUIControl control);
 
-        [SerializeField] protected Image highlighterImage;
-        [SerializeField] protected TextMeshProUGUI highlighterText;
-        [SerializeField, ShowIf(nameof(needHighlightColor))] protected Color highlightColor;
-        [SerializeField] protected BaseUIControl _navUp;
-        [SerializeField] protected BaseUIControl _navDown;
-        [SerializeField] protected BaseUIControl _navLeft;
-        [SerializeField] protected BaseUIControl _navRight;
-        [SerializeField] protected AudioClip changeSnd;
+        [SerializeField] 
+        private HighlightMode   highlightMode = HighlightMode.ImageEnable;
+        [SerializeField] 
+        protected Image         highlighterImage;
+        [SerializeField] 
+        protected TextMeshProUGUI highlighterText;
+        [SerializeField, ShowIf(nameof(needHighlightColor))] 
+        protected Color         highlightColor;
+        [SerializeField] 
+        protected BaseUIControl _navUp;
+        [SerializeField] 
+        protected BaseUIControl _navDown;
+        [SerializeField] 
+        protected BaseUIControl _navLeft;
+        [SerializeField] 
+        protected BaseUIControl _navRight;
+        [SerializeField] 
+        protected AudioClip changeSnd;
 
         protected UIGroup   parentGroup;
         Color               defaultTextColor;
+        Color               defaultImageColor;
         CanvasGroup         canvasGroup;
 
-        private bool needHighlightColor => highlighterText != null;
+        private bool needHighlightColor => (highlighterText != null) || (highlightMode == HighlightMode.ColorSwitch);
 
         public bool isSelected => (parentGroup.uiEnable) && (parentGroup.selectedControl == this);
         public bool isSelectable
@@ -64,6 +77,10 @@ namespace UC
             {
                 defaultTextColor = highlighterText.color;
             }
+            if (highlighterImage)
+            {
+                defaultImageColor = highlighterImage.color;
+            }
         }
 
         protected virtual void Update()
@@ -87,7 +104,15 @@ namespace UC
             }
             if (highlighterImage)
             {
-                highlighterImage.enabled = isSelected && parentGroup.uiEnable;
+                if (highlightMode == HighlightMode.ImageEnable)
+                {
+                    highlighterImage.enabled = isSelected && parentGroup.uiEnable;
+                }
+                else if (highlightMode == HighlightMode.ColorSwitch)
+                {
+                    highlighterImage.enabled = true;
+                    highlighterImage.color = (isSelected && parentGroup.uiEnable) ? (highlightColor) : (defaultImageColor);
+                }
             }
             if (highlighterText)
             {

@@ -1,6 +1,7 @@
 using NaughtyAttributes;
 using System;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
 namespace UC
@@ -8,7 +9,7 @@ namespace UC
 
     public class UIButton : BaseUIControl
     {
-        public enum AutoEvent { None, SwitchPanel, CloseThisPanel, ShowCredits = 8, ChangeScene = 10, QuitApplication = 20 };
+        public enum AutoEvent { None, SwitchPanel, CloseThisPanel, ShowCredits = 8, ChangeScene = 10, QuitApplication = 20, UnityAction = 50 };
 
         [SerializeField] 
         private AutoEvent       interactEvent;
@@ -20,11 +21,14 @@ namespace UC
         private float           fadeTime = 0.5f;
         [SerializeField, ShowIf(nameof(needCredits))]
         private BigTextScroll   creditsScroll;
+        [SerializeField, ShowIf(nameof(needUnityAction))]
+        private UnityEvent      unityEvent;
 
         bool needPanel => interactEvent == AutoEvent.SwitchPanel;
         bool needScene => interactEvent == AutoEvent.ChangeScene;
         bool needFadeTime => (interactEvent != AutoEvent.None);
-        bool needCredits => (interactEvent == AutoEvent.ShowCredits);  
+        bool needCredits => (interactEvent == AutoEvent.ShowCredits);
+        bool needUnityAction => (interactEvent == AutoEvent.UnityAction);
 
         public override void Interact()
         {
@@ -77,6 +81,9 @@ namespace UC
 
                         creditsScroll.onEndScroll += CreditsScroll_onEndScroll;
                     }
+                    break;
+                case AutoEvent.UnityAction:
+                    unityEvent?.Invoke();
                     break;
                 default:
                     break;
