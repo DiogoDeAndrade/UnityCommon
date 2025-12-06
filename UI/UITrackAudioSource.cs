@@ -4,7 +4,7 @@ namespace UC
 {
 
     [RequireComponent(typeof(AudioSource))]
-    public class UITrackAudioSource : UITrackObject
+    public class UITrackAudioSource : UIImageFromObject
     {
         private AudioSource audioSource;
 

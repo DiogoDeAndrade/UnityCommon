@@ -1,0 +1,162 @@
+using NaughtyAttributes;
+using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace UC
+{
+
+    public class UIImageFromObject : MonoBehaviour
+    {
+        [Flags]
+        private enum UpdateMode { None = 0, FixedUpdate = 1, Update = 2, LateUpdate = 4 };
+
+        public delegate bool OnVisibilityCallback(UIImageFromObject trackedObject);
+        public event OnVisibilityCallback onVisibilityCallback;
+
+        [SerializeField, HideIf(nameof(hasCameraTag))]
+        private Camera mainCamera;
+        [SerializeField, HideIf(nameof(hasCamera))]
+        private Hypertag cameraTag;
+        [SerializeField, HideIf(nameof(hasCanvasTag))]
+        private Canvas mainCanvas;
+        [SerializeField, HideIf(nameof(hasCanvas))]
+        private Hypertag canvasTag;
+        [SerializeField]
+        private UpdateMode _updateMode = UpdateMode.Update;
+        [SerializeField]
+        private Sprite _uiSprite;
+        [SerializeField]
+        private float _uiSize = 32.0f;
+
+        bool hasCameraTag => cameraTag != null;
+        bool hasCamera => mainCamera != null;
+        bool hasCanvasTag => canvasTag != null;
+        bool hasCanvas => mainCanvas != null;
+
+        RectTransform uiImageRectTransform;
+        Image image;
+
+        void Start()
+        {
+            if (mainCamera == null)
+            {
+                if (cameraTag == null)
+                {
+                    mainCamera = Camera.main;
+                    if (mainCamera == null) mainCamera = FindAnyObjectByType<Camera>();
+                }
+                else
+                {
+                    mainCamera = Hypertag.FindFirstObjectWithHypertag<Camera>(cameraTag);
+                }
+            }
+            if (mainCanvas == null)
+            {
+                if (canvasTag == null)
+                {
+                    mainCanvas = GetComponentInParent<Canvas>();
+                    if (mainCanvas == null)
+                    {
+                        mainCanvas = FindAnyObjectByType<Canvas>();
+                    }
+                }
+                else
+                {
+                    mainCanvas = Hypertag.FindFirstObjectWithHypertag<Canvas>(canvasTag);
+                }
+            }
+
+            if (_uiSprite == null) return;
+
+            // Create UI object
+            GameObject go = new GameObject();
+            go.transform.SetParent(mainCanvas.transform);
+            go.name = $"UITracker ({_uiSprite.name})";
+            image = go.AddComponent<Image>();
+            image.sprite = _uiSprite;
+
+            var rectTransform = image.rectTransform;
+            rectTransform.anchorMin = Vector2.zero; // Bottom-left corner
+            rectTransform.anchorMax = Vector2.zero; // Bottom-left corner
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);     // Set pivot to center
+            rectTransform.sizeDelta = new Vector2(_uiSize, _uiSize);
+
+            uiImageRectTransform = image.GetComponent<RectTransform>();
+
+            UpdateTrackedObject();
+        }
+
+        void FixedUpdate()
+        {
+            if ((_updateMode & UpdateMode.FixedUpdate) != 0)
+                UpdateTrackedObject();
+        }
+
+        private void Update()
+        {
+            if ((_updateMode & UpdateMode.Update) != 0)
+                UpdateTrackedObject();
+        }
+
+        private void LateUpdate()
+        {
+            if ((_updateMode & UpdateMode.LateUpdate) != 0)
+                UpdateTrackedObject();
+        }
+
+        private void OnDestroy()
+        {
+            if (image)
+            {
+                Destroy(image.gameObject);
+            }
+        }
+
+        void UpdateTrackedObject()
+        {
+            if (uiImageRectTransform == null) return;
+
+            if (mainCamera != null)
+            {
+                // Convert the 3D position of the source to screen space
+                Vector3 screenPos = mainCamera.WorldToScreenPoint(transform.position);
+
+                // Check if the object is in front of the camera
+                if (screenPos.z > 0)
+                {
+                    float scaleFactor = mainCanvas.scaleFactor;
+                    Vector2 adjustedPosition = new Vector2(screenPos.x / scaleFactor, screenPos.y / scaleFactor);
+
+                    uiImageRectTransform.anchoredPosition = adjustedPosition;
+
+                    image.enabled = GetVisibility();
+                }
+                else
+                {
+                    image.enabled = false;
+                }
+            }
+            else
+            {
+                image.enabled = false;
+            }
+        }
+
+        protected virtual bool GetVisibility()
+        {
+            bool visibility = true;
+            if (onVisibilityCallback != null)
+            {
+                // Iterate over each delegate in the invocation list
+                foreach (OnVisibilityCallback callback in onVisibilityCallback.GetInvocationList())
+                {
+                    // Perform logical AND; if any callback returns false, visibility becomes false
+                    visibility &= callback(this);
+                }
+            }
+
+            return visibility;
+        }
+    }
+}
