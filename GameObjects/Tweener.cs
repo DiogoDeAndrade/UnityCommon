@@ -327,6 +327,13 @@ namespace UC
         static public float OutBack(float t) => 1 + c3 * Mathf.Pow(t - 1, 3) + c1 * Mathf.Pow(t - 1, 2);
 
         static public float Bounce(float t) => 1 - Mathf.Pow(2.0f * t - 1, 2);
+
+        static public float SmoothStep(float t)
+        {
+            // optional clamp if your t can go out of [0,1]
+            t = Mathf.Clamp01(t);
+            return t * t * (3f - 2f * t);
+        }
     }
 
 
