@@ -55,9 +55,12 @@ namespace UC
                 MasterInputManager.SetupInput(playerId, playerInput);
             }
 
-            horizontalControl.playerInput = playerInput;
-            verticalControl.playerInput = playerInput;
-            interactControl.playerInput = playerInput;
+            if (playerInput != null)
+            {
+                horizontalControl.playerInput = playerInput;
+                verticalControl.playerInput = playerInput;
+                interactControl.playerInput = playerInput;
+            }
 
             if (initialControl)
             {
@@ -74,6 +77,8 @@ namespace UC
             if (_selectedControl)
             {
                 if (cooldownTimer > 0) cooldownTimer -= GetDeltaTime();
+                if ((verticalControl.needPlayerInput) && (playerInput == null)) return;
+                if ((horizontalControl.needPlayerInput) && (playerInput == null)) return;
 
                 if (cooldownTimer <= 0.0f)
                 {
@@ -183,12 +188,6 @@ namespace UC
             horizontalControl.playerInput = playerInput;
             verticalControl.playerInput = playerInput;
             interactControl.playerInput = playerInput;
-        }
-
-        public void SetEnable(bool b)
-        {
-            _uiEnable = b;
-
         }
     }
 }

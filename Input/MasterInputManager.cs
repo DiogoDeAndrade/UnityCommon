@@ -268,5 +268,10 @@ namespace UC
         {
             Instance?._SetupInput(playerId, playerInput);
         }
+
+        public static int GetMaxPlayers()
+        {
+            return Instance?.maxPlayers ?? 4;
+        }
     }
 }
