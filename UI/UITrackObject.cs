@@ -93,7 +93,7 @@ public class UITrackObject : MonoBehaviour
             UpdateTrackedObject();
     }
 
-    void UpdateTrackedObject()
+    /*void UpdateTrackedObject()
     {
         if (rectTransform == null) return;
 
@@ -109,6 +109,29 @@ public class UITrackObject : MonoBehaviour
 
                 rectTransform.anchoredPosition = localPoint;
             }
+        }
+    }*/
+
+    void UpdateTrackedObject()
+    {
+        if (rectTransform == null || mainCamera == null || mainCanvas == null || _trackedObject == null)
+            return;
+
+        // 1. World -> Screen
+        Vector3 screenPos = mainCamera.WorldToScreenPoint(_trackedObject.position);
+
+        // If object is behind camera, you might want to hide the UI, etc.
+        if (screenPos.z < 0f)
+            return;
+
+        // 2. Screen -> Root canvas local
+        RectTransform canvasRect = mainCanvas.transform as RectTransform;
+        Camera camera = mainCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : mainCanvas.worldCamera;
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPos, camera, out Vector2 canvasLocalPos))
+        {
+            // 3. Canvas local -> world, then assign world position
+            Vector3 worldPos = mainCanvas.transform.TransformPoint(canvasLocalPos);
+            rectTransform.position = worldPos;
         }
     }
 }
