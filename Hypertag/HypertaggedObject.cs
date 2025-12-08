@@ -34,6 +34,11 @@ namespace UC
             return false;
         }
 
+        public bool HasAnyHypertag(Hypertag hypertag)
+        {
+            return (this.hypertag == hypertag);
+        }
+
         static Dictionary<Hypertag, List<HypertaggedObject>> allHypertagObjects = new();
 
         static void AddToHypertagList(HypertaggedObject obj)

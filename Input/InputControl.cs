@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using InputSystemControl = UnityEngine.InputSystem.InputControl;
 
 namespace UC
 {
@@ -226,10 +227,45 @@ namespace UC
             }
         }
 
-        public void Test()
+        public bool IsMouseLike()
         {
+            // Only makes sense for New Input System actions
+            if (_type != InputType.NewInput)
+                return false;
 
-            if (action == null) RefreshAction();
+            if (action == null)
+                RefreshAction();
+
+            if (action == null)
+                return false;
+
+            // Prefer the currently active control (last one that actuated the action)
+            var control = action.activeControl;
+            if (control != null)
+                return IsPointerControl(control);
+
+            // Fallback: look at all bound controls for this action
+            foreach (var c in action.controls)
+            {
+                if (IsPointerControl(c))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsPointerControl(InputSystemControl control)
+        {
+            if (control == null)
+                return false;
+
+            var device = control.device;
+
+            // Mouse, touch, pen, or generic pointer device
+            return device is Mouse
+                || device is Touchscreen
+                || device is Pen
+                || device is Pointer;
         }
     }
 

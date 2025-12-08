@@ -43,5 +43,47 @@ namespace UC
 
             return null;
         }
+
+        public static T GetComponentInParentWithHypertag<T>(this Component go, Hypertag tag) where T : Component
+        {
+            T obj = go.GetComponentInParent<T>();
+            if (obj == null) return null;
+
+            if (obj.gameObject.HasHypertag(tag)) return obj;
+
+            if (obj.transform.parent != null)
+            {
+                return obj.transform.parent.GetComponentInParentWithHypertag<T>(tag);
+            }
+
+            return null;
+        }
+
+        public static T GetComponentInParentWithHypertag<T>(this Component go, Hypertag[] tags) where T : Component
+        {
+            T obj = go.GetComponentInParent<T>();
+            if (obj == null) return null;
+
+            if (obj.gameObject.HasHypertags(tags)) return obj;
+
+            if (obj.transform.parent != null)
+            {
+                return obj.transform.parent.GetComponentInParentWithHypertag<T>(tags);
+            }
+
+            return null;
+        }
+
+        public static bool HasHypertag(this Component go, Hypertag hypertag) 
+        {
+            var h = go.GetComponent<HypertaggedObject>();
+            return h?.HasAnyHypertag(hypertag) ?? false;
+        }
+
+        public static bool HasHypertag(this Component go, Hypertag[] hypertags)
+        {
+            var h = go.GetComponent<HypertaggedObject>();
+            return h?.HasAnyHypertag(hypertags) ?? false;
+        }
     }
 }

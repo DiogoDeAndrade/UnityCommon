@@ -37,7 +37,7 @@ namespace UC
             }
             else if (_Instance != this)
             {
-                Destroy(this);
+                Destroy(gameObject);
                 return;
             }
 

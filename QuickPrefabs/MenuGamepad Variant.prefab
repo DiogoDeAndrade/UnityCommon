@@ -220,8 +220,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: Music Volume
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8ccbc7fcfe324d14e9dc0b82c32b2952, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: fd9c27dd5e5bd2244848b87b2507b6b2, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -508,8 +508,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: Gamma
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8ccbc7fcfe324d14e9dc0b82c32b2952, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: fd9c27dd5e5bd2244848b87b2507b6b2, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -626,6 +626,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 098adba6d35a5c343b68bc432589c28f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UC.UIFloatSelector
+  highlightMode: 0
   highlighterImage: {fileID: 6215241196574462139}
   highlighterText: {fileID: 0}
   highlightColor: {r: 0, g: 0, b: 0, a: 0}
@@ -1188,12 +1189,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 6812487965270011155}
     m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 7276411938065218336, guid: bd042a3695a495342b25252fc774710f, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 3246516357894145382}
-    - targetCorrespondingSourceObject: {fileID: 7276411938065218336, guid: bd042a3695a495342b25252fc774710f, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 7488239576877309972}
     - targetCorrespondingSourceObject: {fileID: 1522235901577604153, guid: bd042a3695a495342b25252fc774710f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7406292572899508854}
@@ -1258,6 +1253,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e49db1cf8781754f86edccc45aae009, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UC.UIButton
+  highlightMode: 0
   highlighterImage: {fileID: 0}
   highlighterText: {fileID: 2397993880224957968}
   highlightColor: {r: 0.9056604, g: 0.8766831, b: 0.089711644, a: 1}
@@ -1266,11 +1262,14 @@ MonoBehaviour:
   _navLeft: {fileID: 0}
   _navRight: {fileID: 0}
   changeSnd: {fileID: 0}
-  interactEvent: 0
+  interactEvent: 20
   panel: {fileID: 0}
   sceneName: 
   fadeTime: 0.2
   creditsScroll: {fileID: 0}
+  unityEvent:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!114 &1613825625603196749 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 6487132654038267681, guid: bd042a3695a495342b25252fc774710f, type: 3}
@@ -1299,6 +1298,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 098adba6d35a5c343b68bc432589c28f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UC.UIFloatSelector
+  highlightMode: 0
   highlighterImage: {fileID: 2778046175426380394}
   highlighterText: {fileID: 0}
   highlightColor: {r: 0, g: 0, b: 0, a: 0}
@@ -1359,6 +1359,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e49db1cf8781754f86edccc45aae009, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UC.UIButton
+  highlightMode: 0
   highlighterImage: {fileID: 0}
   highlighterText: {fileID: 1613825625603196749}
   highlightColor: {r: 0.9056604, g: 0.8766831, b: 0.089711644, a: 1}
@@ -1372,54 +1373,9 @@ MonoBehaviour:
   sceneName: 
   fadeTime: 0.5
   creditsScroll: {fileID: 0}
---- !u!1 &2925258414198098764 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 7276411938065218336, guid: bd042a3695a495342b25252fc774710f, type: 3}
-  m_PrefabInstance: {fileID: 5504411516881465452}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &3246516357894145382
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2925258414198098764}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 62899f850307741f2a39c98a8b639597, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.PlayerInput
-  m_Actions: {fileID: -944628639613478452, guid: 7a87da9d5f7d6cf4eacb581a8fdf3304, type: 3}
-  m_NotificationBehavior: 0
-  m_UIInputModule: {fileID: 0}
-  m_DeviceLostEvent:
+  unityEvent:
     m_PersistentCalls:
       m_Calls: []
-  m_DeviceRegainedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_ControlsChangedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_ActionEvents: []
-  m_NeverAutoSwitchControlSchemes: 0
-  m_DefaultControlScheme: 
-  m_DefaultActionMap: Player
-  m_SplitScreenIndex: -1
-  m_Camera: {fileID: 0}
---- !u!114 &7488239576877309972
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2925258414198098764}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e057eb29e6c965e4b8a94d66f529e5d4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UC.MasterInputManager
-  maxPlayers: 1
 --- !u!1 &2973419906225316675 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 7286873378620396335, guid: bd042a3695a495342b25252fc774710f, type: 3}
@@ -1437,6 +1393,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e49db1cf8781754f86edccc45aae009, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UC.UIButton
+  highlightMode: 0
   highlighterImage: {fileID: 0}
   highlighterText: {fileID: 2804691493610073761}
   highlightColor: {r: 0.9056604, g: 0.8766831, b: 0.089711644, a: 1}
@@ -1450,6 +1407,9 @@ MonoBehaviour:
   sceneName: 
   fadeTime: 0.2
   creditsScroll: {fileID: 0}
+  unityEvent:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &3757685329296530560 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8666724457091656940, guid: bd042a3695a495342b25252fc774710f, type: 3}
@@ -1537,6 +1497,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e49db1cf8781754f86edccc45aae009, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UC.UIButton
+  highlightMode: 0
   highlighterImage: {fileID: 4957962723207502866}
   highlighterText: {fileID: 4248394135887932818}
   highlightColor: {r: 1, g: 1, b: 1, a: 1}
@@ -1550,6 +1511,9 @@ MonoBehaviour:
   sceneName: 
   fadeTime: 0.5
   creditsScroll: {fileID: 0}
+  unityEvent:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &5610822837921948339 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 125604603515720415, guid: bd042a3695a495342b25252fc774710f, type: 3}
@@ -1567,6 +1531,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6e49db1cf8781754f86edccc45aae009, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UC.UIButton
+  highlightMode: 0
   highlighterImage: {fileID: 0}
   highlighterText: {fileID: 403306449510137574}
   highlightColor: {r: 0.9056604, g: 0.8766831, b: 0.089711644, a: 1}
@@ -1575,11 +1540,14 @@ MonoBehaviour:
   _navLeft: {fileID: 0}
   _navRight: {fileID: 0}
   changeSnd: {fileID: 0}
-  interactEvent: 0
-  panel: {fileID: 0}
+  interactEvent: 1
+  panel: {fileID: 2950098927054744068}
   sceneName: 
   fadeTime: 0.5
   creditsScroll: {fileID: 0}
+  unityEvent:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &6432134641543076949 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1522235901577604153, guid: bd042a3695a495342b25252fc774710f, type: 3}
@@ -1600,7 +1568,7 @@ MonoBehaviour:
   playerId: 0
   enableOnStart: 1
   moveCooldown: 0.1
-  playerInput: {fileID: 3246516357894145382}
+  playerInput: {fileID: 0}
   horizontalControl:
     _type: 3
     axis: Horizontal
@@ -1649,7 +1617,7 @@ MonoBehaviour:
   playerId: 0
   enableOnStart: 1
   moveCooldown: 0.1
-  playerInput: {fileID: 3246516357894145382}
+  playerInput: {fileID: 0}
   horizontalControl:
     _type: 3
     axis: Horizontal

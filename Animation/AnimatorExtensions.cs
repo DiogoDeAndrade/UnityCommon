@@ -1,3 +1,4 @@
+using UC;
 using UnityEngine;
 
 static public class AnimatorExtensions
@@ -41,5 +42,18 @@ static public class AnimatorExtensions
         parameterType = AnimatorControllerParameterType.Trigger;
 
         return false;
+    }
+
+    public static Tweener.BaseInterpolator ChangeLayerWeight(this Animator animator, string name, float targetWeight, float duration, string animName = null)
+    {
+        var n = (string.IsNullOrEmpty(animName)) ? ($"ChangeLayerWeight{name}") : animName;
+        animator.Tween().Stop(n, Tweener.StopBehaviour.SkipToEnd);
+
+        var layerIndex = animator.GetLayerIndex(name);
+        var current = animator.GetLayerWeight(layerIndex);
+
+        if (current == targetWeight) return null;
+
+        return animator.Tween().Interpolate(current, targetWeight, duration, (value) => animator.SetLayerWeight(layerIndex, value), n);
     }
 }

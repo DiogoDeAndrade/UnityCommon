@@ -6,6 +6,8 @@ namespace UC
 
     public class FootstepSound : MonoBehaviour
     {
+        [SerializeField] bool  is3D = false;
+        [SerializeField] bool  linkToRenderer = false;
         [SerializeField] float distancePerStep = 5.0f;
         [SerializeField] float teleportDistance = 50.0f;
         [SerializeField] float stepCooldown = 0.1f;
@@ -16,12 +18,17 @@ namespace UC
         float accumDist;
         Vector3 prevPos;
         float cooldownTimer;
-        MovementPlatformer movementPlatformer;
+        MovementPlatformer  movementPlatformer;
+        new Renderer            renderer;
 
         void Start()
         {
             prevPos = transform.position;
             movementPlatformer = GetComponent<MovementPlatformer>();
+            if (linkToRenderer)
+            {
+                renderer = GetComponent<Renderer>();
+            }
         }
 
         void Update()
@@ -30,29 +37,40 @@ namespace UC
             {
                 cooldownTimer -= Time.deltaTime;
             }
-            if ((movementPlatformer == null) || (movementPlatformer.isGrounded))
+            if ((renderer) && (!renderer.enabled)) return;
+
+            float dist = 0.0f;
+            if (is3D)
             {
-                float d = Mathf.Abs(prevPos.x - transform.position.x);
-                if (d > teleportDistance)
+                dist = Vector3.Distance(prevPos, transform.position);
+            }
+            else
+            {
+                if ((movementPlatformer == null) || (movementPlatformer.isGrounded))
                 {
-                    accumDist = 0.0f;
+                    dist = Mathf.Abs(prevPos.x - transform.position.x);
                 }
-                else
+            }
+
+            if (dist > teleportDistance)
+            {
+                accumDist = 0.0f;
+            }
+            else
+            {
+                accumDist += dist;
+                if (accumDist > distancePerStep)
                 {
-                    accumDist += d;
-                    if (accumDist > distancePerStep)
+                    if (cooldownTimer <= 0.0f)
                     {
-                        if (cooldownTimer <= 0.0f)
-                        {
-                            accumDist = 0.0f;
-                            SoundManager.PlaySound(SoundType.PrimaryFX, footstepSnd, volumeVariance.Random(), pitchVariance.Random());
-                            if (stepCooldown > 0) cooldownTimer = stepCooldown;
-                        }
+                        accumDist = 0.0f;
+                        SoundManager.PlaySound(SoundType.PrimaryFX, footstepSnd, volumeVariance.Random(), pitchVariance.Random());
+                        if (stepCooldown > 0) cooldownTimer = stepCooldown;
                     }
                 }
-
-                prevPos = transform.position;
             }
+
+            prevPos = transform.position;
         }
     }
 }

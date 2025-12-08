@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace UC
 {
@@ -19,9 +20,20 @@ namespace UC
             }
         }
 
-        public T FindFirst<T>() where T: Component
+        public T FindFirst<T>() where T : Component
         {
             return FindFirstObjectWithHypertag<T>(this);
+        }
+
+        public GameObject FindFirstGameObject()
+        {
+            var objects = HypertaggedObject.Get(this);
+            foreach (var obj in objects)
+            {
+                return obj.gameObject;
+            }
+
+            return null;
         }
 
         public static T FindFirstObjectWithHypertag<T>(Hypertag tag) where T : Component

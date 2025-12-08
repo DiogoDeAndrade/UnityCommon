@@ -21,7 +21,9 @@ namespace UC
         public SubtitleTrack    subtitleTrack;
         public Speaker          speaker;
         public Speaker[]        additionalSpeakers;
+        [MinMaxSlider(0.0f, 1.0f)]
         public Vector2          volumeRange = new Vector2(1f, 1f);
+        [MinMaxSlider(0.0f, 2.0f)]
         public Vector2          pitchRange = new Vector2(1f, 1f);
         public Hypertag         defaultTag;
 
