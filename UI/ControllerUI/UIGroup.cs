@@ -158,7 +158,7 @@ namespace UC
             if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
         }
 
-        public void SetUI(bool value)
+        public void EnableUI(bool value)
         {
             _uiEnable = value;
             var uiControls = GetComponentsInChildren<BaseUIControl>();

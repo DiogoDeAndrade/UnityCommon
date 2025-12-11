@@ -44,10 +44,10 @@ namespace UC
                     {
                         CanvasGroup cg = parentGroup.GetComponent<CanvasGroup>();
                         if (cg) cg.FadeOut(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
-                        parentGroup.SetUI(false);
+                        parentGroup.EnableUI(false);
                         cg = panel.GetComponent<CanvasGroup>();
                         if (cg) cg.FadeIn(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
-                        panel.SetUI(true);
+                        panel.EnableUI(true);
                     }
                     break;
                 case AutoEvent.CloseThisPanel:
@@ -72,7 +72,7 @@ namespace UC
                     {
                         var cg = parentGroup.GetComponent<CanvasGroup>();
                         if (cg) cg.FadeOut(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
-                        parentGroup.SetUI(false);
+                        parentGroup.EnableUI(false);
 
                         var creditsCanvasGroup = creditsScroll.GetComponent<CanvasGroup>();
                         creditsCanvasGroup.FadeIn(fadeTime);
@@ -94,7 +94,7 @@ namespace UC
         {
             CanvasGroup cg = parentGroup.GetComponent<CanvasGroup>();
             if (cg) cg.FadeIn(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
-            parentGroup.SetUI(true);
+            parentGroup.EnableUI(true);
 
             var creditsCanvasGroup = creditsScroll.GetComponent<CanvasGroup>();
             creditsCanvasGroup.FadeOut(fadeTime);
@@ -111,11 +111,11 @@ namespace UC
             {
                 cg = topGroup.GetComponent<CanvasGroup>();
                 if (cg) cg.FadeIn(fadeTime)?.SetUnscaledTime(parentGroup.useUnscaledTime);
-                topGroup.SetUI(true);
+                topGroup.EnableUI(true);
             }
             cg = parentGroup.GetComponent<CanvasGroup>();
             if (cg) cg.FadeOut(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
-            parentGroup.SetUI(false);
+            parentGroup.EnableUI(false);
         }
     }
 }
