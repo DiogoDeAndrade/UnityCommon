@@ -12,8 +12,10 @@ namespace UC.RPG.Editor
     {
         // One list per property path (per object)
         private readonly Dictionary<string, ReorderableList> _actionsLists = new Dictionary<string, ReorderableList>();
+        private readonly Dictionary<string, ReorderableList> _conditionsLists= new Dictionary<string, ReorderableList>();
 
         private static readonly GUIContent ResourceLabel = new GUIContent("Resource Type");
+        private static readonly GUIContent ConditionsLabel = new GUIContent("Conditions");
         private static readonly GUIContent ActionsLabel = new GUIContent("Actions");
 
         private ReorderableList GetActionsList(SerializedProperty actionsProp)
@@ -36,9 +38,31 @@ namespace UC.RPG.Editor
             return list;
         }
 
+        private ReorderableList GetConditionsList(SerializedProperty conditionsProp)
+        {
+            if (conditionsProp == null)
+                return null;
+
+            // Unique key per instance + property
+            var so = conditionsProp.serializedObject;
+            string key = so.targetObject.GetInstanceID() + "/" + conditionsProp.propertyPath;
+
+            if ((_conditionsLists.TryGetValue(key, out var list)) && (list != null))
+                return list;
+
+            // Build list just like InteractableEditor does for GameAction[]
+            list = ManagedReferenceListHelper.Build(so, conditionsProp, typeof(Condition), "Conditions", "Add Condition", "No conditions", rightHeader: null);
+
+            _conditionsLists[key] = list;
+
+            return list;
+        }
+
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
             var resTypeProp = property.FindPropertyRelative("resourceType");
+            var changeTypeProp = property.FindPropertyRelative("changeType");
+            var conditionsProp = property.FindPropertyRelative("conditions");
             var actionsProp = property.FindPropertyRelative("actions");
 
             float spacing = EditorGUIUtility.standardVerticalSpacing;
@@ -46,8 +70,22 @@ namespace UC.RPG.Editor
 
             // ResourceType line
             if (resTypeProp != null)
-            {
                 height += EditorGUI.GetPropertyHeight(resTypeProp, true) + spacing;
+            if (changeTypeProp != null)
+                height += EditorGUI.GetPropertyHeight(changeTypeProp, true) + spacing;
+
+            // Conditions list height
+            if (conditionsProp != null)
+            {
+                var list = GetConditionsList(conditionsProp);
+                if (list != null)
+                {
+                    height += list.GetHeight() + spacing;
+                }
+                else
+                {
+                    height += EditorGUI.GetPropertyHeight(conditionsProp, true) + spacing;
+                }
             }
 
             // Actions list height
@@ -75,6 +113,8 @@ namespace UC.RPG.Editor
             EditorGUI.BeginProperty(position, label, property);
 
             var resTypeProp = property.FindPropertyRelative("resourceType");
+            var changeTypeProp = property.FindPropertyRelative("changeType");
+            var conditionsProp = property.FindPropertyRelative("conditions");
             var actionsProp = property.FindPropertyRelative("actions");
 
             float spacing = EditorGUIUtility.standardVerticalSpacing;
@@ -87,6 +127,38 @@ namespace UC.RPG.Editor
                 r.height = rh;
                 EditorGUI.PropertyField(r, resTypeProp, ResourceLabel);
                 r.y += rh + spacing;
+            }
+
+            if (changeTypeProp != null)
+            {
+                float rh = EditorGUI.GetPropertyHeight(changeTypeProp, true);
+                r.height = rh;
+                EditorGUI.PropertyField(r, changeTypeProp, ResourceLabel);
+                r.y += rh + spacing;
+            }
+
+            // --- Conditions(Conditions[] as in Interactable) ---
+            if (conditionsProp != null)
+            {
+                var list = GetConditionsList(conditionsProp);
+                if (list != null)
+                {
+                    float lh = list.GetHeight();
+                    r.height = lh;
+                    r.x += 20.0f;
+                    r.width -= 20.0f;
+                    list.DoList(r);   // Non-layout version
+                    r.y += lh + spacing;
+                    r.x -= 20.0f;
+                    r.width += 20.0f;
+                }
+                else
+                {
+                    float ah = EditorGUI.GetPropertyHeight(conditionsProp, true);
+                    r.height = ah;
+                    EditorGUI.PropertyField(r, conditionsProp, ConditionsLabel, true);
+                    r.y += ah + spacing;
+                }
             }
 
             // --- Actions (GameAction[] as in Interactable) ---

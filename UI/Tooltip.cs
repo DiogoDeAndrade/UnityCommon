@@ -1,4 +1,5 @@
 using TMPro;
+using UC.RPG;
 using UnityEngine;
 
 namespace UC
@@ -23,7 +24,7 @@ namespace UC
         {
         }
 
-        public virtual void Set(object obj)
+        public virtual void Set(RPGEntity entity)
         {
             throw new System.NotImplementedException();
         }
