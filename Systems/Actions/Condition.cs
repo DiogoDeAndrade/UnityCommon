@@ -7,13 +7,13 @@ namespace UC.Interaction
     {
         [SerializeField] private bool negate;
 
-        public bool Evaluate(GameObject referenceObject)
+        public bool Evaluate(ActionContext context)
         {
-            bool b = EvaluateThis(referenceObject);
+            bool b = EvaluateThis(context);
             if (negate) b = !b;
             return b;
         }
-        protected abstract bool EvaluateThis(GameObject referenceObject);
+        protected abstract bool EvaluateThis(ActionContext context);
 
         protected bool _alreadyTriggered = false;
 

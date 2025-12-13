@@ -8,15 +8,15 @@ namespace UC.RPG.Actions
     [GameActionName("RPG/Add Item")]
     public class GameAction_AddItem : GameAction
     {
-        [SerializeField] private UnityRPGEntity entity;
+        [SerializeField] private RPGTarget itemTarget;
 
         public override bool NeedWait() { return false; }
 
-        public override IEnumerator Execute(IGameActionObject source, IGameActionObject target)
+        public override IEnumerator Execute(ActionContext context)
         {
             // Get action entity
-            var sourceEntity = source.GetTargetGameObject()?.GetComponent<UnityRPGEntity>();
-            var inventoryInstance = sourceEntity?.rpgEntity?.inventory ?? null;
+            var rpgEntity = RPGTarget.TriggerEntity.GetEntity(context);
+            var inventoryInstance = rpgEntity?.inventory;
 
             if (inventoryInstance == null)
             {
@@ -25,13 +25,7 @@ namespace UC.RPG.Actions
             }
 
             // Find item to add
-            var targetEntity = (entity) ? (entity) : (target.GetTargetGameObject()?.GetComponent<UnityRPGEntity>());
-            if (targetEntity == null)
-            {
-                Debug.LogWarning("No RPG entity on target object, can't get item to add!");
-                yield break;
-            }
-            var item = targetEntity.rpgEntity;
+            var item = itemTarget.GetEntity(context);
             if (item == null)
             {
                 Debug.LogWarning("No item on target entity, can't add item!");
@@ -39,6 +33,7 @@ namespace UC.RPG.Actions
             }
 
             inventoryInstance.Add(item);
+            rpgEntity.AddChild(item);
 
             yield break;
         }

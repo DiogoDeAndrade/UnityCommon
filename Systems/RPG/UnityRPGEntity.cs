@@ -1,4 +1,6 @@
 using NaughtyAttributes;
+using System;
+using System.Collections.Generic;
 using UC.Interaction;
 using UnityEngine;
 
@@ -101,6 +103,8 @@ namespace UC.RPG
                 _rpgEntity = new RPGEntity(_item);
             _rpgEntity.Init();
 
+            Register(_rpgEntity, this);
+
             if (data)
             {
                 foreach (var r in data.GetModules<RPGResourceModule>(true))
@@ -137,7 +141,14 @@ namespace UC.RPG
 
         public bool RunAction(Interactable interactable)
         {
-            if (interactable.Interact(gameObject, interactable.referenceObject, this))
+            var context = new ActionContext
+            {
+                triggerGameObject = gameObject,
+                triggerEntity = rpgEntity,
+                targetGameObject = interactable.referenceObject
+            };
+
+            if (interactable.Interact(context, this))
             {
                 RunActionPerformed();
 
@@ -150,5 +161,47 @@ namespace UC.RPG
         {
             onActionPerformed?.Invoke(this);
         }
+
+        #region Static management of UnityRPGEntity
+
+        private static RPGEntity masterEntity = new();
+        private static Dictionary<RPGEntity, UnityRPGEntity> entityCache = new();
+
+        public static void Register(RPGEntity entity, UnityRPGEntity unity)
+        {
+            entityCache[entity] = unity;            
+            masterEntity.AddChild(entity);
+        }
+
+        public static void Unregister(RPGEntity entity)
+        {
+            if (entity == null) return;
+
+            if (entityCache.ContainsKey(entity))
+            {
+                entityCache.Remove(entity);
+                masterEntity.RemoveChild(entity);
+            }
+        }
+
+        public static UnityRPGEntity GetEntity(RPGEntity source)
+        {
+            if (entityCache.TryGetValue(source, out var entity))
+            {
+                return entity;
+            }
+
+            return null;
+        }
+
+        internal static IEnumerable<KeyValuePair<RPGEntity, UnityRPGEntity>> GetEntities()
+        {
+            foreach (var entity in entityCache)
+            {
+                yield return entity;
+            }
+        }
+
+        #endregion
     }
 }

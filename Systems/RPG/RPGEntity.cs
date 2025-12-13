@@ -1,6 +1,5 @@
-using JetBrains.Annotations;
-using System;
 using System.Collections.Generic;
+using TMPro.EditorUtilities;
 using UnityEngine;
 
 namespace UC.RPG
@@ -17,11 +16,13 @@ namespace UC.RPG
         private ResourceInstance        healthRes;
         private InventoryRPGInstance    _inventory;
         private EquipmentRPGInstance    _equipment;
-
+        private RPGEntity               _owner;
+        private List<RPGEntity>         _children = new();
         public InventoryRPGInstance     inventory => _inventory;
         public EquipmentRPGInstance     equipment => _equipment;
 
-        public bool isDead => (healthRes != null) && (healthRes.isResourceEmpty);
+        public bool         isDead => (healthRes != null) && (healthRes.isResourceEmpty);
+        public RPGEntity    owner => _owner;
 
         public ModularScriptableObject  data
         {
@@ -32,6 +33,11 @@ namespace UC.RPG
 
                 return null;
             }
+        }
+
+        public RPGEntity()
+        {
+            level = -1;
         }
 
         public RPGEntity(int level, Archetype archetype)
@@ -46,6 +52,18 @@ namespace UC.RPG
             this.item = item;
         }
 
+        ~RPGEntity()
+        {
+            if (_owner != null)
+            {
+                _owner.RemoveChild(this);
+            }
+            foreach (var child in _children)
+            {
+                child._owner = null;
+            }
+        }
+
         public void AddInventory(InventoryRPGInstance inventoryInstance)
         {
             _inventory = inventoryInstance;
@@ -58,6 +76,9 @@ namespace UC.RPG
 
         public void Init()
         {
+            // Just a container object?
+            if (data == null) return;
+
             var inventoryModule = data.GetModule<RPGInventoryModule>(true);
             if (inventoryModule)
             {
@@ -183,6 +204,33 @@ namespace UC.RPG
             var weaponModule = weapon.item.GetModule<RPGItemWeapon>(true);
             var attackModule = weaponModule?.attackModule ?? null;
             return attackModule?.Attack(weapon, source, destPos) ?? false;
+        }
+
+        public void AddChild(RPGEntity entity)
+        {
+            // If it's already a child, do nothing
+            if (entity._owner == this) return;
+
+            // Check if entity has a owner, and remove from that
+            if (entity._owner != null)
+            {
+                entity._owner.RemoveChild(entity);
+            }
+            entity._owner = this;
+            _children.Add(entity);
+        }
+
+        public void RemoveChild(RPGEntity entity)
+        {
+            if (entity._owner == this)
+            {
+                entity._owner = null;
+                _children.Remove(entity);
+
+                // Remove it from inventory and equipment
+                inventory?.Remove(entity);
+                equipment?.Unequip(entity);
+            }
         }
     }
 }

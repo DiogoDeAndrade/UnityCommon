@@ -14,10 +14,6 @@ namespace UC.RPG.Editor
         private readonly Dictionary<string, ReorderableList> _actionsLists = new Dictionary<string, ReorderableList>();
         private readonly Dictionary<string, ReorderableList> _conditionsLists= new Dictionary<string, ReorderableList>();
 
-        private static readonly GUIContent ResourceLabel = new GUIContent("Resource Type");
-        private static readonly GUIContent ConditionsLabel = new GUIContent("Conditions");
-        private static readonly GUIContent ActionsLabel = new GUIContent("Actions");
-
         private ReorderableList GetActionsList(SerializedProperty actionsProp)
         {
             if (actionsProp == null)
@@ -125,7 +121,7 @@ namespace UC.RPG.Editor
             {
                 float rh = EditorGUI.GetPropertyHeight(resTypeProp, true);
                 r.height = rh;
-                EditorGUI.PropertyField(r, resTypeProp, ResourceLabel);
+                EditorGUI.PropertyField(r, resTypeProp, new GUIContent("Resource Type"));
                 r.y += rh + spacing;
             }
 
@@ -133,7 +129,7 @@ namespace UC.RPG.Editor
             {
                 float rh = EditorGUI.GetPropertyHeight(changeTypeProp, true);
                 r.height = rh;
-                EditorGUI.PropertyField(r, changeTypeProp, ResourceLabel);
+                EditorGUI.PropertyField(r, changeTypeProp, new GUIContent("Type"));
                 r.y += rh + spacing;
             }
 
@@ -156,7 +152,7 @@ namespace UC.RPG.Editor
                 {
                     float ah = EditorGUI.GetPropertyHeight(conditionsProp, true);
                     r.height = ah;
-                    EditorGUI.PropertyField(r, conditionsProp, ConditionsLabel, true);
+                    EditorGUI.PropertyField(r, conditionsProp, new GUIContent("Conditions"), true);
                     r.y += ah + spacing;
                 }
             }
@@ -180,7 +176,7 @@ namespace UC.RPG.Editor
                 {
                     float ah = EditorGUI.GetPropertyHeight(actionsProp, true);
                     r.height = ah;
-                    EditorGUI.PropertyField(r, actionsProp, ActionsLabel, true);
+                    EditorGUI.PropertyField(r, actionsProp, new GUIContent("Actions"), true);
                     r.y += ah + spacing;
                 }
             }

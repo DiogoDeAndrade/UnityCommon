@@ -93,6 +93,18 @@ namespace UC.RPG
             onChange?.Invoke(false, slot, null);
         }
 
+        public void Unequip(RPGEntity item)
+        {
+            foreach (var i in items)
+            {
+                if (i.Value.item == item)
+                {
+                    Unequip(i.Key);
+                    return;
+                }
+            }
+        }
+
         public List<Hypertag> GetAvailableSlots()
         {
             return availableSlots;

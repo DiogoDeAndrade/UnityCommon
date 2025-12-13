@@ -44,7 +44,7 @@ namespace UC.Interaction
 
         public int priority => _priority;
 
-        public virtual bool CanInteract(GameObject referenceObject)
+        public virtual bool CanInteract(ActionContext context)
         {
             if (isRunning) return false;
             if ((!canRetrigger) && (lastInteractionTime >= 0)) return false;
@@ -54,50 +54,35 @@ namespace UC.Interaction
             }
             if (conditions != null)
             {
+                context.targetGameObject = referenceObject;
+
                 foreach (var condition in conditions)
                 {
-                    if (!condition.Evaluate(referenceObject)) return false;
+                    if (!condition.Evaluate(context)) return false;
                 }
             }
 
             return true;
         }
 
-        public bool Interact(GameObject actionSource, GameObject actionTarget, MonoBehaviour runnerObject)
+        public bool Interact(ActionContext context, MonoBehaviour runnerObject)
         {
-            MonoBehaviour runner = runnerObject ? runnerObject : this;
-            
-            runner.StartCoroutine(RunActionsCR(actionSource.GetComponent<GameActionObject>(), actionTarget.GetComponent<GameActionObject>(), runner));
+            context.runner = runnerObject ? runnerObject : this;
+
+            GameAction.RunActions(actions, context,
+                                  (context) =>
+                                  {
+                                      isRunning = true;
+                                      return true;
+                                  },
+                                  (context) =>
+                                  {
+                                      isRunning = false;
+                                      lastInteractionTime = Time.time;
+                                      return true;
+                                  });
 
             return true;
-        }
-
-        IEnumerator RunActionsCR(IGameActionObject actionSource, IGameActionObject actionTarget, MonoBehaviour runner)
-        {
-            isRunning = true;
-
-            foreach (var a in actions)
-            {
-                if (a == null)
-                    continue;
-
-                // Run the action
-                IEnumerator routine = a.Execute(actionSource, actionTarget);
-
-                if ((a.shouldWait) && (routine != null))
-                {
-                    // Wait for the coroutine to finish
-                    yield return routine;
-                }
-                else if (routine != null)
-                {
-                    // Run asynchronously, but don't wait
-                    runner.StartCoroutine(routine);
-                }
-            }
-
-            isRunning = false;
-            lastInteractionTime = Time.time;
         }
     }
 }
