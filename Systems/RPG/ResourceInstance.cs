@@ -68,16 +68,15 @@ namespace UC.RPG
                 else
                 {
                     value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, type.maxValue);
+
+                    onChange?.Invoke(this, changeData);
+
                     if (value <= 0.0f)
                     {
                         value = 0.0f;
                         _resourceEmpty = true;
 
                         onResourceEmpty?.Invoke(this, changeData.source);
-                    }
-                    else
-                    {
-                        onChange?.Invoke(this, changeData);
                     }
                 }
             }
@@ -109,6 +108,11 @@ namespace UC.RPG
                     }
                     else ret = false;
                 }
+            }
+            else if (changeData.deltaValue == 0.0f)
+            {
+                // Notify zero damage anyway
+                onChange?.Invoke(this, changeData);
             }
 
             return ret;

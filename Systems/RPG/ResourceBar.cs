@@ -1,5 +1,6 @@
 ﻿using NaughtyAttributes;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,36 +12,44 @@ namespace UC.RPG
         public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY };
         public enum UpdateMode { Direct, FeedbackLoop, ConstantSpeed };
 
-        public DisplayMode displayMode;
+        [SerializeField] private DisplayMode displayMode;
         [ShowIf(nameof(isBar))]
-        public UpdateMode updateMode;
+        [SerializeField] private UpdateMode updateMode;
         [ShowIf(nameof(needSpeedVar))]
-        public float speed = 1.0f;
+        [SerializeField] private float speed = 1.0f;
         [ShowIf(nameof(isBar))]
-        public RectTransform bar;
+        [SerializeField] private RectTransform bar;
         [ShowIf(nameof(isBar))]
-        public bool colorChange;
+        [SerializeField] private bool colorChange;
         [ShowIf(nameof(needColor))]
-        public Gradient color;
-        public bool fadeAfterTime;
+        [SerializeField] private Gradient color;
+        [SerializeField] private bool fadeAfterTime;
         [ShowIf(nameof(fadeAfterTime))]
-        public bool startDisabled;
+        [SerializeField] private bool startDisabled;
         [ShowIf(nameof(fadeAfterTime))]
-        public float timeToFade = 2.0f;
+        [SerializeField] private float timeToFade = 2.0f;
         [ShowIf(nameof(fadeAfterTime))]
-        public float timeOfFadeIn = 0.5f;
+        [SerializeField] private float timeOfFadeIn = 0.5f;
         [ShowIf(nameof(fadeAfterTime))]
-        public float timeOfFadeOut = 1.0f;
-        public bool respectRotation = false;
-        public bool preserveRelativePositon = false;
+        [SerializeField] private float timeOfFadeOut = 1.0f;
+        [SerializeField] private bool respectRotation = false;
+        [SerializeField] private bool preserveRelativePositon = false;
         [ShowIf(nameof(preserveRelativePositon))]
-        public Transform relativeTransform;
-        public bool zeroResourceZeroAlpha = false;
-        public Image displayIcon;
+        [SerializeField] private Transform relativeTransform;
+        [SerializeField] private bool zeroResourceZeroAlpha = false;
+        [SerializeField] private Image displayIcon;
+        [SerializeField] private TextMeshProUGUI textDisplay;
+        [SerializeField] private string          _textOnEmpty;
 
         bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY);
         bool needSpeedVar => (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed));
         bool needColor => (isBar) && (colorChange);
+
+        public string textOnEmpty
+        {
+            get { return _textOnEmpty; }
+            set { _textOnEmpty = value; }
+        }
 
         // For alpha change
         CanvasGroup canvasGroup;
@@ -61,6 +70,7 @@ namespace UC.RPG
         Vector3 deltaPos;
 
         ResourceHandler targetResource;
+        string          textBase;
 
         void Start()
         {
@@ -109,6 +119,12 @@ namespace UC.RPG
                 else preserveRelativePositon = false;
             }
 
+            if (textDisplay)
+            {
+                textBase = textDisplay.text;
+                if (string.IsNullOrEmpty(textBase)) textBase = "{0}/{1}";
+            }
+
             UpdateGfx();
         }
 
@@ -152,6 +168,16 @@ namespace UC.RPG
                 changeTimer += Time.deltaTime;
             }
 
+            if (textDisplay)
+            {
+                var currentResource = GetResourceCount();
+                var txt = textBase;
+
+                if ((currentResource <= 0) && (!string.IsNullOrEmpty(textOnEmpty))) txt = textOnEmpty;
+
+                textDisplay.text = string.Format(txt, GetResourceCount(), GetMaxResourceCount());
+            }
+
             RunFade();
 
             prevT = currentT;
@@ -184,6 +210,15 @@ namespace UC.RPG
             if (targetResource)
             {
                 return targetResource.resource;
+            }
+
+            return 0.0f;
+        }
+        protected virtual float GetMaxResourceCount()
+        {
+            if (targetResource)
+            {
+                return targetResource.maxValue;
             }
 
             return 0.0f;

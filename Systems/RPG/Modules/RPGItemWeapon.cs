@@ -16,6 +16,8 @@ namespace UC.RPG
         private     AttackModule  _attackModule;
         [SerializeField]
         public      SoundDef      attackSound;
+        [SerializeField]
+        public      SoundDef      missSound;
 
         public AttackModule attackModule
         {

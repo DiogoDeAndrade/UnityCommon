@@ -106,7 +106,7 @@ namespace UC
                     moveVector = speed;
                 }
 
-                if ((turnEnabled) && (turnModifier.IsPressed()))
+                if ((inputEnabled) && (turnEnabled) && (turnModifier.IsPressed()))
                     TurnInDirection(moveVector);
                 else
                     MoveInDirection(moveVector, useRotation);

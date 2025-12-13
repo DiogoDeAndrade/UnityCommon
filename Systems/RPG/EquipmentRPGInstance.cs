@@ -90,7 +90,7 @@ namespace UC.RPG
                 item = null,
                 lastChange = Time.time
             };
-            onChange?.Invoke(false, slot, null);
+            onChange?.Invoke(false, slot, prevItem);
         }
 
         public void Unequip(RPGEntity item)

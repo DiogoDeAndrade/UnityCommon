@@ -112,7 +112,7 @@ namespace UC.RPG
                         c = type.ctNegativeColor;
                     }
 
-                    CombatTextManager.SpawnText(gameObject, str, c, c.ChangeAlpha(0.0f));
+                    CombatTextManager.SpawnText(gameObject, str, new CombatTextDef(c));
                 }
             }
         }

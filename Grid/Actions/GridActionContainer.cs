@@ -27,7 +27,7 @@ namespace UC
                     if (isCombatTextEnable)
                     {
                         var c = GetCombatTextColor();
-                        CombatTextManager.SpawnText(subject.gameObject, GetCombatText(), c, c.ChangeAlpha(0.0f), 1.0f, 1.0f);
+                        CombatTextManager.SpawnText(subject.gameObject, GetCombatText(), new CombatTextDef(c));
                     }
 
                     if (container.actionSnd)

@@ -23,6 +23,30 @@ namespace UC.RPG
 
         public bool         isDead => (healthRes != null) && (healthRes.isResourceEmpty);
         public RPGEntity    owner => _owner;
+        
+        public string       name
+        {
+            get
+            {
+                if (item) return item.displayName;
+                if (archetype) return archetype.displayName;
+
+                return "unknown";
+            }
+        }
+
+        public Color displayTextColor
+        {
+            get
+            {
+                if (item) return item.displayTextColor;
+                if (archetype) return archetype.GetModule<RPGVisualsModule>()?.highlightColor ?? Color.white;
+
+                return Color.white;
+            }
+        }
+
+        public string displayTextColorHex => displayTextColor.ToHex();
 
         public ModularScriptableObject  data
         {

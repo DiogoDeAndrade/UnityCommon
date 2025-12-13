@@ -2,9 +2,77 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
+using System;
 
 namespace UC
 {
+    [Serializable]
+    public struct CombatTextDef
+    {
+        public CombatTextDef(CombatTextDef src)
+        {
+            startColor = src.startColor;
+            endColor = src.endColor;
+            fadeTime = src.fadeTime;
+            totalTime = src.totalTime;
+            scaleModifier = src.scaleModifier;
+            speedModifier = src.speedModifier;
+        }
+        public CombatTextDef(Color color)
+        {
+            this.startColor = color;
+            this.endColor = color.ChangeAlpha(0.0f);
+            this.totalTime = CombatTextManager.defaultTime;
+
+            fadeTime = CombatTextManager.defaultTime * 0.5f;
+            this.scaleModifier = 1.0f;
+            this.speedModifier = 1.0f;
+        }
+        public CombatTextDef(Color color, float totalTime)
+        {
+            this.startColor = color;
+            this.endColor = color.ChangeAlpha(0.0f);
+            this.totalTime = totalTime;
+
+            fadeTime = totalTime * 0.5f;
+            this.scaleModifier = 1.0f;
+            this.speedModifier = 1.0f;
+        }
+        public CombatTextDef(Color startColor, Color endColor, float totalTime)
+        {
+            this.startColor = startColor;
+            this.endColor = endColor;
+            this.totalTime = totalTime;
+
+            fadeTime = totalTime * 0.5f;
+            this.scaleModifier = 1.0f;
+            this.speedModifier = 1.0f;
+        }
+
+        public Color startColor;
+        public Color endColor;
+        public float fadeTime;
+        public float totalTime;
+        public float scaleModifier;
+        public float speedModifier;
+
+        public CombatTextDef ChangeColor(Color c)
+        {
+            return new CombatTextDef(this)
+            {
+                startColor = c,
+                endColor = c.ChangeAlpha(0.0f)
+            };
+        }
+
+        public CombatTextDef ChangeScale(float s)
+        {
+            return new CombatTextDef(this)
+            {
+                scaleModifier = s
+            };
+        }
+    }
 
     public class CombatTextManager : MonoBehaviour
     {
@@ -12,24 +80,20 @@ namespace UC
 
         class TextElem
         {
-            public Color startColor;
-            public Color endColor;
-            public float elapsedTime;
-            public float totalTime;
-            public float scaleModifier;
-            public float speedModifier;
-            public float number;
-            public bool isNumber;
-            public string baseText;
-            public GameObject ownerObject;
-            public RectTransform textTransform;
-            public TextMeshProUGUI textObject;
+            public CombatTextDef    def;
+            public float            elapsedTime;
+            public float            number;
+            public bool             isNumber;
+            public string           baseText;
+            public GameObject       ownerObject;
+            public RectTransform    textTransform;
+            public TextMeshProUGUI  textObject;
         }
 
-        public TextMeshProUGUI textPrefab;
-        public float defaultTime = 1.0f;
-        public Vector2 movementVector;
-        public float fadeRate = 1;
+        public TextMeshProUGUI  textPrefab;
+        public float            _defaultTime = 1.0f;
+        public Vector2          movementVector;
+        public float            fadeRate = 1;
 
         [SerializeField] private Camera uiCamera;
 
@@ -72,22 +136,23 @@ namespace UC
             {
                 tElem.elapsedTime += Time.deltaTime;
 
-                if (tElem.elapsedTime >= tElem.totalTime)
+                if (tElem.elapsedTime >= tElem.def.totalTime)
                 {
                     Destroy(tElem.textObject.gameObject);
                 }
                 else
                 {
-                    float t = Mathf.Pow(tElem.elapsedTime / tElem.totalTime, fadeRate);
-                    Color c = Color.Lerp(tElem.startColor, tElem.endColor, t);
+                    float t = (tElem.def.totalTime == tElem.def.fadeTime) ? 0.0f : (Mathf.Pow(Mathf.Clamp01((tElem.elapsedTime - tElem.def.fadeTime) / (tElem.def.totalTime - tElem.def.fadeTime)), fadeRate));
+
+                    Color c = Color.Lerp(tElem.def.startColor, tElem.def.endColor, t);
 
                     tElem.textObject.color = c;
-                    tElem.textTransform.localScale = Vector3.one * Mathf.Lerp(tElem.scaleModifier, 1.0f, Mathf.Clamp01(2.0f * tElem.elapsedTime / tElem.totalTime));
-                    tElem.textTransform.anchoredPosition += movementVector * tElem.speedModifier * Time.deltaTime;
+                    tElem.textTransform.localScale = Vector3.one * Mathf.Lerp(tElem.def.scaleModifier, 1.0f, Mathf.Clamp01(2.0f * tElem.elapsedTime / tElem.def.totalTime));
+                    tElem.textTransform.anchoredPosition += movementVector * tElem.def.speedModifier * Time.deltaTime;
                 }
             }
 
-            textList.RemoveAll((t) => t.elapsedTime >= t.totalTime);
+            textList.RemoveAll((t) => t.elapsedTime >= t.def.totalTime);
         }
 
         TextElem NewText(GameObject ownerObject, Vector2 offset)
@@ -121,7 +186,7 @@ namespace UC
             {
                 if (tElem.isNumber)
                 {
-                    if ((tElem.startColor == c) && (tElem.ownerObject == ownerObject))
+                    if ((tElem.def.startColor == c) && (tElem.ownerObject == ownerObject))
                     {
                         return tElem;
                     }
@@ -131,70 +196,60 @@ namespace UC
             return NewText(ownerObject, offset);
         }
 
-        void _SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
+        void _SpawnText(GameObject ownerObject, Vector2 offset, string text, CombatTextDef def)
         {
             TextElem newText = NewText(ownerObject, offset);
             newText.isNumber = false;
             newText.baseText = text;
-            newText.startColor = startColor;
-            newText.endColor = endColor;
-            newText.speedModifier = moveSpeedModifier;
-            newText.scaleModifier = scaleModifier;
-            newText.totalTime = (time > 0.0f) ? (time) : (defaultTime);
+            newText.def = def;
 
             newText.textObject.text = newText.baseText;
-            newText.textObject.color = startColor;
+            newText.textObject.color = def.startColor;
         }
 
-        void _SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
+        void _SpawnText(GameObject ownerObject, float value, string text, CombatTextDef def)
         {
-            TextElem newText = FindNumberTextOfColor(startColor, ownerObject, Vector2.zero);
+            TextElem newText = FindNumberTextOfColor(def.startColor, ownerObject, Vector2.zero);
             newText.isNumber = true;
             newText.number += value;
             newText.baseText = text;
-            newText.startColor = startColor;
-            newText.endColor = endColor;
-            newText.speedModifier = moveSpeedModifier;
-            newText.scaleModifier = scaleModifier;
-            newText.totalTime = (time > 0.0f) ? (time) : (defaultTime);
+            newText.def = def;
 
             newText.textObject.text = string.Format(text, newText.number);
-            newText.textObject.color = startColor;
+            newText.textObject.color = def.startColor;
         }
 
-        void _SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
+        void _SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, CombatTextDef def)
         {
-            TextElem newText = FindNumberTextOfColor(startColor, ownerObject, offset);
+            TextElem newText = FindNumberTextOfColor(def.startColor, ownerObject, offset);
             newText.isNumber = true;
             newText.number += value;
             newText.baseText = text;
-            newText.startColor = startColor;
-            newText.endColor = endColor;
-            newText.speedModifier = moveSpeedModifier;
-            newText.scaleModifier = scaleModifier;
-            newText.totalTime = (time > 0.0f) ? (time) : (defaultTime);
+            newText.def = def;
 
             newText.textObject.text = string.Format(text, newText.number);
-            newText.textObject.color = startColor;
+            newText.textObject.color = def.startColor;
         }
 
-        public static void SpawnText(GameObject ownerObject, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
+        public static void SpawnText(GameObject ownerObject, string text, CombatTextDef def)
         {
-            instance._SpawnText(ownerObject, Vector2.zero, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
+            instance._SpawnText(ownerObject, Vector2.zero, text, def);
         }
-        public static void SpawnText(GameObject ownerObject, Vector2 offset, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
+        public static void SpawnText(GameObject ownerObject, Vector2 offset, string text, CombatTextDef def)
         {
-            instance._SpawnText(ownerObject, offset, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
-        }
-
-        public static void SpawnText(GameObject ownerObject, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
-        {
-            instance._SpawnText(ownerObject, Vector2.zero, value, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
+            instance._SpawnText(ownerObject, offset, text, def);
         }
 
-        public static void SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, Color startColor, Color endColor, float time = 0.0f, float moveSpeedModifier = 1.0f, float scaleModifier = 1.0f)
+        public static void SpawnText(GameObject ownerObject, float value, string text, CombatTextDef def)
         {
-            instance._SpawnText(ownerObject, offset, value, text, startColor, endColor, time, moveSpeedModifier, scaleModifier);
+            instance._SpawnText(ownerObject, Vector2.zero, value, text, def);
         }
+
+        public static void SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, CombatTextDef def)
+        {
+            instance._SpawnText(ownerObject, offset, value, text, def);
+        }
+
+        public static float defaultTime => instance?._defaultTime ?? 1.0f;
     }
 }

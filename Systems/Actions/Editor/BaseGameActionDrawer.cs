@@ -1,4 +1,5 @@
 // Assets/Editor/BaseGameActionDrawer.cs
+using NaughtyAttributes.Editor;
 using UnityEditor;
 using UnityEngine;
 
@@ -52,14 +53,15 @@ namespace UC.Interaction.Editor
             SerializedProperty endProperty = iterator.GetEndProperty();
             bool enterChildren = true;
 
-            while (iterator.NextVisible(enterChildren) &&
-                   !SerializedProperty.EqualContents(iterator, endProperty))
+            while ((iterator.NextVisible(enterChildren)) && (!SerializedProperty.EqualContents(iterator, endProperty)))
             {
                 if (iterator.name == "wait")
                     continue;
 
-                height += EditorGUI.GetPropertyHeight(iterator, true)
-                          + EditorGUIUtility.standardVerticalSpacing;
+                if (PropertyUtility.IsVisible(iterator))
+                {
+                    height += EditorGUI.GetPropertyHeight(iterator, true) + EditorGUIUtility.standardVerticalSpacing;
+                }
 
                 enterChildren = false;
             }
@@ -67,7 +69,7 @@ namespace UC.Interaction.Editor
             return height;
         }
 
-        protected void DefaultDrawer(Rect position, SerializedProperty property, GUIContent label)
+        protected virtual void DefaultDrawer(Rect position, SerializedProperty property, GUIContent label)
         {
             EditorGUI.BeginProperty(position, label, property);
 
@@ -108,8 +110,7 @@ namespace UC.Interaction.Editor
             SerializedProperty endProperty = iterator.GetEndProperty();
             bool enterChildren = true;
 
-            while (iterator.NextVisible(enterChildren) &&
-                   !SerializedProperty.EqualContents(iterator, endProperty))
+            while ((iterator.NextVisible(enterChildren)) && (!SerializedProperty.EqualContents(iterator, endProperty)))
             {
                 enterChildren = false;
 
@@ -118,17 +119,15 @@ namespace UC.Interaction.Editor
 
                 float h = EditorGUI.GetPropertyHeight(iterator, true);
 
-                Rect fieldRect = new Rect(
-                    position.x,
-                    y,
-                    position.width,
-                    h
-                );
+                if (PropertyUtility.IsVisible(iterator))
+                {
+                    Rect fieldRect = new Rect(position.x, y, position.width, h);
 
-                fieldRect = EditorGUI.IndentedRect(fieldRect);
-                EditorGUI.PropertyField(fieldRect, iterator, true);
+                    fieldRect = EditorGUI.IndentedRect(fieldRect);
+                    NaughtyEditorGUI.PropertyField(fieldRect, iterator, true);
 
-                y += h + EditorGUIUtility.standardVerticalSpacing;
+                    y += h + EditorGUIUtility.standardVerticalSpacing;
+                }
             }
 
             EditorGUI.indentLevel--;

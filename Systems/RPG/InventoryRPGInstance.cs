@@ -75,8 +75,6 @@ namespace UC
             }
             items[slotIndex].count = count;
             items[slotIndex].item = item;
-
-            onChange?.Invoke(true, item, slotIndex);
         }
 
         public int Remove(RPGEntity item, int count)

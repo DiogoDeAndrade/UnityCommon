@@ -4,13 +4,13 @@ using UnityEngine;
 
 namespace UC.RPG
 {
-    [System.Serializable]
+    [Serializable]
     public abstract class ResourceValueFunction
     {
         public abstract float GetValue(RPGEntity character);
     }
 
-    [System.Serializable]
+    [Serializable]
     public class ResourceValueFunctionConstant : ResourceValueFunction
     {
         public float baseValue = 1.0f;
@@ -21,7 +21,7 @@ namespace UC.RPG
         }
     }
 
-    [System.Serializable]
+    [Serializable]
     public class ResourceValueFunctionLevelLinear : ResourceValueFunction
     {
         public float baseValue = 1.0f;
@@ -33,7 +33,7 @@ namespace UC.RPG
         }
     }
 
-    [System.Serializable]
+    [Serializable]
     public class ResourceValueFunctionStatLinear : ResourceValueFunction
     {
         public float    baseValue = 1.0f;
@@ -46,7 +46,7 @@ namespace UC.RPG
         }
     }
 
-    [System.Serializable]
+    [Serializable]
     public class ResourceValueFunctionNormalizedStatAsymptote : ResourceValueFunction
     {
         public StatType stat;   

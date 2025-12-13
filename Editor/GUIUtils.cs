@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using System.IO;
+using System;
 
 namespace UC
 {
@@ -357,5 +358,65 @@ namespace UC
 
             return result;
         }
+
+        static readonly Dictionary<Type, MonoScript> _cache = new();
+
+        public static MonoScript FindScriptForType(Type type)
+        {
+            if (type == null) return null;
+
+            if (_cache.TryGetValue(type, out var cached))
+                return cached; // can be null too (negative cache)
+
+            // 1) Fast path: likely filename match
+            var guids = AssetDatabase.FindAssets($"{type.Name} t:MonoScript");
+            for (int i = 0; i < guids.Length; i++)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                var script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+                if (script != null && script.GetClass() == type)
+                    return _cache[type] = script;
+            }
+
+            // 2) Robust fallback: scan all scripts and compare GetClass()
+            guids = AssetDatabase.FindAssets("t:MonoScript");
+            for (int i = 0; i < guids.Length; i++)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                var script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+                if (script == null) continue;
+
+                // GetClass() returns the main class Unity associates with that script asset.
+                if (script.GetClass() == type)
+                {
+                    _cache[type] = script;
+                    return script;
+                }
+            }
+
+            // 3) Extra robus fallback: scan all files for the actual text
+            for (int i = 0; i < guids.Length; i++)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                var text = File.ReadAllText(path);
+
+                // naive but effective: class/struct record declarations
+                if (text.Contains($"class {type.Name}") ||
+                    text.Contains($"struct {type.Name}") ||
+                    text.Contains($"record {type.Name}"))
+                {
+                    _cache[type] = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+                    return _cache[type];
+                }
+            }
+
+            // Cache miss (so we don’t keep scanning)
+            _cache[type] = null;
+            return null;
+        }
+
+
+
+        public static void ClearCache() => _cache.Clear();
     }
 }

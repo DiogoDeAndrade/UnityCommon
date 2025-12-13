@@ -174,14 +174,14 @@ public class ModularScriptableObjectEditor : Editor
             {
                 menu.AddItem(new GUIContent("Edit Script"), false, () =>
                 {
-                    var script = FindScriptForType(type);
+                    var script = GUIUtils.FindScriptForType(type);
                     if (script != null)
                         AssetDatabase.OpenAsset(script);
                 });
 
                 menu.AddItem(new GUIContent("Ping Script"), false, () =>
                 {
-                    var script = FindScriptForType(type);
+                    var script = GUIUtils.FindScriptForType(type);
                     if (script != null)
                         EditorGUIUtility.PingObject(script);
                 });
@@ -261,23 +261,6 @@ public class ModularScriptableObjectEditor : Editor
         EditorGUILayout.PropertyField(element, GUIContent.none, includeChildren: true);
 
         EditorGUI.indentLevel--;
-    }
-    private static MonoScript FindScriptForType(Type type)
-    {
-        if (type == null)
-            return null;
-
-        // Try to find a MonoScript asset whose class matches this type
-        string[] guids = AssetDatabase.FindAssets($"{type.Name} t:MonoScript");
-        for (int i = 0; i < guids.Length; i++)
-        {
-            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-            var script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
-            if (script != null && script.GetClass() == type)
-                return script;
-        }
-
-        return null;
     }
 
     private void RemoveModuleAt(ModularScriptableObject mso, int index)

@@ -47,6 +47,11 @@ namespace UC
 
             return gradient.Evaluate(t);
         }
+
+        public static string ToHex(this Color c)
+        {
+            return ColorUtility.ToHtmlStringRGBA(c);
+        }
     };
 
 }

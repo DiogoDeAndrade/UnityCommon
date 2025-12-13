@@ -62,7 +62,7 @@ namespace UC
         {
             equipmentInstance.Equip(slot, itemToEquip, Time.time);
             if (combatTextEnable)
-                CombatTextManager.SpawnText(gameObject, $"Equipped {itemToEquip.displayName}", combatTextEquippedItemColor, combatTextEquippedItemColor, combatTextDuration);
+                CombatTextManager.SpawnText(gameObject, $"Equipped {itemToEquip.displayName}", new CombatTextDef(combatTextEquippedItemColor, combatTextDuration));
         }
         public bool IsEquipped(Item item) => equipmentInstance.IsEquipped(item);
         public bool IsEquipped(Hypertag slot, Item item) => equipmentInstance.IsEquipped(slot, item);
@@ -72,7 +72,7 @@ namespace UC
             equipmentInstance.Unequip(slot);
             if ((combatTextEnable) && (prevItem))
             {
-                CombatTextManager.SpawnText(gameObject, $"Unequipped {prevItem.displayName}", combatTextUnequippedItemColor, combatTextUnequippedItemColor, combatTextDuration);
+                CombatTextManager.SpawnText(gameObject, $"Unequipped {prevItem.displayName}", new CombatTextDef(combatTextUnequippedItemColor, combatTextDuration));
             }
         }
         public List<Hypertag> GetAvailableSlots() => equipmentInstance.GetAvailableSlots();
