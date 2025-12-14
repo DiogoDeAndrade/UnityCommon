@@ -11,5 +11,12 @@ namespace UC.RPG
         public Color    displaySpriteColor = Color.white;
         public Sprite   displaySprite;
         public Color    displayTextColor = Color.white;
+
+        public string   displayTextColorHex => ColorUtility.ToHtmlStringRGBA(displayTextColor);
+
+        public string ToRTF()
+        {
+            return $"<color=#{displayTextColorHex}>{displayName}</color>";
+        }
     }
 }
