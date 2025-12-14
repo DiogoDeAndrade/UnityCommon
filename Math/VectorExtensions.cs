@@ -29,6 +29,11 @@ namespace UC
             return new Vector3(inV.x, inV.y, 0);
         }
 
+        public static Vector3 xy1(this Vector2 inV)
+        {
+            return new Vector3(inV.x, inV.y, 1.0f);
+        }
+
         public static Vector3 xyz(this Vector2 inV, float z)
         {
             return new Vector3(inV.x, inV.y, z);
