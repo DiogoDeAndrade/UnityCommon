@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UC.RPG;
 using UnityEngine;
@@ -19,14 +20,9 @@ namespace UC
             rectTransform = transform as RectTransform;
             canvasGroup.alpha = 0.0f;
         }
-
-        protected virtual void Start()
+        public virtual void Set(object obj)
         {
-        }
-
-        public virtual void Set(RPGEntity entity)
-        {
-            throw new System.NotImplementedException();
+            throw new NotImplementedException();
         }
 
         public void SetText(string text)
@@ -72,9 +68,21 @@ namespace UC
         public void Remove()
         {
             if (canvasGroup)
-                canvasGroup.FadeOut(0.1f).Done(() => { Destroy(gameObject); });
+            {
+                var fader = canvasGroup.FadeOut(0.1f);
+                if (fader != null) fader.Done(() => 
+                { 
+                    Destroy(gameObject); 
+                });
+                else
+                {
+                    Destroy(gameObject);
+                }
+            }
             else
+            {
                 Destroy(gameObject);
+            }
         }
     }
 }

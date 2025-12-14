@@ -87,6 +87,8 @@ namespace UC.RPG
                     health.onResourceEmpty -= Entity_OnDeath;
                 }
             }
+
+            Unregister(_rpgEntity);
         }
 
         protected virtual void SetupEntity()

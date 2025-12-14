@@ -9,7 +9,7 @@ namespace UC.RPG
 
     public class ResourceBar : MonoBehaviour
     {
-        public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY };
+        public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY, Text };
         public enum UpdateMode { Direct, FeedbackLoop, ConstantSpeed };
 
         [SerializeField] private DisplayMode displayMode;
@@ -59,18 +59,19 @@ namespace UC.RPG
         SpriteRenderer spriteImage;
 
         // Updating
-        float currentT;
-        float prevT;
-        float alpha;
-        float changeTimer;
-        List<GameObject> discreteElements;
+        float               currentT;
+        float               prevT;
+        float               alpha;
+        float               changeTimer;
+        List<GameObject>    discreteElements;
 
         // Keep vars
-        Quaternion initialRotation;
-        Vector3 deltaPos;
+        Quaternion          initialRotation;
+        Vector3             deltaPos;
 
-        ResourceHandler targetResource;
-        string          textBase;
+        ResourceHandler     sourceResource;
+        ResourceInstance    sourceInstance;
+        string              textBase;
 
         void Start()
         {
@@ -197,9 +198,13 @@ namespace UC.RPG
 
         protected virtual float GetNormalizedResource()
         {
-            if (targetResource)
+            if (sourceResource)
             {
-                return targetResource.normalizedResource;
+                return sourceResource.normalizedResource;
+            }
+            if (sourceInstance != null)
+            {
+                return sourceInstance.normalizedValue;
             }
 
             return 0.0f;
@@ -207,18 +212,26 @@ namespace UC.RPG
 
         protected virtual float GetResourceCount()
         {
-            if (targetResource)
+            if (sourceResource)
             {
-                return targetResource.resource;
+                return sourceResource.resource;
+            }
+            if (sourceInstance != null)
+            {
+                return sourceInstance.value;
             }
 
             return 0.0f;
         }
         protected virtual float GetMaxResourceCount()
         {
-            if (targetResource)
+            if (sourceResource)
             {
-                return targetResource.maxValue;
+                return sourceResource.maxValue;
+            }
+            if (sourceInstance != null)
+            {
+                return sourceInstance.maxValue;
             }
 
             return 0.0f;
@@ -255,17 +268,17 @@ namespace UC.RPG
             }
             else
             {
-                if (targetResource)
+                if (sourceResource)
                 {
-                    if (uiImage) uiImage.color = targetResource.type.displayBarColor;
-                    if (spriteImage) spriteImage.color = targetResource.type.displaySpriteColor;
+                    if (uiImage) uiImage.color = sourceResource.type.displayBarColor;
+                    if (spriteImage) spriteImage.color = sourceResource.type.displaySpriteColor;
                 }
             }
 
-            if ((displayIcon) && (targetResource))
+            if ((displayIcon) && (sourceResource))
             {
-                displayIcon.sprite = targetResource.type.displaySprite;
-                displayIcon.color = targetResource.type.displaySpriteColor;
+                displayIcon.sprite = sourceResource.type.displaySprite;
+                displayIcon.color = sourceResource.type.displaySpriteColor;
             }
         }
 
@@ -302,9 +315,16 @@ namespace UC.RPG
             }
         }
 
-        public void SetTarget(ResourceHandler target)
+        public void SetTarget(ResourceHandler source)
         {
-            targetResource = target;
+            sourceResource = source;
+
+            UpdateGfx();
+        }
+
+        public void SetTarget(ResourceInstance source)
+        {
+            sourceInstance = source;
 
             UpdateGfx();
         }

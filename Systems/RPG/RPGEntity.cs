@@ -1,5 +1,6 @@
+using System;
 using System.Collections.Generic;
-using TMPro.EditorUtilities;
+using UnityEditor;
 using UnityEngine;
 
 namespace UC.RPG
@@ -18,6 +19,8 @@ namespace UC.RPG
         private EquipmentRPGInstance    _equipment;
         private RPGEntity               _owner;
         private List<RPGEntity>         _children = new();
+        private Guid                    _guid;
+
         public InventoryRPGInstance     inventory => _inventory;
         public EquipmentRPGInstance     equipment => _equipment;
 
@@ -62,18 +65,24 @@ namespace UC.RPG
         public RPGEntity()
         {
             level = -1;
+            _guid = Guid.NewGuid();
+            Register(this);
         }
-
+        
         public RPGEntity(int level, Archetype archetype)
         {
             this.level = level;
             this.archetype = archetype;
+            _guid = Guid.NewGuid();
+            Register(this);
         }
 
         public RPGEntity(Item item)
         {
             this.level = item.level;
             this.item = item;
+            _guid = Guid.NewGuid();
+            Register(this);
         }
 
         ~RPGEntity()
@@ -86,6 +95,7 @@ namespace UC.RPG
             {
                 child._owner = null;
             }
+            Unregister(this);
         }
 
         public void AddInventory(InventoryRPGInstance inventoryInstance)
@@ -256,5 +266,37 @@ namespace UC.RPG
                 equipment?.Unequip(entity);
             }
         }
+
+        public string ToRTF()
+        {
+            return $"<color=#{displayTextColorHex}><link=\"rpg:{_guid}\">{name}</link></color>";
+        }
+
+        #region Static management of UnityRPGEntity
+
+        private static Dictionary<Guid, RPGEntity> entities = new();
+
+        public static void Register(RPGEntity entity)
+        {
+            entities[entity._guid] = entity;
+        }
+
+        public static void Unregister(RPGEntity entity)
+        {
+            if (entity == null) return;
+
+            if (entities.ContainsKey(entity._guid))
+            {
+                entities.Remove(entity._guid);
+            }
+        }
+
+        public static RPGEntity GetByUUID(Guid guid)
+        {
+            if (entities.TryGetValue(guid, out RPGEntity entity)) return entity;
+
+            return null;
+        }
+        #endregion
     }
 }
