@@ -14,6 +14,7 @@ namespace UC.RPG
         protected Dictionary<StatType, StatInstance>            stats;
         protected Dictionary<ResourceType, ResourceInstance>    resources;
 
+        private Faction                 _faction;
         private ResourceInstance        healthRes;
         private InventoryRPGInstance    _inventory;
         private EquipmentRPGInstance    _equipment;
@@ -26,7 +27,8 @@ namespace UC.RPG
 
         public bool         isDead => (healthRes != null) && (healthRes.isResourceEmpty);
         public RPGEntity    owner => _owner;
-        
+        public Faction      faction => _faction;
+
         public string       name
         {
             get
@@ -184,6 +186,13 @@ namespace UC.RPG
                 }
             }
 
+            // Faction system
+            var faction = data.GetModule<FactionModule>(true);
+            if (faction)
+            {
+                _faction = faction.faction;
+            }
+
             // Register all events necessary for this entity
             var events = data.GetModules<RPGEvent>(true);
             foreach (var  evt in events)
@@ -208,23 +217,32 @@ namespace UC.RPG
             return null;
         }
 
-        public bool DefaultAttack(Vector2Int destPos)
+        public RPGEntity GetCurrentEquipment(Hypertag slot)
         {
-            // Get weapon
             RPGEntity weapon = null;
             if (equipment != null)
             {
-                var entity = equipment.GetItem(GlobalsBase.defaultWeaponSlot);
+                var entity = equipment.GetItem(slot);
                 if (entity != null) weapon = entity;
             }
 
-            var inventoryModule = archetype.GetModule<RPGInventoryModule>(true);
-
             if (weapon == null)
             {
-                weapon = new RPGEntity(inventoryModule.unnarmedWeapon);
-                weapon.Init();
+                var inventoryModule = archetype.GetModule<RPGInventoryModule>(true);
+
+                if (slot == GlobalsBase.defaultWeaponSlot)
+                {
+                    weapon = new RPGEntity(inventoryModule.unnarmedWeapon);
+                    weapon.Init();
+                }
             }
+            return weapon;
+        }
+
+        public bool DefaultAttack(Vector2Int destPos)
+        {
+            // Get weapon
+            RPGEntity weapon = GetCurrentEquipment(GlobalsBase.defaultWeaponSlot);
             if (weapon != null)
             {
                 return Attack(weapon, this, destPos);
@@ -233,11 +251,20 @@ namespace UC.RPG
             return false;
         }
 
-        public bool Attack(RPGEntity weapon, RPGEntity source, Vector2Int destPos)
+        static private bool Attack(RPGEntity weapon, RPGEntity source, Vector2Int destPos)
         {
             var weaponModule = weapon.item.GetModule<RPGItemWeapon>(true);
             var attackModule = weaponModule?.attackModule ?? null;
             return attackModule?.Attack(weapon, source, destPos) ?? false;
+        }
+
+        public MinMaxDistance GetRange()
+        {
+            // Assumes this is a weapon - this is preparing for the future when weapons can have enchants/buffs
+            var weaponModule = item.GetModule<RPGItemWeapon>(true);
+            if (weaponModule != null) return weaponModule.range;
+
+            return new MinMaxDistance { type = MinMaxDistance.Type.Euclidean, min = -float.NegativeInfinity, max = -float.NegativeInfinity };
         }
 
         public void AddChild(RPGEntity entity)
@@ -297,6 +324,7 @@ namespace UC.RPG
 
             return null;
         }
+
         #endregion
     }
 }

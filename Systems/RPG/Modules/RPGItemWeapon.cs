@@ -10,14 +10,12 @@ namespace UC.RPG
     public class RPGItemWeapon : RPGItemGear
     {
         [Header("Weapon")]
-        [SerializeField]
-        public      DamageType    damageType;
+        public      DamageType      damageType;
+        public      MinMaxDistance  range;
         [SerializeReference]
-        private     AttackModule  _attackModule;
-        [SerializeField]
-        public      SoundDef      attackSound;
-        [SerializeField]
-        public      SoundDef      missSound;
+        private     AttackModule    _attackModule;
+        public      SoundDef        attackSound;
+        public      SoundDef        missSound;
 
         public AttackModule attackModule
         {

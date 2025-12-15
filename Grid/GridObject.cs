@@ -162,6 +162,12 @@ namespace UC
             ComputeFacingFromVector(dir);
             onTurnTo?.Invoke(gridPosition, gridPosition);
         }
+        public void TurnTo(Vector2Int targetPos)
+        {
+            Vector3 dir = targetPos.xy0() - gridPosition.xy0();
+            ComputeFacingFromVector(dir);
+            onTurnTo?.Invoke(gridPosition, gridPosition);
+        }
 
         public void TeleportTo(Vector2 target)
         {
@@ -217,6 +223,34 @@ namespace UC
 
             return Vector2Int.zero;
         }
+
+        public bool IsFacingPosition(Vector2Int gridPos, float halfFovDegrees = 45f)
+        {
+            return IsFacingPosition(gridSystem.GridToWorld(gridPos), halfFovDegrees);
+        }
+
+        public bool IsFacingPosition(Vector3 targetWorldPosition, float halfFovDegrees = 45f)
+        {
+            Vector3 toTarget = targetWorldPosition - transform.position;
+            toTarget.y = 0f;
+
+            if (toTarget.sqrMagnitude < Mathf.Epsilon)
+                return true; 
+
+            Vector2 facing = GetFacingDirection2i();
+            if (facing == Vector2Int.zero)
+                return false;
+
+            Vector3 facingDir = new Vector3(facing.x, 0f, facing.y).normalized;
+            Vector3 targetDir = toTarget.normalized;
+
+            float dot = Vector3.Dot(facingDir, targetDir);
+
+            float threshold = Mathf.Cos(halfFovDegrees * Mathf.Deg2Rad);
+
+            return dot >= threshold;
+        }
+
 
         public void GatherActions(GridObject subject, Vector2Int position, List<GridActionContainer.NamedAction> actions)
         {

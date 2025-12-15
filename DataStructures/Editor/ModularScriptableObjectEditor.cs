@@ -1,11 +1,8 @@
 using System;
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UC;
-using UC.Interaction;
 using UC.Interaction.Editor;
-using NaughtyAttributes.Editor;
 
 [CustomEditor(typeof(ModularScriptableObject), true)]
 public class ModularScriptableObjectEditor : Editor

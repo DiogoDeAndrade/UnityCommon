@@ -48,10 +48,16 @@ namespace UC.Editor
                 // Sum heights of all children of the managed reference
                 var iterator = property.Copy();
                 var end = iterator.GetEndProperty();
+                int targetDepth = property.depth + 1;
                 bool enterChildren = true;
 
                 while (iterator.NextVisible(enterChildren) && !SerializedProperty.EqualContents(iterator, end))
                 {
+                    enterChildren = false;
+
+                    if (iterator.depth != targetDepth)
+                        continue;
+
                     height += EditorGUI.GetPropertyHeight(iterator, true) +
                               EditorGUIUtility.standardVerticalSpacing;
                     enterChildren = false;
@@ -63,6 +69,8 @@ namespace UC.Editor
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
+            label = new GUIContent(property.displayName, label.image, label.tooltip);
+
             EditorGUI.BeginProperty(position, label, property);
 
             // First line: label + popup
@@ -82,7 +90,7 @@ namespace UC.Editor
                 lineRect.height
             );
 
-            EditorGUI.LabelField(labelRect, label);
+            EditorGUI.LabelField(labelRect, new GUIContent(property.displayName));
 
             int currentIndex = GetCurrentTypeIndex(property);
             int newIndex = EditorGUI.Popup(popupRect, currentIndex + 1, _displayNames) - 1;
@@ -110,15 +118,21 @@ namespace UC.Editor
 
                 var iterator = property.Copy();
                 var end = iterator.GetEndProperty();
+                int targetDepth = property.depth + 1;
                 bool enterChildren = true;
 
                 while (iterator.NextVisible(enterChildren) && !SerializedProperty.EqualContents(iterator, end))
                 {
+                    enterChildren = false;
+
+                    // only direct children of the managed ref object
+                    if (iterator.depth != targetDepth)
+                        continue;
+
                     float h = EditorGUI.GetPropertyHeight(iterator, true);
                     Rect r = new Rect(position.x, y, position.width, h);
                     EditorGUI.PropertyField(r, iterator, true);
                     y += h + EditorGUIUtility.standardVerticalSpacing;
-                    enterChildren = false;
                 }
 
                 EditorGUI.indentLevel--;

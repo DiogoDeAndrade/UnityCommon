@@ -44,6 +44,8 @@ namespace UC.RPG
         public bool shouldDisplayArchetype => (_archetype != null) || ((_archetype == null) && (_item == null));
         public bool shouldDisplayItem => (_item != null) || ((_archetype == null) && (_item == null));
 
+        public Faction faction => _rpgEntity.faction;
+
         protected virtual void Start()
         {
             SetupEntity();
@@ -159,9 +161,72 @@ namespace UC.RPG
             return false;
         }
 
+        protected virtual void Wait()
+        {
+            RunActionPerformed();
+        }
+
+        public virtual void TriggerAnimation(string triggerName, bool completeAction, Action callback)
+        {
+            callback?.Invoke();
+
+            if (completeAction) RunActionPerformed();
+        }
+
+
         protected void RunActionPerformed()
         {
             onActionPerformed?.Invoke(this);
+        }
+
+        public virtual float GetInitiative()
+        {
+            return 0.0f;
+        }
+
+        // Get notified by main system that an action should be taken (or not)
+        // In normal circumstance, this evaluates and executes an action (but the action is only "done" when RunActionPerformed() is called)
+        // enable is used to be able to 'disable' mechanisms for actions (if we're talking about time-sliced systems, or player systems)
+        public virtual void RunTurn(bool enable)
+        {
+            if (!enable) return;
+
+            // Search for TurnDriver and take decisions
+            if (!data) return;
+
+            var turnDrivers = data.GetModules<TurnDriver>(true);
+
+            // Remove all disabled modules
+            turnDrivers.RemoveAll(m => !m.IsEnabled(this));
+
+            // Precompute priority once, sort, then unwrap
+            var tmp = new List<(TurnDriver driver, float priority)>(turnDrivers.Count);
+
+            foreach (var d in turnDrivers)
+            {
+                tmp.Add((d, d.GetPriority(this)));
+            }
+
+            tmp.Sort((a, b) => b.priority.CompareTo(a.priority)); // largest -> smallest
+
+            turnDrivers.Clear();
+            turnDrivers.Capacity = Mathf.Max(turnDrivers.Capacity, tmp.Count);
+            for (int i = 0; i < tmp.Count; i++)
+            {
+                turnDrivers.Add(tmp[i].driver);
+            }
+
+            foreach (var d in turnDrivers)
+            {
+                if (d.Execute(this))
+                {
+                    // Done, found an action I can execute
+                    return;
+                }
+            }
+
+            // Run wait, no action could be executed
+            Wait();
         }
 
         #region Static management of UnityRPGEntity
@@ -196,7 +261,7 @@ namespace UC.RPG
             return null;
         }
 
-        internal static IEnumerable<KeyValuePair<RPGEntity, UnityRPGEntity>> GetEntities()
+        public static IEnumerable<KeyValuePair<RPGEntity, UnityRPGEntity>> GetEntities()
         {
             foreach (var entity in entityCache)
             {
