@@ -1,9 +1,10 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
-using System.IO;
-using System;
 
 namespace UC
 {
@@ -414,9 +415,252 @@ namespace UC
             _cache[type] = null;
             return null;
         }
-
-
-
         public static void ClearCache() => _cache.Clear();
+
+        static void DrawHGrid(Rect plot, float y01, LabelFunctionDelegate labelFunction)
+        {
+            float y = Mathf.Lerp(plot.yMax, plot.yMin, y01);
+            Handles.color = new Color(1, 1, 1, y01 == 0.5f ? 0.18f : 0.10f);
+            Handles.DrawLine(new Vector3(plot.xMin, y), new Vector3(plot.xMax, y));
+
+            var str = labelFunction != null ? labelFunction(0, y01, false) : null;
+            if (!string.IsNullOrEmpty(str))
+                GUI.Label(new Rect(plot.xMin - 34, y - 7, 32, 14), str, EditorStyles.miniLabel);
+        }
+
+        public delegate float GraphEvaluateFunction(float x);
+        public delegate string LabelFunctionDelegate(float x, float y, bool isVerticalAxis);
+
+        public static void DrawPreviewGraph(Rect rect, string title, float padding, float xMin, float xMax, float sampleSpacing, float hGridSpacing,
+                                            GraphEvaluateFunction graphEvaluate, LabelFunctionDelegate labelFunction,
+                                            bool fixedY = false, float yMin = 0f, float yMax = 1f,
+                                            float? xCenter = null, Color? centralColor = null)
+        {
+            // Background
+            EditorGUI.DrawRect(rect, new Color(0, 0, 0, 0.12f));
+
+            // Header
+            if (!string.IsNullOrEmpty(title))
+                EditorGUI.LabelField(new Rect(rect.x + 6, rect.y + 2, rect.width - 12, 16), title, EditorStyles.miniLabel);
+
+            // Plot area
+            Rect plot = rect;
+            plot.xMin += padding;
+            plot.xMax -= padding;
+            plot.yMin += 18f;
+            plot.yMax -= 16f;
+
+            Handles.BeginGUI();
+
+            // Border
+            Handles.color = new Color(1, 1, 1, 0.15f);
+            Handles.DrawAAPolyLine(1f, new Vector3[]
+            {
+                new(plot.xMin, plot.yMin),
+                new(plot.xMax, plot.yMin),
+                new(plot.xMax, plot.yMax),
+                new(plot.xMin, plot.yMax),
+                new(plot.xMin, plot.yMin),
+            });
+
+            // Horizontal grid (fixed 0..1)
+            DrawHGrid(plot, 0.0f, labelFunction);
+            DrawHGrid(plot, 0.25f, labelFunction);
+            DrawHGrid(plot, 0.5f, labelFunction);
+            DrawHGrid(plot, 0.75f, labelFunction);
+            DrawHGrid(plot, 1.0f, labelFunction);
+
+            // Vertical grid (integer diffs)
+            float xRange = xMax - xMin;
+            int gridPointCount = Mathf.FloorToInt((xMax - xMin) / hGridSpacing) + 1;
+            int samplePointCount = Mathf.FloorToInt((xMax - xMin) / sampleSpacing) + 1;
+
+            bool hasCenter = xCenter.HasValue && centralColor.HasValue;
+            int centerIdx = -1;
+            float centerX = 0f;
+
+            if (hasCenter)
+            {
+                centerX = xCenter.Value;
+
+                // If it’s outside the plotted range, ignore
+                if (centerX < xMin || centerX > xMax)
+                    hasCenter = false;
+                else
+                {
+                    // Choose the closest sample index
+                    centerIdx = Mathf.RoundToInt((centerX - xMin) / sampleSpacing);
+                    centerIdx = Mathf.Clamp(centerIdx, 0, samplePointCount - 1);
+                }
+            }
+
+            for (int i = 0; i < gridPointCount; i++)
+            {
+                float d = xMin + i * hGridSpacing;
+                float u = (d - xMin) / xRange;
+                float x = Mathf.Lerp(plot.xMin, plot.xMax, u);
+
+                bool isCenter = hasCenter && Mathf.Abs(d - centerX) <= (hGridSpacing * 0.5f);
+
+                Handles.color = isCenter ? new Color(centralColor.Value.r, centralColor.Value.g, centralColor.Value.b, 0.35f) : new Color(1, 1, 1, d == 0 ? 0.22f : 0.10f);
+
+                Handles.DrawLine(new Vector3(x, plot.yMin), new Vector3(x, plot.yMax));
+            }
+
+            // Curve: connect the integer points directly (no stepping)
+            Vector3[] pts = new Vector3[samplePointCount];
+
+            // Compute vertical range
+            if (!fixedY)
+            {
+                yMin = float.MaxValue;
+                yMax = -float.MaxValue;
+
+                for (int i = 0; i < samplePointCount; i++)
+                {
+                    float d = xMin + i * sampleSpacing;
+                    float p = graphEvaluate(d);
+
+                    if (p < yMin) yMin = p;
+                    if (p > yMax) yMax = p;
+                }
+            }
+
+            // Draw curve (normalized to vertical range)
+            int idx = 0;
+            float yRange = yMax - yMin;
+            bool flat = Mathf.Abs(yRange) < 1e-6f;
+            if (flat) 
+            { 
+                yMin -= 0.5f; 
+                yMax += 0.5f; 
+                yRange = yMax - yMin; 
+            }
+
+            for (int i = 0; i < samplePointCount; i++)
+            {
+                float d = xMin + i * sampleSpacing;
+                float u = (d - xMin) / xRange;
+                float p = (graphEvaluate(d) - yMin) / yRange;
+
+                float x = Mathf.Lerp(plot.xMin, plot.xMax, u);
+                float y = Mathf.Lerp(plot.yMax, plot.yMin, p);
+
+                pts[idx++] = new Vector3(x, y);
+            }
+
+            Handles.color = new Color(0.35f, 0.9f, 1f, 0.9f);
+            Handles.DrawAAPolyLine(2f, pts);
+
+            // Markers + labels
+            for (int i = 0; i < samplePointCount; i++)
+            {
+                float d = xMin + i * sampleSpacing;
+                float u = (d - xMin) / xRange;
+                float v = graphEvaluate(d);
+                float p = (v - yMin) / yRange;
+
+                float x = Mathf.Lerp(plot.xMin, plot.xMax, u);
+                float y = Mathf.Lerp(plot.yMax, plot.yMin, p);
+            }
+
+            for (int i = 0; i < gridPointCount; i++)
+            {
+                float d = xMin + i * hGridSpacing;
+                float u = (d - xMin) / xRange;
+                float v = graphEvaluate(d);
+                float p = (v - yMin) / yRange;
+
+                float x = Mathf.Lerp(plot.xMin, plot.xMax, u);
+                float y = Mathf.Lerp(plot.yMax, plot.yMin, p);
+
+                bool isCenter = (hasCenter) && (Mathf.Abs(d - centerX) <= (hGridSpacing * 0.5f)); // closest grid line
+
+                Handles.color = isCenter ? centralColor.Value : Color.white; 
+                Handles.DrawSolidDisc(new Vector3(x, y), Vector3.forward, 2.4f);
+
+                float labelW = 60.0f;
+                GUI.Label(new Rect(x - labelW * 0.5f, rect.yMax - 16, labelW, 16), d.ToString("0.00"), EditorStyles.centeredGreyMiniLabel);
+
+                if (labelFunction != null)
+                {
+                    var str = labelFunction(d, v, false);
+                    if (!string.IsNullOrEmpty(str))
+                    {
+                        GUI.Label(new Rect(x - labelW * 0.5f, y - 14, labelW, 16), str, EditorStyles.centeredGreyMiniLabel);
+                    }
+                }
+            }
+
+            Handles.EndGUI();
+        }
+
+        public static object GetTargetObjectOfProperty(SerializedProperty prop)
+        {
+            if (prop == null)
+                return null;
+
+            object obj = prop.serializedObject.targetObject;
+            string path = prop.propertyPath.Replace(".Array.data[", "[");
+
+            var elements = path.Split('.');
+
+            foreach (var element in elements)
+            {
+                if (obj == null)
+                    return null;
+
+                if (element.Contains("["))
+                {
+                    string name = element.Substring(0, element.IndexOf("["));
+                    int index = Convert.ToInt32(
+                        element.Substring(element.IndexOf("[") + 1).TrimEnd(']')
+                    );
+
+                    obj = GetFieldValue(obj, name);
+
+                    if (obj is IList list)
+                    {
+                        if (index < 0 || index >= list.Count)
+                            return null;
+
+                        obj = list[index];
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
+                else
+                {
+                    obj = GetFieldValue(obj, element);
+                }
+            }
+
+            return obj;
+        }
+
+        static object GetFieldValue(object source, string name)
+        {
+            if (source == null)
+                return null;
+
+            Type type = source.GetType();
+
+            while (type != null)
+            {
+                FieldInfo f = type.GetField(
+                    name,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+                );
+
+                if (f != null)
+                    return f.GetValue(source);
+
+                type = type.BaseType;
+            }
+
+            return null;
+        }
     }
 }

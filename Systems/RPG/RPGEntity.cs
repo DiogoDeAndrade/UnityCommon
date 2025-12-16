@@ -258,13 +258,13 @@ namespace UC.RPG
             return attackModule?.Attack(weapon, source, destPos) ?? false;
         }
 
-        public MinMaxDistance GetRange()
+        public DistanceRange GetRange()
         {
             // Assumes this is a weapon - this is preparing for the future when weapons can have enchants/buffs
             var weaponModule = item.GetModule<RPGItemWeapon>(true);
             if (weaponModule != null) return weaponModule.range;
 
-            return new MinMaxDistance { type = MinMaxDistance.Type.Euclidean, min = -float.NegativeInfinity, max = -float.NegativeInfinity };
+            return new DistanceRange { type = DistanceRange.Type.Euclidean, min = -float.NegativeInfinity, max = -float.NegativeInfinity };
         }
 
         public void AddChild(RPGEntity entity)

@@ -11,7 +11,7 @@ namespace UC.RPG
     {
         [Header("Weapon")]
         public      DamageType      damageType;
-        public      MinMaxDistance  range;
+        public      DistanceRange  range;
         [SerializeReference]
         private     AttackModule    _attackModule;
         public      SoundDef        attackSound;

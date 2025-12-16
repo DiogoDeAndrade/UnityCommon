@@ -2,8 +2,8 @@ using UC;
 using UnityEditor;
 using UnityEngine;
 
-[CustomPropertyDrawer(typeof(MinMaxDistance))]
-public class MinMaxDistanceDrawer : PropertyDrawer
+[CustomPropertyDrawer(typeof(DistanceRange))]
+public class DistanceRangeDrawer : PropertyDrawer
 {
     // Small positive value so it is strictly > 0 (not >= 0)
     const float kEpsilon = 0.0f;

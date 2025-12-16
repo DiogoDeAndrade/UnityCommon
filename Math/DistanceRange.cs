@@ -5,7 +5,7 @@ namespace UC
 {
 
     [Serializable]
-    public class MinMaxDistance
+    public class DistanceRange
     {
         public enum Type { Euclidean, Manhattan, Chebyshev };
 

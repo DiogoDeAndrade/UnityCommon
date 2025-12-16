@@ -1,10 +1,13 @@
 using System;
+using UnityEngine;
 
 namespace UC.RPG
 {
     [Serializable]
     public abstract class HitChanceFunction
     {
+        [SerializeField,HideInInspector] protected bool displayGraph = true;
+
         public abstract float GetValue(RPGEntity weapon, RPGEntity src, RPGEntity target);
         public virtual bool CanPreview() => true;
         public abstract float GetPreviewValue(int diff);

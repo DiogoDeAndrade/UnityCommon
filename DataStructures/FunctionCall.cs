@@ -47,7 +47,7 @@ namespace UC
             }
 
             var compType = component.GetType();
-            var method = FindMethod(compType, functionName, parameters?.Length ?? 0);
+            var method = FindMethod(compType, functionName, runtimeParameters);
 
             if (method == null)
             {
@@ -116,9 +116,13 @@ namespace UC
             {
                 method.Invoke(component, args);
             }
+            catch (TargetInvocationException tie)
+            {
+                Debug.LogException(tie.InnerException ?? tie);
+            }
             catch (Exception ex)
             {
-                Debug.LogError($"[FunctionCall] Exception calling {compType.Name}.{functionName} on {go.name}: {ex}");
+                Debug.LogException(ex);
             }
         }
 
@@ -131,20 +135,44 @@ namespace UC
             return go.GetComponent(targetType);
         }
 
-        static MethodInfo FindMethod(Type type, string methodName, int paramCount)
+        static MethodInfo FindMethod(Type type, string methodName, object[] runtimeParameters)
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
             var methods = type.GetMethods(flags);
+            MethodInfo fallbackByCount = null;
+
             foreach (var m in methods)
             {
                 if (m.Name != methodName) continue;
-                var p = m.GetParameters();
-                if (p.Length == paramCount)
+
+                var ps = m.GetParameters();
+                int wantCount = runtimeParameters?.Length ?? 0;
+                if (ps.Length != wantCount) continue;
+
+                fallbackByCount ??= m; // keep something, but don't return yet
+
+                bool exact = true;
+                for (int i = 0; i < ps.Length; i++)
+                {
+                    var pt = ps[i].ParameterType;
+                    var arg = runtimeParameters[i];
+
+                    // null can match ref types/nullable
+                    if (arg == null)
+                    {
+                        if (pt.IsValueType && Nullable.GetUnderlyingType(pt) == null) { exact = false; break; }
+                        continue;
+                    }
+
+                    if (!pt.IsInstanceOfType(arg)) { exact = false; break; }
+                }
+
+                if (exact)
                     return m;
             }
 
-            return null;
+            return fallbackByCount;
         }
 
         public static Type GetTypeFromString(string fullName)
