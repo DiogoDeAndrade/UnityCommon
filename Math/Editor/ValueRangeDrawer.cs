@@ -45,9 +45,13 @@ namespace UC.Editor
             bool needsSecondLine = (mode == ValueRange.Mode.GaussianClamped) || (mode == ValueRange.Mode.BiasedUniform);
 
             // ---- Layout rects ----
-            Rect line1 = new Rect(position.x, position.y, position.width - 20.0f, Line);
+            Rect line1 = new Rect(position.x, position.y, position.width, Line);
+
+            var indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
 
             // First line: [LABEL][TYPE][Mean][Range?]
+            if (!needsSecondLine) line1.width -= 20.0f;
             DrawFirstLine(line1, label, modeProp, meanProp, rangeProp, mode);
 
             float y = position.y + Line + VSpace;
@@ -73,6 +77,7 @@ namespace UC.Editor
             if (showGraph)
             {
                 Rect graphRect = new Rect(position.x, y, position.width, GraphH);
+                graphRect = EditorGUI.IndentedRect(graphRect);
 
                 ValueRange vr = GUIUtils.GetTargetObjectOfProperty(property) as ValueRange;
                 if (vr == null)
@@ -83,6 +88,8 @@ namespace UC.Editor
                 float divs = 0.1f;
                 GUIUtils.DrawPreviewGraph(graphRect, null, 20.0f, xMin - divs * range, xMax + divs * range, range * divs * 0.25f, range * divs, (x) => vr.GetRelativeDensity(x), null, xCenter: vr.mean, centralColor: Color.red);
             }
+
+            EditorGUI.indentLevel = indent;
 
             EditorGUI.EndProperty();
         }
@@ -95,13 +102,11 @@ namespace UC.Editor
             float spacing = 6f;
 
             // Label
-            Rect rLabel = rect;
-            rLabel.width = EditorGUIUtility.labelWidth;
-            EditorGUI.LabelField(rLabel, label);
+            var content = EditorGUI.PrefixLabel(rect, label);
 
             // Remaining
-            float x = rect.x + rLabel.width + spacing;
-            float w = rect.xMax - x;
+            float x = content.x;
+            float w = content.width;
 
             // Give more space to type
             float typeW = Mathf.Clamp(w * 0.38f, 110f, 180f);
@@ -276,7 +281,11 @@ namespace UC.Editor
             }
 
             // Tiny checkbox (no text). Use Toggle so it looks like Unity's normal checkbox.
+            // Need to reset indentLevel for this, because it is accounted for
+            var indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
             showGraph = EditorGUI.Toggle(toggleRect, showGraph);
+            EditorGUI.indentLevel = indent;
         }
     }
 }

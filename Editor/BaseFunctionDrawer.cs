@@ -93,7 +93,12 @@ namespace UC.Editor
             EditorGUI.LabelField(labelRect, new GUIContent(property.displayName));
 
             int currentIndex = GetCurrentTypeIndex(property);
+
+            // Remove indent or else we get issues with this direct positioning
+            var indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
             int newIndex = EditorGUI.Popup(popupRect, currentIndex + 1, _displayNames) - 1;
+            EditorGUI.indentLevel = indent;
 
             HandleContextMenu(popupRect, (newIndex >= 0) ? _types[newIndex] : null);
 

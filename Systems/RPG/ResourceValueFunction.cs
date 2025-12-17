@@ -22,6 +22,17 @@ namespace UC.RPG
     }
 
     [Serializable]
+    public class ResourceValueFunctionConstantRange : ResourceValueFunction
+    {
+        public ValueRange value;
+
+        public override float GetValue(RPGEntity character)
+        {
+            return value.GetRandom();
+        }
+    }
+
+    [Serializable]
     public class ResourceValueFunctionLevelLinear : ResourceValueFunction
     {
         public float baseValue = 1.0f;
