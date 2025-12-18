@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace UC
@@ -159,18 +159,77 @@ namespace UC
             }
         }
 
-        public void GetPreviewDomain(out float xmin, out float xmax)
+        public void GetPreviewDomain(out float xMin, out float xMax, out float yMin, out float yMax, float binSize = 1.0f)
         {
+            float min = Min;
+            float max = Max;
+
+            // X domain
             if (range > 1e-6f)
             {
-                xmin = mean - range;
-                xmax = mean + range;
+                xMin = min;
+                xMax = max;
             }
             else
             {
-                xmin = mean - 1f;
-                xmax = mean + 1f;
+                xMin = mean - 1f;
+                xMax = mean + 1f;
             }
+
+            yMin = 0f;
+
+            // Degenerate => spike
+            float width = xMax - xMin;
+            if (width <= 1e-6f)
+            {
+                yMax = 1f;
+                return;
+            }
+
+            // Choose a "peak neighborhood" size.
+            // Interpretable meaning: "probability of landing in the peak-ish region of size binWidth".
+            float binWidth = Mathf.Max(binSize, 1e-6f);
+
+            // Integrate the *relative* curve over support to get its "area".
+            // Then scale so peak(=1) corresponds to probability mass in binWidth:
+            //   pdfApprox(x) = rel(x) / areaRel
+            //   peakMass = (1/areaRel) * binWidth
+            float areaRel = IntegrateRelative(min, max);
+            if (areaRel <= 1e-8f)
+            {
+                yMax = 1f;
+                return;
+            }
+
+            float peakMass = binWidth / areaRel;
+
+            // For display sanity: clamp to [0,1] (it’s a "probability-ish" reference)
+            // If you prefer allowing >1 when extreme, remove this clamp.
+            yMax = Mathf.Clamp01(peakMass);
+        }
+
+        float IntegrateRelative(float min, float max)
+        {
+            // Trapezoidal integration of GetRelativeDensity over [min,max]
+            // Good enough for editor previews.
+            const int N = 256;
+            float width = max - min;
+            if (width <= 1e-6f) return 1f;
+
+            float dx = width / (N - 1);
+            float sum = 0f;
+
+            for (int i = 0; i < N; i++)
+            {
+                float x = min + i * dx;
+                float y = GetRelativeDensity(x);
+
+                // Trapezoid weights
+                float w = (i == 0 || i == N - 1) ? 0.5f : 1f;
+                sum += y * w;
+            }
+
+            return sum * dx;
         }
 
         // --- Sampling helpers ---

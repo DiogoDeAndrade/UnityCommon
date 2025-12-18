@@ -417,13 +417,13 @@ namespace UC
         }
         public static void ClearCache() => _cache.Clear();
 
-        static void DrawHGrid(Rect plot, float y01, LabelFunctionDelegate labelFunction)
+        static void DrawHGrid(Rect plot, float y01, float yBase, float yRange, LabelFunctionDelegate labelFunction)
         {
             float y = Mathf.Lerp(plot.yMax, plot.yMin, y01);
             Handles.color = new Color(1, 1, 1, y01 == 0.5f ? 0.18f : 0.10f);
             Handles.DrawLine(new Vector3(plot.xMin, y), new Vector3(plot.xMax, y));
 
-            var str = labelFunction != null ? labelFunction(0, y01, false) : null;
+            var str = labelFunction != null ? labelFunction(0, yBase + yRange * y01, true) : null;
             if (!string.IsNullOrEmpty(str))
                 GUI.Label(new Rect(plot.xMin - 34, y - 7, 32, 14), str, EditorStyles.miniLabel);
         }
@@ -462,13 +462,6 @@ namespace UC
                 new(plot.xMin, plot.yMax),
                 new(plot.xMin, plot.yMin),
             });
-
-            // Horizontal grid (fixed 0..1)
-            DrawHGrid(plot, 0.0f, labelFunction);
-            DrawHGrid(plot, 0.25f, labelFunction);
-            DrawHGrid(plot, 0.5f, labelFunction);
-            DrawHGrid(plot, 0.75f, labelFunction);
-            DrawHGrid(plot, 1.0f, labelFunction);
 
             // Vertical grid (integer diffs)
             float xRange = xMax - xMin;
@@ -536,6 +529,13 @@ namespace UC
                 yMax += 0.5f; 
                 yRange = yMax - yMin; 
             }
+
+            // Horizontal grid (fixed 0..1)
+            DrawHGrid(plot, 0.0f, yMin, yRange, labelFunction);
+            DrawHGrid(plot, 0.25f, yMin, yRange, labelFunction);
+            DrawHGrid(plot, 0.5f, yMin, yRange, labelFunction);
+            DrawHGrid(plot, 0.75f, yMin, yRange, labelFunction);
+            DrawHGrid(plot, 1.0f, yMin, yRange, labelFunction);
 
             for (int i = 0; i < samplePointCount; i++)
             {

@@ -1,4 +1,5 @@
 using UnityEditor;
+using UnityEditor.TerrainTools;
 using UnityEngine;
 
 namespace UC.Editor
@@ -47,12 +48,16 @@ namespace UC.Editor
             // ---- Layout rects ----
             Rect line1 = new Rect(position.x, position.y, position.width, Line);
 
+            // Label
+            var content = EditorGUI.PrefixLabel(position, label);
+            content.height = EditorGUIUtility.singleLineHeight;
+
             var indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
 
             // First line: [LABEL][TYPE][Mean][Range?]
             if (!needsSecondLine) line1.width -= 20.0f;
-            DrawFirstLine(line1, label, modeProp, meanProp, rangeProp, mode);
+            DrawFirstLine(content, label, modeProp, meanProp, rangeProp, mode);
 
             float y = position.y + Line + VSpace;
 
@@ -73,6 +78,8 @@ namespace UC.Editor
                 DrawGraphToggle(line1, showLabel: false);
             }
 
+            EditorGUI.indentLevel = indent;
+
             // Graph
             if (showGraph)
             {
@@ -83,26 +90,30 @@ namespace UC.Editor
                 if (vr == null)
                     return;
 
-                vr.GetPreviewDomain(out float xMin, out float xMax);
+                vr.GetPreviewDomain(out float xMin, out float xMax, out float yMin, out float yMax);
                 float range = (xMax - xMin);
                 float divs = 0.1f;
-                GUIUtils.DrawPreviewGraph(graphRect, null, 20.0f, xMin - divs * range, xMax + divs * range, range * divs * 0.25f, range * divs, (x) => vr.GetRelativeDensity(x), null, xCenter: vr.mean, centralColor: Color.red);
+                GUIUtils.DrawPreviewGraph(graphRect, null, 20.0f, xMin - divs * range, xMax + divs * range, range * divs * 0.25f, range * divs, 
+                                          (x) => vr.GetRelativeDensity(x), null,
+                                          xCenter: vr.mean, centralColor: Color.red);
             }
 
-            EditorGUI.indentLevel = indent;
-
             EditorGUI.EndProperty();
+        }
+
+        public string VerticalLabel(float x, float y, bool isVerticalAxis)
+        {
+            if (!isVerticalAxis) return null;
+
+            return $"{Mathf.FloorToInt(y * 100.0f)}%";
         }
 
         // =========================
         // Line 1
         // =========================
-        static void DrawFirstLine(Rect rect, GUIContent label, SerializedProperty modeProp, SerializedProperty meanProp, SerializedProperty rangeProp, ValueRange.Mode mode)
+        static void DrawFirstLine(Rect content, GUIContent label, SerializedProperty modeProp, SerializedProperty meanProp, SerializedProperty rangeProp, ValueRange.Mode mode)
         {
             float spacing = 6f;
-
-            // Label
-            var content = EditorGUI.PrefixLabel(rect, label);
 
             // Remaining
             float x = content.x;
@@ -114,20 +125,20 @@ namespace UC.Editor
             // Two numeric slots
             float fieldW = Mathf.Clamp((w - typeW - spacing * 2f) / 2f, 80f, 140f);
 
-            Rect rType = new Rect(x, rect.y, typeW, rect.height);
+            Rect rType = new Rect(x, content.y, typeW, content.height);
             EditorGUI.PropertyField(rType, modeProp, GUIContent.none);
 
             x += typeW + spacing;
 
             // Mean (mini label + draggable + float field)
-            Rect rMean = new Rect(x, rect.y, fieldW, rect.height);
+            Rect rMean = new Rect(x, content.y, fieldW, content.height);
             DrawMiniLabeledFloat(rMean, "Mean", meanProp);
 
             x += fieldW + spacing;
 
             if (UsesRange(mode))
             {
-                Rect rRange = new Rect(x, rect.y, fieldW, rect.height);
+                Rect rRange = new Rect(x, content.y, fieldW, content.height);
                 DrawMiniLabeledFloat(rRange, "Range", rangeProp);
 
                 // Clamp: Range can never be negative
