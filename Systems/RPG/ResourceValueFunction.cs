@@ -1,6 +1,7 @@
 using NaughtyAttributes;
 using System;
 using UnityEngine;
+using static UnityEngine.Rendering.DebugUI;
 
 namespace UC.RPG
 {
@@ -8,6 +9,7 @@ namespace UC.RPG
     public abstract class ResourceValueFunction
     {
         public abstract float GetValue(RPGEntity character);
+        public abstract Vector2 GetMinMax(RPGEntity character);
     }
 
     [Serializable]
@@ -19,6 +21,8 @@ namespace UC.RPG
         {
             return baseValue;
         }
+
+        public override Vector2 GetMinMax(RPGEntity character) => new Vector2(baseValue, baseValue);
     }
 
     [Serializable]
@@ -30,6 +34,9 @@ namespace UC.RPG
         {
             return value.GetRandom();
         }
+
+        public override Vector2 GetMinMax(RPGEntity character) => new Vector2(value.Min, value.Max);
+
     }
 
     [Serializable]
@@ -42,6 +49,8 @@ namespace UC.RPG
         {
             return Mathf.FloorToInt(baseValue + character.level * valuePerLevel);
         }
+
+        public override Vector2 GetMinMax(RPGEntity character) => Vector2.one * GetValue(character);
     }
 
     [Serializable]
@@ -55,6 +64,8 @@ namespace UC.RPG
         {
             return Mathf.FloorToInt(baseValue + character.Get(stat).GetValue() * valuePerLevel);
         }
+
+        public override Vector2 GetMinMax(RPGEntity character) => Vector2.one * GetValue(character);
     }
 
     [Serializable]
@@ -88,6 +99,8 @@ namespace UC.RPG
             // 4) Guarantee [0,1] for safety
             return Mathf.Clamp01(chance);
         }
+
+        public override Vector2 GetMinMax(RPGEntity character) => Vector2.one * GetValue(character);
     }
 
     [Serializable]
@@ -127,5 +140,7 @@ namespace UC.RPG
 
             return value;
         }
+
+        public override Vector2 GetMinMax(RPGEntity character) => Vector2.one * GetValue(character);
     }
 }
