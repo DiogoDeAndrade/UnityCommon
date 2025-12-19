@@ -62,6 +62,7 @@ namespace UC
 
         public void SetOnSlot(int slotIndex, RPGEntity item, int count)
         {
+            if (items == null) items = new();
             if (items.Count <= slotIndex)
             {
                 for (int i = items.Count; i <= slotIndex; i++)
