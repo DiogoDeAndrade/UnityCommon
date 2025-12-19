@@ -3,8 +3,8 @@ using UC.Editor;
 
 namespace UC.RPG.Editor
 {
-    [CustomPropertyDrawer(typeof(AttackModule), true)]
-    public class AttackModuleDrawer : BaseFunctionDrawer<AttackModule>
+    [CustomPropertyDrawer(typeof(AttackModuleFunction), true)]
+    public class AttackModuleDrawer : BaseFunctionDrawer<AttackModuleFunction>
     {
     }
 }

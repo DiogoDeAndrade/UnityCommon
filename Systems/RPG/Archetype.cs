@@ -14,27 +14,6 @@ namespace UC.RPG
         [SerializeField, ResizableTextArea]
         private string  _description;
 
-        public void UpdateDerivedStats(RPGEntity entity)
-        {
-            foreach (var p in parents)
-            {
-                (p as Archetype)?.UpdateDerivedStats(entity);
-            }
-
-            var modules = GetModules<RPGStatModule>(true);
-            foreach (var s in modules)
-            {
-                if (s.calculator != null)
-                {
-                    var statInstance = entity.Get(s.type);
-                    if (statInstance != null)
-                    {
-                        statInstance.SetValue(s.calculator.GetValue(entity));
-                    }
-                }
-            }
-        }
-
         public string description
         {
             get

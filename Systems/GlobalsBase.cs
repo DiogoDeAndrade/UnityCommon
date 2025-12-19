@@ -4,7 +4,7 @@ using UC.RPG;
 
 namespace UC
 {
-    [CreateAssetMenu(fileName = "Globals", menuName = "Unity Common/Data/Globals (Base)")]
+    [CreateAssetMenu(fileName = "Globals", menuName = "Unity Common/Data/Globals/Base")]
     public class GlobalsBase : ScriptableObject
     {
         [HorizontalLine(color: EColor.Red)]

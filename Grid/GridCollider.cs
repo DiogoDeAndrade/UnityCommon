@@ -7,7 +7,7 @@ namespace UC
 
     public class GridCollider : MonoBehaviour
     {
-        public enum Type { Tilemap, Sprite, Box };
+        public enum Type { Tilemap, Sprite, Box, Grid };
 
         [SerializeField, ShowIf(nameof(isNotTilemap))] 
         private Type           colliderType = Type.Sprite;
@@ -31,6 +31,7 @@ namespace UC
         private bool isNotTilemap => !isTilemapCollider;
         private bool isSpriteCollider => (isNotTilemap && (colliderType == Type.Sprite)) || ((separateForInteraction) && (colliderTypeForInteraction == Type.Sprite));
         private bool isBoxCollider => isNotTilemap && (colliderType == Type.Box) || ((separateForInteraction) && (colliderTypeForInteraction == Type.Box));
+        private bool isGridCollider => isNotTilemap && (colliderType == Type.Grid) || ((separateForInteraction) && (colliderTypeForInteraction == Type.Grid));
 
         public GridObject gridObject => _gridObject;
 
@@ -81,6 +82,7 @@ namespace UC
                     return tilemapCollider.OverlapPoint(worldPoint);
                 }
             }
+
             if (isBoxCollider)
             {
                 var minGrid = gridSystem.WorldToGrid(transform.position + rectangle.min.xy0());
@@ -88,6 +90,16 @@ namespace UC
 
                 if ((endPosGrid.x >= minGrid.x) && (endPosGrid.x <= maxGrid.x) &&
                     (endPosGrid.y >= minGrid.y) && (endPosGrid.y <= maxGrid.y))
+                {
+                    return true;
+                }
+            }
+            if (isGridCollider)
+            {
+                var rect = gridSystem.GetGridCellRectangle(transform.position);
+                var pos = gridSystem.GridToWorld(endPosGrid);
+                if ((pos.x >= rect.xMin) && (pos.x <= rect.xMax) &&
+                    (pos.y >= rect.yMin) && (pos.y <= rect.yMax))
                 {
                     return true;
                 }
@@ -131,6 +143,12 @@ namespace UC
                 var localPos = worldPoint - transform.position.xy();
 
                 return rectangle.Contains(localPos);
+            }
+            if (ct == Type.Grid)
+            {
+                var rect = gridSystem.GetGridCellRectangle(transform.position);
+
+                return rect.Contains(worldPoint);
             }
 
             return false;

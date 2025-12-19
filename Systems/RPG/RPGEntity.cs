@@ -1,3 +1,4 @@
+using Mono.Cecil;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -161,19 +162,21 @@ namespace UC.RPG
             {
                 foreach (var s in data.GetModules<RPGStatModule>(true))
                 {
-                    var statInstance = new StatInstance(s.type);
+                    // Check if this is already created (parents can't create what is overriden in children)
+                    if (stats.ContainsKey(s.type)) continue;
+
+                    var statInstance = new StatInstance(this, s);
 
                     var generator = data.GetModule<RPGStatGenerator>(true);
                     if (generator != null)
+                    {
                         generator.RunGenerator(s.type, this, statInstance);
+                    }
 
                     stats.Add(s.type, statInstance);
                 }
 
-                if (archetype)
-                    archetype.UpdateDerivedStats(this);
-                else if (item)
-                    item.UpdateDerivedStats(this);
+                UpdateAllDerivedStats(StatType.UpdateMode.Start);
 
                 resources = new();
                 foreach (var r in data.GetModules<RPGResourceModule>(true))
@@ -201,12 +204,44 @@ namespace UC.RPG
             }
         }
 
+        public void UpdateAllDerivedStats(StatType.UpdateMode reason)
+        {
+            foreach (var s in stats)
+            {
+                UpdateDerivedStat(s.Key, reason);
+            }
+        }
+
+        public void UpdateDerivedStat(StatType stat)
+        {
+            Get(stat)?.Update();
+        }
+
+        public void UpdateDerivedStat(StatType stat, StatType.UpdateMode reason)
+        {
+            // No need to update with the given reason
+            if (!stat.NeedUpdate(reason)) return;
+
+            Get(stat)?.Update();
+        }
+
         public StatInstance Get(StatType s)
         {
             if (stats == null) return null;
-            if (stats.TryGetValue(s, out var instance)) return instance;
+            if (stats.TryGetValue(s, out var instance))
+            {
+                return instance;
+            }
 
             return null;
+        }
+
+        public float GetValue(StatType armourStat) => Get(armourStat)?.GetValue() ?? 0f;
+        public bool Has(StatType s)
+        {
+            if (s == null) return false;
+            if (stats == null) return false;
+            return stats.ContainsKey(s);
         }
 
         public ResourceInstance Get(ResourceType r)
@@ -298,6 +333,32 @@ namespace UC.RPG
         {
             return $"<color=#{displayTextColorHex}><link=\"rpg:{_guid}\">{name}</link></color>";
         }
+
+        public void Apply(ChangeData inChangeData)
+        {
+            var changeData = new List<ChangeData> { inChangeData };
+
+            // Now, let's apply the "global" mitigation (accumulation system)
+            var armourFunctions = RPGConfig.GetArmourFunctions(inChangeData.rpgChangeData.damageType);
+            if (armourFunctions != null)
+            {
+                foreach (var func in armourFunctions)
+                {
+                    if (func != null)
+                    {
+                        func.Mitigate(changeData);
+                    }
+                }
+            }
+
+            foreach (var cd in changeData)
+            {
+                var resourceHandler = Get(cd.rpgChangeData.resourceType);
+
+                resourceHandler?.Change(cd);
+            }
+        }
+
 
         #region Static management of UnityRPGEntity
 

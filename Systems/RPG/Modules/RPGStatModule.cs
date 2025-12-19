@@ -1,5 +1,4 @@
 using System;
-using UC.Interaction;
 using UnityEngine;
 
 namespace UC.RPG

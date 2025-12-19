@@ -5,9 +5,9 @@ using UnityEngine;
 
 namespace UC.RPG
 {
-
     [Serializable]
-    public abstract class RPGItemGear : SOModule
+    [PolymorphicName("RPG/Item/Gear")]
+    public class RPGItemGear : SOModule
     {
         [SerializeField]
         private Hypertag[]          equipmentSlots;

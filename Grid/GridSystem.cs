@@ -76,6 +76,13 @@ namespace UC
             return GridToWorld(gridPos);
         }
 
+        public Rect GetGridCellRectangle(Vector3 position)
+        {
+            var snappedPos = Snap(position);
+
+            return new Rect(snappedPos.x - cellSize.x * 0.5f, snappedPos.y - cellSize.y * 0.5f, cellSize.x, cellSize.y);
+        }
+
         public bool CheckCollision(Vector2Int endPosGrid, GridObject gridObject)
         {
             foreach (var collider in gridColliders)

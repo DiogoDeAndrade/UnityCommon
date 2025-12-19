@@ -1,3 +1,4 @@
+using NaughtyAttributes.Editor;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +26,7 @@ namespace UC.Editor
             }
 
             _types = list
-                .OrderBy(t => MakeNiceName(t), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => MakeFolderFirstSortKey(t), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             _displayNames = new string[_types.Length + 1];
@@ -58,8 +59,11 @@ namespace UC.Editor
                     if (iterator.depth != targetDepth)
                         continue;
 
-                    height += EditorGUI.GetPropertyHeight(iterator, true) +
-                              EditorGUIUtility.standardVerticalSpacing;
+                    if (PropertyUtility.IsVisible(iterator))
+                    {
+                        height += EditorGUI.GetPropertyHeight(iterator, true) +
+                                  EditorGUIUtility.standardVerticalSpacing;
+                    }
                     enterChildren = false;
                 }
             }
@@ -134,10 +138,13 @@ namespace UC.Editor
                     if (iterator.depth != targetDepth)
                         continue;
 
-                    float h = EditorGUI.GetPropertyHeight(iterator, true);
-                    Rect r = new Rect(position.x, y, position.width, h);
-                    EditorGUI.PropertyField(r, iterator, true);
-                    y += h + EditorGUIUtility.standardVerticalSpacing;
+                    if (PropertyUtility.IsVisible(iterator))
+                    {
+                        float h = EditorGUI.GetPropertyHeight(iterator, true);
+                        Rect r = new Rect(position.x, y, position.width, h);
+                        NaughtyEditorGUI.PropertyField(r, iterator, true);
+                        y += h + EditorGUIUtility.standardVerticalSpacing;
+                    }
                 }
 
                 EditorGUI.indentLevel--;
@@ -263,6 +270,34 @@ namespace UC.Editor
             }
 
             return result.ToString();
+        }
+
+        private static string MakeFolderFirstSortKey(Type t)
+        {
+            // Use the same string you show in the popup (full path when available)
+            string name = MakeNiceName(t, usePolymorphicFullPath: true) ?? "";
+
+            // Normalize slashes
+            name = name.Replace('\\', '/');
+
+            // Foldered entries first: those containing '/'
+            bool hasFolder = name.IndexOf('/') >= 0;
+
+            // Split into folder + leaf for nicer ordering inside groups
+            string folder = "";
+            string leaf = name;
+
+            int slash = name.LastIndexOf('/');
+            if (slash >= 0)
+            {
+                folder = name.Substring(0, slash);
+                leaf = name.Substring(slash + 1);
+            }
+
+            // Sort key format:
+            // 0 = foldered, 1 = non-foldered (so foldered appear first)
+            // then folder, then leaf, then full string
+            return $"{(hasFolder ? "0" : "1")}\u001F{folder}\u001F{leaf}\u001F{name}";
         }
     }
 }

@@ -434,7 +434,7 @@ namespace UC
         public static void DrawPreviewGraph(Rect rect, string title, float padding, float xMin, float xMax, float sampleSpacing, float hGridSpacing,
                                             GraphEvaluateFunction graphEvaluate, LabelFunctionDelegate labelFunction,
                                             bool fixedY = false, float yMin = 0f, float yMax = 1f,
-                                            float? xCenter = null, Color? centralColor = null)
+                                            float? xCenter = null, Color? centralColor = null, int vDivs = 5)
         {
             // Background
             EditorGUI.DrawRect(rect, new Color(0, 0, 0, 0.12f));
@@ -530,12 +530,13 @@ namespace UC
                 yRange = yMax - yMin; 
             }
 
-            // Horizontal grid (fixed 0..1)
-            DrawHGrid(plot, 0.0f, yMin, yRange, labelFunction);
-            DrawHGrid(plot, 0.25f, yMin, yRange, labelFunction);
-            DrawHGrid(plot, 0.5f, yMin, yRange, labelFunction);
-            DrawHGrid(plot, 0.75f, yMin, yRange, labelFunction);
-            DrawHGrid(plot, 1.0f, yMin, yRange, labelFunction);
+            // Horizontal grid
+            if (vDivs <= 1) vDivs = 3;
+            for (int i = 0; i < vDivs; i++)
+            {
+                float y01 = i / (vDivs - 1.0f);
+                DrawHGrid(plot, y01, yMin, yRange, labelFunction);
+            }
 
             for (int i = 0; i < samplePointCount; i++)
             {

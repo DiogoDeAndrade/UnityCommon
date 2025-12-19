@@ -1,9 +1,10 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace UC.RPG
 {
-    public class EquipmentRPGInstance
+    public class EquipmentRPGInstance : IEnumerable<(Hypertag slot, RPGEntity item)>
     {
         public delegate void OnChange(bool equip, Hypertag slot, RPGEntity item);
         public event OnChange onChange;
@@ -108,6 +109,22 @@ namespace UC.RPG
         public List<Hypertag> GetAvailableSlots()
         {
             return availableSlots;
+        }
+
+        public IEnumerator<(Hypertag slot, RPGEntity item)> GetEnumerator()
+        {
+            foreach (var kv in items)
+            {
+                if (kv.Value.item != null)
+                {
+                    yield return (kv.Key, kv.Value.item);
+                }
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 }

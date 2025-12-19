@@ -7,17 +7,16 @@ namespace UC.RPG
 
     [Serializable]
     [PolymorphicName("RPG/Item/Weapon")]
-    public class RPGItemWeapon : RPGItemGear
+    public class RPGItemWeapon : SOModule
     {
-        [Header("Weapon")]
         public      DamageType      damageType;
         public      DistanceRange  range;
         [SerializeReference]
-        private     AttackModule    _attackModule;
+        private     AttackModuleFunction    _attackModule;
         public      SoundDef        attackSound;
         public      SoundDef        missSound;
 
-        public AttackModule attackModule
+        public AttackModuleFunction attackModule
         {
             get
             {

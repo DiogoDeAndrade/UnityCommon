@@ -136,6 +136,7 @@ namespace UC.RPG
         }
 
         public float GetStat(StatType type) => _rpgEntity.Get(type).GetValue();
+        public bool HasStat(StatType type) => _rpgEntity.Has(type);
 
         public StatInstance GetStatInstance(StatType type) => _rpgEntity.Get(type);
         public ResourceInstance GetResourceInstance(ResourceType type) => _rpgEntity.Get(type);

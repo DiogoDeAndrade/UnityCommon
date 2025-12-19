@@ -1,7 +1,6 @@
 using NaughtyAttributes;
 using System;
 using UnityEngine;
-using static UnityEngine.Rendering.DebugUI;
 
 namespace UC.RPG
 {

@@ -6,11 +6,12 @@ namespace UC.RPG
     [System.Serializable]
     public class LevelRequirement : EquipCondition
     {
-        [SerializeField] private int minLevel;
+        [SerializeField, Tooltip("If minLevel = -1, then the minimum level is the level of the item itself")] private int minLevel = -1;
 
         public override bool CanEquip(Hypertag slot, RPGEntity entity, Item item)
         {
-            if (entity.level < minLevel) return false;
+            if ((entity.level < minLevel) && (minLevel >= 0)) return false;
+            if ((entity.level < item.level) && (minLevel == -1)) return false;
 
             return true;
         }
