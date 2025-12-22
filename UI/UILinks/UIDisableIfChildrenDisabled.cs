@@ -15,11 +15,17 @@ public class UIDisableIfChildrenDisabled : MonoBehaviour
     {
         foreach (Transform child in transform)
         {
-            if (child.gameObject.activeSelf)
+            if (!child.gameObject.activeSelf) continue;
+
+            // Check if it has a layout element
+            var le = child.GetComponent<LayoutElement>();
+            if (le)
             {
-                layoutElement.ignoreLayout = false;
-                return;
+                if (le.ignoreLayout) continue;
             }
+
+            layoutElement.ignoreLayout = false;
+            return;
         }
 
         layoutElement.ignoreLayout = true;

@@ -40,6 +40,7 @@ namespace UC.RPG
         [SerializeField] private Image displayIcon;
         [SerializeField] private TextMeshProUGUI textDisplay;
         [SerializeField] private string          _textOnEmpty;
+        [SerializeField] private TextMeshProUGUI header;
 
         bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY);
         bool needSpeedVar => (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed));
@@ -177,6 +178,21 @@ namespace UC.RPG
                 if ((currentResource <= 0) && (!string.IsNullOrEmpty(textOnEmpty))) txt = textOnEmpty;
 
                 textDisplay.text = string.Format(txt, GetResourceCount(), GetMaxResourceCount());
+            }
+
+            if (header)
+            {
+                header.text = "";
+                if (sourceResource)
+                {
+                    header.text = sourceResource.type.displayName;
+                    header.color = sourceResource.type.displayTextColor;
+                }
+                else if (sourceInstance != null)
+                {
+                    header.text = sourceInstance.type.displayName;
+                    header.color = sourceInstance.type.displayTextColor;
+                }
             }
 
             RunFade();

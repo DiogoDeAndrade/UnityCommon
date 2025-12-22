@@ -7,6 +7,7 @@ namespace UC.RPG
     public abstract class AttackModuleFunction
     {
         public abstract bool Attack(RPGEntity weapon, RPGEntity source, Vector2Int destPos);
-        public abstract (float minDamage, float maxDamage, float hitChance) GetWeaponDataTooltip(RPGEntity weapon, RPGEntity source);
+        public abstract Vector2 GetDamageRange(RPGEntity weapon, RPGEntity wielder);
+        public abstract float GetHitChance(RPGEntity weapon, RPGEntity wielder);
     }
 }

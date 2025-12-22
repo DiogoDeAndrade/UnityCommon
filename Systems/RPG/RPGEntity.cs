@@ -1,7 +1,5 @@
-using Mono.Cecil;
 using System;
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
 
 namespace UC.RPG
@@ -242,6 +240,13 @@ namespace UC.RPG
             if (s == null) return false;
             if (stats == null) return false;
             return stats.ContainsKey(s);
+        }
+
+        public bool Has(ResourceType r)
+        {
+            if (r == null) return false;
+            if (resources == null) return false;
+            return resources.ContainsKey(r);
         }
 
         public ResourceInstance Get(ResourceType r)
