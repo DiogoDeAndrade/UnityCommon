@@ -13,5 +13,6 @@ namespace UC.RPG
         public Sprite                       _displaySprite;
         public Color                        highlightColor = Color.white;
         public RuntimeAnimatorController    controller;
+        public EntityPanel.DataChannel      uiChannel = EntityPanel.AllDataChannels;
     }
 }
