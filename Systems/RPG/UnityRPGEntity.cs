@@ -50,23 +50,33 @@ namespace UC.RPG
         {
             SetupEntity();
 
-            if (data)
-            {
-                foreach (var r in data.GetModules<RPGResourceModule>(true))
-                {
-                    var res = rpgEntity.Get(r.type);
-                    res.onChange += Entity_onChange;
-                        
-                    if (r.type == GlobalsBase.healthResource)
-                    {
-                        health = res;
-                    }
-                }
+            RegisterEvents(rpgEntity);
+        }
 
-                if (health != null)
-                {
-                    health.onResourceEmpty += Entity_OnDeath;
-                }
+        protected virtual void RegisterEvents(RPGEntity entity)
+        {
+            var resources = entity.GetResources();
+            foreach (var res in resources)
+            {
+                var resInstance = entity.Get(res);
+                resInstance.onChange += Entity_onChange;
+
+            }
+
+            health = entity.Get(GlobalsBase.healthResource);
+            if (health != null)
+            {
+                health.onResourceEmpty += Entity_OnDeath;
+            }
+        }
+
+        protected virtual void UnregisterEvents(RPGEntity entity)
+        {
+            var resources = entity.GetResources();
+            foreach (var res in resources)
+            {
+                var resInstance = rpgEntity.Get(res);
+                resInstance.onChange -= Entity_onChange;
             }
         }
 
@@ -76,20 +86,7 @@ namespace UC.RPG
 
         protected virtual void OnDestroy()
         {
-            if (data)
-            {
-                foreach (var r in data.GetModules<RPGResourceModule>(true))
-                {
-                    var res = rpgEntity.Get(r.type);
-                    res.onChange -= Entity_onChange;
-                }
-
-                if (health != null)
-                {
-                    health.onResourceEmpty -= Entity_OnDeath;
-                }
-            }
-
+            UnregisterEvents(rpgEntity);
             Unregister(_rpgEntity);
         }
 

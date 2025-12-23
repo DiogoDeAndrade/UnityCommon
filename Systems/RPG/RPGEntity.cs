@@ -249,6 +249,19 @@ namespace UC.RPG
             return resources.ContainsKey(r);
         }
 
+        public List<ResourceType> GetResources()
+        {
+            var ret = new List<ResourceType>();
+            if (resources != null)
+            {
+                foreach (var r in resources.Keys)
+                {
+                    ret.Add(r);
+                }
+            }
+            return ret;
+        }
+
         public ResourceInstance Get(ResourceType r)
         {
             if (resources == null) return null;
