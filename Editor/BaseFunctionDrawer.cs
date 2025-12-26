@@ -106,11 +106,14 @@ namespace UC.Editor
 
             HandleContextMenu(popupRect, (newIndex >= 0) ? _types[newIndex] : null);
 
+            bool justCreated = false;
+
             if (newIndex != currentIndex)
             {
                 if (newIndex >= 0 && newIndex < _types.Length)
                 {
                     property.managedReferenceValue = Activator.CreateInstance(_types[newIndex]);
+                    justCreated = true;
                 }
                 else
                 {
@@ -119,7 +122,7 @@ namespace UC.Editor
             }
 
             // Draw fields of the selected T below
-            if (property.managedReferenceValue != null)
+            if ((property.managedReferenceValue != null) && (!justCreated))
             {
                 EditorGUI.indentLevel++;
 
