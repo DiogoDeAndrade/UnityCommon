@@ -172,7 +172,7 @@ namespace UC.RPG
         }
 
 
-        protected void RunActionPerformed()
+        public void RunActionPerformed()
         {
             onActionPerformed?.Invoke(this);
         }

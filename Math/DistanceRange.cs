@@ -13,6 +13,15 @@ namespace UC
         public float min = 0;
         public float max = 10;
 
+        public DistanceRange()
+        {
+        }
+        public DistanceRange(int range, Type type = Type.Euclidean)
+        {
+            this.type = type;
+            max = range;
+        }
+
         public float GetDistance(Vector2 p1, Vector2 p2)
         {
             switch (type)
