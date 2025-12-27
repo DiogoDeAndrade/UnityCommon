@@ -20,36 +20,43 @@ namespace UC.RPG
 
         public override string GetModuleHeaderString() => "Turn Driver (Composite)";
 
-        public override bool IsEnabled(UnityRPGEntity entity)
+        public override void Init(UnityRPGEntity entity, TurnState state)
+        {
+            foreach (var driver in _drivers)
+            {
+                driver?.Init(entity, state);
+            }
+        }
+        public override bool IsEnabled(UnityRPGEntity entity, TurnState state)
         {
             if (!_enabled)
             {
                 return false;
             }
 
-            return FindBestDriver(entity) != null;
+            return FindBestDriver(entity, state) != null;
         }
 
-        public override float GetPriority(UnityRPGEntity entity)
+        public override float GetPriority(UnityRPGEntity entity, TurnState state)
         {
-            var best = FindBestDriver(entity);
+            var best = FindBestDriver(entity, state);
             if (best == null) return float.NegativeInfinity;
 
-            return best.GetPriority(entity) + _priorityBias;
+            return best.GetPriority(entity, state) + _priorityBias;
         }
 
-        public override bool Execute(UnityRPGEntity entity)
+        public override bool Execute(UnityRPGEntity entity, TurnState state)
         {
-            var best = FindBestDriver(entity);
+            var best = FindBestDriver(entity, state);
             if (best != null)
             {
-                return best.Execute(entity);
+                return best.Execute(entity, state);
             }
 
             return false;
         }
 
-        private TurnDriver FindBestDriver(UnityRPGEntity entity)
+        private TurnDriver FindBestDriver(UnityRPGEntity entity, TurnState state)
         {
             TurnDriver best = null;
             float bestPriority = float.NegativeInfinity;
@@ -63,10 +70,10 @@ namespace UC.RPG
                 if (d == null || !d.enabled)
                     continue;
 
-                if (!d.IsEnabled(entity))
+                if (!d.IsEnabled(entity, state))
                     continue;
 
-                float p = d.GetPriority(entity);
+                float p = d.GetPriority(entity, state);
 
                 // Tie-breaker: earlier in list wins (stable + designer-friendly)
                 if (p > bestPriority)

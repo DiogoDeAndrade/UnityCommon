@@ -100,6 +100,27 @@ namespace UC
             return false;
         }
 
+        public bool CheckCollision(Vector2Int endPosGrid, GridObject gridObject, out GridCollider collisionObject)
+        {
+            foreach (var collider in gridColliders)
+            {
+                // Check if this collider is on the same object as the given object
+                if (collider.transform.IsChildOf(gridObject.transform)) continue;
+                if ((collider.gridObject) && (!collider.gridObject.isSolid)) continue;
+
+                if (collider.IsIntersecting(endPosGrid))
+                {
+                    collisionObject = collider;
+
+                    return true;
+                }
+            }
+
+            collisionObject = null;
+
+            return false;
+        }
+
         public List<GridActionContainer.NamedAction> GetActions(GridObject subject, Vector2Int position)
         {
             var ret = new List<GridActionContainer.NamedAction>();

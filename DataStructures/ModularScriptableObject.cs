@@ -13,13 +13,20 @@ namespace UC
         protected bool _open = true; 
         [SerializeField, HideInInspector]
         protected ModularScriptableObject _scriptableObject;
+        [SerializeField, HideInInspector]
+        protected RPGModuleOverride       _moduleOverride;
 
-        public ModularScriptableObject scriptableObject => _scriptableObject;
+        public ModularScriptableObject  scriptableObject => _scriptableObject;
+        public RPGModuleOverride        moduleOverride => _moduleOverride;
         public bool enabled => _enabled;
 
         internal void SetOwner(ModularScriptableObject owner)
         {
             _scriptableObject = owner;
+        }
+        internal void SetOwner(RPGModuleOverride owner)
+        {
+            _moduleOverride = owner;
         }
 
         public static bool operator true(SOModule m) => m != null;
@@ -41,6 +48,45 @@ namespace UC
         public IReadOnlyList<ModularScriptableObject>   parents => _parents;
         public IReadOnlyList<SOModule>                  modules => _modules;
 
+        public bool IsA(ModularScriptableObject objType)
+        {
+            if (objType == this) return true;
+            foreach (ModularScriptableObject parent in _parents)
+            {
+                if (parent.IsA(objType)) return true;
+            }
+
+            return false;
+        }
+
+        public T GetModule<T>(GameObject gameObject, bool includeParents = false) where T : SOModule
+        {
+            var moduleOverride = gameObject.GetComponent<RPGModuleOverride>();
+            if (moduleOverride)
+            {
+                var ret = moduleOverride.GetModule<T>();
+                if (ret) return ret;
+            }
+
+            // Local search first
+            for (int i = 0; i < _modules.Count; i++)
+            {
+                if ((_modules[i] is T tModule) && (_modules[i].enabled))
+                {
+                    return tModule;
+                }
+            }
+
+            if (!includeParents)
+            {
+                return null;
+            }
+
+            // Recursive parent search with cycle protection
+            HashSet<ModularScriptableObject> visited = new();
+            visited.Add(this);
+            return GetModuleRecursive<T>(visited);
+        }
         public T GetModule<T>(bool includeParents = false) where T : SOModule
         {
             // Local search first
@@ -88,6 +134,16 @@ namespace UC
             }
 
             return null;
+        }
+
+        public List<T> GetModules<T>(GameObject gameObject, bool includeParents = false, List<T> result = null) where T : SOModule
+        {
+            result ??= new List<T>();
+
+            var moduleOverride = gameObject.GetComponent<RPGModuleOverride>();
+            if (moduleOverride) result = moduleOverride.GetModules<T>(result);
+
+            return GetModules<T>(includeParents, result);
         }
 
         public List<T> GetModules<T>(bool includeParents = false, List<T> result = null) where T : SOModule

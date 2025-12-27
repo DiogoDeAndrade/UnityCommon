@@ -20,6 +20,7 @@ namespace UC.RPG
 
         protected RPGEntity         _rpgEntity;
         protected ResourceInstance  health;
+        protected TurnState         state;
 
         public Archetype                archetype => _archetype;
         public RPGEntity                rpgEntity => _rpgEntity;
@@ -108,13 +109,13 @@ namespace UC.RPG
 
             if (data)
             {
-                foreach (var r in data.GetModules<RPGResourceModule>(true))
+                foreach (var r in data.GetModules<RPGResourceModule>(gameObject, true))
                 {
                     var handler = gameObject.AddComponent<ResourceHandler>();
                     handler.instance = _rpgEntity.Get(r.type);
                 }
 
-                var inventoryModule = data.GetModule<RPGInventoryModule>(true);
+                var inventoryModule = data.GetModule<RPGInventoryModule>(gameObject, true);
                 if (inventoryModule)
                 {
                     if (inventoryModule.hasInventory)
@@ -128,7 +129,14 @@ namespace UC.RPG
                         var equipmentHandler = gameObject.AddComponent<EquipmentRPG>();
                         equipmentHandler.instance = _rpgEntity.equipment;
                     }
-                }
+                }                
+
+                state = new TurnState();
+                var turnDrivers = data.GetModules<TurnDriver>(gameObject, true);
+                foreach (var driver in turnDrivers)
+                {
+                    driver.Init(this, state);
+                }                
             }
         }
 
@@ -179,7 +187,7 @@ namespace UC.RPG
 
         public virtual float GetInitiative()
         {
-            return 0.0f;
+            return level;
         }
 
         // Get notified by main system that an action should be taken (or not)
@@ -192,17 +200,17 @@ namespace UC.RPG
             // Search for TurnDriver and take decisions
             if (!data) return;
 
-            var turnDrivers = data.GetModules<TurnDriver>(true);
+            var turnDrivers = data.GetModules<TurnDriver>(gameObject, true);
 
             // Remove all disabled modules
-            turnDrivers.RemoveAll(m => !m.IsEnabled(this));
+            turnDrivers.RemoveAll(m => !m.IsEnabled(this, state));
 
             // Precompute priority once, sort, then unwrap
             var tmp = new List<(TurnDriver driver, float priority)>(turnDrivers.Count);
 
             foreach (var d in turnDrivers)
             {
-                tmp.Add((d, d.GetPriority(this)));
+                tmp.Add((d, d.GetPriority(this, state)));
             }
 
             tmp.Sort((a, b) => b.priority.CompareTo(a.priority)); // largest -> smallest
@@ -216,7 +224,7 @@ namespace UC.RPG
 
             foreach (var d in turnDrivers)
             {
-                if (d.Execute(this))
+                if (d.Execute(this, state))
                 {
                     // Done, found an action I can execute
                     return;

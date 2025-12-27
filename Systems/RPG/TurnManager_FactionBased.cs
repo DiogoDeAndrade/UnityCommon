@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UC.RPG;
+using UnityEditor;
 using UnityEngine;
 
 namespace UC
@@ -105,7 +106,8 @@ namespace UC
 
             if (simultaneousTurns)
             {
-                foreach (var pendingEntity in pendingEntities)
+                var sEntities = new List<UnityRPGEntity>(pendingEntities);
+                foreach (var pendingEntity in sEntities)
                 {
                     pendingEntity.onActionPerformed += TurnDone;
                     pendingEntity.RunTurn(true);

@@ -4,21 +4,13 @@ using UnityEngine;
 using UC;
 using UC.Interaction.Editor;
 
-[CustomEditor(typeof(ModularScriptableObject), true)]
-public class ModularScriptableObjectEditor : Editor
+[CustomEditor(typeof(RPGModuleOverride), true)]
+public class RPGModuleOverrideEditor : Editor
 {
-    // "Clipboard" for modules (JSON + type name)
-    public static string s_ModuleClipboardJson;
-    public static string s_ModuleClipboardTypeName;
-
-    public static bool HasClipboard => (!string.IsNullOrEmpty(s_ModuleClipboardJson)) && (!string.IsNullOrEmpty(s_ModuleClipboardTypeName));
-
-    private SerializedProperty _parentsProp;
     private SerializedProperty _modulesProp;
 
     private void OnEnable()
     {
-        _parentsProp = serializedObject.FindProperty("_parents");
         _modulesProp = serializedObject.FindProperty("_modules");
     }
 
@@ -26,12 +18,9 @@ public class ModularScriptableObjectEditor : Editor
     {
         serializedObject.Update();
 
-        var mso = (ModularScriptableObject)target;
+        var mso = (RPGModuleOverride)target;
 
         DrawHeader();
-        EditorGUILayout.Space();
-
-        DrawParentsSection();
         EditorGUILayout.Space();
 
         // Draw all other fields except parents/modules + script
@@ -47,12 +36,7 @@ public class ModularScriptableObjectEditor : Editor
     {
     }
 
-    private void DrawParentsSection()
-    {
-        EditorGUILayout.PropertyField(_parentsProp, includeChildren: true);
-    }
-
-    private void DrawModulesSection(ModularScriptableObject mso)
+    private void DrawModulesSection(RPGModuleOverride mso)
     {
         EditorGUILayout.LabelField("Modules", EditorStyles.boldLabel);
 
@@ -79,7 +63,7 @@ public class ModularScriptableObjectEditor : Editor
                 ShowAddModuleMenu(mso);
             }
 
-            using (new EditorGUI.DisabledScope(!HasClipboard))
+            using (new EditorGUI.DisabledScope(!ModularScriptableObjectEditor.HasClipboard))
             {
                 if (GUILayout.Button("Paste Module from Clipboard", GUILayout.Height(22)))
                 {
@@ -89,7 +73,7 @@ public class ModularScriptableObjectEditor : Editor
         }
     }
 
-    private void DrawModulePanel(ModularScriptableObject mso, SerializedProperty element, int index)
+    private void DrawModulePanel(RPGModuleOverride mso, SerializedProperty element, int index)
     {
         if (element == null)
             return;
@@ -198,7 +182,7 @@ public class ModularScriptableObjectEditor : Editor
                 menu.AddDisabledItem(new GUIContent("Copy"));
 
             // Paste (overwrite)
-            if (HasClipboard)
+            if (ModularScriptableObjectEditor.HasClipboard)
             {
                 menu.AddItem(new GUIContent("Paste"), false, () =>
                 {
@@ -260,7 +244,7 @@ public class ModularScriptableObjectEditor : Editor
         EditorGUI.indentLevel--;
     }
 
-    private void RemoveModuleAt(ModularScriptableObject mso, int index)
+    private void RemoveModuleAt(RPGModuleOverride mso, int index)
     {
         var moduleProp = _modulesProp.GetArrayElementAtIndex(index);
         var moduleObj = moduleProp.managedReferenceValue as SOModule;
@@ -275,7 +259,7 @@ public class ModularScriptableObjectEditor : Editor
         EditorUtility.SetDirty(mso);
     }
 
-    private void MoveModule(ModularScriptableObject mso, int from, int to)
+    private void MoveModule(RPGModuleOverride mso, int from, int to)
     {
         if ((from == to) || (from < 0) || (to < 0) || (from >= _modulesProp.arraySize) || (to >= _modulesProp.arraySize))
             return;
@@ -286,7 +270,7 @@ public class ModularScriptableObjectEditor : Editor
         EditorUtility.SetDirty(mso);
     }
 
-    private void ShowAddModuleMenu(ModularScriptableObject mso)
+    private void ShowAddModuleMenu(RPGModuleOverride mso)
     {
         var menu = new GenericMenu();
 
@@ -310,7 +294,7 @@ public class ModularScriptableObjectEditor : Editor
         menu.ShowAsContext();
     }
 
-    private void AddModuleOfType(ModularScriptableObject mso, Type t)
+    private void AddModuleOfType(RPGModuleOverride mso, Type t)
     {
         Undo.RecordObject(mso, "Add Module");
 
@@ -357,13 +341,13 @@ public class ModularScriptableObjectEditor : Editor
         if (module == null)
             return;
 
-        s_ModuleClipboardJson = JsonUtility.ToJson(module);
-        s_ModuleClipboardTypeName = module.GetType().AssemblyQualifiedName;
+        ModularScriptableObjectEditor.s_ModuleClipboardJson = JsonUtility.ToJson(module);
+        ModularScriptableObjectEditor.s_ModuleClipboardTypeName = module.GetType().AssemblyQualifiedName;
     }
 
-    private void PasteModuleOver(ModularScriptableObject mso, SerializedProperty element)
+    private void PasteModuleOver(RPGModuleOverride mso, SerializedProperty element)
     {
-        if (!HasClipboard || element == null)
+        if (!ModularScriptableObjectEditor.HasClipboard || element == null)
             return;
 
         var targetModule = element.managedReferenceValue as SOModule;
@@ -372,19 +356,19 @@ public class ModularScriptableObjectEditor : Editor
 
         Undo.RecordObject(mso, "Paste Module (Overwrite)");
 
-        JsonUtility.FromJsonOverwrite(s_ModuleClipboardJson, targetModule);
+        JsonUtility.FromJsonOverwrite(ModularScriptableObjectEditor.s_ModuleClipboardJson, targetModule);
 
-        // Owner (_scriptableObject) will be corrected by OnValidate in ModularScriptableObject.
+        // Owner (_scriptableObject) will be corrected by OnValidate in RPGModuleOverride.
         EditorUtility.SetDirty(mso);
         serializedObject.Update();
     }
 
-    private void PasteModuleAsNew(ModularScriptableObject mso)
+    private void PasteModuleAsNew(RPGModuleOverride mso)
     {
-        if (!HasClipboard)
+        if (!ModularScriptableObjectEditor.HasClipboard)
             return;
 
-        var type = System.Type.GetType(s_ModuleClipboardTypeName);
+        var type = System.Type.GetType(ModularScriptableObjectEditor.s_ModuleClipboardTypeName);
         if (type == null || !typeof(SOModule).IsAssignableFrom(type))
             return;
 
@@ -395,7 +379,7 @@ public class ModularScriptableObjectEditor : Editor
         if (newModule == null)
             return;
 
-        JsonUtility.FromJsonOverwrite(s_ModuleClipboardJson, newModule);
+        JsonUtility.FromJsonOverwrite(ModularScriptableObjectEditor.s_ModuleClipboardJson, newModule);
 
         // Owner will again be re-established in OnValidate.
         EditorUtility.SetDirty(mso);
