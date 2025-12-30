@@ -8,7 +8,7 @@ namespace UC.RPG
     [PolymorphicName("RPG/Visuals Module")]
     public class RPGVisualsModule: SOModule
     {
-        public GameObject                   gfxElementPrefab = null;
+        public RPGGfx                       gfxElementPrefab = null;
         public Vector2                      gfxOffset = Vector2.zero;
         public Sprite                       _displaySprite;
         public Color                        highlightColor = Color.white;
@@ -26,12 +26,12 @@ namespace UC.RPG
         public void InitGraphics(GameObject gameObject)
         {
             // Check if there is already a graphics object
-            var gfx = RPGConfig.gfxTag.FindIn(gameObject);
+            var gfx = gameObject.GetComponentInChildren<RPGGfx>();
             if ((gfx) && (gfxElementPrefab != null))
             {
                 // Delete existing one, remove it first from the hierarchy so it doesn't influence GetComponents before the end of the frame
                 gfx.transform.SetParent(null);
-                GameObject.Destroy(gfx);
+                GameObject.Destroy(gfx.gameObject);
             }
 
             // Spawn object
@@ -44,23 +44,10 @@ namespace UC.RPG
 
             if (controller)
             {
-                var animator = gfx.GetComponent<Animator>();
-                if (animator)
-                {
-                    animator.runtimeAnimatorController = controller;
-                }
+                gfx.SetAnimator(controller);
             }
 
-            // Find shadow object
-            var shadowGfx = RPGConfig.gfxShadowTag.FindAllIn<SpriteRenderer>(gameObject);
-            if (shadowGfx != null)
-            {
-                foreach (var sg in shadowGfx)
-                {
-                    sg.enabled = enableShadow;
-                    sg.transform.localScale = shadowScale.xy1();
-                }
-            }
+            gfx.SetShadow(enableShadow, shadowScale.xy1());            
         }
     }
 }
