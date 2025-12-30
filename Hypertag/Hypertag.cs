@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 namespace UC
 {
@@ -23,6 +22,72 @@ namespace UC
         public T FindFirst<T>() where T : Component
         {
             return FindFirstObjectWithHypertag<T>(this);
+        }
+
+        public GameObject FindIn(GameObject baseObject) 
+        {
+            if (baseObject.HasHypertag(this))
+            {
+                return baseObject;
+            }
+
+            foreach (Transform t in baseObject.transform)
+            {
+                var ret = FindIn(t.gameObject);
+                if (ret) return ret;
+            }
+
+            return null;
+        }
+
+        public T FindIn<T>(GameObject baseObject) where T : Component
+        {
+            if (baseObject.HasHypertag(this))
+            {
+                return baseObject.GetComponent<T>();
+            }
+
+            foreach (Transform t in baseObject.transform)
+            {
+                var ret = FindIn<T>(t.gameObject);
+                if (ret) return ret;
+            }
+
+            return null;
+        }
+
+        public List<GameObject> FindAllIn(GameObject baseObject, List<GameObject> outputList = null)
+        {
+            var ret = outputList ?? new List<GameObject>();
+
+            if (baseObject.HasHypertag(this))
+            {
+                ret.Add(baseObject);
+            }
+
+            foreach (Transform t in baseObject.transform)
+            {
+                FindAllIn(t.gameObject, ret);
+            }
+
+            return ret;
+        }
+
+        public List<T> FindAllIn<T>(GameObject baseObject, List<T> outputList = null) where T : Component
+        {
+            var ret = outputList ?? new List<T>();
+
+            if (baseObject.HasHypertag(this))
+            {
+                ret.AddRange(baseObject.GetComponents<T>());
+            }
+
+            foreach (Transform t in baseObject.transform)
+            {
+                FindAllIn<T>(t.gameObject, ret);
+            }
+
+            return ret;
         }
 
         public GameObject FindFirstGameObject()

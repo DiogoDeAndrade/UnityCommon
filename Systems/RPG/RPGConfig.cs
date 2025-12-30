@@ -22,6 +22,11 @@ namespace UC
         private List<ArmourModuleFunctionElem> _armourFunctions;
         [SerializeField, Tooltip("This stat is used for the calculation of the K component in the armour mitigation code.")]
         private StatType _itemArmourKStat;
+        [HorizontalLine(color: EColor.Blue)]
+        [SerializeField]
+        private Hypertag _gfxTag;
+        [SerializeField]
+        private Hypertag _gfxShadowTag;
 
         List<ArmourModuleFunction> _GetArmourFunctions(DamageType damageType)
         {
@@ -64,5 +69,7 @@ namespace UC
             return instanceBase?._GetArmourFunctions(damageType);
         }
         public static StatType itemArmourKStat => instanceBase?._itemArmourKStat;
+        public static Hypertag gfxTag => instanceBase?._gfxTag;
+        public static Hypertag gfxShadowTag => instanceBase?._gfxShadowTag;
     }
 }

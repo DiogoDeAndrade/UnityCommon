@@ -154,6 +154,11 @@ namespace UC
             return false;
         }
 
+        public void SetSpriteRenderer(SpriteRenderer spriteRenderer)
+        {
+            this.spriteRenderer = spriteRenderer;
+        }
+
         private void OnDrawGizmosSelected()
         {
             if ((colliderType == Type.Sprite) && (spriteRenderer))

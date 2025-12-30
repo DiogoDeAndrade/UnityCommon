@@ -39,5 +39,10 @@ namespace UC
                 case 3: if (spriteRight) spriteRenderer.sprite = spriteRight; spriteRenderer.flipX = flipRight; break;
             }
         }
+
+        public void SetSpriteRenderer(SpriteRenderer spriteRenderer)
+        {
+            this.spriteRenderer = spriteRenderer;
+        }
     }
 }
