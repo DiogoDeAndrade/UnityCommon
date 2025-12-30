@@ -1,3 +1,4 @@
+using NaughtyAttributes;
 using System;
 using UnityEngine;
 
@@ -12,9 +13,13 @@ namespace UC.RPG
         public Sprite                       _displaySprite;
         public Color                        highlightColor = Color.white;
         public bool                         enableHitFlash = true;
-        public RuntimeAnimatorController    controller;
         public bool                         enableShadow = true;
         public Vector2                      shadowScale = Vector2.one;
+        [Header("Animation")]
+        public RuntimeAnimatorController    controller;
+        public bool                         desynchAnimation = true;
+        [MinMaxSlider(0.1f, 2.0f)]
+        public Vector2                      animationSpeed = Vector2.one;
         [Header("UI")]
         public EntityPanel.DataChannel      uiChannel = EntityPanel.AllDataChannels;
 
