@@ -19,3 +19,5 @@ MonoBehaviour:
     destMaterial: {fileID: 2100000, guid: 424b595fb00c0a84f937990792d64e89, type: 2}
   - srcMaterial: {fileID: 2100000, guid: 4fca24bb902170d4ebe80ee3814daa9c, type: 2}
     destMaterial: {fileID: 2100000, guid: 43928b076a7d44045ba37b25de0213d2, type: 2}
+  - srcMaterial: {fileID: 2100000, guid: 2193c74d206c7ac43a174749771b1267, type: 2}
+    destMaterial: {fileID: 2100000, guid: 931f5e2fb7bdd3f4aaf49bcf18194794, type: 2}
