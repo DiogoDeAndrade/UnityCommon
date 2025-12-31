@@ -7,7 +7,8 @@ namespace UC
 
     public class HypertaggedObject : MonoBehaviour
     {
-        public Hypertag hypertag;
+        [SerializeField]
+        protected Hypertag hypertag;
 
         void Awake()
         {
@@ -18,6 +19,15 @@ namespace UC
         {
             RemoveFromHypertagList(this);
         }
+
+        public void SetHypertag(Hypertag hypertag)
+        {
+            RemoveFromHypertagList(this);
+            this.hypertag = hypertag;
+            AddToHypertagList(this);
+        }
+
+        public Hypertag GetHypertag() => hypertag;
 
         public bool HasAnyHypertag(IEnumerable<Hypertag> hypertags)
         {
@@ -38,6 +48,8 @@ namespace UC
         {
             return (this.hypertag == hypertag);
         }
+
+        public bool IsNullHypertag() => (this.hypertag == null);
 
         static Dictionary<Hypertag, List<HypertaggedObject>> allHypertagObjects = new();
 

@@ -228,9 +228,9 @@ namespace UC
             for (int i = 0; i < audioSources.Count; i++)
             {
                 var source = audioSources[i];
-                if ((!source.isPlaying) && ((audioTags[i].hypertag == tag) || (tag == null) || (audioTags[i].hypertag == null)))
+                if ((!source.isPlaying) && ((audioTags[i].HasAnyHypertag(tag)) || (tag == null) || (audioTags[i].IsNullHypertag())))
                 {
-                    audioTags[i].hypertag = tag;
+                    audioTags[i].SetHypertag(tag);
                     return (source, audioTags[i]);
                 }
             }
@@ -246,7 +246,7 @@ namespace UC
 
             var audioSource = go.AddComponent<AudioSource>();
             var ht = go.AddComponent<HypertaggedObject>();
-            ht.hypertag = tag;
+            ht.SetHypertag(tag);
 
             audioSources.Add(audioSource);
             audioTags.Add(ht);
@@ -257,7 +257,7 @@ namespace UC
         {
             for (int i = 0; i < audioSources.Count; i++)
             {
-                if ((audioSources[i].isPlaying) && (audioTags[i].hypertag == soundTag)) return audioSources[i];
+                if ((audioSources[i].isPlaying) && (audioTags[i].HasAnyHypertag(soundTag))) return audioSources[i];
             }
 
             return null;

@@ -9,6 +9,8 @@ namespace UC.RPG
         [SerializeField]
         private Animator            _primaryAnimator;
         [SerializeField]
+        private Renderer            _primaryRenderer;
+        [SerializeField]
         private Animator[]          _animators;
         [SerializeField]
         private SpriteRenderer[]    _spriteRenderers;
@@ -18,6 +20,7 @@ namespace UC.RPG
         private SpriteRenderer[]    _shadowRenderers;
 
         public Animator primaryAnimator => _primaryAnimator;
+        public Renderer primaryRenderer => _primaryRenderer;
         public Animator[] animators { get => _animators; }
 
         public void SetAnimator(RuntimeAnimatorController controller)

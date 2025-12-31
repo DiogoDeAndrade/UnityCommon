@@ -9,7 +9,7 @@ namespace UC
         {
             foreach (var obj in go.GetComponents<HypertaggedObject>())
             {
-                if (obj.hypertag == tag) return true;
+                if (obj.HasAnyHypertag(tag)) return true;
             }
 
             return false;
