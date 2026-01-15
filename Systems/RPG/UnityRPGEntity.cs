@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace UC.RPG
 {
-    public abstract class UnityRPGEntity : MonoBehaviour
+    public abstract class UnityRPGEntity : ActionRunner
     {
         public delegate void OnActionPerformed(UnityRPGEntity entity);
         public event OnActionPerformed onActionPerformed;

@@ -69,7 +69,7 @@ namespace UC.RPG
                 targetEntity = resource.owner as RPGEntity,
                 changeSource = changeSource,
                 changeData = changeData,
-                runner = AreaManager.instance
+                runner = FindRunner(changeSource)
             };
             if (conditions != null)
             {
@@ -83,6 +83,16 @@ namespace UC.RPG
             }
 
             GameAction.RunActions(actions, context);
+        }
+
+        private ActionRunner FindRunner(GameObject source)
+        {
+            var ret = source.GetComponent<ActionRunner>();
+            if (ret) return ret;
+
+            ret = GameObject.FindFirstObjectByType<ActionRunner>();
+
+            return ret;
         }
     }
 }

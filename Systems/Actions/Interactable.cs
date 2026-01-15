@@ -1,10 +1,9 @@
 using NaughtyAttributes;
-using System.Collections;
 using UnityEngine;
 
 namespace UC.Interaction
 {
-    public class Interactable : MonoBehaviour
+    public class Interactable : ActionRunner
     {
         [SerializeField] 
         protected InteractionVerb   interactionVerb;
@@ -65,7 +64,7 @@ namespace UC.Interaction
             return true;
         }
 
-        public bool Interact(ActionContext context, MonoBehaviour runnerObject)
+        public bool Interact(ActionContext context, ActionRunner runnerObject)
         {
             context.runner = runnerObject ? runnerObject : this;
 

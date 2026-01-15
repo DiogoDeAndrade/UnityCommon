@@ -13,6 +13,6 @@ namespace UC.Interaction
         public GameObject       changeSource;
         public ChangeData       changeData;
         // For action execution
-        public MonoBehaviour    runner;
+        public ActionRunner     runner;
     }
 }
