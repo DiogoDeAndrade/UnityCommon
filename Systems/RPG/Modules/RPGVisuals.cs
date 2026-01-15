@@ -21,7 +21,7 @@ namespace UC.RPG
         [MinMaxSlider(0.1f, 2.0f)]
         public Vector2                      animationSpeed = Vector2.one;
         [Header("UI")]
-        public EntityPanel.DataChannel      uiChannel = EntityPanel.AllDataChannels;
+        public DataChannel                  uiChannel = DataChannel.All;
 
         public void InitGraphics(GameObject gameObject)
         {
