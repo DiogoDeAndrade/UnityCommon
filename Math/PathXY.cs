@@ -8,7 +8,7 @@ namespace UC
 {
     public class PathXY : MonoBehaviour
     {
-        [SerializeField] public enum Type { Linear = 0, CatmulRom = 1, Circle = 2, Arc = 3, Polygon = 4, Bezier = 5 };
+        public enum Type { Linear = 0, CatmulRom = 1, Circle = 2, Arc = 3, Polygon = 4, Bezier = 5 };
 
         [SerializeField]
         private Type type = Type.Linear;
