@@ -778,7 +778,7 @@ namespace UC
                         for (int i = 0; i < vertices.Length; i++)
                         {
                             Gizmos.color = Color.green;
-                            DebugHelpers.DrawArrow(vertices[i], normals[i], 0.1f, 0.025f, normals[i].Perpendicular());
+                            DebugHelpers.DrawArrow(vertices[i], normals[i], 0.1f, 0.025f, 45.0f, normals[i].Perpendicular());
                         }
                     }
                 }

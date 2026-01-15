@@ -80,7 +80,7 @@ namespace UC
                             Vector3 d = p2 - p1;
                             float mag = d.magnitude;
                             d.Normalize();
-                            DebugHelpers.DrawArrow(p1, d, mag, 0.05f * mag, d.PerpendicularXY());
+                            DebugHelpers.DrawArrow(p1, d, mag, 0.05f * mag, 45.0f, d.PerpendicularXY());
                         }
                         else
                         {

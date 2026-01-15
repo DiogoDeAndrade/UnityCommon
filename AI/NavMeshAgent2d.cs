@@ -718,9 +718,9 @@ namespace UC
                 }
 
                 Gizmos.color = Color.cyan;
-                DebugHelpers.DrawArrow(transform.position, desiredDir, 10.0f, 5.0f, desiredDir.Perpendicular());
+                DebugHelpers.DrawArrow(transform.position, desiredDir, 10.0f, 5.0f, 45.0f, desiredDir.Perpendicular());
                 Gizmos.color = Color.yellow;
-                DebugHelpers.DrawArrow(transform.position, velocity.normalized, 10.0f, 5.0f, desiredDir.Perpendicular());
+                DebugHelpers.DrawArrow(transform.position, velocity.normalized, 10.0f, 5.0f, 45.0f, desiredDir.Perpendicular());
 
                 Gizmos.color = Color.red;
                 Gizmos.DrawSphere(targetPosition, 3.0f);

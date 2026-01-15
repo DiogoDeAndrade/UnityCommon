@@ -69,7 +69,7 @@ namespace UC
         {
             Gizmos.matrix = ownerGameObject.transform.localToWorldMatrix * Matrix4x4.TRS(normal * d, Quaternion.LookRotation(normal.Perpendicular(), normal), Vector3.one);
             Gizmos.DrawCube(Vector3.zero, new Vector3(size.x, 0.1f, size.y));
-            DebugHelpers.DrawArrow(Vector3.zero, Vector3.up, Mathf.Min(size.x, size.y) * 0.5f, Mathf.Min(size.x, size.y) * 0.25f, Vector3.right);
+            DebugHelpers.DrawArrow(Vector3.zero, Vector3.up, Mathf.Min(size.x, size.y) * 0.5f, Mathf.Min(size.x, size.y) * 0.25f, 45.0f, Vector3.right);
         }
 #endif
     }

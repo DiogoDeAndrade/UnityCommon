@@ -18,6 +18,7 @@ namespace UC
 
             public bool isLeaf => (children == null || children.Count == 0);
             public bool isRoot => parent == -1;
+            public int childrenCount => (children == null) ? (0) : (children.Count);
 
             public N data;
             public int parent;
@@ -41,7 +42,8 @@ namespace UC
         [SerializeField]
         public int rootNodeId = -1;
 
-        public int nodeCount => (nodes != null) ? (nodes.Count) : (0);
+        public int nodeCount => CountNodes(rootNodeId);
+        public int edgeCount => CountEdges(rootNodeId);
 
         public Tree(N node)
         {
@@ -226,6 +228,30 @@ namespace UC
         public bool IsLeaf(int nodeId)
         {
             return nodes[nodeId].isLeaf;
+        }
+
+        private int CountNodes(int nodeId)
+        {
+            int count = 1;
+
+            if (nodes[nodeId].children != null)
+            {
+                foreach (var child in nodes[nodeId].children) count += CountNodes(child);
+            }
+
+            return count;
+        }
+
+        private int CountEdges(int nodeId)
+        {
+            int count = nodes[nodeId].childrenCount;
+
+            if (nodes[nodeId].children != null)
+            {
+                foreach (var child in nodes[nodeId].children) count += CountEdges(child);
+            }
+
+            return count;
         }
     }
 }
