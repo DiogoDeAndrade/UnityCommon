@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using static UC.SimpleOutline3d;
 
 [ExecuteAlways]
 [DisallowMultipleComponent]
@@ -16,22 +17,18 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
 
     public enum DisableOriginalsMode
     {
-        /// <summary>Always disable originals while override is enabled.</summary>
         Always,
-
-        /// <summary>
-        /// Disable originals only for SceneView rendering (so GameView can keep normal rendering unless you also draw there).
-        /// </summary>
         OnlyWhenDrawingSceneView,
-
-        /// <summary>
-        /// Disable originals only for GameView rendering (so SceneView can keep normal rendering unless you also draw there).
-        /// </summary>
         OnlyWhenDrawingGameView,
-
-        /// <summary>Never disable originals; just draw the override on top.</summary>
         Never
     }
+
+    public enum Component
+    {
+        Position, Normal, Tangent, 
+        Color,
+        UV0, UV1, UV2, UV3, UV4, UV5, UV6, UV7,
+    };
 
     [Header("Override")]
     [SerializeField] private bool _enabledOverride = false;
@@ -69,6 +66,8 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
 
         public Mesh meshInstance;
         public Transform tr;
+
+        public bool dirty;
     }
 
     // We track per-camera whether originals were forced off, so we can restore safely.
@@ -266,7 +265,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
         for (int i = 0; i < _entries.Count; i++)
         {
             var e = _entries[i];
-            if (e.tr == null || e.meshInstance == null) continue;
+            if ((e.tr == null) || (e.meshInstance == null)) continue;
             if (!e.tr.gameObject) continue;
 
             if (e.isSkinned)
@@ -275,22 +274,19 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
                 e.skinned.BakeMesh(e.meshInstance);
             }
 
+            if (e.dirty)
+            {
+                // If we had any data changed, upload to GPU now.
+                e.meshInstance.UploadMeshData(false);
+                e.dirty = false;
+            }
+
             var matrix = e.tr.localToWorldMatrix;
 
             int subMeshCount = Mathf.Max(1, e.meshInstance.subMeshCount);
             for (int sub = 0; sub < subMeshCount; sub++)
             {
-                Graphics.DrawMesh(
-                    e.meshInstance,
-                    matrix,
-                    _overrideMaterial,
-                    _drawLayer,
-                    cam,
-                    sub,
-                    properties: null,
-                    castShadows: _castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off,
-                    receiveShadows: _receiveShadows
-                );
+                Graphics.DrawMesh(e.meshInstance, matrix, _overrideMaterial, _drawLayer, cam, sub, properties: null, castShadows: _castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off, receiveShadows: _receiveShadows);
             }
         }
     }
@@ -400,8 +396,186 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
     {
         var list = new List<Mesh>(_entries.Count);
         for (int i = 0; i < _entries.Count; i++)
+        {
             if (_entries[i].meshInstance != null)
+            {
                 list.Add(_entries[i].meshInstance);
+            }
+        }
         return list;
+    }
+
+    public int meshCount => _entries.Count;
+
+    public int GetMeshVertexCount(int meshIndex)
+    {
+        if ((meshIndex < 0) || (meshIndex >= _entries.Count)) return 0;
+
+        var mesh = _entries[meshIndex].meshInstance;
+        return mesh != null ? mesh.vertexCount : 0;
+    }
+
+    public void SetData(int meshIndex, Component component, Color[] colors)
+    {
+        if ((meshIndex < 0) || (meshIndex >= _entries.Count)) return;
+
+        var entry = _entries[meshIndex];
+        switch (component)
+        {
+            case Component.Color:
+                entry.meshInstance.SetColors(colors);
+                entry.dirty = true;
+                break;
+            default:
+                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set colors on component {component}!");
+                break;
+        }
+    }
+
+    public void SetData(int meshIndex, Component component, Vector2[] uvs)
+    {
+        if ((meshIndex < 0) || (meshIndex >= _entries.Count)) return;
+
+        var entry = _entries[meshIndex];
+        switch (component)
+        {
+            case Component.UV0:
+                entry.meshInstance.SetUVs(0, uvs);
+                entry.dirty = true;
+                break;
+            case Component.UV1:
+                entry.meshInstance.SetUVs(1, uvs);
+                entry.dirty = true;
+                break;
+            case Component.UV2:
+                entry.meshInstance.SetUVs(2, uvs);
+                entry.dirty = true;
+                break;
+            case Component.UV3:
+                entry.meshInstance.SetUVs(3, uvs);
+                entry.dirty = true;
+                break;
+            case Component.UV4:
+                entry.meshInstance.SetUVs(4, uvs);
+                entry.dirty = true;
+                break;
+            case Component.UV5:
+                entry.meshInstance.SetUVs(5, uvs);
+                entry.dirty = true;
+                break;
+            case Component.UV6:
+                entry.meshInstance.SetUVs(6, uvs);
+                entry.dirty = true;
+                break;
+            case Component.UV7:
+                entry.meshInstance.SetUVs(7, uvs);
+                entry.dirty = true;
+                break;
+            default:
+                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set Vector2 on component {component}!");
+                break;
+        }
+    }
+
+    public void SetData(int meshIndex, Component component, Vector3[] inVec3)
+    {
+        if ((meshIndex < 0) || (meshIndex >= _entries.Count)) return;
+
+        var entry = _entries[meshIndex];
+        switch (component)
+        {
+            case Component.Position:
+                entry.meshInstance.SetVertices(inVec3);
+                entry.dirty = true;
+                break;
+            case Component.Normal:
+                entry.meshInstance.SetNormals(inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV0:
+                entry.meshInstance.SetUVs(0, inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV1:
+                entry.meshInstance.SetUVs(1, inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV2:
+                entry.meshInstance.SetUVs(2, inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV3:
+                entry.meshInstance.SetUVs(3, inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV4:
+                entry.meshInstance.SetUVs(4, inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV5:
+                entry.meshInstance.SetUVs(5, inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV6:
+                entry.meshInstance.SetUVs(6, inVec3);
+                entry.dirty = true;
+                break;
+            case Component.UV7:
+                entry.meshInstance.SetUVs(7, inVec3);
+                entry.dirty = true;
+                break;
+            default:
+                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set Vector3 on component {component}!");
+                break;
+        }
+    }
+
+    public void SetData(int meshIndex, Component component, Vector4[] inVec4)
+    {
+        if ((meshIndex < 0) || (meshIndex >= _entries.Count)) return;
+
+        var entry = _entries[meshIndex];
+        switch (component)
+        {
+            case Component.Tangent:
+                entry.meshInstance.SetTangents(inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV0:
+                entry.meshInstance.SetUVs(0, inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV1:
+                entry.meshInstance.SetUVs(1, inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV2:
+                entry.meshInstance.SetUVs(2, inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV3:
+                entry.meshInstance.SetUVs(3, inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV4:
+                entry.meshInstance.SetUVs(4, inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV5:
+                entry.meshInstance.SetUVs(5, inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV6:
+                entry.meshInstance.SetUVs(6, inVec4);
+                entry.dirty = true;
+                break;
+            case Component.UV7:
+                entry.meshInstance.SetUVs(7, inVec4);
+                entry.dirty = true;
+                break;
+            default:
+                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set Vector4 on component {component}!");
+                break;
+        }
     }
 }

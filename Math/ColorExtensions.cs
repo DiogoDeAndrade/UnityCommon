@@ -1,5 +1,4 @@
-﻿using UnityEditor.ShaderGraph;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace UC
 {
@@ -208,6 +207,10 @@ namespace UC
         {
             return ColorUtility.ToHtmlStringRGBA(c);
         }
-    };
 
+        public static Color RandomRGB()
+        {
+            return new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), 1.0f);
+        }
+    };
 }
