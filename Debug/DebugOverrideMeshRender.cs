@@ -414,6 +414,23 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
         var mesh = _entries[meshIndex].meshInstance;
         return mesh != null ? mesh.vertexCount : 0;
     }
+    public Mesh GetMesh(int meshIndex)
+    {
+        if ((meshIndex < 0) || (meshIndex >= _entries.Count)) return null;
+
+        var mesh = _entries[meshIndex].meshInstance;
+
+        return mesh;
+    }
+
+    public Matrix4x4 GetModelMatrix(int meshIndex)
+    {
+        if ((meshIndex < 0) || (meshIndex >= _entries.Count)) return Matrix4x4.identity;
+
+        var matrix = _entries[meshIndex].tr.localToWorldMatrix;
+
+        return matrix;
+    }
 
     public void SetData(int meshIndex, Component component, Color[] colors)
     {
@@ -578,4 +595,5 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
                 break;
         }
     }
+
 }
