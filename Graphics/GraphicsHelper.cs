@@ -8,14 +8,14 @@ namespace UC
     {
         public delegate void DrawFunction(CommandBuffer cmd);
 
-        public static void QuickDraw(RenderTexture rt, Matrix4x4 viewMatrix, Matrix4x4 projMatrix, DrawFunction function, bool clearColor = true, Color clrColor = default(Color))
+        public static void QuickDraw(RenderTexture rt, Matrix4x4 viewMatrix, Matrix4x4 projMatrix, DrawFunction function, bool clearColor = true, Color clrColor = default(Color), bool clearDepth = true, float depth = 1.0f)
         {
             var cmd = CommandBufferPool.Get("VoxelizeSlicing_Slice");
             cmd.SetRenderTarget(rt);
             cmd.SetViewport(new Rect(0, 0, rt.width, rt.height));
-            cmd.ClearRenderTarget(true, clearColor, clrColor);
+            cmd.ClearRenderTarget(clearDepth, clearColor, clrColor, depth);
 
-            var gpuProjMatrix = GL.GetGPUProjectionMatrix(projMatrix, false);
+            var gpuProjMatrix = GL.GetGPUProjectionMatrix(projMatrix, true);
 
             cmd.SetViewProjectionMatrices(viewMatrix, gpuProjMatrix);
 

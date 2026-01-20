@@ -50,6 +50,22 @@ namespace UC
             return worldBounds;
         }
 
+        public static Bounds ToWorld(this Bounds b, Matrix4x4 transform)
+        {
+            var min = b.min;
+            var max = b.max;
+
+            var corner = b.GetCorner(0);
+            corner = transform.MultiplyPoint(corner);
+            Bounds worldBounds = worldBounds = new Bounds(corner, Vector3.zero);
+            for (int i = 1; i < 8; i++)
+            {
+                corner = transform.MultiplyPoint(b.GetCorner(i));
+                worldBounds.Encapsulate(corner);
+            }
+            return worldBounds;
+        }
+
         public static bool ContainsMinInclusive(this Bounds b, Vector3 p)
         {
             return ((b.min.x <= p.x) && (b.max.x > p.x) &&

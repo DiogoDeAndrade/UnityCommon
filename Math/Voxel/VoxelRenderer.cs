@@ -45,7 +45,7 @@ namespace UC
             }
         }
 
-        public void SetVoxelData(VoxelDataByte voxelData)
+        public void SetVoxelData(VoxelData<byte> voxelData)
         {
             if (voxelObject == null)
             {

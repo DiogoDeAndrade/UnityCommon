@@ -1,14 +1,17 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.UIElements;
+using static UC.VoxelObject;
 
 namespace UC
 {
 
     public static class VoxelTools
     {
-        static public VoxelDataByte Voxelize(Mesh mesh, float density, bool forcePowerOfTwo = false, float triangleScale = 1.0f, float gridScale = 1.0f, bool fillEmpty = false)
+        static public VoxelData<byte> Voxelize(Mesh mesh, float density, bool forcePowerOfTwo = false, float triangleScale = 1.0f, float gridScale = 1.0f, bool fillEmpty = false)
         {
-            VoxelDataByte ret = new VoxelDataByte();
+            VoxelData<byte> ret = new VoxelData<byte>();
 
             Bounds bounds = mesh.bounds;
             bounds.Expand(bounds.size * gridScale - bounds.size);
@@ -107,9 +110,9 @@ namespace UC
             return ret;
         }
 
-        private static void FindAndFillEmpty(VoxelDataByte vd)
+        private static void FindAndFillEmpty(VoxelData<byte> vd)
         {
-            byte GetAdjacent(VoxelDataByte vd, int x, int y, int z)
+            byte GetAdjacent(VoxelData<byte> vd, int x, int y, int z)
             {
                 byte v;
                 v = vd[x - 1, y, z]; if (v != 0) return v;
@@ -122,7 +125,7 @@ namespace UC
                 return 0;
             }
 
-            bool FloodFillAndCheckBounds(VoxelDataByte vd, int sx, int sy, int sz, byte v)
+            bool FloodFillAndCheckBounds(VoxelData<byte> vd, int sx, int sy, int sz, byte v)
             {
                 Stack<Vector3Int> stack = new Stack<Vector3Int>();
                 int lx = vd.gridSize.x - 1;
@@ -199,7 +202,7 @@ namespace UC
             vd.Replace(254, 0);
         }
 
-        public static void MarkTop(VoxelDataByte vd, byte value)
+        public static void MarkTop(VoxelData<byte> vd, byte value)
         {
             int index = 0;
             int incAboveItem = vd.gridSize.x;
@@ -224,7 +227,7 @@ namespace UC
             }
         }
 
-        public static void MarkMinHeight(VoxelDataByte vd, int voxelHeight, byte value)
+        public static void MarkMinHeight(VoxelData<byte> vd, int voxelHeight, byte value)
         {
             int index = 0;
 
@@ -250,7 +253,7 @@ namespace UC
             }
         }
 
-        public static int GetHeight(VoxelDataByte vd, int x, int y, int z)
+        public static int GetHeight(VoxelData<byte> vd, int x, int y, int z)
         {
             int index = x + ((y + 1) * vd.gridSize.x) + (z * vd.gridSize.x * vd.gridSize.y);
             int incAboveItem = vd.gridSize.x;
@@ -268,7 +271,7 @@ namespace UC
             return int.MaxValue;
         }
 
-        public static (int, int, int)? FindVoxel(VoxelDataByte vd, byte value)
+        public static (int, int, int)? FindVoxel(VoxelData<byte> vd, byte value)
         {
             int index = 0;
 
@@ -290,7 +293,7 @@ namespace UC
             return null;
         }
 
-        public static void FloodFill(VoxelDataByte vd, int x, int y, int z, byte value, byte newValue)
+        public static void FloodFill(VoxelData<byte> vd, int x, int y, int z, byte value, byte newValue)
         {
             if ((x < 0) || (y < 0) || (z < 0)) return;
             if ((x >= vd.gridSize.x) || (y >= vd.gridSize.y) || (z >= vd.gridSize.z)) return;
@@ -309,7 +312,7 @@ namespace UC
             }
         }
 
-        public static int FloodFillWithStep(VoxelDataByte vd, int stepSize, int x, int y, int z, byte value, byte newValue)
+        public static int FloodFillWithStep(VoxelData<byte> vd, int stepSize, int x, int y, int z, byte value, byte newValue)
         {
             int count = 0;
             Queue<Vector3Int> explore = new Queue<Vector3Int>();
@@ -344,7 +347,7 @@ namespace UC
             return count;
         }
 
-        public static int CountVoxel(VoxelDataByte vd, byte value)
+        public static int CountVoxel(VoxelData<byte> vd, byte value)
         {
             int index = 0;
             int count = 0;
@@ -371,7 +374,7 @@ namespace UC
             public byte voxelId;
         }
 
-        public static List<VoxelRegion> MarkRegions(VoxelDataByte vd, int stepSize, byte value, byte firstRegion, byte lastRegion)
+        public static List<VoxelRegion> MarkRegions(VoxelData<byte> vd, int stepSize, byte value, byte firstRegion, byte lastRegion)
         {
             int regionId = 0;
             int regionRange = lastRegion - firstRegion + 1;
@@ -398,6 +401,224 @@ namespace UC
             }
 
             return ret;
+        }
+
+        public enum MaterialMode { Single, Palette, Multi };
+        public static Mesh ConvertToMesh(VoxelData<byte> voxelData, MaterialMode materialMode, Vector3 uvScale, ref Dictionary<int, int> voxelValueToMaterialId)
+        {
+            voxelValueToMaterialId ??= new Dictionary<int, int>();
+
+            var _indices = new List<List<int>>();
+
+            if (materialMode == MaterialMode.Multi)
+            {
+                // Count materials in use
+                for (int i = 0; i < voxelData.gridSize.x * voxelData.gridSize.y * voxelData.gridSize.z; i++)
+                {
+                    var tmp = voxelData.data[i];
+                    if (tmp > 0)
+                    {
+                        if (!voxelValueToMaterialId.ContainsKey(tmp))
+                        {
+                            voxelValueToMaterialId.Add(tmp, _indices.Count);
+                            _indices.Add(new List<int>());
+                        }
+                    }
+                }
+            }
+            else
+            {
+                _indices.Add(new List<int>());
+            }
+
+            var _vertices = new List<Vector3>();
+            var _normals = new List<Vector3>();
+            var _uvs = new List<Vector2>();
+
+            int index = 0;
+            Vector3 center = Vector3.zero;
+            Vector3 half_size = voxelData.voxelSize * 0.5f;
+            Vector3 p1, p2, p3, p4, n;
+            Vector2 uv1, uv2, uv3, uv4;
+            int incX = 1;
+            int incY = voxelData.gridSize.x;
+            int incZ = voxelData.gridSize.x * voxelData.gridSize.y;
+            Vector3 o = voxelData.minBound + voxelData.voxelSize * 0.5f;
+            byte value;
+            float uvPaletteScale = 1.0f / 16.0f;
+            float uvPaletteOffset = 0.5f / 16.0f;
+
+            uv1 = uv2 = uv3 = uv4 = Vector2.zero;
+
+            for (int z = 0; z < voxelData.gridSize.z; z++)
+            {
+                center.z = o.z + z * voxelData.voxelSize.z;
+                for (int y = 0; y < voxelData.gridSize.y; y++)
+                {
+                    center.y = o.y + y * voxelData.voxelSize.y;
+                    for (int x = 0; x < voxelData.gridSize.x; x++)
+                    {
+                        center.x = o.x + x * voxelData.voxelSize.x;
+                        value = voxelData.data[index];
+                        if (value > 0)
+                        {
+                            List<int> targetIndices = null;
+                            switch (materialMode)
+                            {
+                                case MaterialMode.Single:
+                                    targetIndices = _indices[0];
+                                    break;
+                                case MaterialMode.Palette:
+                                    targetIndices = _indices[0];
+                                    uv1 = uv2 = uv3 = uv4 = new Vector2((value % 16) * uvPaletteScale + uvPaletteOffset, 1 - ((value / 16) * uvPaletteScale + uvPaletteOffset));
+                                    break;
+                                case MaterialMode.Multi:
+                                    targetIndices = _indices[voxelValueToMaterialId[value]];
+                                    break;
+                                default:
+                                    break;
+                            }
+                            // Add the 6 quads that compose the cube
+                            // -Z
+                            if ((z == 0) || (voxelData.data[index - incZ] == 0))
+                            {
+                                p1 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p2 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p3 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p4 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                n = -Vector3.forward;
+                                if (materialMode != MaterialMode.Palette)
+                                {
+                                    uv1 = new Vector2(p1.x * uvScale.x, p1.y * uvScale.y);
+                                    uv2 = new Vector2(p2.x * uvScale.x, p2.y * uvScale.y);
+                                    uv3 = new Vector2(p3.x * uvScale.x, p3.y * uvScale.y);
+                                    uv4 = new Vector2(p4.x * uvScale.x, p4.y * uvScale.y);
+                                }
+                                GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
+                            }
+                            // +X
+                            if ((x == voxelData.gridSize.x - 1) || (voxelData.data[index + incX] == 0))
+                            {
+                                p1 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p2 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p3 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p4 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                n = Vector3.right;
+                                if (materialMode != MaterialMode.Palette)
+                                {
+                                    uv1 = new Vector2(p1.z * uvScale.z, p1.y * uvScale.y);
+                                    uv2 = new Vector2(p2.z * uvScale.z, p2.y * uvScale.y);
+                                    uv3 = new Vector2(p3.z * uvScale.z, p3.y * uvScale.y);
+                                    uv4 = new Vector2(p4.z * uvScale.z, p4.y * uvScale.y);
+                                }
+                                GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
+                            }
+                            // +Z
+                            if ((z == voxelData.gridSize.z - 1) || (voxelData.data[index + incZ] == 0))
+                            {
+                                p1 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p2 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p3 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p4 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                n = Vector3.forward;
+                                if (materialMode != MaterialMode.Palette)
+                                {
+                                    uv1 = new Vector2(p1.x * uvScale.x, p1.y * uvScale.y);
+                                    uv2 = new Vector2(p2.x * uvScale.x, p2.y * uvScale.y);
+                                    uv3 = new Vector2(p3.x * uvScale.x, p3.y * uvScale.y);
+                                    uv4 = new Vector2(p4.x * uvScale.x, p4.y * uvScale.y);
+                                }
+                                GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
+                            }
+                            // -X
+                            if ((x == 0) || (voxelData.data[index - incX] == 0))
+                            {
+                                p1 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p2 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p3 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p4 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                n = -Vector3.right;
+                                if (materialMode != MaterialMode.Palette)
+                                {
+                                    uv1 = new Vector2(p1.z * uvScale.z, p1.y * uvScale.y);
+                                    uv2 = new Vector2(p2.z * uvScale.z, p2.y * uvScale.y);
+                                    uv3 = new Vector2(p3.z * uvScale.z, p3.y * uvScale.y);
+                                    uv4 = new Vector2(p4.z * uvScale.z, p4.y * uvScale.y);
+                                }
+                                GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
+                            }
+                            // +Y
+                            if ((y == voxelData.gridSize.y - 1) || (voxelData.data[index + incY] == 0))
+                            {
+                                p1 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p2 = center + Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p3 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p4 = center - Vector3.forward * half_size.z + Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                n = Vector3.up;
+                                if (materialMode != MaterialMode.Palette)
+                                {
+                                    uv1 = new Vector2(p1.x * uvScale.x, p1.z * uvScale.z);
+                                    uv2 = new Vector2(p2.x * uvScale.x, p2.z * uvScale.z);
+                                    uv3 = new Vector2(p3.x * uvScale.x, p3.z * uvScale.z);
+                                    uv4 = new Vector2(p4.x * uvScale.x, p4.z * uvScale.z);
+                                }
+                                GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
+                            }
+                            // -Y
+                            if ((y == 0) || (voxelData.data[index - incY] == 0))
+                            {
+                                p1 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                p2 = center + Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p3 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y + Vector3.right * half_size.x;
+                                p4 = center - Vector3.forward * half_size.z - Vector3.up * half_size.y - Vector3.right * half_size.x;
+                                n = -Vector3.up;
+                                if (materialMode != MaterialMode.Palette)
+                                {
+                                    uv1 = new Vector2(p1.x * uvScale.x, p1.z * uvScale.z);
+                                    uv2 = new Vector2(p2.x * uvScale.x, p2.z * uvScale.z);
+                                    uv3 = new Vector2(p3.x * uvScale.x, p3.z * uvScale.z);
+                                    uv4 = new Vector2(p4.x * uvScale.x, p4.z * uvScale.z);
+                                }
+                                GeometricFactory.AddQuad(p1, n, uv1, p2, n, uv2, p3, n, uv3, p4, n, uv4, ref _vertices, ref _normals, ref _uvs, ref targetIndices);
+                            }
+                        }
+
+                        index++;
+                    }
+                }
+            }
+
+            Mesh mesh = new Mesh();
+            mesh.name = "VoxelMesh";
+            mesh.SetVertices(_vertices);
+            mesh.SetNormals(_normals);
+            mesh.SetUVs(0, _uvs);
+            if (_vertices.Count > 65535) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.subMeshCount = _indices.Count;
+            if (materialMode == MaterialMode.Multi)
+            {
+                for (int i = 0; i < 256; i++)
+                {
+                    if (voxelValueToMaterialId.ContainsKey(i))
+                    {
+                        // My functions for AddQuad are reverting the cull order, for some unknowable reason from the past, need to refactor this
+                        int id = voxelValueToMaterialId[i];
+                        GeometricFactory.InvertOrder(_indices[id]);
+
+                        mesh.SetTriangles(_indices[id], id);
+                    }
+                }
+            }
+            else
+            {
+                // My functions for AddQuad are reverting the cull order, for some unknowable reason from the past, need to refactor this
+                GeometricFactory.InvertOrder(_indices[0]);
+
+                mesh.SetTriangles(_indices[0], 0);
+            }
+            mesh.UploadMeshData(true);
+
+            return mesh;
         }
     }
 }

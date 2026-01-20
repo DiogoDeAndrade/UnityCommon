@@ -11,7 +11,7 @@ namespace UC
         Mesh mesh;
         Mesh unsimplifiedMesh;
 
-        public void Build(VoxelDataByte vd, List<int> validVoxels,
+        public void Build(VoxelData<byte> vd, List<int> validVoxels,
                           TriangulationMesh method, bool simplifyBoundary,
                           float stepSize, bool simplify, bool keepUnsimplifiedMesh)
         {

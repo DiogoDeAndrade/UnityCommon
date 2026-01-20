@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 namespace UC
 {
@@ -613,6 +614,14 @@ namespace UC
             MeshTools.ComputeNormalsAndTangentSpace(mesh, false);
 
             return mesh;
+        }
+
+        public static void InvertOrder(List<int> indices)
+        {
+            for (int i = 0; i < indices.Count; i+=3)
+            {
+                (indices[i + 1], indices[i + 2]) = (indices[i + 2], indices[i + 1]);
+            }
         }
     }
 }
