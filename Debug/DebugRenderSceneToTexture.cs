@@ -29,7 +29,7 @@ public class DebugRenderSceneToTexture : MonoBehaviour
     private Vector2     leftRight = new Vector2(-10f, 10f);
     [SerializeField, ShowIf(nameof(isOrtographic))] 
     private Vector2     bottomTop = new Vector2(-10f, 10f);
-    [SerializeField, MinMaxSlider(0.0f, 1000.0f)]
+    [SerializeField, MinMaxSlider(0.0f, 10.0f)]
     private Vector2     zRange = new Vector2(0.3f, 100.0f);
     [SerializeField]
     private RenderTarget    renderTargetType = RenderTarget.Scene;
@@ -153,15 +153,21 @@ public class DebugRenderSceneToTexture : MonoBehaviour
                 break;
             case RenderTarget.Object:
                 {
-                    var mr = targetObject?.GetComponent<MeshRenderer>();
-                    if (mr != null)
+                    if (targetObject)
                     {
-                        ret.Add(mr);
+                        var mr = targetObject?.GetComponent<MeshRenderer>();
+                        if (mr != null)
+                        {
+                            ret.Add(mr);
+                        }
                     }
                 }
                 break;
             case RenderTarget.ObjectAndChildren:
-                ret.AddRange(targetObject.GetComponentsInChildren<MeshRenderer>());
+                if (targetObject)
+                {
+                    ret.AddRange(targetObject.GetComponentsInChildren<MeshRenderer>());
+                }
                 break;
             default:
                 break;

@@ -73,28 +73,38 @@ namespace UC
 
         public void Render()
         {
-            Shader shader = Shader.Find("Hidden/VoxelizeSlicing/VoxelSliceShader");
+            Shader shader = Shader.Find("Unity Common/VoxelizeSlicing/VoxelSliceShader");
             Material backfacesWhiteMat = new Material(shader);
             backfacesWhiteMat.SetColor("_Color", Color.white);
             backfacesWhiteMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Front);
 
             Material frontfacesBlackMat = new Material(shader);
-            frontfacesBlackMat.SetColor("_Color", Color.red);
+            frontfacesBlackMat.SetColor("_Color", Color.black);
             frontfacesBlackMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Back);
 
             if (volumeDef == null)
             {
                 volumeDef = new();
                 volumeDef.bounds = GetWorldBounds();
-                volumeDef.origin = volumeDef.bounds.min;
 
-                Vector3 voxelCount = volumeDef.bounds.size / voxelSize;
-                volumeDef.dims = new Vector3Int();
-                volumeDef.dims.x = Mathf.CeilToInt(voxelCount.x);
-                volumeDef.dims.y = Mathf.CeilToInt(voxelCount.y);
-                volumeDef.dims.z = Mathf.CeilToInt(voxelCount.z);
+                static float SnapDown(float v, float s) => Mathf.Floor(v / s) * s;
+                static float SnapUp(float v, float s) => Mathf.Ceil(v / s) * s;
+
+                Vector3 min = volumeDef.bounds.min;
+                Vector3 max = volumeDef.bounds.max;
+
+                // Snap bounds to voxel grid
+                min = new Vector3(SnapDown(min.x, voxelSize), SnapDown(min.y, voxelSize), SnapDown(min.z, voxelSize));
+                max = new Vector3(SnapUp(max.x, voxelSize), SnapUp(max.y, voxelSize), SnapUp(max.z, voxelSize));
+
+                volumeDef.origin = min;
+
+                Vector3 size = max - min;
+                volumeDef.bounds = new Bounds(min + size * 0.5f, size);
+
+                // Exact dims from snapped size (avoid Ceil drift)
+                volumeDef.dims = new Vector3Int(Mathf.RoundToInt(size.x / voxelSize), Mathf.RoundToInt(size.y / voxelSize), Mathf.RoundToInt(size.z / voxelSize));
             }
-
 
             ComputeDirectionalExtents(volumeDef.bounds, direction, out var r, out var u, out var d, out float xMin, out float xMax, out float yMin, out float yMax, out float zMin, out float zMax);
 
@@ -110,18 +120,9 @@ namespace UC
             Vector3 camPos = volumeDef.bounds.center + d * ((zMin - margin) - centerZ);
             Vector3 lookAt = camPos + d;
 
-            /*Matrix4x4 viewMatrix = new Matrix4x4();
+            Matrix4x4 viewMatrix = GraphicsHelper.GetUnityCameraMatrix(camPos, camPos + d, u);
 
-            viewMatrix.SetRow(0, new Vector4(r.x, r.y, r.z, -Vector3.Dot(r, camPos)));
-            viewMatrix.SetRow(1, new Vector4(u.x, u.y, u.z, -Vector3.Dot(u, camPos)));
-            viewMatrix.SetRow(2, new Vector4(-d.x, -d.y, -d.z, Vector3.Dot(d, camPos)));
-            viewMatrix.SetRow(3, new Vector4(0, 0, 0, 1));*/
-
-            Matrix4x4 viewMatrix  = Matrix4x4.LookAt(camPos, camPos + d, u);
-            var scaleMatrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(1, 1, -1));
-            viewMatrix = scaleMatrix * viewMatrix.inverse;
-
-            ComputeOrthoFromView(volumeDef.bounds, viewMatrix, out float left, out float right, out float bottom, out float top, out float nearAll, out float farAll);
+            ComputeOrthoFromView(volumeDef.bounds, viewMatrix, out float left, out float right, out float bottom, out float top);
 
             float centerDot = Vector3.Dot(volumeDef.bounds.center, d);
 
@@ -157,18 +158,13 @@ namespace UC
                 float sliceStart = zMin + i * voxelSize;
                 float sliceEnd = sliceStart + voxelSize;
 
-                Vector3 pStart = volumeDef.bounds.center + d * (sliceStart - centerDot);
-                Vector3 pEnd = volumeDef.bounds.center + d * (sliceEnd - centerDot);
+                // Camera is placed at (zMin - margin) along d, so slab distances are:
+                float zNear = margin + i * voxelSize;
+                float zFar = (zMax - zMin) + margin + voxelSize * 2f;
 
-                float zNear = -viewMatrix.MultiplyPoint(pStart).z;
-                float zFar = -viewMatrix.MultiplyPoint(pEnd).z;
-                if (zNear > zFar) (zNear, zFar) = (zFar, zNear);
-
-                zNear = Mathf.Max(zNear, nearAll);
-                zFar = farAll;
+                // sanity
                 if (zFar <= zNear + 1e-5f) continue;
-                float eps = voxelSize * 1e-3f;
-                zFar -= eps;
+
                 var projMatrix = Matrix4x4.Ortho(left, right, bottom, top, zNear, zFar);
 
                 if (rt == null)
@@ -241,40 +237,39 @@ namespace UC
 
         static void MapPixelToCanonical(Vector3 dir, int px, int py, int slice, int nx, int ny, int nz, out int x, out int y, out int z)
         {
-            // Default
             x = y = z = 0;
 
-            if (dir == Vector3.forward) // +Z
+            if (dir == Vector3.forward) // +Z : r=+X, u=+Y
             {
                 x = px;
                 y = py;
                 z = slice;
             }
-            else if (dir == Vector3.back) // -Z
+            else if (dir == Vector3.back) // -Z : r=-X, u=+Y
             {
-                x = px;
+                x = (nx - 1) - px;       // <-- FIX (was px)
                 y = py;
                 z = (nz - 1) - slice;
             }
-            else if (dir == Vector3.right) // +X
+            else if (dir == Vector3.right) // +X : r=-Z, u=+Y
             {
                 x = slice;
                 y = py;
-                z = px;
+                z = (nz - 1) - px;       // <-- FIX (was px)
             }
-            else if (dir == Vector3.left) // -X
+            else if (dir == Vector3.left) // -X : r=+Z, u=+Y
             {
                 x = (nx - 1) - slice;
                 y = py;
                 z = px;
             }
-            else if (dir == Vector3.up) // +Y
+            else if (dir == Vector3.up) // +Y : r=-X, u=+Z
             {
-                x = px;
+                x = (nx - 1) - px;       // <-- FIX (was px)
                 y = slice;
-                z = py;
+                z = py;                  // py corresponds to +Z here, this part was OK
             }
-            else if (dir == Vector3.down) // -Y
+            else if (dir == Vector3.down) // -Y : r=+X, u=+Z
             {
                 x = px;
                 y = (ny - 1) - slice;
@@ -324,31 +319,19 @@ namespace UC
             }
         }
 
-        static void ComputeOrthoFromView(Bounds b, Matrix4x4 view, out float left, out float right, out float bottom, out float top, out float near, out float far)
+        static void ComputeOrthoFromView(Bounds b, Matrix4x4 view, out float left, out float right, out float bottom, out float top)
         {
             Vector3 c = b.center;
             Vector3 e = b.extents;
-
-            Vector3[] corners =
-            {
-            c + new Vector3(-e.x,-e.y,-e.z),
-            c + new Vector3(-e.x,-e.y, e.z),
-            c + new Vector3(-e.x, e.y,-e.z),
-            c + new Vector3(-e.x, e.y, e.z),
-            c + new Vector3( e.x,-e.y,-e.z),
-            c + new Vector3( e.x,-e.y, e.z),
-            c + new Vector3( e.x, e.y,-e.z),
-            c + new Vector3( e.x, e.y, e.z),
-        };
 
             left = bottom = float.PositiveInfinity;
             right = top = float.NegativeInfinity;
             float minZ = float.PositiveInfinity;
             float maxZ = float.NegativeInfinity;
 
-            for (int i = 0; i < corners.Length; i++)
+            for (int i = 0; i < 8; i++)
             {
-                Vector3 v = view.MultiplyPoint(corners[i]);
+                Vector3 v = view.MultiplyPoint(b.GetCorner(i));
 
                 if (v.x < left) left = v.x;
                 if (v.x > right) right = v.x;
@@ -360,9 +343,6 @@ namespace UC
                 if (dz < minZ) minZ = dz;
                 if (dz > maxZ) maxZ = dz;
             }
-
-            near = Mathf.Max(0.01f, minZ);
-            far = Mathf.Max(near + 0.01f, maxZ);
         }
 
         static void ReadSliceIntoBits(RenderTexture rt, Texture2D scratch, BitVolume bits, Vector3 dir, int sliceIndex, Vector3Int dims, float threshold = 0.5f)

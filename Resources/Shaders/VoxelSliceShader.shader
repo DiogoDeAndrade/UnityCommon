@@ -1,4 +1,4 @@
-Shader "Hidden/VoxelizeSlicing/VoxelSliceShader"
+Shader "Unity Common/VoxelizeSlicing/VoxelSliceShader"
 {
     Properties 
     { 

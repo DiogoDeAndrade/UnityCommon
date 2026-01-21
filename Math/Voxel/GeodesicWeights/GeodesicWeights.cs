@@ -6,17 +6,26 @@ namespace UC
 
     static public class GeodesicWeights
     {
+        static float SnapDown(float v, float s) => Mathf.Floor(v / s) * s;
+        static float SnapUp(float v, float s) => Mathf.Ceil(v / s) * s;
+
         public static VoxelData<byte> Voxelize(List<Mesh> meshes, List<Matrix4x4> transforms, float voxelSize)
         {
             var target = new AxisSlice.VolumeDef();
             target.bounds = GetWorldBounds(meshes, transforms);
-            target.origin = target.bounds.min;
 
-            Vector3 size = target.bounds.size;
-            int nx = Mathf.CeilToInt(size.x / voxelSize);
-            int ny = Mathf.CeilToInt(size.y / voxelSize);
-            int nz = Mathf.CeilToInt(size.z / voxelSize);
-            target.dims = new Vector3Int(nx, ny, nz);
+            Vector3 min = target.bounds.min;
+            Vector3 max = target.bounds.max;
+
+            min = new Vector3(SnapDown(min.x, voxelSize), SnapDown(min.y, voxelSize), SnapDown(min.z, voxelSize));
+            max = new Vector3(SnapUp(max.x, voxelSize), SnapUp(max.y, voxelSize), SnapUp(max.z, voxelSize));
+
+            target.origin = min;
+
+            Vector3 size = max - min;
+            target.bounds = new Bounds(min + size * 0.5f, size);
+
+            target.dims = new Vector3Int(Mathf.RoundToInt(size.x / voxelSize), Mathf.RoundToInt(size.y / voxelSize), Mathf.RoundToInt(size.z / voxelSize));
 
             Vector3[] directions = new Vector3[6]
             {

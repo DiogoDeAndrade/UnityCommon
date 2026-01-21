@@ -57,5 +57,19 @@ namespace UC
 
             return viewMatrix;
         }
+
+        public static Matrix4x4 GetUnityCameraMatrix(Vector3 camPos, Vector3 lookAt, Vector3 up)
+        {
+            // Unity cameras use a Z flip for some ungodly reason, this forces it when computing camera matrices manually
+            Matrix4x4 worldMatrix = Matrix4x4.TRS(camPos, Quaternion.LookRotation(lookAt - camPos, up), Vector3.one);
+            Matrix4x4 viewMatrix = worldMatrix.inverse;
+            // Flip Z axis
+            viewMatrix.m20 *= -1.0f;
+            viewMatrix.m21 *= -1.0f;
+            viewMatrix.m22 *= -1.0f;
+            viewMatrix.m23 *= -1.0f;
+
+            return viewMatrix;
+        }
     }
 }
