@@ -1,20 +1,24 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.UIElements;
-using static UC.VoxelObject;
 
 namespace UC
 {
 
     public static class VoxelTools
     {
-        static public VoxelData<byte> Voxelize(Mesh mesh, float density, bool forcePowerOfTwo = false, float triangleScale = 1.0f, float gridScale = 1.0f, bool fillEmpty = false)
+        static public VoxelData<byte> Voxelize(Mesh mesh, float density, bool forcePowerOfTwo = false, float triangleScale = 1.0f, float gridScale = 1.0f, float padding = 0.0f, bool fillEmpty = false)
+        {
+            return Voxelize(new List<Mesh> { mesh }, new List<Matrix4x4> { Matrix4x4.identity}, density, forcePowerOfTwo, triangleScale, gridScale, padding, fillEmpty);
+        }
+
+        static public VoxelData<byte> Voxelize(List<Mesh> meshes, List<Matrix4x4> transforms, float density, bool forcePowerOfTwo = false, float triangleScale = 1.0f, float gridScale = 1.0f, float padding = 0.0f, bool fillEmpty = false)
         {
             VoxelData<byte> ret = new VoxelData<byte>();
 
-            Bounds bounds = mesh.bounds;
+            Bounds bounds = MeshExtensions.GetWorldBounds(meshes, transforms);
             bounds.Expand(bounds.size * gridScale - bounds.size);
+            bounds.Expand(padding);
 
             Vector3Int gridSize = new Vector3Int(Mathf.CeilToInt(bounds.size.x * density),
                                                  Mathf.CeilToInt(bounds.size.y * density),
@@ -44,56 +48,67 @@ namespace UC
 
             // Brute force approach, for all triangles see if any of the voxels is overlapping
             // Only concession is that we don't check for voxels that are already filled in
-            var vertices = mesh.vertices;
-            for (var submesh = 0; submesh < mesh.subMeshCount; submesh++)
+            for (int i = 0; i < meshes.Count; i++)
             {
-                var indices = mesh.GetTriangles(submesh);
-                for (var index = 0; index < indices.Length; index += 3)
+                var mesh = meshes[i];
+                var vertices = mesh.vertices;
+                var m = transforms[i];
+
+                for (int v = 0; v < vertices.Length; v++)
                 {
-                    var v1 = vertices[indices[index]];
-                    var v2 = vertices[indices[index + 1]];
-                    var v3 = vertices[indices[index + 2]];
-                    // Scale triangle relative to center
-                    if (triangleScale != 1.0f)
+                    vertices[v] = m.MultiplyPoint3x4(vertices[v]);
+                }
+
+                for (var submesh = 0; submesh < mesh.subMeshCount; submesh++)
+                {
+                    var indices = mesh.GetTriangles(submesh);
+                    for (var index = 0; index < indices.Length; index += 3)
                     {
-                        var center = (v1 + v2 + v3) / 3.0f;
-                        v1 = ((v1 - center) * triangleScale) + center;
-                        v2 = ((v2 - center) * triangleScale) + center;
-                        v3 = ((v3 - center) * triangleScale) + center;
-                    }
-
-                    var min_x = Mathf.FloorToInt((Mathf.Min(v1.x, v2.x, v3.x) - ret.minBound.x) * densityV.x);
-                    var min_y = Mathf.FloorToInt((Mathf.Min(v1.y, v2.y, v3.y) - ret.minBound.y) * densityV.y);
-                    var min_z = Mathf.FloorToInt((Mathf.Min(v1.z, v2.z, v3.z) - ret.minBound.z) * densityV.z);
-                    var max_x = Mathf.CeilToInt((Mathf.Max(v1.x, v2.x, v3.x) - ret.minBound.x) * densityV.x);
-                    var max_y = Mathf.CeilToInt((Mathf.Max(v1.y, v2.y, v3.y) - ret.minBound.y) * densityV.y);
-                    var max_z = Mathf.CeilToInt((Mathf.Max(v1.z, v2.z, v3.z) - ret.minBound.z) * densityV.z);
-
-                    // DEBUG CODE: Just cover everything
-                    /*min_x = min_y = min_z = 0;
-                    max_x = gridSize.x; max_y = gridSize.y; max_z = gridSize.z; //*/
-
-                    var offset = Vector3.zero;
-
-                    for (int z = Mathf.Max(0, min_z); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
-                    {
-                        offset.z = ret.minBound.z + z * ret.voxelSize.z;
-                        for (int y = Mathf.Max(0, min_y); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
+                        var v1 = vertices[indices[index]];
+                        var v2 = vertices[indices[index + 1]];
+                        var v3 = vertices[indices[index + 2]];
+                        // Scale triangle relative to center
+                        if (triangleScale != 1.0f)
                         {
-                            offset.y = ret.minBound.y + y * ret.voxelSize.y;
-                            for (int x = Mathf.Max(0, min_x); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
-                            {
-                                int voxelIndex = x + (y * gridSize.x) + (z * gridSize.x * gridSize.y);
-                                if (ret.data[voxelIndex] == 0)
-                                {
-                                    // Check this voxel
-                                    offset.x = ret.minBound.x + x * ret.voxelSize.x;
-                                    Vector3 aabb_min = offset;
-                                    Vector3 aabb_max = aabb_min + ret.voxelSize;
+                            var center = (v1 + v2 + v3) / 3.0f;
+                            v1 = ((v1 - center) * triangleScale) + center;
+                            v2 = ((v2 - center) * triangleScale) + center;
+                            v3 = ((v3 - center) * triangleScale) + center;
+                        }
 
-                                    if (AABB.Intersects(aabb_min, aabb_max, v1, v2, v3))
+                        var min_x = Mathf.FloorToInt((Mathf.Min(v1.x, v2.x, v3.x) - ret.minBound.x) * densityV.x);
+                        var min_y = Mathf.FloorToInt((Mathf.Min(v1.y, v2.y, v3.y) - ret.minBound.y) * densityV.y);
+                        var min_z = Mathf.FloorToInt((Mathf.Min(v1.z, v2.z, v3.z) - ret.minBound.z) * densityV.z);
+                        var max_x = Mathf.CeilToInt((Mathf.Max(v1.x, v2.x, v3.x) - ret.minBound.x) * densityV.x);
+                        var max_y = Mathf.CeilToInt((Mathf.Max(v1.y, v2.y, v3.y) - ret.minBound.y) * densityV.y);
+                        var max_z = Mathf.CeilToInt((Mathf.Max(v1.z, v2.z, v3.z) - ret.minBound.z) * densityV.z);
+
+                        // DEBUG CODE: Just cover everything
+                        /*min_x = min_y = min_z = 0;
+                        max_x = gridSize.x; max_y = gridSize.y; max_z = gridSize.z; //*/
+
+                        var offset = Vector3.zero;
+
+                        for (int z = Mathf.Max(0, min_z); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
+                        {
+                            offset.z = ret.minBound.z + z * ret.voxelSize.z;
+                            for (int y = Mathf.Max(0, min_y); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
+                            {
+                                offset.y = ret.minBound.y + y * ret.voxelSize.y;
+                                for (int x = Mathf.Max(0, min_x); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
+                                {
+                                    int voxelIndex = x + (y * gridSize.x) + (z * gridSize.x * gridSize.y);
+                                    if (ret.data[voxelIndex] == 0)
                                     {
-                                        ret.data[voxelIndex] = 1;
+                                        // Check this voxel
+                                        offset.x = ret.minBound.x + x * ret.voxelSize.x;
+                                        Vector3 aabb_min = offset;
+                                        Vector3 aabb_max = aabb_min + ret.voxelSize;
+
+                                        if (AABB.Intersects(aabb_min, aabb_max, v1, v2, v3))
+                                        {
+                                            ret.data[voxelIndex] = 1;
+                                        }
                                     }
                                 }
                             }

@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
-using UnityMeshSimplifier.Internal;
 
 namespace UC
 {
@@ -249,6 +248,30 @@ namespace UC
             ret.RecalculateBounds();
 
             return ret;
+        }
+
+        static public Bounds GetWorldBounds(List<Mesh> meshes, List<Matrix4x4> transforms)
+        {
+            Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
+            bool first = true;
+            for (int i = 0; i < meshes.Count; i++)
+            {
+                var mesh = meshes[i];
+                var b = mesh.bounds.ToWorld(transforms[i]);
+
+                // Convert bounds to be relative to this one
+                if (first)
+                {
+                    bounds = b;
+                    first = false;
+                }
+                else
+                {
+                    bounds.Encapsulate(b);
+                }
+            }
+
+            return bounds;
         }
     }
 }

@@ -6,26 +6,27 @@ namespace UC
 
     static public class GeodesicWeights
     {
-        static float SnapDown(float v, float s) => Mathf.Floor(v / s) * s;
-        static float SnapUp(float v, float s) => Mathf.Ceil(v / s) * s;
+        public enum VoxelizationAxis
+        {
+            PositiveX, NegativeX, AxisX,
+            PositiveY, NegativeY, AxisY,
+            PositiveZ, NegativeZ, AxisZ,
+            All
+        }
 
-        public static VoxelData<byte> Voxelize(List<Mesh> meshes, List<Matrix4x4> transforms, float voxelSize)
+        public static VoxelData<byte> Voxelize(List<Mesh> meshes, List<Matrix4x4> transforms, float voxelSize, VoxelizationAxis axis = VoxelizationAxis.All, int pad = 0)
         {
             var target = new AxisSlice.VolumeDef();
-            target.bounds = GetWorldBounds(meshes, transforms);
+            target.bounds = MeshExtensions.GetWorldBounds(meshes, transforms);
+            target.bounds.Expand(pad * voxelSize);
 
-            Vector3 min = target.bounds.min;
-            Vector3 max = target.bounds.max;
+            target.origin = target.bounds.min;
 
-            min = new Vector3(SnapDown(min.x, voxelSize), SnapDown(min.y, voxelSize), SnapDown(min.z, voxelSize));
-            max = new Vector3(SnapUp(max.x, voxelSize), SnapUp(max.y, voxelSize), SnapUp(max.z, voxelSize));
+            var size = target.bounds.size;
+            target.dims = new Vector3Int(Mathf.CeilToInt(size.x / voxelSize), Mathf.CeilToInt(size.y / voxelSize), Mathf.CeilToInt(size.z / voxelSize));
 
-            target.origin = min;
-
-            Vector3 size = max - min;
-            target.bounds = new Bounds(min + size * 0.5f, size);
-
-            target.dims = new Vector3Int(Mathf.RoundToInt(size.x / voxelSize), Mathf.RoundToInt(size.y / voxelSize), Mathf.RoundToInt(size.z / voxelSize));
+            var gridSize = new Vector3(target.dims.x * voxelSize, target.dims.y * voxelSize, target.dims.z * voxelSize);
+            target.bounds = new Bounds(target.origin + 0.5f * gridSize, gridSize);
 
             Vector3[] directions = new Vector3[6]
             {
@@ -57,12 +58,49 @@ namespace UC
 
             var insideFinal = BitVolume.Majority3(axisX, axisY, axisZ);
 
+            BitVolume toVoxelize = null;
+            switch (axis)
+            {
+                case VoxelizationAxis.PositiveX:
+                    toVoxelize = xp.sliceData;
+                    break;
+                case VoxelizationAxis.NegativeX:
+                    toVoxelize = xn.sliceData;
+                    break;
+                case VoxelizationAxis.AxisX:
+                    toVoxelize = axisX;
+                    break;
+                case VoxelizationAxis.PositiveY:
+                    toVoxelize = yp.sliceData;
+                    break;
+                case VoxelizationAxis.NegativeY:
+                    toVoxelize = yn.sliceData;
+                    break;
+                case VoxelizationAxis.AxisY:
+                    toVoxelize = axisY;
+                    break;
+                case VoxelizationAxis.PositiveZ:
+                    toVoxelize = zp.sliceData;
+                    break;
+                case VoxelizationAxis.NegativeZ:
+                    toVoxelize = zn.sliceData;
+                    break;
+                case VoxelizationAxis.AxisZ:
+                    toVoxelize = axisZ;
+                    break;
+                case VoxelizationAxis.All:
+                    toVoxelize = insideFinal;
+                    break;
+                default:
+                    break;
+            }
+
             // Convert final bit volume to VoxelData<byte>
             var vox = new VoxelData<byte>();
             vox.Init(target.dims, new Vector3(voxelSize, voxelSize, voxelSize));
             vox.minBound = target.origin;
 
-            FillVoxelDataFromBits(vox, insideFinal, filledValue: 1, emptyValue: 0);
+            FillVoxelDataFromBits(vox, toVoxelize, filledValue: 1, emptyValue: 0);
 
             return vox;
         }
@@ -97,30 +135,6 @@ namespace UC
                     dst.data[voxelIndex++] = inside ? filledValue : emptyValue;
                 }
             }
-        }
-
-        static public Bounds GetWorldBounds(List<Mesh> meshes, List<Matrix4x4> transforms)
-        {
-            Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
-            bool first = true;
-            for (int i = 0; i < meshes.Count; i++)
-            {
-                var mesh = meshes[i];
-                var b = mesh.bounds.ToWorld(transforms[i]);
-
-                // Convert bounds to be relative to this one
-                if (first)
-                {
-                    bounds = b;
-                    first = false;
-                }
-                else
-                {
-                    bounds.Encapsulate(b);
-                }
-            }
-
-            return bounds;
         }
     }
 }

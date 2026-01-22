@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using UnityEngine;
 
 namespace UC
 {
@@ -26,11 +27,23 @@ namespace UC
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int Index(int x, int y, int z) => (z * height + y) * width + x;
+        private int Index(Vector3Int p) => (p.z * height + p.y) * width + p.x;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Set(int x, int y, int z, bool value)
         {
             int idx = Index(x, y, z);
+            int word = idx >> 6;
+            int bit = idx & 63;
+            ulong mask = 1UL << bit;
+
+            if (value) data[word] |= mask;
+            else data[word] &= ~mask;
+        }
+
+        public void Set(Vector3Int p, bool value)
+        {
+            int idx = Index(p);
             int word = idx >> 6;
             int bit = idx & 63;
             ulong mask = 1UL << bit;

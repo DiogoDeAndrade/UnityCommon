@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace UC
@@ -85,25 +86,11 @@ namespace UC
             if (volumeDef == null)
             {
                 volumeDef = new();
-                volumeDef.bounds = GetWorldBounds();
+                volumeDef.bounds = MeshExtensions.GetWorldBounds(renderMeshes.Select(r => r.mesh).ToList(), renderMeshes.Select(r => r.transform).ToList());
+                volumeDef.origin = volumeDef.bounds.min;
 
-                static float SnapDown(float v, float s) => Mathf.Floor(v / s) * s;
-                static float SnapUp(float v, float s) => Mathf.Ceil(v / s) * s;
-
-                Vector3 min = volumeDef.bounds.min;
-                Vector3 max = volumeDef.bounds.max;
-
-                // Snap bounds to voxel grid
-                min = new Vector3(SnapDown(min.x, voxelSize), SnapDown(min.y, voxelSize), SnapDown(min.z, voxelSize));
-                max = new Vector3(SnapUp(max.x, voxelSize), SnapUp(max.y, voxelSize), SnapUp(max.z, voxelSize));
-
-                volumeDef.origin = min;
-
-                Vector3 size = max - min;
-                volumeDef.bounds = new Bounds(min + size * 0.5f, size);
-
-                // Exact dims from snapped size (avoid Ceil drift)
-                volumeDef.dims = new Vector3Int(Mathf.RoundToInt(size.x / voxelSize), Mathf.RoundToInt(size.y / voxelSize), Mathf.RoundToInt(size.z / voxelSize));
+                var size = volumeDef.bounds.size;
+                volumeDef.dims = new Vector3Int(Mathf.CeilToInt(size.x / voxelSize), Mathf.CeilToInt(size.y / voxelSize), Mathf.CeilToInt(size.z / voxelSize));
             }
 
             ComputeDirectionalExtents(volumeDef.bounds, direction, out var r, out var u, out var d, out float xMin, out float xMax, out float yMin, out float yMax, out float zMin, out float zMax);
@@ -211,72 +198,6 @@ namespace UC
             }
         }
 
-        public Bounds GetWorldBounds()
-        {
-            Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
-            bool first = true;
-            for (int i = 0; i < renderMeshes.Count; i++)
-            {
-                var mesh = renderMeshes[i].mesh;
-                var b = mesh.bounds.ToWorld(renderMeshes[i].transform);
-
-                // Convert bounds to be relative to this one
-                if (first)
-                {
-                    bounds = b;
-                    first = false;
-                }
-                else
-                {
-                    bounds.Encapsulate(b);
-                }
-            }
-
-            return bounds;
-        }
-
-        static void MapPixelToCanonical(Vector3 dir, int px, int py, int slice, int nx, int ny, int nz, out int x, out int y, out int z)
-        {
-            x = y = z = 0;
-
-            if (dir == Vector3.forward) // +Z : r=+X, u=+Y
-            {
-                x = px;
-                y = py;
-                z = slice;
-            }
-            else if (dir == Vector3.back) // -Z : r=-X, u=+Y
-            {
-                x = (nx - 1) - px;       // <-- FIX (was px)
-                y = py;
-                z = (nz - 1) - slice;
-            }
-            else if (dir == Vector3.right) // +X : r=-Z, u=+Y
-            {
-                x = slice;
-                y = py;
-                z = (nz - 1) - px;       // <-- FIX (was px)
-            }
-            else if (dir == Vector3.left) // -X : r=+Z, u=+Y
-            {
-                x = (nx - 1) - slice;
-                y = py;
-                z = px;
-            }
-            else if (dir == Vector3.up) // +Y : r=-X, u=+Z
-            {
-                x = (nx - 1) - px;       // <-- FIX (was px)
-                y = slice;
-                z = py;                  // py corresponds to +Z here, this part was OK
-            }
-            else if (dir == Vector3.down) // -Y : r=+X, u=+Z
-            {
-                x = px;
-                y = (ny - 1) - slice;
-                z = py;
-            }
-        }
-
         static void ComputeDirectionalExtents(Bounds b, Vector3 direction, out Vector3 r, out Vector3 u, out Vector3 d, out float xMin, out float xMax, out float yMin, out float yMax, out float zMin, out float zMax)
         {
             d = direction.normalized;
@@ -345,6 +266,24 @@ namespace UC
             }
         }
 
+        static (Vector3Int origin, Vector3Int deltaX, Vector3Int deltaY, Vector3Int deltaZ) GetMapping(Vector3 direction, Vector3Int dims)
+        {
+            if (direction == Vector3.forward)
+                return (new Vector3Int(0, 0, 0), new Vector3Int(1, 0, 0), new Vector3Int(0, 1, 0), new Vector3Int(0, 0, 1));
+            else if (direction == Vector3.back)
+                return (new Vector3Int(dims.x - 1, 0, dims.z - 1), new Vector3Int(-1, 0, 0), new Vector3Int(0, 1, 0), new Vector3Int(0, 0, -1));
+            else if (direction == Vector3.right)
+                return (new Vector3Int(0, 0, dims.z - 1), new Vector3Int(0, 0, -1), new Vector3Int(0, 1, 0), new Vector3Int(1, 0, 0));
+            else if (direction == Vector3.left)
+                return (new Vector3Int(dims.x - 1, 0, 0), new Vector3Int(0, 0, 1), new Vector3Int(0, 1, 0), new Vector3Int(-1, 0, 0));
+            else if (direction == Vector3.up)
+                return (new Vector3Int(dims.x - 1, 0, 0), new Vector3Int(-1, 0, 0), new Vector3Int(0, 0, 1), new Vector3Int(0, 1, 0));
+            else if (direction == Vector3.down)
+                return (new Vector3Int(0, dims.y - 1, 0), new Vector3Int(1, 0, 0), new Vector3Int(0, 0, 1), new Vector3Int(0, -1, 0));
+
+            throw new Exception($"No mapping available - non canonical axis used ({direction})");
+        }
+
         static void ReadSliceIntoBits(RenderTexture rt, Texture2D scratch, BitVolume bits, Vector3 dir, int sliceIndex, Vector3Int dims, float threshold = 0.5f)
         {
             // Ensure scratch matches rt
@@ -356,6 +295,8 @@ namespace UC
 
             scratch.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0, false);
             scratch.Apply(false, false);
+
+            var mapping = GetMapping(dir, dims);
 
             RenderTexture.active = prev;
 
@@ -374,12 +315,25 @@ namespace UC
                 {
                     byte r = raw[row + px].r;
                     bool inside = r >= (byte)(threshold * 255.0f);
+                    if (!inside) continue;
 
-                    MapPixelToCanonical(dir, px, py, sliceIndex, nx, ny, nz, out int x, out int y, out int z);
+                    var p = mapping.origin + mapping.deltaX * px + mapping.deltaY * py + mapping.deltaZ * sliceIndex;
+
+                    /*if ((p.x < 0) || (p.x >= dims.x) ||
+                        (p.y < 0) || (p.y >= dims.y) ||
+                        (p.z < 0) || (p.z >= dims.z))
+                    {
+                        throw new Exception("Out of bounds on bit volume!");
+                    }//*/
+
+                    bits.Set(p, inside);
+
+                    /*MapPixelToCanonical(dir, px, py, sliceIndex, nx, ny, nz, out int x, out int y, out int z);
 
                     // Safety (until you lock mapping)
                     if (((uint)x < (uint)nx) && ((uint)y < (uint)ny) && ((uint)z < (uint)nz))
                         bits.Set(x, y, z, inside);
+                    */
                 }
             }
         }
