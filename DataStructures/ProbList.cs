@@ -487,6 +487,8 @@ namespace UC
 
     [Serializable]
     public class AudioClipProbList : ProbList<AudioClip> { }
+    [Serializable]
+    public class StringProbList : ProbList<string> { }
 
 #endif
 }

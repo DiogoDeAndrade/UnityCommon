@@ -140,4 +140,11 @@ namespace UC
     {
 
     }
+
+    [CustomPropertyDrawer(typeof(StringProbList))]
+    public class StringProbListDrawer : ProbListPropertyDrawer<string>
+    {
+
+    }
+
 }
