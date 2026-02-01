@@ -16,12 +16,16 @@ namespace UC.Editor
 
         static BaseFunctionDrawer()
         {
-            // Find all non-abstract T types in the project
+            // Find all non-abstract T types in the project, including the type itself
             var list = new List<Type>();
+
+            var selfType = typeof(T);
+            if ((!selfType.IsAbstract) && (!selfType.IsGenericType) && (selfType.IsClass))
+                list.Add(selfType);
 
             foreach (var t in TypeCache.GetTypesDerivedFrom<T>())
             {
-                if (!t.IsAbstract && !t.IsGenericType && t.IsClass)
+                if ((!t.IsAbstract) && (!t.IsGenericType) && (t.IsClass))
                     list.Add(t);
             }
 
