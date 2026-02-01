@@ -12,7 +12,7 @@ namespace UC
         {
             SerializedProperty originalElements = property.FindPropertyRelative("originalElements");
             // Height includes title, boolean field, each element line, and the bottom space for buttons
-            return EditorGUIUtility.singleLineHeight * (4 + originalElements.arraySize) + 10; // Additional padding for buttons
+            return (EditorGUIUtility.singleLineHeight + 2) * (4 + originalElements.arraySize) + 7; // Additional padding for buttons
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
@@ -25,7 +25,7 @@ namespace UC
             position.y += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
 
             // Draw the outer outline box for the list, making space for buttons at the bottom
-            Rect outlineRect = new Rect(position.x, position.y, position.width, GetPropertyHeight(property, label) - EditorGUIUtility.singleLineHeight);
+            Rect outlineRect = new Rect(position.x, position.y, position.width, GetPropertyHeight(property, label) - EditorGUIUtility.singleLineHeight - 2);
             EditorGUI.HelpBox(outlineRect, GUIContent.none.text, MessageType.None);
 
             // Padding for the inner content
