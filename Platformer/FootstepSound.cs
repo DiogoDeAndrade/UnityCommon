@@ -15,11 +15,11 @@ namespace UC
         [SerializeField, MinMaxSlider(0.1f, 1.0f)] Vector2 volumeVariance = Vector2.one;
         [SerializeField, MinMaxSlider(0.1f, 1.5f)] Vector2 pitchVariance = Vector2.one;
 
-        float accumDist;
-        Vector3 prevPos;
-        float cooldownTimer;
+        float               accumDist;
+        Vector3             prevPos;
+        float               cooldownTimer;
         MovementPlatformer  movementPlatformer;
-        new Renderer            renderer;
+        Renderer            mainRenderer;
 
         void Start()
         {
@@ -27,7 +27,7 @@ namespace UC
             movementPlatformer = GetComponent<MovementPlatformer>();
             if (linkToRenderer)
             {
-                renderer = GetComponent<Renderer>();
+                mainRenderer = GetComponent<Renderer>();
             }
         }
 
@@ -37,7 +37,7 @@ namespace UC
             {
                 cooldownTimer -= Time.deltaTime;
             }
-            if ((renderer) && (!renderer.enabled)) return;
+            if ((mainRenderer) && (!mainRenderer.enabled)) return;
 
             float dist = 0.0f;
             if (is3D)
