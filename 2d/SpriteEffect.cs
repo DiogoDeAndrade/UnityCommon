@@ -116,11 +116,18 @@ namespace UC
             {
                 material = spriteRenderer.material = new Material(spriteRenderer.material);
             }
-            else
+            else if (spriteRenderer3D)
             {
                 material = spriteRenderer3D.material = new Material(spriteRenderer3D.material);
             }
-            material.name = $"{material.name} Copy ({name})";
+            else
+            {
+                spriteRenderer = GetComponent<SpriteRenderer>();
+                spriteRenderer3D = GetComponent<SpriteRenderer3D>();
+                if (spriteRenderer) material = spriteRenderer.material = new Material(spriteRenderer.material);
+                if (spriteRenderer3D) material = spriteRenderer3D.material = new Material(spriteRenderer3D.material);
+            }
+                material.name = $"{material.name} Copy ({name})";
 
             if (SpriteEffectConfig.Instance != null)
             {
