@@ -10,6 +10,7 @@ namespace UC
         [SerializeField] private float amplitude;
         [SerializeField] private float frequency;
         [SerializeField] private float baseOffset = 0.0f;
+        [SerializeField] private bool  useAbs = false;
 
         Vector3 basePos;
         float elapsedTime;
@@ -26,7 +27,9 @@ namespace UC
         {
             elapsedTime += Time.deltaTime;
 
-            target.localPosition = basePos + direction * (offset + Mathf.Sin(elapsedTime * frequency * Mathf.Deg2Rad + baseOffset) * amplitude);
+            float wave = Mathf.Sin(elapsedTime * frequency * Mathf.Deg2Rad + baseOffset);
+            if (useAbs) wave = Mathf.Abs(wave);
+            target.localPosition = basePos + direction * (offset + wave * amplitude);
         }
     }
 }
