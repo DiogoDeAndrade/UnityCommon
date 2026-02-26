@@ -6,9 +6,10 @@ namespace UC
 {
 
     [CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Hypertag")]
-    public class Hypertag : ScriptableObject
+    public class Hypertag : ModularScriptableObject
     {
         [SerializeField] private string _displayName = String.Empty;
+        [SerializeField] private string _category = String.Empty;
 
         public string displayName
         {
@@ -17,6 +18,11 @@ namespace UC
             {
                 _displayName = value;
             }
+        }
+
+        public string category
+        {
+            get => _category;
         }
 
         public T FindFirst<T>() where T : Component
