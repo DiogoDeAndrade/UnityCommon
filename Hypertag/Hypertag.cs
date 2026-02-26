@@ -30,6 +30,11 @@ namespace UC
             return FindFirstObjectWithHypertag<T>(this);
         }
 
+        public List<T> FindAll<T>() where T : Component
+        {
+            return FindObjectsWithHypertag<T>(this);
+        }
+
         public GameObject FindIn(GameObject baseObject) 
         {
             if (baseObject.HasHypertag(this))
