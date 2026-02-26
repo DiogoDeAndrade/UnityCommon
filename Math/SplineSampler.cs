@@ -1,3 +1,4 @@
+#if UNITYSPLINE_PRESENT
 using NaughtyAttributes;
 using System.Collections.Generic;
 using UnityEngine;
@@ -169,3 +170,4 @@ public class SplineSampler : MonoBehaviour
         }
     }
 }
+#endif
