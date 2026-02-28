@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using InputSystemControl = UnityEngine.InputSystem.InputControl;
 
 namespace UC
@@ -266,6 +267,29 @@ namespace UC
                 || device is Touchscreen
                 || device is Pen
                 || device is Pointer;
+        }
+
+        public static bool isAnyInputPressed
+        {
+            get
+            {
+#if ENABLE_LEGACY_INPUT_MANAGER
+                    return Input.anyKeyDown;
+#else
+                foreach (var device in InputSystem.devices)
+                {
+                    foreach (var control in device.allControls)
+                    {
+                        if (control is ButtonControl button && button.wasPressedThisFrame)
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+#endif
+            }
         }
     }
 

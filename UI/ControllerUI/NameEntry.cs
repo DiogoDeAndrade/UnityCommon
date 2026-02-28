@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using UC;
+using System;
 
 public class NameEntry : MonoBehaviour
 {
@@ -64,6 +65,24 @@ public class NameEntry : MonoBehaviour
         selectButton.playerInput = playerInput;
         deleteButton.playerInput = playerInput;
     }
+
+    void OnEnable()
+    {
+        Debug.Log("Registering text input callback");
+#if !ENABLE_LEGACY_INPUT_MANAGER
+        Keyboard.current.onTextInput += OnTextInput;
+#endif
+    }
+
+    void OnDisable()
+    {
+        Debug.Log("Removing text input callback");
+
+#if !ENABLE_LEGACY_INPUT_MANAGER
+        Keyboard.current.onTextInput -= OnTextInput;
+#endif
+    }
+
 
     void Update()
     {
@@ -183,6 +202,10 @@ public class NameEntry : MonoBehaviour
         {
             onNameEntryComplete?.Invoke(name);
         }
+
+#if !ENABLE_LEGACY_INPUT_MANAGER
+        Keyboard.current.onTextInput -= OnTextInput;
+#endif
     }
 
     string CollectName()
@@ -287,4 +310,30 @@ public class NameEntry : MonoBehaviour
         targetDelay = 0f;
         nextStepAt = 0f;
     }
+
+    private void OnTextInput(char c)
+    {
+        if (currentLetter == null) return;
+
+        if (c == '\b') // Backspace
+        {
+            if (currentLetter.allowBackspace)
+            {
+                DeleteLetter();
+            }
+            return;
+        }
+        else if (c == '\n' || c == '\r') // Enter
+        {
+            StopEntry();
+            return;
+        }
+
+        // A key was pressed - set it to the current letter, and move on to the next
+        if ((char.IsLower(c)) && (!currentLetter.allowLowercase)) c = char.ToUpper(c);
+        else if ((char.IsUpper(c)) && (!currentLetter.allowUppercase)) c = char.ToLower(c);
+        
+        currentLetter.SetLetter(c);
+    }
+
 }
