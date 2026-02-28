@@ -9,7 +9,7 @@ namespace UC
 
     public class BaseUIControl : MonoBehaviour
     {
-        public enum HighlightMode { ImageEnable, ColorSwitch };
+        public enum HighlightMode { ImageEnable, ColorSwitch, Animator, Outline };
 
         public delegate void OnSelect(BaseUIControl newCntrol, BaseUIControl prevControl);
         public delegate void OnDeselect(BaseUIControl control);
@@ -20,8 +20,14 @@ namespace UC
 
         [SerializeField] 
         private HighlightMode   highlightMode = HighlightMode.ImageEnable;
-        [SerializeField] 
+        [SerializeField, ShowIf(nameof(needsHighlighterImage))] 
         protected Image         highlighterImage;
+        [SerializeField, ShowIf(nameof(needsHighlighterImageEffect))]
+        protected UIImageEffect highlighterImageEffect;
+        [SerializeField, ShowIf(nameof(isOutline))]
+        protected Color         outlineColor = Color.yellow;
+        [SerializeField, ShowIf(nameof(isOutline)), Min(0.0f)]
+        protected float         outlineWidth = 1.0f;
         [SerializeField] 
         protected TextMeshProUGUI highlighterText;
         [SerializeField, ShowIf(nameof(needHighlightColor))] 
@@ -41,8 +47,12 @@ namespace UC
         Color               defaultTextColor;
         Color               defaultImageColor;
         CanvasGroup         canvasGroup;
+        Animator            animator;
 
         private bool needHighlightColor => (highlighterText != null) || (highlightMode == HighlightMode.ColorSwitch);
+        private bool needsHighlighterImage => (highlightMode == HighlightMode.ImageEnable);
+        private bool needsHighlighterImageEffect => (highlightMode == HighlightMode.Outline);
+        private bool isOutline => (highlightMode == HighlightMode.Outline);
 
         public bool isSelected => (parentGroup.uiEnable) && (parentGroup.selectedControl == this);
         public bool isSelectable
@@ -81,6 +91,10 @@ namespace UC
             {
                 defaultImageColor = highlighterImage.color;
             }
+            if (highlightMode == HighlightMode.Animator)
+            {
+                animator = GetComponent<Animator>();
+            }
         }
 
         protected virtual void Update()
@@ -113,6 +127,18 @@ namespace UC
                     highlighterImage.enabled = true;
                     highlighterImage.color = (isSelected && parentGroup.uiEnable) ? (highlightColor) : (defaultImageColor);
                 }
+            }
+            if (animator)
+            {
+                animator.SetBool("Highlight", isSelected && parentGroup.uiEnable);
+                animator.SetBool("Enable", isSelectable && parentGroup.uiEnable);
+            }
+            if (highlightMode == HighlightMode.Outline)
+            {
+                if (isSelected && parentGroup.uiEnable)
+                    highlighterImageEffect.SetOutline(outlineWidth, outlineColor);
+                else
+                    highlighterImageEffect.SetOutline(0.0f, outlineColor);
             }
             if (highlighterText)
             {

@@ -127,7 +127,7 @@ namespace UC
                 if (spriteRenderer) material = spriteRenderer.material = new Material(spriteRenderer.material);
                 if (spriteRenderer3D) material = spriteRenderer3D.material = new Material(spriteRenderer3D.material);
             }
-                material.name = $"{material.name} Copy ({name})";
+            material.name = $"{material.name} Copy ({name})";
 
             if (SpriteEffectConfig.Instance != null)
             {

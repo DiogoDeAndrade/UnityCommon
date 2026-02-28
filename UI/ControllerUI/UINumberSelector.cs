@@ -8,7 +8,7 @@ namespace UC
 
     public class UIFloatSelector : UIControl<float>
     {
-        public enum DisplayMode { Text, ScaleX, ScaleY };
+        public enum DisplayMode { Text, ScaleX, ScaleY, Fill };
         public enum AutoEvent { None, SetPlayerPref, SetSoundVolume };
         public enum ValueType { Float, Vec4_W };
 
@@ -19,8 +19,9 @@ namespace UC
         [SerializeField] protected float defaultValue = 0.0f;
         [SerializeField] protected float changeCooldown = 0.1f;
         [SerializeField] protected DisplayMode displayMode;
-        [SerializeField] protected TextMeshProUGUI valueIndicatorText;
-        [SerializeField] protected RectTransform valueIndicatorTransform;
+        [SerializeField, ShowIf(nameof(needValueIndicatorText))] protected TextMeshProUGUI valueIndicatorText;
+        [SerializeField, ShowIf(nameof(needValueIndicatorTransform))] protected RectTransform valueIndicatorTransform;
+        [SerializeField, ShowIf(nameof(needFillImage))] protected Image fillImage;
         [SerializeField] private AutoEvent valueChangeEvent;
         [SerializeField, ShowIf(nameof(needKey))] private ValueType valueType;
         [SerializeField, ShowIf(nameof(needKey))] private string key;
@@ -28,6 +29,9 @@ namespace UC
 
         bool needKey => valueChangeEvent == AutoEvent.SetPlayerPref;
         bool needSoundType => valueChangeEvent == AutoEvent.SetSoundVolume;
+        bool needValueIndicatorText => displayMode == DisplayMode.Text;
+        bool needValueIndicatorTransform => displayMode == DisplayMode.ScaleX || displayMode == DisplayMode.ScaleY;
+        bool needFillImage => displayMode == DisplayMode.Fill;
 
 
         string originalText;
@@ -86,6 +90,12 @@ namespace UC
                     if (valueIndicatorTransform)
                     {
                         valueIndicatorTransform.localScale = new Vector3(1, Mathf.Clamp01((value - minMaxValue.x) / (minMaxValue.y - minMaxValue.x)), 1);
+                    }
+                    break;
+                case DisplayMode.Fill:
+                    if (fillImage)
+                    {
+                        fillImage.fillAmount = Mathf.Clamp01((value - minMaxValue.x) / (minMaxValue.y - minMaxValue.x));
                     }
                     break;
                 default:
