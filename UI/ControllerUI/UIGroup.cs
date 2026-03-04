@@ -1,6 +1,10 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace UC
 {
@@ -26,12 +30,20 @@ namespace UC
 
         [SerializeField] protected BaseUIControl initialControl;
         [SerializeField] protected bool _useUnscaledTime = false;
+        [SerializeField] protected bool _enableMouseSupport = false;
 
-        protected float cooldownTimer;
-        protected BaseUIControl _selectedControl;
-        protected bool _verticalReset = true;
-        protected bool _horizontalReset = true;
-        protected bool _uiEnable = true;
+        protected float                 cooldownTimer;
+        protected BaseUIControl         _selectedControl;
+        protected bool                  selectedFromMouse;
+        protected int                   mouseSkipFrames = 4;
+        protected bool                  _verticalReset = true;
+        protected bool                  _horizontalReset = true;
+        protected bool                  _uiEnable = true;
+        protected bool                  forceMouseUpdate = false;
+        protected GraphicRaycaster      graphicRaycaster;
+        protected List<RaycastResult>   raycasterResults = new();
+
+        public bool enableMouseSupport => _enableMouseSupport;
 
         public BaseUIControl selectedControl
         {
@@ -68,11 +80,42 @@ namespace UC
             }
 
             _uiEnable = enableOnStart;
+
+            if (_enableMouseSupport)
+            {
+                graphicRaycaster = GetComponent<GraphicRaycaster>();
+                if (graphicRaycaster == null) graphicRaycaster = GetComponentInParent<GraphicRaycaster>();
+
+                raycasterResults = new();
+            }
         }
 
         void Update()
         {
             if (!_uiEnable) return;
+
+            if (mouseSkipFrames > 0) mouseSkipFrames--;
+            if ((_enableMouseSupport) && ((mouseSkipFrames <= 0) || (forceMouseUpdate)))
+            {
+                if ((InputControl.HasMouseMovedThisFrame()) || (forceMouseUpdate))
+                {
+                    var ctrl = GetControlOnPointer();
+                    if (forceMouseUpdate)
+                    {
+                        if (ctrl)
+                        {
+                            selectedControl = ctrl;
+                            selectedFromMouse = (selectedControl != null);
+                        }
+                        forceMouseUpdate = false;
+                    }
+                    else
+                    {
+                        selectedControl = ctrl;
+                        selectedFromMouse = (selectedControl != null);
+                    }
+                }
+            }
 
             if (_selectedControl)
             {
@@ -100,6 +143,7 @@ namespace UC
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
                                 if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
+                                selectedFromMouse = false;
                             }
                             else if (dy > 0.5f)
                             {
@@ -108,6 +152,7 @@ namespace UC
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
                                 if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
+                                selectedFromMouse = false;
                             }
                         }
                         else
@@ -125,12 +170,66 @@ namespace UC
 
                     if (interactControl.IsDown())
                     {
-                        if (selectSnd) SoundManager.PlaySound(SoundType.SecondaryFX, selectSnd);
+                        bool interact = true;
+                        if (interactControl.WasDownFromPointerThisFrame())
+                        {
+                            if (!_enableMouseSupport) interact = false;
+                            else
+                            {
+                                // Was a mouse click or similar, so we should use the mouse to select the control
+                                var ctrl = GetControlOnPointer();
+                                if (ctrl)
+                                {
+                                    _selectedControl = ctrl;
+                                    selectedFromMouse = true;
+                                }
+                                else
+                                {
+                                    interact = false;
+                                }
+                            }
+                        }
+
+                        if (interact)
+                        {
+                            if (selectSnd) SoundManager.PlaySound(SoundType.SecondaryFX, selectSnd);
+                            _selectedControl?.Interact();
+                            OnSelect();
+                        }
+                    }
+                    else if ((interactControl.IsPressed()) && (_selectedControl) && (_selectedControl.isContinuous))
+                    {
                         _selectedControl?.Interact();
                         OnSelect();
                     }
                 }
             }
+        }
+
+        BaseUIControl GetControlOnPointer()
+        {
+            var screenPos = InputControl.GetScreenMousePosition();
+
+            raycasterResults.Clear();
+            var data = new PointerEventData(EventSystem.current) { position = screenPos };
+            graphicRaycaster.Raycast(data, raycasterResults);
+            if (raycasterResults.Count > 0)
+            {
+                foreach (var ray in raycasterResults)
+                {
+                    BaseUIControl ctrl = ray.gameObject.GetComponent<BaseUIControl>();
+                    if (ctrl == null) ctrl = ray.gameObject.GetComponentInParent<BaseUIControl>();
+                    if (ctrl)
+                    {
+                        if (ctrl.isSelectable)
+                        {
+                            return selectedControl = ctrl;
+                        }
+                    }
+                }
+            }
+
+            return null;
         }
 
         private BaseUIControl NextSelectable(BaseUIControl from, Func<BaseUIControl, BaseUIControl> step)
@@ -160,6 +259,12 @@ namespace UC
 
         public void EnableUI(bool value)
         {
+            if ((_enableMouseSupport) && (value))
+            {
+                // Need to launch a coroutine, because I'm enabling this and I want to skip a frame before trying to get the 
+                // element at the cursor, because the canvas group might not be active yet
+                StartCoroutine(WaitFrameAndForceMousePointerUpdate());
+            }
             _uiEnable = value;
             var uiControls = GetComponentsInChildren<BaseUIControl>();
             foreach (var uiControl in uiControls)
@@ -173,6 +278,16 @@ namespace UC
                 selectedControl = initialControl;
                 cooldownTimer = moveCooldown;
             }
+        }
+
+        IEnumerator WaitFrameAndForceMousePointerUpdate()
+        {
+            var canvasGroup = GetComponent<CanvasGroup>();
+            while (!canvasGroup.interactable)
+            {
+                yield return null;
+            }
+            forceMouseUpdate = true;
         }
 
         protected virtual void OnSelect()

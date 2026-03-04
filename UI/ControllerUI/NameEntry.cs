@@ -319,13 +319,13 @@ public class NameEntry : MonoBehaviour
         {
             if (currentLetter.allowBackspace)
             {
-                DeleteLetter();
+                currentLetter.SetBackspace();
             }
             return;
         }
         else if (c == '\n' || c == '\r') // Enter
         {
-            StopEntry();
+            currentLetter.SetEnter();
             return;
         }
 

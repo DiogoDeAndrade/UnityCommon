@@ -33,9 +33,12 @@ namespace UC
         bool needValueIndicatorTransform => displayMode == DisplayMode.ScaleX || displayMode == DisplayMode.ScaleY;
         bool needFillImage => displayMode == DisplayMode.Fill;
 
+        public override bool isContinuous => true;
+
 
         string originalText;
         float cooldownTimer;
+        Camera eventCamera;
 
         protected void Awake()
         {
@@ -173,5 +176,30 @@ namespace UC
                 SoundManager.SetVolume(soundType, value, true);
             }
         }
+
+        public override void Interact()
+        {
+            // Check if ui group is mouse controllled
+            if (!parentGroup) return;
+            if (!parentGroup.enableMouseSupport) return;
+
+            if (displayMode == DisplayMode.Fill)
+            {
+                // Check if we've clicked on the fill area
+                var     rt = fillImage.transform as RectTransform;
+                Vector2 uv = new();
+
+                if (!eventCamera) eventCamera = rt.GetEventCamera();
+                if (rt.TryGetCursorUV(eventCamera, ref uv)) 
+                {
+                    float val = Mathf.Lerp(minMaxValue.x, minMaxValue.y, uv.x);
+                    ChangeValue(val);
+                    UpdateValue();
+                }
+            }
+
+            base.Interact();
+        }
+
     }
 }

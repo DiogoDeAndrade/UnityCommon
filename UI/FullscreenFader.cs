@@ -68,6 +68,15 @@ namespace UC
 
         void _Fade(float targetAlpha, float time, Color targetColor, System.Action action)
         {
+            // Check if we're already fading in this direction
+            if ((action == callback) && (action != null))
+            {
+                if ((this.targetColor == targetColor.ChangeAlpha(targetAlpha)))
+                {
+                    return;
+                }
+            }
+
             currentT = 0.0f;
             fader.color = targetColor.ChangeAlpha(fader.color.a);
             startColor = fader.color;

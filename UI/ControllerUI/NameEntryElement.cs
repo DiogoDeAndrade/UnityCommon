@@ -1,4 +1,3 @@
-using NaughtyAttributes.Editor;
 using System;
 using System.Collections.Generic;
 using TMPro;
@@ -202,6 +201,21 @@ public class NameEntryElement : MonoBehaviour
             }
         }
 #endif
+    }
+
+    public void SetBackspace()
+    {
+        index = allowed.IndexOf("\u2190");
+        letterText.text = allowed[index];
+        FlashLetter();
+        onBackspace();
+    }
+    public void SetEnter()
+    {
+        index = allowed.IndexOf("OK");
+        letterText.text = allowed[index];
+        FlashLetter();
+        onFinish();
     }
 
     public bool SetLetter(char c)

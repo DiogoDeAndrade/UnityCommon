@@ -78,6 +78,8 @@ namespace UC
         public event OnUIEnableToggle onUIToggle;
         public event CanSelect canSelect;
 
+        public virtual bool isContinuous => false;
+
         protected virtual void Start()
         {
             parentGroup = GetComponentInParent<UIGroup>();
