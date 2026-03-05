@@ -1,16 +1,16 @@
 using NaughtyAttributes;
 using System.Collections.Generic;
 using UnityEngine;
-//#if UNITYSPLINE_PRESENT
+#if UNITYSPLINE_PRESENT
 using UnityEngine.Splines;
-//#endif
+#endif
 
 public class SplineSampler : MonoBehaviour
 {
-//#if UNITYSPLINE_PRESENT
+#if UNITYSPLINE_PRESENT
     [SerializeField] 
     private SplineContainer spline;
-//#endif
+#endif
     [SerializeField] 
     private int             sampleCount = 200;
     [SerializeField] 
@@ -39,7 +39,7 @@ public class SplineSampler : MonoBehaviour
 
     void BuildCache()
     {
-//#if UNITYSPLINE_PRESENT
+#if UNITYSPLINE_PRESENT
         if (spline == null)
         {
             spline = GetComponent<SplineContainer>();
@@ -76,12 +76,12 @@ public class SplineSampler : MonoBehaviour
         }
 
         _maxDistance = distance;
-//#endif
+#endif
     }
 
     public bool Evaluate(float t, out Vector3 position, out Vector3 tangent, out Vector3 up)
     {
-//#if UNITYSPLINE_PRESENT
+#if UNITYSPLINE_PRESENT
 
         bool b = spline.Evaluate(t, out var pos, out var tan, out var u);
 
@@ -89,12 +89,12 @@ public class SplineSampler : MonoBehaviour
         tangent = tan;
         up = u;
         return b;
-/*#else
+#else
         position = Vector3.zero;
         tangent = Vector3.right;
         up = Vector3.up;
         return false;
-#endif*/
+#endif
     }
 
     public bool EvaluateByDistance(float dist, out Vector3 position, out Vector3 tangent, out Vector3 up)
