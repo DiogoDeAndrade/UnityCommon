@@ -7,7 +7,7 @@ namespace UC
 {
     public class VoxelObject : MonoBehaviour
     {
-        [SerializeField] private VoxelData<byte> _voxelData;
+        [SerializeField] private VoxelData<byte>            _voxelData;
         [SerializeField] private VoxelTools.MaterialMode    _materialMode;
         [SerializeField] private Dictionary<int, int>       _voxelValueToMaterialId;
 

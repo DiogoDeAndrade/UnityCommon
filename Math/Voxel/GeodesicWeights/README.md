@@ -19,5 +19,4 @@ This is code to implement "Geodesic voxel binding for production character meshe
 }
 ```
 
-* Class AxisSlice represents a single direction for voting
 * Class GeodesicWeights does the actual calculation

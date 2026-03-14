@@ -207,6 +207,27 @@ namespace UC
             return Vector3.Distance(p, closestPoint);
         }
 
+        // Clamped to segment, returns squared distance for efficiency
+        public static float DistanceSqr(Vector3 p0, Vector3 p1, Vector3 p, out Vector3 closestPoint)
+        {
+            Vector3 ab = p1 - p0;
+            Vector3 ap = p - p0;
+
+            float abSqrMag = ab.sqrMagnitude;
+            if (abSqrMag < Mathf.Epsilon)
+            {
+                // Segment is a point
+                closestPoint = p0;
+                return (p - p0).sqrMagnitude;
+            }
+
+            float t = Vector3.Dot(ap, ab) / abSqrMag;
+            t = Mathf.Clamp01(t); // Clamp to segment
+
+            closestPoint = p0 + t * ab;
+            return (p - closestPoint).sqrMagnitude;
+        }
+
         public static float Distance(Vector3 p0, Vector3 p1, Vector3 p, out Vector3 closestPoint, out float closestT)
         {
             Vector3 ab = p1 - p0;

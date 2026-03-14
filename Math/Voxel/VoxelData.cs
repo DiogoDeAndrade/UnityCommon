@@ -16,6 +16,7 @@ namespace UC
         public Vector3 minBound;
         public Vector3 uvScale;
 
+        public int voxelCount => gridSize.x * gridSize.y * gridSize.z;
         public Vector3 size => new Vector3(gridSize.x * voxelSize.x, gridSize.y * voxelSize.y, gridSize.z * voxelSize.z);
         public Vector3 extents => size * 0.5f;
         public Bounds bounds
@@ -35,11 +36,21 @@ namespace UC
             set { data[IndexOf(x, y, z)] = value; }
         }
 
+        public DATA_TYPE this[int index]
+        {
+            get { return data[index]; }
+            set { data[index] = value; }
+        }
 
         public DATA_TYPE this[Vector3Int p]
         {
             get { return data[IndexOf(p.x, p.y, p.z)]; }
             set { data[IndexOf(p.x, p.y, p.z)] = value; }
+        }
+
+        public void Clear(DATA_TYPE value)
+        {
+            for (int i = 0; i < data.Length; i++) data[i] = value;
         }
 
         public void Replace(DATA_TYPE src, DATA_TYPE dest)
@@ -114,6 +125,18 @@ namespace UC
             data = dst;
             gridSize = newGS;
             voxelSize *= 2.0f;
+        }
+
+        public Vector3Int WorldToVoxel(Vector3 p)
+        {
+            Vector3 local = p - minBound;
+
+            return new Vector3Int(Mathf.FloorToInt(local.x / voxelSize.x), Mathf.FloorToInt(local.y / voxelSize.y), Mathf.FloorToInt(local.z / voxelSize.z));
+        }
+
+        public Vector3 GetVoxelCenter(int x, int y, int z)
+        {
+            return minBound + new Vector3((x + 0.5f) * voxelSize.x, (y + 0.5f) * voxelSize.y, (z + 0.5f) * voxelSize.z);
         }
     }
 
