@@ -24,6 +24,10 @@ namespace UC
         private PlayerInput playerInput;
         [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
         protected InputControl backControl;
+        [SerializeField]
+        protected bool  enableManualLimits = false;
+        [SerializeField, ShowIf(nameof(enableManualLimits))]
+        protected Vector2 manualLimits = Vector2.zero;
 
         Vector3 originalPosition;
         RectTransform rectTransform;
@@ -44,8 +48,8 @@ namespace UC
             foreach (var line in lines)
             {
                 var tmp = Instantiate(textPrefab, transform);
-                if (line == "")
-                    tmp.text = "<color=#FF000000>||||</color>";
+                if (string.IsNullOrEmpty(line.Trim()))
+                    tmp.text = "<color=#FF000000>||ABCD||</color>";
                 else
                     tmp.text = line;
 
@@ -62,9 +66,11 @@ namespace UC
         {
             rectTransform.anchoredPosition = rectTransform.anchoredPosition + Vector2.up * scrollSpeed * Time.deltaTime;
 
-            float maxY = lastRectTransform.anchoredPosition.y;
+            float maxY = Mathf.Abs(lastRectTransform.anchoredPosition.y) + 150.0f;
+            if (enableManualLimits)
+                maxY = manualLimits.y;
 
-            if ((rectTransform.anchoredPosition.y > (Mathf.Abs(maxY) + 150.0f)) || (backControl.IsDown()))
+            if ((rectTransform.anchoredPosition.y > maxY) || (backControl.IsDown()))
             {
                 onEndScroll?.Invoke();
             }
@@ -72,7 +78,10 @@ namespace UC
 
         public void Reset()
         {
-            rectTransform.anchoredPosition = originalPosition;
+            if (enableManualLimits)
+                rectTransform.anchoredPosition = new Vector2(originalPosition.x, manualLimits.x);
+            else
+                rectTransform.anchoredPosition = originalPosition;
         }
     }
 }

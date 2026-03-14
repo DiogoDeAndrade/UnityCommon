@@ -8,8 +8,10 @@ namespace UC
         [SerializeField] private Tooltip        tooltipPrefab;
         [SerializeField] private RectTransform  tooltipParent;
         [SerializeField] private Camera         _referenceCamera;
+        [SerializeField] private bool           forceSingleTooltip = false;
 
-        protected Canvas _parentCanvas;
+        protected Canvas    _parentCanvas;
+        protected Tooltip   lastTooltip;
 
         static TooltipManager instance;
 
@@ -44,8 +46,12 @@ namespace UC
 
         private Tooltip _CreateTooltip()
         {
-            var tooltip = Instantiate(tooltipPrefab, tooltipParent);
-            return tooltip;
+            if (forceSingleTooltip && (lastTooltip != null))
+            {
+                Destroy(lastTooltip.gameObject);
+            }
+            lastTooltip = Instantiate(tooltipPrefab, tooltipParent);
+            return lastTooltip;
         }
 
         public static Tooltip CreateTooltip()

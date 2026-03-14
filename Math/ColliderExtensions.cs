@@ -27,4 +27,22 @@ public static class ColliderExtensions
     {
         return boxCollider.bounds.Random();
     }
+
+    public static Vector2 Random(this PolygonCollider2D polygonCollider)
+    {
+        Bounds bounds = polygonCollider.bounds;
+
+        for (int i = 0; i < 1000; i++) // safety cap
+        {
+            Vector2 point = bounds.Random().xy();
+
+            if (polygonCollider.OverlapPoint(point))
+            {
+                return point;
+            }
+        }
+
+        // Fallback (should basically never happen)
+        return polygonCollider.bounds.center;
+    }
 }

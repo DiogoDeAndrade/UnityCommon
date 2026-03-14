@@ -315,6 +315,47 @@ namespace UC
         {
             return new Vector4(v.x, v.y, v.z, value);
         }
+        public static Vector2 AddX(this Vector2 v, float value)
+        {
+            return new Vector2(v.x + value, v.y);
+        }
+
+        public static Vector2 AddY(this Vector2 v, float value)
+        {
+            return new Vector2(v.x, v.y + value);
+        }
+        public static Vector3 AddX(this Vector3 v, float value)
+        {
+            return new Vector3(v.x + value, v.y, v.z);
+        }
+
+        public static Vector3 AddY(this Vector3 v, float value)
+        {
+            return new Vector3(v.x, v.y + value, v.z);
+        }
+
+        public static Vector3 AddZ(this Vector3 v, float value)
+        {
+            return new Vector3(v.x, v.y, v.z + value);
+        }
+        public static Vector4 AddX(this Vector4 v, float value)
+        {
+            return new Vector4(v.x + value, v.y, v.z, v.w);
+        }
+
+        public static Vector4 AddY(this Vector4 v, float value)
+        {
+            return new Vector4(v.x, v.y + value, v.z, v.w);
+        }
+
+        public static Vector4 AddZ(this Vector4 v, float value)
+        {
+            return new Vector4(v.x, v.y, v.z + value, v.w);
+        }
+        public static Vector4 AddW(this Vector4 v, float value)
+        {
+            return new Vector4(v.x, v.y, v.z, v.w + value);
+        }
 
         public static int ManhattanDistance(this Vector2Int v1, Vector2Int v2)
         {

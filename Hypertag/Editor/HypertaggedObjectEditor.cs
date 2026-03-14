@@ -45,7 +45,11 @@ namespace UC.Editor
         protected override string GetTitle()
         {
             var obj = target as HypertaggedObject;
-            return obj?.GetHypertag()?.name ?? "Hypertag";
+            if (obj == null) return "Hypertag";
+            var ht = obj.GetHypertag();
+            if (ht == null) return "Hypertag";
+
+            return ht.displayName;
         }
 
 

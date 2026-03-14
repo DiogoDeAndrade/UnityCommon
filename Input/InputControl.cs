@@ -2,6 +2,7 @@ using NaughtyAttributes;
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using InputSystemControl = UnityEngine.InputSystem.InputControl;
 
 namespace UC
@@ -254,6 +255,67 @@ namespace UC
             return false;
         }
 
+        public bool WasDownFromPointerThisFrame()
+        {
+            if (_type != InputType.NewInput)
+                return false;
+
+            if (action == null)
+                RefreshAction();
+
+            if (action == null)
+                return false;
+
+            // Only meaningful if the action was pressed this frame
+            if (!action.WasPressedThisFrame())
+                return false;
+
+            // The control that most recently actuated this action
+            var c = action.activeControl;
+            if (c == null)
+                return false;
+
+            return IsPointerControl(c);
+        }
+
+        public bool WasDownFromKeyboardThisFrame()
+        {
+            if (_type != InputType.NewInput)
+                return false;
+
+            if (action == null)
+                RefreshAction();
+
+            if (action == null)
+                return false;
+
+            if (!action.WasPressedThisFrame())
+                return false;
+
+            var c = action.activeControl;
+            if (c == null)
+                return false;
+
+            return c.device is Keyboard;
+        }
+
+        public InputDevice GetDownDeviceThisFrame()
+        {
+            if (_type != InputType.NewInput)
+                return null;
+
+            if (action == null)
+                RefreshAction();
+
+            if (action == null)
+                return null;
+
+            if (!action.WasPressedThisFrame())
+                return null;
+
+            return action.activeControl?.device;
+        }
+
         private static bool IsPointerControl(InputSystemControl control)
         {
             if (control == null)
@@ -266,6 +328,66 @@ namespace UC
                 || device is Touchscreen
                 || device is Pen
                 || device is Pointer;
+        }
+
+        public static bool isAnyInputPressed
+        {
+            get
+            {
+#if ENABLE_LEGACY_INPUT_MANAGER
+                    return Input.anyKeyDown;
+#else
+                foreach (var device in InputSystem.devices)
+                {
+                    foreach (var control in device.allControls)
+                    {
+                        if (control is ButtonControl button && button.wasPressedThisFrame)
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+#endif
+            }
+        }
+
+        public static Vector2 GetScreenMousePosition()
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            Vector3 p = Input.mousePosition;
+            return new Vector2(p.x, p.y);
+#elif ENABLE_INPUT_SYSTEM
+            var mouse = Mouse.current;
+            if (mouse == null)
+            {
+                return default;
+            }
+
+            // position is a Vector2 in screen pixels, bottom-left origin (same convention as legacy)
+            return mouse.position.ReadValue();
+#else
+        return default;
+#endif
+        }
+
+        public static bool HasMouseMovedThisFrame()
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            // This is frame-based and does not require manual position caching
+            return Mathf.Abs(Input.GetAxisRaw("Mouse X")) > 0f ||
+                   Mathf.Abs(Input.GetAxisRaw("Mouse Y")) > 0f;
+#elif ENABLE_INPUT_SYSTEM
+            var mouse = Mouse.current;
+            if (mouse == null)
+                return false;
+
+            // delta is reset every frame
+            return mouse.delta.ReadValue() != Vector2.zero;
+#else
+        return false;
+#endif
         }
     }
 

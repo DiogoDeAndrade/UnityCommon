@@ -193,7 +193,7 @@ namespace UC
 
             if (buildDefs.buildWindows)
             {
-                string windowsPath = buildFolder + productName + "Windows/";
+                string windowsPath = buildFolder + productName + "_Windows/";
                 BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, windowsPath + productName + ".exe", BuildTarget.StandaloneWindows64, BuildOptions.None);
                 Log("Windows build completed: " + windowsPath);
 
@@ -208,9 +208,9 @@ namespace UC
 
                 if (buildDefs.createZipFiles)
                 {
-                    CreateZip(buildFolder, productName + "Windows", buildFolder + productName + "Windows_v" + buildDefs.version + ".zip");
+                    CreateZip(buildFolder, productName + "_Windows", buildFolder + productName + "_Windows_v" + buildDefs.version + ".zip");
 
-                    string zipPath = buildFolder + productName + "Windows_v" + buildDefs.version + ".zip";
+                    string zipPath = buildFolder + productName + "_Windows_v" + buildDefs.version + ".zip";
                     if (buildDefs.uploadToItch)
                     {
                         UploadToItch(zipPath, "windows");
@@ -220,7 +220,7 @@ namespace UC
 
             if (buildDefs.buildWeb)
             {
-                string webPath = buildFolder + productName + "Web/";
+                string webPath = buildFolder + productName + "_Web/";
                 BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, webPath, BuildTarget.WebGL, BuildOptions.None);
                 Log("WebGL build completed: " + webPath);
 
@@ -228,9 +228,9 @@ namespace UC
 
                 if (buildDefs.createZipFiles)
                 {
-                    CreateZip(buildFolder, productName + "Web", buildFolder + productName + "Web_v" + buildDefs.version + ".zip");
+                    CreateZip(buildFolder, productName + "_Web", buildFolder + productName + "_Web_v" + buildDefs.version + ".zip");
 
-                    string zipPath = buildFolder + productName + "Web_v" + buildDefs.version + ".zip";
+                    string zipPath = buildFolder + productName + "_Web_v" + buildDefs.version + ".zip";
                     if (buildDefs.uploadToItch)
                     {
                         UploadToItch(zipPath, "html5");

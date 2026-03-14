@@ -250,7 +250,7 @@ public class GeodesicWeights
 
     private IEnumerable<Vector3Int> EnumerateValidNeighbors(int x, int y, int z)
     {
-        // 26-neighborhood, matching the paper’s spirit better than pure von Neumann.
+        // 26-neighborhood, matching the paperï¿½s spirit better than pure von Neumann.
         // Because the step cost is center-to-center distance, diagonals naturally cost more.
         for (int dz = -1; dz <= 1; dz++)
         {

@@ -4,12 +4,13 @@ namespace UC
 {
     public class Hover : MonoBehaviour
     {
-        [SerializeField] private Transform target;
-        [SerializeField] private Vector3 direction = Vector3.up;
-        [SerializeField] private float offset;
-        [SerializeField] private float amplitude;
-        [SerializeField] private float frequency;
-        [SerializeField] private float baseOffset = 0.0f;
+        [SerializeField] private Transform  target;
+        [SerializeField] private Vector3    direction = Vector3.up;
+        [SerializeField] private float      offset;
+        [SerializeField] private float      amplitude;
+        [SerializeField] private float      frequency;
+        [SerializeField] private float      baseOffset = 0.0f;
+        [SerializeField] private bool       useAbs = false;
 
         Vector3 basePos;
         float elapsedTime;
@@ -24,9 +25,14 @@ namespace UC
         // Update is called once per frame
         void Update()
         {
-            elapsedTime += Time.deltaTime;
+            elapsedTime += Time.deltaTime * frequency * Mathf.Deg2Rad;
 
-            target.localPosition = basePos + direction * (offset + Mathf.Sin(elapsedTime * frequency * Mathf.Deg2Rad + baseOffset) * amplitude);
+            float wave = Mathf.Sin(elapsedTime + baseOffset);
+            if (useAbs) wave = Mathf.Abs(wave);
+            target.localPosition = basePos + direction * (offset + wave * amplitude);
         }
+
+        public void SetFrequency(float v) { frequency = v; }
+        public void SetAmplitude(float v) { amplitude = v; }
     }
 }

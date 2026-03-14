@@ -1,7 +1,6 @@
 
 using System;
 using System.Collections;
-using UnityEditor.Timeline.Actions;
 using UnityEngine;
 
 namespace UC.Interaction

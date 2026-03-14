@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using TMPro;
 using UC;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 public class NameEntryElement : MonoBehaviour
@@ -38,6 +37,10 @@ public class NameEntryElement : MonoBehaviour
     private Color   defaultDownColor;
 
     List<string> allowed;
+    
+    public bool allowLowercase => allowedTypes.HasFlag(NameEntryType.LowercaseAlpha);
+    public bool allowUppercase => allowedTypes.HasFlag(NameEntryType.UppercaseAlpha);
+    public bool allowBackspace => allowedTypes.HasFlag(NameEntryType.Backspace);
 
     void Awake()
     {
@@ -126,6 +129,7 @@ public class NameEntryElement : MonoBehaviour
 
     private void Update()
     {
+#if ENABLE_LEGACY_INPUT_MANAGER
         if (upArrow.enabled && Input.anyKeyDown)
         {
             foreach (var entry in allowed)
@@ -196,6 +200,37 @@ public class NameEntryElement : MonoBehaviour
                 }
             }
         }
+#endif
+    }
+
+    public void SetBackspace()
+    {
+        index = allowed.IndexOf("\u2190");
+        letterText.text = allowed[index];
+        FlashLetter();
+        onBackspace();
+    }
+    public void SetEnter()
+    {
+        index = allowed.IndexOf("OK");
+        letterText.text = allowed[index];
+        FlashLetter();
+        onFinish();
+    }
+
+    public bool SetLetter(char c)
+    {
+        int idx = allowed.IndexOf($"{c}");
+        if (idx != -1)
+        {
+            index = idx;
+            letterText.text = allowed[idx];
+            FlashLetter();
+            onSelect();
+            return true;
+        }
+
+        return false;
     }
 
     public string letter => allowed[index];
