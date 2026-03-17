@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using UC;
 using UnityEngine;
 
@@ -17,27 +16,6 @@ public class GeodesicWeights
         public VoxelData<float> distances;
     }
 
-    private struct QueueNode : IComparable<QueueNode>
-    {
-        public int      x, y, z;
-        public float    dist;
-        public int      serial;
-
-        public int CompareTo(QueueNode other)
-        {
-            int c = dist.CompareTo(other.dist);
-            if (c != 0) return c;
-            c = x.CompareTo(other.x);
-            if (c != 0) return c;
-            c = y.CompareTo(other.y);
-            if (c != 0) return c;
-            c = z.CompareTo(other.z);
-            if (c != 0) return c;
-            return serial.CompareTo(other.serial);
-        }
-    }
-
-
     [SerializeField] private List<BoneSegment>  bones;
     [SerializeField] private VoxelData<byte>    baseVoxelData;
 
@@ -51,29 +29,6 @@ public class GeodesicWeights
         bones = new List<BoneSegment>();
 
         CacheValidVoxels();
-    }
-
-    private void CacheValidVoxels()
-    {
-        validVoxelCoords.Clear();
-        validVoxelCenters.Clear();
-
-        Vector3Int size = baseVoxelData.gridSize;
-
-        for (int z = 0; z < size.z; z++)
-        {
-            for (int y = 0; y < size.y; y++)
-            {
-                for (int x = 0; x < size.x; x++)
-                {
-                    if (!IsValidVoxel(x, y, z))
-                        continue;
-
-                    validVoxelCoords.Add(new Vector3Int(x, y, z));
-                    validVoxelCenters.Add(baseVoxelData.GetVoxelCenter(x, y, z));
-                }
-            }
-        }
     }
 
     public int AddBone(int parentId, int boneId, Vector3 start, Vector3 end)
@@ -108,6 +63,27 @@ public class GeodesicWeights
         }
 
         return false;
+    }
+
+    #region Compute Distance Fields
+    private struct QueueNode : IComparable<QueueNode>
+    {
+        public int x, y, z;
+        public float dist;
+        public int serial;
+
+        public int CompareTo(QueueNode other)
+        {
+            int c = dist.CompareTo(other.dist);
+            if (c != 0) return c;
+            c = x.CompareTo(other.x);
+            if (c != 0) return c;
+            c = y.CompareTo(other.y);
+            if (c != 0) return c;
+            c = z.CompareTo(other.z);
+            if (c != 0) return c;
+            return serial.CompareTo(other.serial);
+        }
     }
 
     public void ComputeDistanceFields()
@@ -285,5 +261,124 @@ public class GeodesicWeights
     private bool IsInside(Vector3Int v)
     {
         return (v.x >= 0) && (v.y >= 0) && (v.z >= 0) && (v.x < baseVoxelData.gridSize.x) && (v.y < baseVoxelData.gridSize.y) && (v.z < baseVoxelData.gridSize.z);
+    }
+
+    private void CacheValidVoxels()
+    {
+        validVoxelCoords.Clear();
+        validVoxelCenters.Clear();
+
+        Vector3Int size = baseVoxelData.gridSize;
+
+        for (int z = 0; z < size.z; z++)
+        {
+            for (int y = 0; y < size.y; y++)
+            {
+                for (int x = 0; x < size.x; x++)
+                {
+                    if (!IsValidVoxel(x, y, z))
+                        continue;
+
+                    validVoxelCoords.Add(new Vector3Int(x, y, z));
+                    validVoxelCenters.Add(baseVoxelData.GetVoxelCenter(x, y, z));
+                }
+            }
+        }
+    }
+    #endregion
+
+    public bool ComputeWeight(Vector3 position, out float[] weights, out int[] boneWeights,
+                              int maxWeights = 4, float alpha = 0.7f, float epsilon = 1e-8f,
+                              bool normalizeWeights = true)
+    {
+        weights = null;
+        boneWeights = null;
+
+        if ((bones == null) || (bones.Count == 0))
+            return false;
+
+        if (maxWeights <= 0)
+            return false;
+
+        Vector3Int voxel = baseVoxelData.WorldToVoxel(position);
+
+        // If the vertex lies outside the valid volume, snap to nearest valid voxel.
+        // This shouldn't happen, since the voxel field is created from the intersection, but you never know
+        if ((!IsInside(voxel)) || (!IsValidVoxel(voxel.x, voxel.y, voxel.z)))
+        {
+            voxel = FindClosestValidVoxelToPointCached(position);
+            if (voxel.x < 0)
+                return false;
+        }
+
+        Vector3 voxelCenter = baseVoxelData.GetVoxelCenter(voxel.x, voxel.y, voxel.z);
+        float vertexOffset = Vector3.Distance(position, voxelCenter);
+
+        // Paper uses the product of bounding box extents D.
+        Vector3 extents = Vector3.Scale(baseVoxelData.gridSize, baseVoxelData.voxelSize);
+        float D = Mathf.Max(extents.x * extents.y * extents.z, epsilon);
+
+        List<(int boneId, float weight)> candidates = new List<(int boneId, float weight)>(bones.Count);
+
+        for (int i = 0; i < bones.Count; i++)
+        {
+            var bone = bones[i];
+            if (bone.distances == null)
+                continue;
+
+            float dv = bone.distances[voxel.x, voxel.y, voxel.z];
+
+            // Unreachable or invalid
+            if ((float.IsNaN(dv)) || (float.IsInfinity(dv)) || (dv == float.MaxValue))
+                continue;
+
+            float dij = (dv + vertexOffset) / D;
+            dij = Mathf.Clamp(dij, epsilon, 1f);
+
+            float denom = ((1.0f - alpha) * dij) + (alpha * dij * dij);
+            denom = Mathf.Max(denom, epsilon);
+
+            float wij = 1.0f / denom;
+            wij *= wij;
+
+            if (wij > 0.0f && !float.IsNaN(wij) && !float.IsInfinity(wij))
+                candidates.Add((bone.boneId, wij));
+        }
+
+        if (candidates.Count == 0)
+            return false;
+
+        // Keep strongest influences only.
+        candidates.Sort((a, b) => b.weight.CompareTo(a.weight));
+
+        int count = Mathf.Min(maxWeights, candidates.Count);
+        weights = new float[count];
+        boneWeights = new int[count];
+
+        float sum = 0.0f;
+        for (int i = 0; i < count; i++)
+        {
+            boneWeights[i] = candidates[i].boneId;
+            weights[i] = candidates[i].weight;
+            sum += weights[i];
+        }
+
+        if (normalizeWeights)
+        {
+            if (sum <= epsilon)
+            {
+                float uniform = 1.0f / count;
+                for (int i = 0; i < count; i++)
+                    weights[i] = uniform;
+            }
+            else
+            {
+                float invSum = 1.0f / sum;
+                for (int i = 0; i < count; i++)
+                    weights[i] *= invSum;
+            }
+        }
+
+        return true;
     }
 }

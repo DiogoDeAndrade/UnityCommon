@@ -253,5 +253,13 @@ namespace UC
 
             return count;
         }
+
+        public IEnumerable<N> GetNodes()
+        {
+            foreach (var node in nodes)
+            {
+                if (node != null) yield return node.data;
+            }
+        }
     }
 }
