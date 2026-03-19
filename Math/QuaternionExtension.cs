@@ -58,4 +58,9 @@ public static class QuaternionExtension
             s0 * q1.w + s1 * q2.w
         );
     }
+
+    public static Quaternion Negate(this Quaternion q)
+    {
+        return new Quaternion(-q.x, -q.y, -q.z, -q.w);
+    }
 }

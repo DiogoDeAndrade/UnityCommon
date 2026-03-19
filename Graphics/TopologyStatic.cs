@@ -136,7 +136,7 @@ namespace UC
                 for (int i = 0; i < verts.Length; i++)
                 {
                     Vector3 tvertex = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
-                    vertexMatch.Add(GetOrAddVertex(tvertex));
+                    vertexMatch.Add(GetOrAddVertex(tvertex, epsilon));
                 }
             }
             else
@@ -405,6 +405,141 @@ namespace UC
             var tri = triangles[index];
 
             return (vertices[tri.vertices.i1].position + vertices[tri.vertices.i2].position + vertices[tri.vertices.i3].position) / 3.0f;
+        }
+
+        public TopologyStatic SubdivideLongEdges(float maxEdgeLength, out int nSplits)
+        {
+            nSplits = 0;
+
+            if ((_vertices == null) || (_triangles == null) || (_edges == null))
+                return this;
+
+            // Copy original vertex positions
+            List<Vector3> newVertices = GetVertexPositions();
+
+            // For each edge that is too long, create one midpoint vertex.
+            Dictionary<int, int> edgeToMidpoint = new Dictionary<int, int>();
+
+            for (int e = 0; e < _edges.Count; e++)
+            {
+                var edge = _edges[e];
+                float len = edge.GetLength(_vertices);
+                if (len > maxEdgeLength)
+                {
+                    int newId = newVertices.Count;
+                    newVertices.Add(edge.GetMidpoint(_vertices));
+                    edgeToMidpoint[e] = newId;
+                }
+            }
+
+            // Nothing to do
+            if (edgeToMidpoint.Count == 0) return this;
+
+            List<int> newIndices = new List<int>(_triangles.Count * 12);
+
+            void AddTri(int a, int b, int c)
+            {
+                // Avoid degenerate triangles
+                if ((a == b) || (b == c) || (c == a))
+                    return;
+
+                newIndices.Add(a);
+                newIndices.Add(b);
+                newIndices.Add(c);
+            }
+
+            // Rebuild all triangles according to which of their 3 edges were split
+            for (int t = 0; t < _triangles.Count; t++)
+            {
+                var tri = _triangles[t];
+
+                int a = tri.vertices.i1;
+                int b = tri.vertices.i2;
+                int c = tri.vertices.i3;
+
+                int eAB = tri.edges.i1; // edge(a,b)
+                int eBC = tri.edges.i2; // edge(b,c)
+                int eCA = tri.edges.i3; // edge(c,a)
+
+                bool sAB = edgeToMidpoint.TryGetValue(eAB, out int mAB);
+                bool sBC = edgeToMidpoint.TryGetValue(eBC, out int mBC);
+                bool sCA = edgeToMidpoint.TryGetValue(eCA, out int mCA);
+
+                int splitCount = (sAB ? 1 : 0) + (sBC ? 1 : 0) + (sCA ? 1 : 0);
+
+                nSplits += splitCount;
+
+                switch (splitCount)
+                {
+                    case 0:
+                        // unchanged
+                        AddTri(a, b, c);
+                        break;
+
+                    case 1:
+                        // 1 split edge -> 2 triangles
+                        if (sAB)
+                        {
+                            AddTri(a, mAB, c);
+                            AddTri(mAB, b, c);
+                        }
+                        else if (sBC)
+                        {
+                            AddTri(a, b, mBC);
+                            AddTri(a, mBC, c);
+                        }
+                        else // sCA
+                        {
+                            AddTri(a, b, mCA);
+                            AddTri(mCA, b, c);
+                        }
+                        break;
+
+                    case 2:
+                        // 2 split edges -> 3 triangles
+                        // choose a consistent triangulation based on the unsplit edge
+                        if (!sAB) // split BC and CA
+                        {
+                            AddTri(a, b, mCA);
+                            AddTri(b, mBC, mCA);
+                            AddTri(mCA, mBC, c);
+                        }
+                        else if (!sBC) // split AB and CA
+                        {
+                            AddTri(a, mAB, mCA);
+                            AddTri(mAB, b, c);
+                            AddTri(mCA, mAB, c);
+                        }
+                        else // !sCA, split AB and BC
+                        {
+                            AddTri(a, mAB, c);
+                            AddTri(mAB, mBC, c);
+                            AddTri(mAB, b, mBC);
+                        }
+                        break;
+
+                    case 3:
+                        // 3 split edges -> 4 triangles
+                        AddTri(a, mAB, mCA);
+                        AddTri(mAB, b, mBC);
+                        AddTri(mCA, mBC, c);
+                        AddTri(mAB, mBC, mCA);
+                        break;
+                }
+            }
+
+            // Build a temporary mesh and reconstruct topology from it.
+            Mesh mesh = new Mesh();
+            mesh.indexFormat = (newVertices.Count > 65535) ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+            mesh.SetVertices(newVertices);
+            mesh.SetTriangles(newIndices, 0);
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.name = "SubdivideLongEdges";
+
+            // false = don't weld again by default, since this topology is already welded
+            // If you do want aggressive cleanup at seams, use true with a configurable epsilon.
+            return new TopologyStatic(mesh, Matrix4x4.identity, false);
         }
     }
 }

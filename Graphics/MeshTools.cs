@@ -2,6 +2,7 @@
 using UnityEngine.Rendering;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 namespace UC
 {
@@ -765,92 +766,129 @@ namespace UC
             return mesh;
         }
 
-        public static Mesh SubdivideLongEdges(Mesh sourceMesh, float maxEdgeLength, int maxSplits)
+        // This one is an old function, not sure if I'm using it anymore.
+        [Obsolete("SubdivideLongEdges is an old function, not sure if it's used anymore. Consider using SubdivideLongEdgesTopology instead.")]
+        public static Mesh SubdivideLongEdges(Mesh sourceMesh, float maxEdgeLength, int maxSplits, bool weld = false)
         {
-            bool restart = true;
+            // Weld first so geometric neighbors actually share indices
+            if (weld)
+            {
+                sourceMesh = FromTopology(new TopologyStatic(sourceMesh, Matrix4x4.identity, true));
+            }
+
             int numSplits = 0;
 
             List<int> indices = new(sourceMesh.triangles);
             List<Vector3> vertices = new(sourceMesh.vertices);
 
+            bool restart = true;
             while (restart)
             {
-                if (numSplits >= maxSplits) break;
-
                 restart = false;
+
+                if ((maxSplits != 0) && (numSplits >= maxSplits))
+                    break;
 
                 for (int i = 0; i < indices.Count; i += 3)
                 {
+                    int[] tri = { indices[i], indices[i + 1], indices[i + 2] };
+
                     for (int k = 0; k < 3; k++)
                     {
-                        int i1 = indices[i + k];
-                        int i2 = indices[i + (k + 1) % 3];
-                        int i3 = indices[i + (k + 2) % 3];
-                        Vector3 p1 = vertices[i1];
-                        Vector3 p2 = vertices[i2];
+                        int a = tri[k];
+                        int b = tri[(k + 1) % 3];
+                        int c = tri[(k + 2) % 3];
 
-                        float d = Vector3.Distance(p1, p2);
-                        if (d > maxEdgeLength)
+                        float d = Vector3.Distance(vertices[a], vertices[b]);
+                        if (d <= maxEdgeLength)
+                            continue;
+
+                        numSplits++;
+                        restart = true;
+
+                        int m = vertices.Count;
+                        vertices.Add((vertices[a] + vertices[b]) * 0.5f);
+
+                        // Replace current triangle with (a, m, c)
+                        indices[i + 0] = a;
+                        indices[i + 1] = m;
+                        indices[i + 2] = c;
+
+                        // Add second half (m, b, c)
+                        indices.Add(m);
+                        indices.Add(b);
+                        indices.Add(c);
+
+                        // Split EVERY other triangle sharing edge (a,b) or (b,a)
+                        for (int j = 0; j < indices.Count - 3; j += 3)
                         {
-                            numSplits++;
-                            restart = true;
+                            if (j == i) continue;
 
-                            int newVertexId = vertices.Count;
-                            vertices.Add((p1 + p2) * 0.5f);
+                            int t0 = indices[j + 0];
+                            int t1 = indices[j + 1];
+                            int t2 = indices[j + 2];
 
-                            indices[i + (k + 1) % 3] = newVertexId;
-
-                            indices.Add(newVertexId);
-                            indices.Add(i2);
-                            indices.Add(i3);
-
-                            // Need to split all triangles that share this edge
-                            for (int j = i + 3; j < indices.Count; j += 3)
+                            // check the three directed edges of this triangle
+                            for (int e = 0; e < 3; e++)
                             {
-                                for (int k2 = 0; k2 < 3; k2++)
+                                int o1 = (e == 0) ? t0 : (e == 1) ? t1 : t2;
+                                int o2 = (e == 0) ? t1 : (e == 1) ? t2 : t0;
+                                int o3 = (e == 0) ? t2 : (e == 1) ? t0 : t1;
+
+                                if (((o1 == a) && (o2 == b)) || ((o1 == b) && (o2 == a)))
                                 {
-                                    int o1 = indices[j + k2];
-                                    int o2 = indices[j + (k2 + 1) % 3];
-                                    int o3 = indices[j + (k2 + 2) % 3];
+                                    // replace that triangle with (o1, m, o3)
+                                    indices[j + 0] = o1;
+                                    indices[j + 1] = m;
+                                    indices[j + 2] = o3;
 
-                                    if (((o1 == i1) && (o2 == i2)) ||
-                                        ((o1 == i2) && (o2 == i1)))
-                                    {
-                                        // Found shared edge
-                                        indices[j + (k2 + 1) % 3] = newVertexId;
+                                    // add (m, o2, o3)
+                                    indices.Add(m);
+                                    indices.Add(o2);
+                                    indices.Add(o3);
 
-                                        indices.Add(newVertexId);
-                                        indices.Add(o2);
-                                        indices.Add(o3);
-                                    }
+                                    break;
                                 }
                             }
-                            if (numSplits >= maxSplits) break;
                         }
+
+                        // topology changed; restart from scratch
+                        break;
                     }
 
-                    if (numSplits >= maxSplits) break;
+                    if (restart)
+                        break;
                 }
             }
 
             Mesh mesh = new Mesh();
-
-            mesh.indexFormat = (vertices.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
+            mesh.indexFormat = (vertices.Count > 65535)
+                ? UnityEngine.Rendering.IndexFormat.UInt32
+                : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(vertices);
             mesh.SetTriangles(indices, 0);
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
-            if (sourceMesh.name.IndexOf("Subdivide") == -1)
-                mesh.name = sourceMesh.name + " Subdivided";
-            else
-                mesh.name = sourceMesh.name;
+            mesh.name = sourceMesh.name.Contains("Subdivide") ? sourceMesh.name : sourceMesh.name + " Subdivided";
 
             Debug.Log($"Ran {numSplits} splits...");
 
-            // To cleanup the mesh, get topology from the mesh
+            // Final cleanup / weld
             var topology = new TopologyStatic(mesh, Matrix4x4.identity, true);
-
             return FromTopology(topology);
+        }
+
+        public static Mesh SubdivideLongEdgesTopology(Mesh sourceMesh, float maxEdgeLength, int maxPasses)
+        {
+            TopologyStatic top = new TopologyStatic(sourceMesh, Matrix4x4.identity, true);
+            for (int i = 0; i < maxPasses; i++)
+            {
+                var next = top.SubdivideLongEdges(maxEdgeLength, out var nSplits);
+                if (nSplits == 0)
+                    break;
+                top = next;
+            }
+            return FromTopology(top);
         }
 
         public static Mesh CopyMesh(Mesh sourceMesh)

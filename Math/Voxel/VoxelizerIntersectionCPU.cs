@@ -1,13 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace UC
 {
 
     public static class VoxelizerIntersectionCPU
     {
-        static public VoxelData<byte> Voxelize(List<Mesh> meshes, List<Matrix4x4> transforms, float voxelSize, bool forcePowerOfTwo = false, float gridScale = 1.0f, bool fillEmpty = false)
+        static public VoxelData<byte> Voxelize(List<Mesh> meshes, List<Matrix4x4> transforms, float voxelSize, bool forcePowerOfTwo = false, float gridScale = 1.0f, int gridPad = 0, bool fillEmpty = false)
         {
             Bounds bounds = meshes[0].bounds;
             bounds = bounds.ToWorld(transforms[0]);
@@ -24,6 +23,10 @@ namespace UC
             float density = 1.0f / voxelSize;
 
             bounds.Expand(bounds.size * gridScale - bounds.size);
+            if (gridPad > 0)
+            {
+                bounds.Expand(new Vector3(gridPad * voxelSize, gridPad * voxelSize, gridPad * voxelSize));
+            }
 
             Vector3Int gridSize = new Vector3Int(Mathf.CeilToInt(bounds.size.x * density),
                                                  Mathf.CeilToInt(bounds.size.y * density),

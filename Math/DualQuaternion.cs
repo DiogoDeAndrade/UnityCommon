@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Security.Principal;
 using UnityEngine;
 
 namespace UC
@@ -7,6 +9,9 @@ namespace UC
     {
         public Quaternion real; // rotation
         public Quaternion dual; // translation part
+
+        public static DualQuaternion identity => new DualQuaternion(Quaternion.identity, new Quaternion(0f, 0f, 0f, 0f));
+        public static DualQuaternion zero => new DualQuaternion(new Quaternion(0f, 0f, 0f, 0f), new Quaternion(0f, 0f, 0f, 0f));
 
         public DualQuaternion(Quaternion real, Quaternion dual)
         {
@@ -42,11 +47,23 @@ namespace UC
         public void Normalize()
         {
             float mag = Mathf.Sqrt(Quaternion.Dot(real, real));
-            if (mag > 0f)
+            if (mag <= 0f)
             {
-                real = real.Divide(mag);
-                dual = dual.Divide(mag);
+                real = Quaternion.identity;
+                dual = new Quaternion(0f, 0f, 0f, 0f);
+                return;
             }
+
+            real = real.Divide(mag);
+            dual = dual.Divide(mag);
+
+            float dot = Quaternion.Dot(real, dual);
+            dual = new Quaternion(
+                dual.x - real.x * dot,
+                dual.y - real.y * dot,
+                dual.z - real.z * dot,
+                dual.w - real.w * dot
+            );
         }
 
         public static DualQuaternion Normalized(DualQuaternion dq)
@@ -55,12 +72,24 @@ namespace UC
             return dq;
         }
 
+        public static DualQuaternion operator *(DualQuaternion dq, float s)
+        {
+            return new DualQuaternion(new Quaternion(dq.real.x * s, dq.real.y * s, dq.real.z * s, dq.real.w * s),
+                                      new Quaternion(dq.dual.x * s, dq.dual.y * s, dq.dual.z * s, dq.dual.w * s));
+        }
+
         public static DualQuaternion operator *(DualQuaternion a, DualQuaternion b)
         {
             return new DualQuaternion(
                 a.real * b.real,
                 (a.real * b.dual).Add(a.dual * b.real)
             );
+        }
+
+        public static DualQuaternion operator +(DualQuaternion a, DualQuaternion b)
+        {
+            return new DualQuaternion(new Quaternion(a.real.x + b.real.x, a.real.y + b.real.y, a.real.z + b.real.z, a.real.w + b.real.w),   
+                                      new Quaternion(a.dual.x + b.dual.x, a.dual.y + b.dual.y, a.dual.z + b.dual.z, a.dual.w + b.dual.w));
         }
 
         public DualQuaternion Conjugate()
@@ -73,10 +102,9 @@ namespace UC
 
         public DualQuaternion Inverse()
         {
-            DualQuaternion c = Conjugate();
-            // For unit dual quaternion, inverse = (real*, -dual*)
-            c.dual = new Quaternion(-c.dual.x, -c.dual.y, -c.dual.z, -c.dual.w);
-            return c;
+            Quaternion rInv = Quaternion.Inverse(real);
+            Quaternion dInv = (rInv * dual * rInv).Negate();
+            return new DualQuaternion(rInv, dInv);
         }
 
         public void GetRotationTranslation(out Quaternion rotation, out Vector3 translation)
@@ -144,22 +172,52 @@ namespace UC
             result.Normalize();
             return result;
         }
-        
+
+        // Blend weight some quaternions together, then normalize the result.
+        public static DualQuaternion BlendWeighted(IList<DualQuaternion> dqs, IList<float> weights)
+        {
+            if ((dqs == null) || (weights == null) || (dqs.Count == 0) || (dqs.Count != weights.Count)) return identity;
+
+            int first = -1;
+            for (int i = 0; i < weights.Count; i++)
+            {
+                if (weights[i] > 0f)
+                {
+                    first = i;
+                    break;
+                }
+            }
+
+            if (first < 0) return identity;
+
+            Quaternion reference = dqs[first].real;
+            DualQuaternion accum = zero;
+
+            for (int i = 0; i < dqs.Count; i++)
+            {
+                float w = weights[i];
+                if (w <= 0f) continue;
+
+                DualQuaternion dq = dqs[i];
+
+                // Hemisphere correction
+                if (Quaternion.Dot(reference, dq.real) < 0f)
+                {
+                    dq.real = new Quaternion(-dq.real.x, -dq.real.y, -dq.real.z, -dq.real.w);
+                    dq.dual = new Quaternion(-dq.dual.x, -dq.dual.y, -dq.dual.z, -dq.dual.w);
+                }
+
+                accum += dq * w;
+            }
+
+            accum.Normalize();
+            return accum;
+        }
+
         public Vector3 TransformPoint(Vector3 p)
         {
-            DualQuaternion dq = this;
-            dq.Normalize();
-
-            Quaternion r = dq.real;
-            Quaternion d = dq.dual;
-
-            // Rotate point
-            Quaternion rp = r * new Quaternion(p.x, p.y, p.z, 0f) * Quaternion.Inverse(r);
-
-            // Extract translation
-            Quaternion t = (d * Quaternion.Inverse(r)).Multiply(2.0f);
-
-            return new Vector3(rp.x + t.x, rp.y + t.y, rp.z + t.z);
+            GetRotationTranslation(out Quaternion rotation, out Vector3 translation);
+            return rotation * p + translation;
         }
     }
 }
