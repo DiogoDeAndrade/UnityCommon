@@ -334,10 +334,25 @@ namespace UC
         }
         public SerializedHashSet<int> GetEdgeNeighbours(int edgeId) => _edges[edgeId].neighbourEdges;
         public SerializedHashSet<int> GetEdgeTriangles(int edgeId) => _edges[edgeId].triangles;
+        public int                    GetEdgeTrianglesCount(int edgeId) => _edges[edgeId].triangles.Count;
 
         public IdTriplet GetTriangleVertex(int triangleId) => _triangles[triangleId].vertices;
         public IdTriplet GetTriangleEdges(int triangleId) => _triangles[triangleId].edges;
         public SerializedHashSet<int> GetTriangleNeighbours(int triangleId) => _triangles[triangleId].neighbourTriangles;
+
+        public List<int> GetTriangleIndices()
+        {
+            List<int> ret = new(triangleCount * 3);
+            foreach (var tri in _triangles)
+            {
+                ret.Add(tri.vertices.i1);
+                ret.Add(tri.vertices.i2);
+                ret.Add(tri.vertices.i3);
+            }
+
+            return ret;
+        }
+
 
         public int GetClosestPointId(Vector3 position)
         {
@@ -540,6 +555,30 @@ namespace UC
             // false = don't weld again by default, since this topology is already welded
             // If you do want aggressive cleanup at seams, use true with a configurable epsilon.
             return new TopologyStatic(mesh, Matrix4x4.identity, false);
+        }
+
+        public Mesh ToMesh()
+        {
+            List<int> indices = new List<int>();
+            foreach (var tri in triangles)
+            {
+                if (tri == null) continue;
+
+                indices.Add(tri.vertices.i1);
+                indices.Add(tri.vertices.i2);
+                indices.Add(tri.vertices.i3);
+            }
+
+            Mesh mesh = new Mesh();
+
+            mesh.indexFormat = (vertices.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
+            mesh.SetVertices(GetVertexPositions());
+            mesh.SetTriangles(indices, 0);
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.name = "FromTopology";
+
+            return mesh;
         }
     }
 }

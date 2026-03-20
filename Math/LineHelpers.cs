@@ -250,6 +250,81 @@ namespace UC
             return Vector3.Distance(p, closestPoint);
         }
 
+        public static float Distance(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, out Vector3 closestA, out Vector3 closestB)
+        {
+            Vector3 d1 = a1 - a0; // Direction of segment A
+            Vector3 d2 = b1 - b0; // Direction of segment B
+            Vector3 r = a0 - b0;
+
+            float a = Vector3.Dot(d1, d1); // Squared length of segment A
+            float e = Vector3.Dot(d2, d2); // Squared length of segment B
+            float f = Vector3.Dot(d2, r);
+
+            float s, t;
+
+            // Both segments degenerate into points
+            if (a <= Mathf.Epsilon && e <= Mathf.Epsilon)
+            {
+                closestA = a0;
+                closestB = b0;
+                return Vector3.Distance(closestA, closestB);
+            }
+
+            // First segment degenerates into a point
+            if (a <= Mathf.Epsilon)
+            {
+                s = 0.0f;
+                t = Mathf.Clamp01(f / e);
+            }
+            else
+            {
+                float c = Vector3.Dot(d1, r);
+
+                // Second segment degenerates into a point
+                if (e <= Mathf.Epsilon)
+                {
+                    t = 0.0f;
+                    s = Mathf.Clamp01(-c / a);
+                }
+                else
+                {
+                    float b = Vector3.Dot(d1, d2);
+                    float denom = a * e - b * b;
+
+                    // If not parallel, compute closest point on infinite lines and clamp to segment A
+                    if (denom != 0.0f)
+                        s = Mathf.Clamp01((b * f - c * e) / denom);
+                    else
+                        s = 0.0f; // Parallel, pick arbitrary s
+
+                    // Compute point on segment B corresponding to s
+                    t = (b * s + f) / e;
+
+                    // If t out of range, clamp and recompute s
+                    if (t < 0.0f)
+                    {
+                        t = 0.0f;
+                        s = Mathf.Clamp01(-c / a);
+                    }
+                    else if (t > 1.0f)
+                    {
+                        t = 1.0f;
+                        s = Mathf.Clamp01((b - c) / a);
+                    }
+                }
+            }
+
+            closestA = a0 + d1 * s;
+            closestB = b0 + d2 * t;
+
+            return Vector3.Distance(closestA, closestB);
+        }
+
+        public static float Distance(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1)
+        {
+            return Distance(a0, a1, b0, b1, out _, out _);
+        }
+
         public static Vector3 GetClosestPoint(Vector3 p0, Vector3 p1, Vector3 p)
         {
             Vector3 dp = (p1 - p0).normalized;

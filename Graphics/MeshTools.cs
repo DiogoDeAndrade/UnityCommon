@@ -551,30 +551,6 @@ namespace UC
             return mesh;
         }
 
-        public static Mesh FromTopology(TopologyStatic top)
-        {
-            List<int> indices = new List<int>();
-            foreach (var tri in top.triangles)
-            {
-                if (tri == null) continue;
-
-                indices.Add(tri.vertices.i1);
-                indices.Add(tri.vertices.i2);
-                indices.Add(tri.vertices.i3);
-            }
-
-            Mesh mesh = new Mesh();
-
-            mesh.indexFormat = (top.vertices.Count > 65535) ? (UnityEngine.Rendering.IndexFormat.UInt32) : (UnityEngine.Rendering.IndexFormat.UInt16);
-            mesh.SetVertices(top.GetVertexPositions());
-            mesh.SetTriangles(indices, 0);
-            mesh.RecalculateBounds();
-            mesh.RecalculateNormals();
-            mesh.name = "FromTopology";
-
-            return mesh;
-        }
-
         public static Mesh SimplifyMeshInterior(Mesh sourceMesh, float colinearTolerance = 0.001f)
         {
             float colTol = 1.0f - colinearTolerance;
@@ -760,7 +736,7 @@ namespace UC
                 // To cleanup the mesh, get topology from the mesh with weld
                 var topology = new TopologyStatic(mesh, Matrix4x4.identity, true);
 
-                return FromTopology(topology);
+                return topology.ToMesh();
             }
 
             return mesh;
@@ -773,7 +749,7 @@ namespace UC
             // Weld first so geometric neighbors actually share indices
             if (weld)
             {
-                sourceMesh = FromTopology(new TopologyStatic(sourceMesh, Matrix4x4.identity, true));
+                sourceMesh = (new TopologyStatic(sourceMesh, Matrix4x4.identity, true)).ToMesh();
             }
 
             int numSplits = 0;
@@ -875,7 +851,7 @@ namespace UC
 
             // Final cleanup / weld
             var topology = new TopologyStatic(mesh, Matrix4x4.identity, true);
-            return FromTopology(topology);
+            return topology.ToMesh();
         }
 
         public static Mesh SubdivideLongEdgesTopology(Mesh sourceMesh, float maxEdgeLength, int maxPasses)
@@ -888,7 +864,7 @@ namespace UC
                     break;
                 top = next;
             }
-            return FromTopology(top);
+            return top.ToMesh();
         }
 
         public static Mesh CopyMesh(Mesh sourceMesh)
