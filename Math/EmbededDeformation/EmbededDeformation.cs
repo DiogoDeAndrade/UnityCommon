@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+#if MATH_NET_AVAILABLE
+using MathNet.Numerics.LinearAlgebra;
+using MathNet.Numerics.LinearAlgebra.Double;
+#endif   
 
 namespace UC.ED
 {
@@ -10,8 +14,19 @@ namespace UC.ED
     [Serializable]
     public class EDNode
     {
-        public Vector3 restPosition;
-        public List<int> neighbors = new();
+        public Vector3      restPosition;
+        public List<int>    neighbors = new();
+
+        public Vector3      currentTranslation = Vector3.zero;
+        public Quaternion   currentRotation = Quaternion.identity;
+        public Matrix4x4    currentMatrix;
+
+        public void UpdateMatrix()
+        {
+            currentMatrix = Matrix4x4.TRS(currentTranslation, currentRotation, Vector3.one);
+        }
+
+        public Vector3 currentPosition => currentMatrix.MultiplyPoint(restPosition);
     }
 
     [Serializable]
@@ -22,21 +37,30 @@ namespace UC.ED
     }
 
     [Serializable]
-    public struct EDConstraint
+    public struct EDHandleConstraint
     {
-        public int vertexIndex;
-        public Vector3 targetPosition;
+        public Matrix4x4 restHandleMatrix;
+        public Matrix4x4 currentHandleMatrix;
+        public List<int> vertexIndices;
+    }
+
+    [Serializable]
+    public struct EDVertexConstraint
+    {
+        public int      vertexIndex;
+        public Vector3  targetPosition;
     }
 
     [Serializable]
     public class EmbededDeformation
     {
-        public Vector3[]            restVertices;
-        public int[]                triangles;
+        public Vector3[]                restVertices;
+        public int[]                    triangles;
 
-        public List<EDNode>         nodes = new();
-        public EDVertexBinding[]    bindings;
-        public List<EDConstraint>   constraints = new();
+        public List<EDNode>             nodes = new();
+        public EDVertexBinding[]        bindings;
+        public List<EDHandleConstraint> handleConstraints = new();
+        public List<EDVertexConstraint> vertexConstraints = new();
 
         public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, BindingMode bindMode, GraphLinkMode graphLinkMode, int k = 4)
         {
@@ -60,7 +84,7 @@ namespace UC.ED
 
             nodes.Clear();
             bindings = null;
-            constraints.Clear();
+            handleConstraints.Clear();
 
             // -----------------------------------------------------------------
             // 2) Sample graph nodes from navmesh vertices
@@ -362,6 +386,242 @@ namespace UC.ED
             }
 
             EnsureNoIsolatedNodes();
+        }
+
+        public void UpdateConstraints(List<EDHandleConstraint> handleData)
+        {
+            handleConstraints = new(handleData);
+
+            vertexConstraints.Clear();
+
+            foreach (var hc in handleData)
+            {
+                Matrix4x4 delta = hc.currentHandleMatrix * hc.restHandleMatrix.inverse;
+
+                foreach (int vId in hc.vertexIndices)
+                {
+                    Vector3 restPos = restVertices[vId];
+                    Vector3 targetPos = delta.MultiplyPoint3x4(restPos);
+
+                    vertexConstraints.Add(new EDVertexConstraint
+                    {
+                        vertexIndex = vId,
+                        targetPosition = targetPos
+                    });
+                }
+            }
+        }
+
+        public void ResetDeformation()
+        {
+            foreach (var node in nodes)
+            {
+                node.currentTranslation = Vector3.zero;
+                node.currentRotation = Quaternion.identity;
+                node.UpdateMatrix();
+            }
+        }
+
+        public Vector3[] DeformVerticesFromCurrentNodeTransforms()
+        {
+            foreach (var node in nodes) node.UpdateMatrix();
+
+            Vector3[] deformed = new Vector3[restVertices.Length];
+
+            for (int vId = 0; vId < restVertices.Length; vId++)
+            {                
+                deformed[vId] = DeformVertexFromCurrentNodeTransforms(vId);
+            }
+
+            return deformed;
+        }
+
+        public Vector3 DeformVertexFromCurrentNodeTransforms(int vertexId)
+        {
+            Vector3 v = restVertices[vertexId];
+            var binding = bindings[vertexId];
+            Vector3 result = Vector3.zero;
+
+            for (int i = 0; i < binding.nodeIndices.Length; i++)
+            {
+                int nodeIndex = binding.nodeIndices[i];
+                float w = binding.weights[i];
+
+                var node = nodes[nodeIndex];
+
+                Vector3 g = node.restPosition;
+
+                Vector3 transformed = node.currentMatrix.MultiplyPoint3x4(v - g) + g;
+
+                result += w * transformed;
+            }
+
+            return result;
+        }
+
+        public bool SolveTranslationsOnly(double constraintWeight = 1.0, double smoothnessWeight = 0.1)
+        {
+#if MATH_NET_AVAILABLE
+            if ((nodes == null) || (nodes.Count == 0))
+            {
+                Debug.LogError("SolveTranslationsOnly failed: no nodes.");
+                return false;
+            }
+
+            if ((bindings == null) || (bindings.Length != restVertices.Length))
+            {
+                Debug.LogError("SolveTranslationsOnly failed: bindings are missing or invalid.");
+                return false;
+            }
+
+            if ((vertexConstraints == null) || (vertexConstraints.Count == 0))
+            {
+                Debug.LogWarning("SolveTranslationsOnly: no vertex constraints, resetting translations.");
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    nodes[i].currentTranslation = Vector3.zero;
+                    nodes[i].currentRotation = Quaternion.identity;
+                    nodes[i].UpdateMatrix();
+                }
+                return true;
+            }
+
+            int nodeCount = nodes.Count;
+
+            // Count unique undirected graph edges.
+            List<(int a, int b)> edges = CollectUniqueEdges();
+            int edgeCount = edges.Count;
+
+            int constraintRowCount = vertexConstraints.Count;
+            int smoothRowCount = edgeCount;
+            int rowCount = constraintRowCount + smoothRowCount;
+
+            if (rowCount == 0)
+            {
+                Debug.LogWarning("SolveTranslationsOnly: system has zero rows.");
+                return false;
+            }
+
+            Matrix<double> A = DenseMatrix.Create(rowCount, nodeCount, 0.0);
+            Vector<double> bx = DenseVector.Create(rowCount, 0.0);
+            Vector<double> by = DenseVector.Create(rowCount, 0.0);
+            Vector<double> bz = DenseVector.Create(rowCount, 0.0);
+
+            int row = 0;
+
+            // -----------------------------------------------------------------
+            // 1) Positional constraints
+            //     sum_j w_j(v) * t_j = target(v) - rest(v)
+            // -----------------------------------------------------------------
+            for (int c = 0; c < vertexConstraints.Count; c++, row++)
+            {
+                EDVertexConstraint vc = vertexConstraints[c];
+
+                if ((vc.vertexIndex < 0) || (vc.vertexIndex >= restVertices.Length))
+                    continue;
+
+                Vector3 rest = restVertices[vc.vertexIndex];
+                Vector3 delta = vc.targetPosition - rest;
+
+                EDVertexBinding binding = bindings[vc.vertexIndex];
+                if ((binding.nodeIndices == null) || (binding.nodeIndices.Length == 0))
+                    continue;
+
+                for (int k = 0; k < binding.nodeIndices.Length; k++)
+                {
+                    int nodeIndex = binding.nodeIndices[k];
+                    if ((nodeIndex < 0) || (nodeIndex >= nodeCount))
+                        continue;
+
+                    double w = 0.0;
+
+                    if ((binding.weights != null) && (k < binding.weights.Length))
+                        w = binding.weights[k];
+                    else
+                        w = 1.0 / binding.nodeIndices.Length;
+
+                    A[row, nodeIndex] += constraintWeight * w;
+                }
+
+                bx[row] = constraintWeight * delta.x;
+                by[row] = constraintWeight * delta.y;
+                bz[row] = constraintWeight * delta.z;
+            }
+
+            // -----------------------------------------------------------------
+            // 2) Smoothness constraints
+            //     t_i - t_j = 0
+            // -----------------------------------------------------------------
+            for (int e = 0; e < edgeCount; e++, row++)
+            {
+                var edge = edges[e];
+
+                A[row, edge.a] += smoothnessWeight;
+                A[row, edge.b] -= smoothnessWeight;
+
+                // rhs stays zero
+            }
+
+            // -----------------------------------------------------------------
+            // 3) Solve least squares independently for x/y/z
+            // -----------------------------------------------------------------
+            Vector<double> tx, ty, tz;
+
+            try
+            {
+                tx = A.Solve(bx);
+                ty = A.Solve(by);
+                tz = A.Solve(bz);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"SolveTranslationsOnly failed while solving: {ex.Message}");
+                return false;
+            }
+
+            // -----------------------------------------------------------------
+            // 4) Store result in nodes
+            // -----------------------------------------------------------------
+            for (int i = 0; i < nodeCount; i++)
+            {
+                nodes[i].currentTranslation = new Vector3((float)tx[i], (float)ty[i], (float)tz[i]);
+                nodes[i].currentRotation = Quaternion.identity;
+                nodes[i].UpdateMatrix();
+            }
+
+            return true;
+#else
+            throw new NotImplementedException();            
+#endif
+
+        }
+
+        private List<(int a, int b)> CollectUniqueEdges()
+        {
+            List<(int a, int b)> result = new();
+            HashSet<ulong> seen = new();
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                if (nodes[i].neighbors == null)
+                    continue;
+
+                for (int j = 0; j < nodes[i].neighbors.Count; j++)
+                {
+                    int n = nodes[i].neighbors[j];
+                    if ((n < 0) || (n >= nodes.Count) || (n == i))
+                        continue;
+
+                    int a = Mathf.Min(i, n);
+                    int b = Mathf.Max(i, n);
+
+                    ulong key = ((ulong)(uint)a << 32) | (uint)b;
+                    if (seen.Add(key))
+                        result.Add((a, b));
+                }
+            }
+
+            return result;
         }
     }
 }
