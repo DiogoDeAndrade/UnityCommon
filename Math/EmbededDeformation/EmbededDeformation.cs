@@ -4,7 +4,6 @@ using UnityEngine;
 using UC.DoubleMath;
 using System.Text;
 
-
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
@@ -12,7 +11,8 @@ using MathNet.Numerics.LinearAlgebra.Double;
 
 namespace UC.ED
 {
-    public enum BindingMode { ClosestOne, NearestK };
+    public enum BindingSelectionMode { ClosestOne, NearestK };
+    public enum BindingWeightMode { Uniform, InversePower, Gaussian, OriginalED };
     public enum GraphLinkMode { PartitionAdjacency, SharedBindings, DirectionAware };
 
     [Serializable]
@@ -125,11 +125,14 @@ namespace UC.ED
         public List<EDHandleConstraint> handleConstraints = new();
         public List<EDVertexConstraint> vertexConstraints = new();
 
-        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, BindingMode bindMode, GraphLinkMode graphLinkMode, 
-                                          int k = 4, // For closest-K
-                                          float maxBindDistance = 2.0f, // For DirectionAware
-                                          float minBindAngle = 20.0f, // For DirectionAware
-                                          HasLOS hasLOSFunction = null) // For DirectionAware
+        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, 
+                                          BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
+                                          int k = 4, // When BindingSelectionMode = closest-K
+                                          float maxBindDistance = 2.0f, // When GraphLinKMode = DirectionAware
+                                          float minBindAngle = 20.0f, // When GraphLinKMode = DirectionAware
+                                          HasLOS hasLOSFunction = null, // When GraphLinKMode = DirectionAware
+                                          float power = 2.0f, 
+                                          float sigma = 1.0f) // When BindingSelectionMode = closest-K and BindingWeightMode = InversePower
         {
             if (topology == null)
             {
@@ -205,7 +208,7 @@ namespace UC.ED
             // -----------------------------------------------------------------
             // 3) Build bindings: each navmesh vertex gets k nearest nodes
             // -----------------------------------------------------------------
-            BuildBindings(topology, bindMode, k);
+            BuildBindings(topology, bindMode, weightMode, k, power, sigma);
 
             // -----------------------------------------------------------------
             // 4) Build graph edges from shared bindings
@@ -407,7 +410,7 @@ namespace UC.ED
             }
         }
 
-        private void BuildBindings(TopologyStatic topology, BindingMode bindMode, int k)
+        private void BuildBindings(TopologyStatic topology, BindingSelectionMode bindMode, BindingWeightMode weightMode, int k = 4, float power = 2.0f, float sigma = 1.0f)
         {
             if (topology == null)
             {
@@ -421,77 +424,33 @@ namespace UC.ED
                 return;
             }
 
-            int nodeCount = nodes.Count;
             int vertexCount = topology.vertexCount;
+            int nodeCount = nodes.Count;
             bindings = new EDVertexBinding[vertexCount];
 
             switch (bindMode)
             {
-                case BindingMode.ClosestOne:
-                    {
-                        for (int vId = 0; vId < vertexCount; vId++)
-                        {
-                            DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
-                            int closestNode = GetClosestNodeIndex(p);
-
-                            bindings[vId] = new EDVertexBinding
-                            {
-                                nodeIndices = new int[] { closestNode },
-                                weights = new double[] { 1.0f }
-                            };
-                        }
-                    }
+                case BindingSelectionMode.ClosestOne:
+                    BindClosestOne(topology);
                     break;
 
-                case BindingMode.NearestK:
+                case BindingSelectionMode.NearestK:
+                    switch (weightMode)
                     {
-                        int actualK = Mathf.Clamp(k, 1, nodeCount);
-
-                        for (int vId = 0; vId < vertexCount; vId++)
-                        {
-                            DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
-
-                            int[] bestIndices = new int[actualK];
-                            double[] bestDistSq = new double[actualK];
-
-                            for (int i = 0; i < actualK; i++)
-                            {
-                                bestIndices[i] = -1;
-                                bestDistSq[i] = double.MaxValue;
-                            }
-
-                            for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
-                            {
-                                double dSq = (nodes[nodeIndex].restPosition - p).sqrMagnitude;
-
-                                for (int slot = 0; slot < actualK; slot++)
-                                {
-                                    if (dSq < bestDistSq[slot])
-                                    {
-                                        for (int shift = actualK - 1; shift > slot; shift--)
-                                        {
-                                            bestDistSq[shift] = bestDistSq[shift - 1];
-                                            bestIndices[shift] = bestIndices[shift - 1];
-                                        }
-
-                                        bestDistSq[slot] = dSq;
-                                        bestIndices[slot] = nodeIndex;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            double[] weights = new double[actualK];
-                            float w = 1.0f / actualK;
-                            for (int i = 0; i < actualK; i++)
-                                weights[i] = w;
-
-                            bindings[vId] = new EDVertexBinding
-                            {
-                                nodeIndices = bestIndices,
-                                weights = weights
-                            };
-                        }
+                        case BindingWeightMode.Uniform:
+                            BindNearestK_Uniform(topology, k);
+                            break;
+                        case BindingWeightMode.InversePower:
+                            BindNearestK_InversePower(topology, k, power);
+                            break;
+                        case BindingWeightMode.Gaussian:
+                            BindNearestK_Gaussian(topology, k,sigma);
+                            break;
+                        case BindingWeightMode.OriginalED:
+                            BindNearestK_EDStyle(topology, k);
+                            break;
+                        default:
+                            break;
                     }
                     break;
 
@@ -499,6 +458,175 @@ namespace UC.ED
                     Debug.LogWarning($"BuildBindings: unsupported link mode {bindMode}.");
                     break;
             }
+        }
+
+        void BindClosestOne(TopologyStatic topology)
+        {
+            int vertexCount = topology.vertexCount;
+
+            for (int vId = 0; vId < vertexCount; vId++)
+            {
+                DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
+                int closestNode = GetClosestNodeIndex(p);
+
+                bindings[vId] = new EDVertexBinding
+                {
+                    nodeIndices = new int[] { closestNode },
+                    weights = new double[] { 1.0f }
+                };
+            }
+        }
+
+        void BindNearestK_Generic(TopologyStatic topology, int k, Func<double, double, double> weightFunc)
+        {
+            int vertexCount = topology.vertexCount;
+            int nodeCount = nodes.Count;
+            int actualK = Mathf.Clamp(k, 1, nodeCount);
+
+            const double epsilon = 1e-12;
+            const double snapDistanceSq = 1e-12;
+
+            for (int vId = 0; vId < vertexCount; vId++)
+            {
+                DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
+
+                int[] bestIndices = new int[actualK];
+                double[] bestDistSq = new double[actualK];
+
+                for (int i = 0; i < actualK; i++)
+                {
+                    bestIndices[i] = -1;
+                    bestDistSq[i] = double.MaxValue;
+                }
+
+                // Find K nearest
+                for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
+                {
+                    double dSq = (nodes[nodeIndex].restPosition - p).sqrMagnitude;
+
+                    for (int slot = 0; slot < actualK; slot++)
+                    {
+                        if (dSq < bestDistSq[slot])
+                        {
+                            for (int shift = actualK - 1; shift > slot; shift--)
+                            {
+                                bestDistSq[shift] = bestDistSq[shift - 1];
+                                bestIndices[shift] = bestIndices[shift - 1];
+                            }
+
+                            bestDistSq[slot] = dSq;
+                            bestIndices[slot] = nodeIndex;
+                            break;
+                        }
+                    }
+                }
+
+                double[] weights = new double[actualK];
+
+                // Snap
+                bool snapped = false;
+                for (int i = 0; i < actualK; i++)
+                {
+                    if (bestIndices[i] >= 0 && bestDistSq[i] <= snapDistanceSq)
+                    {
+                        for (int j = 0; j < actualK; j++)
+                            weights[j] = 0.0;
+
+                        weights[i] = 1.0;
+                        snapped = true;
+                        break;
+                    }
+                }
+
+                if (!snapped)
+                {
+                    double weightSum = 0.0;
+
+                    double dMaxSq = bestDistSq[actualK - 1];
+
+                    for (int i = 0; i < actualK; i++)
+                    {
+                        if (bestIndices[i] < 0)
+                        {
+                            weights[i] = 0.0;
+                            continue;
+                        }
+
+                        double w = weightFunc(bestDistSq[i], dMaxSq);
+
+                        weights[i] = w;
+                        weightSum += w;
+                    }
+
+                    if (weightSum > epsilon)
+                    {
+                        for (int i = 0; i < actualK; i++)
+                            weights[i] /= weightSum;
+                    }
+                    else
+                    {
+                        int validCount = 0;
+                        for (int i = 0; i < actualK; i++)
+                            if (bestIndices[i] >= 0) validCount++;
+
+                        double fallback = validCount > 0 ? 1.0 / validCount : 0.0;
+
+                        for (int i = 0; i < actualK; i++)
+                            weights[i] = (bestIndices[i] >= 0) ? fallback : 0.0;
+                    }
+                }
+
+                bindings[vId] = new EDVertexBinding
+                {
+                    nodeIndices = bestIndices,
+                    weights = weights
+                };
+            }
+        }
+
+        void BindNearestK_Uniform(TopologyStatic topology, int k)
+        {
+            BindNearestK_Generic(topology, k, (dSq, dMaxSq) => 1.0);
+        }
+
+        void BindNearestK_InversePower(TopologyStatic topology, int k, float power)
+        {
+            const double epsilon = 1e-8;
+
+            BindNearestK_Generic(topology, k, 
+                (dSq, _) =>
+                {
+                    double d = Math.Sqrt(dSq);
+                    return 1.0 / Math.Pow(d + epsilon, power);
+                });
+        }
+
+        void BindNearestK_Gaussian(TopologyStatic topology, int k, double sigma)
+        {
+            double sigmaSq = sigma * sigma;
+
+            BindNearestK_Generic(topology, k, 
+                (dSq, _) =>
+                {
+                    return Math.Exp(-dSq / (2.0 * sigmaSq));
+                });
+        }
+
+        void BindNearestK_EDStyle(TopologyStatic topology, int k)
+        {
+            const double epsilon = 1e-12;
+
+            BindNearestK_Generic(topology, k,
+                (dSq, dMaxSq) =>
+                {
+                    double d = Math.Sqrt(dSq);
+                    double dMax = Math.Sqrt(Math.Max(dMaxSq, epsilon));
+
+                    double w = 1.0 - (d / dMax);
+                    if (w < 0.0) w = 0.0;
+
+                    return w * w;
+                });
         }
 
         private void BuildGraphFromBindings()
@@ -997,7 +1125,7 @@ namespace UC.ED
             return J;
         }
 
-        private int FillRotationJacobianBlock(Matrix<double> J, int row, int nodeIndex, double wRot)
+        private int FillRotationJacobianBlock(Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
         {
             int p = ParamBase(nodeIndex);
             var aX = nodes[nodeIndex].axisX;
@@ -1005,7 +1133,7 @@ namespace UC.ED
             var aZ = nodes[nodeIndex].axisZ;
 
             // r0 = X·Y
-            J[row, p + 0] = wRot * aY.x;
+            J[row, p + 0] = wRot * aY.x; 
             J[row, p + 3] = wRot * aY.y;
             J[row, p + 6] = wRot * aY.z;
             J[row, p + 1] = wRot * aX.x;
@@ -1049,10 +1177,16 @@ namespace UC.ED
             J[row, p + 8] = wRot * 2.0 * aZ.z;
             row++;
 
+            double ax2 = aX.x * aX.x + aX.y * aX.y + aX.z * aX.z;
+            double ay2 = aY.x * aY.x + aY.y * aY.y + aY.z * aY.z;
+            double az2 = aZ.x * aZ.x + aZ.y * aZ.y + aZ.z * aZ.z;
+
+            jNormRunningTotalSq += 6.0 * wRot * wRot * (ax2 + ay2 + az2);
+
             return row;
         }
 
-        private int FillRegularizationJacobianBlock(Matrix<double> J, int row, int nodeJ, int nodeK, double wReg)
+        private int FillRegularizationJacobianBlock(Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
         {
             int pj = ParamBase(nodeJ);
             int pk = ParamBase(nodeK);
@@ -1089,10 +1223,13 @@ namespace UC.ED
             J[row, pk + 11] = wReg * -1.0;
             row++;
 
+            double d2 = dx * dx + dy * dy + dz * dz;
+            jNormRunningTotalSq += 3.0 * wReg * wReg * (d2 + 2.0);
+
             return row;
         }
 
-        private int FillConstraintJacobianBlock(Matrix<double> J, int row, int vertexIndex, double wCon)
+        private int FillConstraintJacobianBlock(Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
         {
             DVector3 v = restVertices[vertexIndex];
             EDVertexBinding binding = bindings[vertexIndex];
@@ -1132,13 +1269,18 @@ namespace UC.ED
                 J[row + 2, p + 7] += s * uy;
                 J[row + 2, p + 8] += s * uz;
                 J[row + 2, p + 11] += s;
+
+                double u2 = ux * ux + uy * uy + uz * uz;
+                jNormRunningTotalSq += 3.0 * s * s * (u2 + 1.0);
             }
 
             return row + 3;
         }
 
-        public Matrix<double> BuildAnalyticalJacobian(double rotationWeight = 1.0, double regularizationWeight = 10.0, double constraintWeight = 100.0)
+        public Matrix<double> BuildAnalyticalJacobian(out double jNorm, double rotationWeight = 1.0, double regularizationWeight = 10.0, double constraintWeight = 100.0)
         {
+            jNorm = 0.0;
+
             int nodeCount = nodes.Count;
 
             int directedEdgeCount = 0;
@@ -1160,18 +1302,20 @@ namespace UC.ED
 
             // Rotation
             for (int i = 0; i < nodeCount; i++)
-                row = FillRotationJacobianBlock(J, row, i, wRot);
+                row = FillRotationJacobianBlock(J, row, i, wRot, ref jNorm);
 
             // Regularization (directed)
             for (int j = 0; j < nodeCount; j++)
             {
                 foreach (int k in nodes[j].neighbors)
-                    row = FillRegularizationJacobianBlock(J, row, j, k, wReg);
+                    row = FillRegularizationJacobianBlock(J, row, j, k, wReg, ref jNorm);
             }
 
             // Constraints
             for (int c = 0; c < constraintCount; c++)
-                row = FillConstraintJacobianBlock(J, row, vertexConstraints[c].vertexIndex, wCon);
+                row = FillConstraintJacobianBlock(J, row, vertexConstraints[c].vertexIndex, wCon, ref jNorm);
+
+            jNorm = Math.Sqrt(jNorm);
 
             return J;
         }
@@ -1290,14 +1434,14 @@ namespace UC.ED
         }
 #endif
 
-        public void SolveED(int maxIterations = 10,
-                    double rotationWeight = 1.0,
-                    double regularizationWeight = 10.0,
-                    double constraintWeight = 100.0,
-                    double damping = 1.0,
-                    double residualTolerance = 1e-5,
-                    double stepTolerance = 1e-6,
-                    bool resetBeforeSolve = true)
+        public void SolveED_GN(int maxIterations = 10,
+                               double rotationWeight = 1.0,
+                               double regularizationWeight = 10.0,
+                               double constraintWeight = 100.0,
+                               double damping = 1.0,
+                               double residualTolerance = 1e-5,
+                               double stepTolerance = 1e-6,
+                               bool resetBeforeSolve = true)
         {
             if (resetBeforeSolve) ResetDeformation();
 
@@ -1311,7 +1455,7 @@ namespace UC.ED
                 var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
                 double error = f.L2Norm();
 
-                //Debug.Log($"[ED] Iter {iter} - Residual: {error}");
+                //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
 
                 // Already solved / close enough
                 if (!double.IsFinite(error) || error < residualTolerance)
@@ -1321,14 +1465,14 @@ namespace UC.ED
                 }
 
                 //var J2 = BuildNumericalJacobian(x, rotationWeight, regularizationWeight, constraintWeight);
-                var J = BuildAnalyticalJacobian(rotationWeight, regularizationWeight, constraintWeight);
+                var J = BuildAnalyticalJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight);
 
                 //double diff = (J - J2).FrobeniusNorm();
                 //double rel = diff / Math.Max(1e-12, J2.FrobeniusNorm());
 
                 //Debug.Log($"Jacobian diff = {diff}, relative = {rel}");
 
-                double jNorm = J.FrobeniusNorm();
+                //double jNorm = J.FrobeniusNorm();
                 if (!double.IsFinite(jNorm) || jNorm < 1e-12)
                 {
                     //Debug.Log("[ED] Jacobian is near zero; stopping.");
@@ -1364,6 +1508,132 @@ namespace UC.ED
                 }
 
                 x = x + damping * delta;
+            }
+
+            ApplyNodeParameters(x);
+#else
+    throw new NotImplementedException();
+#endif
+        }
+
+        public void SolveED_LM(int maxIterations = 10,
+                               double rotationWeight = 1.0,
+                               double regularizationWeight = 10.0,
+                               double constraintWeight = 100.0,
+                               double lambda = 1e-3,
+                               double residualTolerance = 1e-5,
+                               double stepTolerance = 1e-6,
+                               bool resetBeforeSolve = true,
+                               bool adaptiveLambda = true)
+        {
+            if (resetBeforeSolve)
+                ResetDeformation();
+
+#if MATH_NET_AVAILABLE
+            var x = PackNodeParameters();
+            double currentLambda = lambda;
+
+            for (int iter = 0; iter < maxIterations; iter++)
+            {
+                ApplyNodeParameters(x);
+
+                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
+                double error = f.L2Norm();
+
+                //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
+
+                if (!double.IsFinite(error))
+                {
+                    Debug.LogError("[ED] Residual became non-finite.");
+                    return;
+                }
+
+                if (error < residualTolerance)
+                    break;
+
+                var J = BuildAnalyticalJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight);
+
+                if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
+                    break;
+
+                var JT = J.Transpose();
+                var H = JT * J;     // approximate Hessian
+                var g = JT * f;     // gradient term
+
+                Vector<double> delta = null;
+                bool solved = false;
+
+                // Try current lambda, optionally increasing it if solve or step is bad
+                for (int attempt = 0; attempt < 8; attempt++)
+                {
+                    var Hlm = H.Clone();
+
+                    for (int i = 0; i < Hlm.RowCount; i++)
+                        Hlm[i, i] += currentLambda;
+
+                    try
+                    {
+                        delta = Hlm.Solve(-g);
+                    }
+                    catch
+                    {
+                        delta = null;
+                    }
+
+                    if (delta == null)
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    double stepNorm = delta.L2Norm();
+                    if (!double.IsFinite(stepNorm))
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    // Candidate step
+                    var xCandidate = x + delta;
+                    ApplyNodeParameters(xCandidate);
+
+                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
+                    double candidateError = fCandidate.L2Norm();
+
+                    if (!double.IsFinite(candidateError))
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    // Accept only if it improves the residual
+                    if (candidateError <= error)
+                    {
+                        x = xCandidate;
+                        solved = true;
+
+                        if (adaptiveLambda)
+                            currentLambda = Math.Max(currentLambda * 0.3, 1e-12);
+
+                        if (stepNorm < stepTolerance)
+                        {
+                            ApplyNodeParameters(x);
+                            return;
+                        }
+
+                        break;
+                    }
+                    else
+                    {
+                        currentLambda *= 10.0;
+                    }
+                }
+
+                if (!solved)
+                {
+                    Debug.LogWarning("[ED] LM could not find an improving step.");
+                    break;
+                }
             }
 
             ApplyNodeParameters(x);
