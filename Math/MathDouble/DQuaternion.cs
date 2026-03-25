@@ -2,20 +2,21 @@ using System;
 
 namespace UC.DoubleMath
 {
-    public class DoubleQuaternion
+    [Serializable]
+    public struct DQuaternion
     {
         public double x, y, z, w;
 
 
-        public DoubleQuaternion(double x, double y, double z, double w)
+        public DQuaternion(double x, double y, double z, double w)
         {
             this.x = x; this.y = y; this.z = z; this.w = w;
         }
 
-        public static DoubleQuaternion operator *(DoubleQuaternion a, double s) => new(a.x * s, a.y * s, a.z * s, a.w * s);
+        public static DQuaternion operator *(DQuaternion a, double s) => new(a.x * s, a.y * s, a.z * s, a.w * s);
 
 
-        public DoubleQuaternion normalized
+        public DQuaternion normalized
         {
             get
             {
@@ -32,7 +33,7 @@ namespace UC.DoubleMath
             }
         }
 
-        public static DoubleQuaternion identity => new DoubleQuaternion(0.0, 0.0, 0.0, 1.0);
+        public static DQuaternion identity => new DQuaternion(0.0, 0.0, 0.0, 1.0);
 
     }
 }

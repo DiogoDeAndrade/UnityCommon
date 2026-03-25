@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UC.DoubleMath;
+using System.Text;
+
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
@@ -11,20 +13,20 @@ using MathNet.Numerics.LinearAlgebra.Double;
 namespace UC.ED
 {
     public enum BindingMode { ClosestOne, NearestK };
-    public enum GraphLinkMode { PartitionAdjacency, SharedBindings };
+    public enum GraphLinkMode { PartitionAdjacency, SharedBindings, DirectionAware };
 
     [Serializable]
     public class EDNode
     {
-        public DoubleVector3    restPosition;
+        public DVector3    restPosition;
         public List<int>        neighbors = new();
 
         [SerializeField, HideInInspector]
-        private DoubleVector3       _currentTranslation = DoubleVector3.zero;
+        private DVector3       _currentTranslation = DVector3.zero;
         [SerializeField, HideInInspector]
-        private DoubleQuaternion    _currentRotation = DoubleQuaternion.identity;
+        private DQuaternion    _currentRotation = DQuaternion.identity;
         [SerializeField, HideInInspector]
-        private DoubleMatrix3x4     _currentMatrix = DoubleMatrix3x4.identity;
+        private DMatrix3x4     _currentMatrix = DMatrix3x4.identity;
         [SerializeField, HideInInspector]
         private bool                _recomputeMatrix = false;
         [SerializeField, HideInInspector]
@@ -32,18 +34,18 @@ namespace UC.ED
         [SerializeField, HideInInspector]
         private bool                _recomputeRotation = false;
 
-        public DoubleVector3 currentTranslation
+        public DVector3 currentTranslation
         {
             get { if (_recomputeTranslation) UpdateTranslationFromMatrix(); return _currentTranslation; }
             set { _currentTranslation = value; _recomputeMatrix = true; _recomputeTranslation = false; }
         }
-        public DoubleQuaternion currentRotation
+        public DQuaternion currentRotation
         {
             get { if (_recomputeRotation) UpdateRotationFromMatrix();  return _currentRotation; }
             set { _currentRotation = value; _recomputeMatrix = true; _recomputeRotation = false; }
         }
 
-        public DoubleMatrix3x4 currentMatrix
+        public DMatrix3x4 currentMatrix
         {
             get { if (_recomputeMatrix) UpdateMatrixFromTranslationRotation(); return _currentMatrix; }
             set 
@@ -54,17 +56,17 @@ namespace UC.ED
             }
         }
 
-        public DoubleVector3 axisX
+        public DVector3 axisX
         {
-            get { var M = currentMatrix; return new DoubleVector3(M.m00, M.m10, M.m20); }
+            get { var M = currentMatrix; return new DVector3(M.m00, M.m10, M.m20); }
         }
-        public DoubleVector3 axisY
+        public DVector3 axisY
         {
-            get { var M = currentMatrix; return new DoubleVector3(M.m01, M.m11, M.m21); }
+            get { var M = currentMatrix; return new DVector3(M.m01, M.m11, M.m21); }
         }
-        public DoubleVector3 axisZ
+        public DVector3 axisZ
         {
-            get { var M = currentMatrix; return new DoubleVector3(M.m02, M.m12, M.m22); }
+            get { var M = currentMatrix; return new DVector3(M.m02, M.m12, M.m22); }
         }
 
         private void UpdateTranslationFromMatrix()
@@ -81,18 +83,18 @@ namespace UC.ED
 
         private void UpdateMatrixFromTranslationRotation()
         {
-            currentMatrix = DoubleMatrix3x4.TRS(currentTranslation, currentRotation, DoubleVector3.one);
+            currentMatrix = DMatrix3x4.TRS(currentTranslation, currentRotation, DVector3.one);
             _recomputeMatrix = false;
         }
 
-        public DoubleVector3 debugNodePosition => restPosition + currentTranslation;
+        public Vector3 debugNodePosition => (restPosition + currentTranslation).ToVector3();
     }
 
     [Serializable]
     public struct EDVertexBinding
     {
-        public int[] nodeIndices;   // k nearest
-        public float[] weights;     // normalized
+        public int[]    nodeIndices;   // k nearest
+        public double[] weights;     // normalized
     }
 
     [Serializable]
@@ -107,13 +109,15 @@ namespace UC.ED
     public struct EDVertexConstraint
     {
         public int      vertexIndex;
-        public Vector3  targetPosition;
+        public DVector3 targetPosition;
     }
+
+    public delegate bool HasLOS(Vector3 p1, Vector3 p2);
 
     [Serializable]
     public class EmbededDeformation
     {
-        public Vector3[]                restVertices;
+        public DVector3[]               restVertices;
         public int[]                    triangles;
 
         public List<EDNode>             nodes = new();
@@ -121,7 +125,11 @@ namespace UC.ED
         public List<EDHandleConstraint> handleConstraints = new();
         public List<EDVertexConstraint> vertexConstraints = new();
 
-        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, BindingMode bindMode, GraphLinkMode graphLinkMode, int k = 4)
+        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, BindingMode bindMode, GraphLinkMode graphLinkMode, 
+                                          int k = 4, // For closest-K
+                                          float maxBindDistance = 2.0f, // For DirectionAware
+                                          float minBindAngle = 20.0f, // For DirectionAware
+                                          HasLOS hasLOSFunction = null) // For DirectionAware
         {
             if (topology == null)
             {
@@ -138,7 +146,9 @@ namespace UC.ED
             // -----------------------------------------------------------------
             // 1) Copy source navmesh into ED rest data
             // -----------------------------------------------------------------
-            restVertices = topology.GetVertexPositions().ToArray();
+            var v = topology.GetVertexPositions();
+            restVertices = new DVector3[v.Count];
+            for (int i = 0; i < v.Count; i++) restVertices[i] = v[i].ToDVector3();
             triangles = topology.GetTriangleIndices().ToArray();
 
             nodes.Clear();
@@ -187,7 +197,7 @@ namespace UC.ED
                 int vId = sampledVertexIds[i];
                 nodes.Add(new EDNode
                 {
-                    restPosition = topology.GetVertexPosition(vId).ToDoubleVector3(),
+                    restPosition = topology.GetVertexPosition(vId).ToDVector3(),
                     neighbors = new List<int>()
                 });
             }
@@ -209,9 +219,115 @@ namespace UC.ED
                 case GraphLinkMode.SharedBindings:
                     BuildGraphFromBindings();
                     break;
+
+                case GraphLinkMode.DirectionAware:
+                    BuildGraphDirectionAware(maxBindDistance, minBindAngle, hasLOSFunction);
+                    break;
             }
 
             Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}");
+        }
+
+        private struct DirectionAwareCandidate
+        {
+            public int      nodeIndex;
+            public double   distanceSq;
+            public Vector3  direction;
+        }
+
+        void BuildGraphDirectionAware(float maxBindDistance, float minBindAngle, HasLOS hasLOSFunction)
+        {
+
+            // Clamp to valid cosine range.
+            float sameDirectionCosTolerance = Mathf.Cos(minBindAngle * Mathf.Deg2Rad);
+            sameDirectionCosTolerance = Math.Max(-1.0f, Math.Min(1.0f, sameDirectionCosTolerance));
+
+            bool IsDirectionAlreadyChosen(Vector3 candidateDirection, List<Vector3> chosenDirections)
+            {
+                for (int i = 0; i < chosenDirections.Count; i++)
+                {
+                    double d = Vector3.Dot(candidateDirection, chosenDirections[i]);
+
+                    // Same direction only. If you want opposite directions to collapse too,
+                    // change this to Math.Abs(d) >= sameDirectionCosTolerance.
+                    if (d >= sameDirectionCosTolerance)
+                        return true;
+                }
+
+                return false;
+            }
+
+            if (nodes == null || nodes.Count == 0)
+                return;
+
+            if (maxBindDistance <= 0.0)
+            {
+                Debug.LogWarning("BuildGraphDirectionAware: maxBindDistance must be > 0.");
+                return;
+            }
+
+            // Clear previous graph
+            for (int i = 0; i < nodes.Count; i++) nodes[i].neighbors.Clear();
+
+            float maxBindDistanceSq = maxBindDistance * maxBindDistance;
+            const double eps = 1e-12;
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                Vector3 pi = nodes[i].restPosition.ToVector3();
+
+                List<DirectionAwareCandidate> candidates = new();
+
+                // ---------------------------------------------------------
+                // 1) Gather valid candidates inside radius (+ optional LOS)
+                // ---------------------------------------------------------
+                for (int j = 0; j < nodes.Count; j++)
+                {
+                    if (i == j)
+                        continue;
+
+                    Vector3 pj = nodes[j].restPosition.ToVector3();
+                    Vector3 delta = pj - pi;
+
+                    float distSq = delta.sqrMagnitude;
+                    if (distSq <= eps || distSq > maxBindDistanceSq)
+                        continue;
+
+                    if ((hasLOSFunction != null) && (!hasLOSFunction(pi, pj)))
+                        continue;
+
+                    float   dist = Mathf.Sqrt(distSq);
+                    Vector3 dir = delta / dist;
+
+                    candidates.Add(new DirectionAwareCandidate
+                    {
+                        nodeIndex = j,
+                        distanceSq = distSq,
+                        direction = dir
+                    });
+                }
+
+                // ---------------------------------------------------------
+                // 2) Closest first
+                // ---------------------------------------------------------
+                candidates.Sort((a, b) => a.distanceSq.CompareTo(b.distanceSq));
+
+                // ---------------------------------------------------------
+                // 3) Greedily keep only one candidate per direction bucket
+                // ---------------------------------------------------------
+                List<Vector3> chosenDirections = new();
+
+                for (int c = 0; c < candidates.Count; c++)
+                {
+                    var cand = candidates[c];
+
+                    if (IsDirectionAlreadyChosen(cand.direction, chosenDirections))
+                        continue;
+
+                    AddUndirectedNeighbor(i, cand.nodeIndex);
+                    chosenDirections.Add(cand.direction);
+                }
+            }
         }
 
         private bool TryAddSampleVertex(int vertexId, TopologyStatic topology, List<int> sampledVertexIds, float minDistanceSq)
@@ -229,7 +345,7 @@ namespace UC.ED
             return true;
         }
 
-        private int GetClosestNodeIndex(DoubleVector3 p)
+        private int GetClosestNodeIndex(DVector3 p)
         {
             int bestIndex = -1;
             double bestDistSq = double.MaxValue;
@@ -271,7 +387,7 @@ namespace UC.ED
 
                 int bestJ = -1;
                 double bestDistSq = float.MaxValue;
-                DoubleVector3 p = nodes[i].restPosition;
+                DVector3 p = nodes[i].restPosition;
 
                 for (int j = 0; j < nodes.Count; j++)
                 {
@@ -315,13 +431,13 @@ namespace UC.ED
                     {
                         for (int vId = 0; vId < vertexCount; vId++)
                         {
-                            Vector3 p = topology.GetVertexPosition(vId);
+                            DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
                             int closestNode = GetClosestNodeIndex(p);
 
                             bindings[vId] = new EDVertexBinding
                             {
                                 nodeIndices = new int[] { closestNode },
-                                weights = new float[] { 1.0f }
+                                weights = new double[] { 1.0f }
                             };
                         }
                     }
@@ -333,7 +449,7 @@ namespace UC.ED
 
                         for (int vId = 0; vId < vertexCount; vId++)
                         {
-                            DoubleVector3 p = topology.GetVertexPosition(vId).ToDoubleVector3();
+                            DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
 
                             int[] bestIndices = new int[actualK];
                             double[] bestDistSq = new double[actualK];
@@ -341,7 +457,7 @@ namespace UC.ED
                             for (int i = 0; i < actualK; i++)
                             {
                                 bestIndices[i] = -1;
-                                bestDistSq[i] = float.MaxValue;
+                                bestDistSq[i] = double.MaxValue;
                             }
 
                             for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
@@ -365,7 +481,7 @@ namespace UC.ED
                                 }
                             }
 
-                            float[] weights = new float[actualK];
+                            double[] weights = new double[actualK];
                             float w = 1.0f / actualK;
                             for (int i = 0; i < actualK; i++)
                                 weights[i] = w;
@@ -459,8 +575,8 @@ namespace UC.ED
 
                 foreach (int vId in hc.vertexIndices)
                 {
-                    Vector3 restPos = restVertices[vId];
-                    Vector3 targetPos = delta.MultiplyPoint3x4(restPos);
+                    DVector3 restPos = restVertices[vId];
+                    DVector3 targetPos = delta.MultiplyPoint3x4(restPos.ToVector3()).ToDVector3();
 
                     vertexConstraints.Add(new EDVertexConstraint
                     {
@@ -475,7 +591,7 @@ namespace UC.ED
         {
             foreach (var node in nodes)
             {
-                node.currentMatrix = Matrix4x4.identity;
+                node.currentMatrix = DMatrix3x4.identity;
             }
         }
 
@@ -485,28 +601,28 @@ namespace UC.ED
 
             for (int vId = 0; vId < restVertices.Length; vId++)
             {                
-                deformed[vId] = DeformVertexFromCurrentNodeTransforms(vId);
+                deformed[vId] = DeformVertexFromCurrentNodeTransforms(vId).ToVector3();
             }
 
             return deformed;
         }
 
-        public Vector3 DeformVertexFromCurrentNodeTransforms(int vertexId)
+        public DVector3 DeformVertexFromCurrentNodeTransforms(int vertexId)
         {
-            Vector3 v = restVertices[vertexId];
-            var binding = bindings[vertexId];
-            Vector3 result = Vector3.zero;
+            DVector3    v = restVertices[vertexId];
+            var         binding = bindings[vertexId];
+            DVector3    result = DVector3.zero;
 
             for (int i = 0; i < binding.nodeIndices.Length; i++)
             {
-                int nodeIndex = binding.nodeIndices[i];
-                float w = binding.weights[i];
+                int     nodeIndex = binding.nodeIndices[i];
+                double  w = binding.weights[i];
 
                 var node = nodes[nodeIndex];
 
-                Vector3 g = node.restPosition;
+                DVector3 g = node.restPosition;
 
-                Vector3 transformed = node.currentMatrix.MultiplyPoint3x4(v - g) + g;
+                DVector3 transformed = node.currentMatrix.MultiplyPoint(v - g) + g;
 
                 result += w * transformed;
             }
@@ -536,7 +652,7 @@ namespace UC.ED
                 Debug.LogWarning("SolveTranslationsOnly: no vertex constraints, resetting translations.");
                 for (int i = 0; i < nodes.Count; i++)
                 {
-                    nodes[i].currentMatrix = Matrix4x4.identity;
+                    nodes[i].currentMatrix = DMatrix3x4.identity;
                 }
                 return true;
             }
@@ -575,8 +691,8 @@ namespace UC.ED
                 if ((vc.vertexIndex < 0) || (vc.vertexIndex >= restVertices.Length))
                     continue;
 
-                Vector3 rest = restVertices[vc.vertexIndex];
-                Vector3 delta = vc.targetPosition - rest;
+                DVector3 rest = restVertices[vc.vertexIndex];
+                DVector3 delta = vc.targetPosition - rest;
 
                 EDVertexBinding binding = bindings[vc.vertexIndex];
                 if ((binding.nodeIndices == null) || (binding.nodeIndices.Length == 0))
@@ -639,8 +755,8 @@ namespace UC.ED
             // -----------------------------------------------------------------
             for (int i = 0; i < nodeCount; i++)
             {
-                nodes[i].currentTranslation = new Vector3((float)tx[i], (float)ty[i], (float)tz[i]);
-                nodes[i].currentRotation = Quaternion.identity;
+                nodes[i].currentTranslation = new DVector3(tx[i], ty[i], tz[i]);
+                nodes[i].currentRotation = DQuaternion.identity;
             }
 
             return true;
@@ -687,13 +803,13 @@ namespace UC.ED
                 var axisY = nodes[i].axisY;
                 var axisZ = nodes[i].axisZ;
 
-                residual[row++] = wRot * Vector3.Dot(axisX, axisY);
-                residual[row++] = wRot * Vector3.Dot(axisX, axisZ);
-                residual[row++] = wRot * Vector3.Dot(axisY, axisZ);
+                residual[row++] = wRot * DVector3.Dot(axisX, axisY);
+                residual[row++] = wRot * DVector3.Dot(axisX, axisZ);
+                residual[row++] = wRot * DVector3.Dot(axisY, axisZ);
 
-                residual[row++] = wRot * (Vector3.Dot(axisX, axisX) - 1.0);
-                residual[row++] = wRot * (Vector3.Dot(axisY, axisY) - 1.0);
-                residual[row++] = wRot * (Vector3.Dot(axisZ, axisZ) - 1.0);
+                residual[row++] = wRot * (DVector3.Dot(axisX, axisX) - 1.0);
+                residual[row++] = wRot * (DVector3.Dot(axisY, axisY) - 1.0);
+                residual[row++] = wRot * (DVector3.Dot(axisZ, axisZ) - 1.0);
             }
 
             // -------------------------------------------------------------
@@ -707,20 +823,20 @@ namespace UC.ED
             // -------------------------------------------------------------
             for (int j = 0; j < nodeCount; j++)
             {
-                EDNode nodeJ = nodes[j];
-                Vector3 gj = nodeJ.restPosition;
-                Vector3 tj = nodeJ.currentTranslation;
+                EDNode      nodeJ = nodes[j];
+                DVector3    gj = nodeJ.restPosition;
+                DVector3    tj = nodeJ.currentTranslation;
 
                 foreach (int k in nodeJ.neighbors)
                 {
                     EDNode nodeK = nodes[k];
-                    Vector3 gk = nodeK.restPosition;
-                    Vector3 tk = nodeK.currentTranslation;
+                    DVector3 gk = nodeK.restPosition;
+                    DVector3 tk = nodeK.currentTranslation;
 
-                    Vector3 diff = gk - gj;
-                    Vector3 rotatedDiff = nodeJ.currentMatrix.MultiplyVector(diff);
+                    DVector3 diff = gk - gj;
+                    DVector3 rotatedDiff = nodeJ.currentMatrix.MultiplyVector(diff);
 
-                    Vector3 r = rotatedDiff + gj + tj - (gk + tk);
+                    DVector3 r = rotatedDiff + gj + tj - (gk + tk);
 
                     residual[row++] = wReg * r.x;
                     residual[row++] = wReg * r.y;
@@ -746,8 +862,8 @@ namespace UC.ED
                     continue;
                 }
 
-                Vector3 deformed = DeformVertexFromCurrentNodeTransforms(vc.vertexIndex);
-                Vector3 r = deformed - vc.targetPosition;
+                DVector3 deformed = DeformVertexFromCurrentNodeTransforms(vc.vertexIndex);
+                DVector3 r = deformed - vc.targetPosition;
 
                 residual[row++] = wCon * r.x;
                 residual[row++] = wCon * r.y;
@@ -770,7 +886,7 @@ namespace UC.ED
             for (int i = 0; i < nodeCount; i++)
             {
                 int baseIdx = ParamBase(i);
-                Matrix4x4 m = nodes[i].currentMatrix;
+                var m = nodes[i].currentMatrix;
 
                 // 3x3 affine block
                 x[baseIdx + 0] = m.m00;
@@ -804,25 +920,25 @@ namespace UC.ED
             {
                 int baseIdx = ParamBase(i);
 
-                Matrix4x4 m = Matrix4x4.identity;
+                var m = DMatrix3x4.identity;
 
                 // 3x3 affine block
-                m.m00 = (float)x[baseIdx + 0];
-                m.m01 = (float)x[baseIdx + 1];
-                m.m02 = (float)x[baseIdx + 2];
+                m.m00 = x[baseIdx + 0];
+                m.m01 = x[baseIdx + 1];
+                m.m02 = x[baseIdx + 2];
 
-                m.m10 = (float)x[baseIdx + 3];
-                m.m11 = (float)x[baseIdx + 4];
-                m.m12 = (float)x[baseIdx + 5];
+                m.m10 = x[baseIdx + 3];
+                m.m11 = x[baseIdx + 4];
+                m.m12 = x[baseIdx + 5];
 
-                m.m20 = (float)x[baseIdx + 6];
-                m.m21 = (float)x[baseIdx + 7];
-                m.m22 = (float)x[baseIdx + 8];
+                m.m20 = x[baseIdx + 6];
+                m.m21 = x[baseIdx + 7];
+                m.m22 = x[baseIdx + 8];
 
-                // translation
-                m.m03 = (float)x[baseIdx + 9];
-                m.m13 = (float)x[baseIdx + 10];
-                m.m23 = (float)x[baseIdx + 11];
+                // trans
+                m.m03 = x[baseIdx + 9];
+                m.m13 = x[baseIdx + 10];
+                m.m23 = x[baseIdx + 11];
 
                 nodes[i].currentMatrix = m;
             }
@@ -853,8 +969,11 @@ namespace UC.ED
             {
                 double original = xPerturbed[i];
 
+                double scale = Math.Max(1.0, Math.Abs(original));
+                double eps = 1e-6 * scale;
+
                 // Perturb parameter
-                xPerturbed[i] = original + epsilon;
+                xPerturbed[i] = original + eps;
 
                 // Apply perturbed parameters
                 ApplyNodeParameters(xPerturbed);
@@ -865,7 +984,7 @@ namespace UC.ED
                 // Compute column i
                 for (int r = 0; r < residualCount; r++)
                 {
-                    J[r, i] = (f1[r] - f0[r]) / epsilon;
+                    J[r, i] = (f1[r] - f0[r]) / eps;
                 }
 
                 // Restore parameter
@@ -938,9 +1057,9 @@ namespace UC.ED
             int pj = ParamBase(nodeJ);
             int pk = ParamBase(nodeK);
 
-            Vector3 gj = nodes[nodeJ].restPosition;
-            Vector3 gk = nodes[nodeK].restPosition;
-            Vector3 d = gk - gj;
+            DVector3 gj = nodes[nodeJ].restPosition;
+            DVector3 gk = nodes[nodeK].restPosition;
+            DVector3 d = gk - gj;
 
             double dx = d.x;
             double dy = d.y;
@@ -975,7 +1094,7 @@ namespace UC.ED
 
         private int FillConstraintJacobianBlock(Matrix<double> J, int row, int vertexIndex, double wCon)
         {
-            Vector3 v = restVertices[vertexIndex];
+            DVector3 v = restVertices[vertexIndex];
             EDVertexBinding binding = bindings[vertexIndex];
 
             for (int b = 0; b < binding.nodeIndices.Length; b++)
@@ -987,8 +1106,8 @@ namespace UC.ED
 
                 int p = ParamBase(nodeIndex);
 
-                Vector3 g = nodes[nodeIndex].restPosition;
-                Vector3 u = v - g;
+                DVector3 g = nodes[nodeIndex].restPosition;
+                DVector3 u = v - g;
 
                 double ux = u.x;
                 double uy = u.y;
@@ -1056,6 +1175,119 @@ namespace UC.ED
 
             return J;
         }
+
+        public void DebugJacobianNullspace(Matrix<double> J, double singularValueTolerance = 1e-10, int topCount = 20)
+        {
+            var svd = J.Svd(true);
+
+            var s = svd.S;
+            double sigmaMax = s[0];
+            double sigmaMin = s[s.Count - 1];
+            double tol = singularValueTolerance * sigmaMax;
+
+            int rank = 0;
+            for (int i = 0; i < s.Count; i++)
+            {
+                if (s[i] > tol)
+                    rank++;
+            }
+
+            Debug.Log($"[ED] J rows = {J.RowCount}, cols = {J.ColumnCount}");
+            Debug.Log($"[ED] Rank \u2245 {rank}/{J.ColumnCount}");
+            Debug.Log($"[ED] Nullity \u2245 {J.ColumnCount - rank}");
+            Debug.Log($"[ED] sigmaMax = {sigmaMax}");
+            Debug.Log($"[ED] sigmaMin = {sigmaMin}");
+            Debug.Log($"[ED] Condition \u2245 {sigmaMax / Math.Max(sigmaMin, 1e-300)}");
+
+            // Math.NET returns VT, so the smallest right singular vector is the last row of VT
+            var vt = svd.VT;
+            int lastRow = vt.RowCount - 1;
+            Vector<double> nullVec = vt.Row(lastRow);
+
+            // Normalize for easier reading
+            double maxAbs = 0.0;
+            for (int i = 0; i < nullVec.Count; i++)
+                maxAbs = Math.Max(maxAbs, Math.Abs(nullVec[i]));
+
+            if (maxAbs > 0.0)
+                nullVec = nullVec / maxAbs;
+
+            // Collect largest entries
+            List<(int index, double value)> entries = new();
+            for (int i = 0; i < nullVec.Count; i++)
+                entries.Add((i, nullVec[i]));
+
+            entries.Sort((a, b) => Math.Abs(b.value).CompareTo(Math.Abs(a.value)));
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("[ED] Dominant entries in smallest right singular vector:");
+
+            int count = Math.Min(topCount, entries.Count);
+            for (int i = 0; i < count; i++)
+            {
+                int idx = entries[i].index;
+                double val = entries[i].value;
+
+                int nodeIndex = idx / 12;
+                int localParam = idx % 12;
+
+                sb.AppendLine(
+                    $"  #{i + 1}: global={idx}, node={nodeIndex}, param={ParamName(localParam)}, value={val}");
+            }
+
+            Debug.Log(sb.ToString());
+
+            // Optional summary per node
+            StringBuilder sbNode = new StringBuilder();
+            sbNode.AppendLine("[ED] Null-space magnitude per node:");
+
+            for (int n = 0; n < nodes.Count; n++)
+            {
+                int p = n * 12;
+
+                double blockNormSq = 0.0;
+                double matrixNormSq = 0.0;
+                double translationNormSq = 0.0;
+
+                for (int k = 0; k < 12; k++)
+                {
+                    double v = nullVec[p + k];
+                    blockNormSq += v * v;
+
+                    if (k < 9) matrixNormSq += v * v;
+                    else translationNormSq += v * v;
+                }
+
+                double blockNorm = Math.Sqrt(blockNormSq);
+                double matrixNorm = Math.Sqrt(matrixNormSq);
+                double translationNorm = Math.Sqrt(translationNormSq);
+
+                sbNode.AppendLine(
+                    $"  node {n}: total={blockNorm}, matrix={matrixNorm}, translation={translationNorm}");
+            }
+
+            Debug.Log(sbNode.ToString());
+        }
+
+        private string ParamName(int localParam)
+        {
+            switch (localParam)
+            {
+                case 0: return "m00";
+                case 1: return "m01";
+                case 2: return "m02";
+                case 3: return "m10";
+                case 4: return "m11";
+                case 5: return "m12";
+                case 6: return "m20";
+                case 7: return "m21";
+                case 8: return "m22";
+                case 9: return "tx";
+                case 10: return "ty";
+                case 11: return "tz";
+                default: return $"p{localParam}";
+            }
+        }
 #endif
 
         public void SolveED(int maxIterations = 10,
@@ -1088,7 +1320,7 @@ namespace UC.ED
                     break;
                 }
 
-                //var J = BuildNumericalJacobian(x, rotationWeight, regularizationWeight, constraintWeight);
+                //var J2 = BuildNumericalJacobian(x, rotationWeight, regularizationWeight, constraintWeight);
                 var J = BuildAnalyticalJacobian(rotationWeight, regularizationWeight, constraintWeight);
 
                 //double diff = (J - J2).FrobeniusNorm();
@@ -1102,6 +1334,8 @@ namespace UC.ED
                     //Debug.Log("[ED] Jacobian is near zero; stopping.");
                     break;
                 }
+
+                //DebugJacobianNullspace(J);
 
                 Vector<double> delta;
 

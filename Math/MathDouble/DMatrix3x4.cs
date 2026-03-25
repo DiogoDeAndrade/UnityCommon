@@ -1,20 +1,16 @@
 
 using System;
-using UnityEngine;
 
 namespace UC.DoubleMath
 {
-    public class DoubleMatrix3x4
+    [Serializable]
+    public struct DMatrix3x4
     {
         public double m00, m01, m02, m03;
         public double m10, m11, m12, m13;
         public double m20, m21, m22, m23;
 
-        public DoubleMatrix3x4()
-        {
-        }
-
-        public DoubleMatrix3x4(double m00, double m01, double m02, double m03,
+        public DMatrix3x4(double m00, double m01, double m02, double m03,
                                double m10, double m11, double m12, double m13,
                                double m20, double m21, double m22, double m23)
         {
@@ -23,29 +19,29 @@ namespace UC.DoubleMath
             this.m20 = m20; this.m21 = m21; this.m22 = m22; this.m23 = m23;
         }
 
-        public DoubleVector3 MultiplyVector(DoubleVector3 v)
+        public DVector3 MultiplyVector(DVector3 v)
         {
-            return new DoubleVector3(m00 * v.x + m01 * v.y + m02 * v.z,
+            return new DVector3(m00 * v.x + m01 * v.y + m02 * v.z,
                                      m10 * v.x + m11 * v.y + m12 * v.z,
                                      m20 * v.x + m21 * v.y + m22 * v.z);
         }
 
-        public DoubleVector3 MultiplyPoint(DoubleVector3 v)
+        public DVector3 MultiplyPoint(DVector3 v)
         {
-            return new DoubleVector3(m00 * v.x + m01 * v.y + m02 * v.z + m03,
+            return new DVector3(m00 * v.x + m01 * v.y + m02 * v.z + m03,
                                      m10 * v.x + m11 * v.y + m12 * v.z + m13,
                                      m20 * v.x + m21 * v.y + m22 * v.z + m23);
         }
 
-        public DoubleVector3 translation
+        public DVector3 translation
         {
             get
             {
-                return new DoubleVector3(m03, m13, m23);
+                return new DVector3(m03, m13, m23);
             }
         }
 
-        public DoubleQuaternion rotation
+        public DQuaternion rotation
         {
             get
             {
@@ -54,9 +50,9 @@ namespace UC.DoubleMath
                 // that we remove by normalizing the basis vectors).
 
                 // Basis vectors = columns of the matrix
-                DoubleVector3 x = new DoubleVector3(m00, m10, m20);
-                DoubleVector3 y = new DoubleVector3(m01, m11, m21);
-                DoubleVector3 z = new DoubleVector3(m02, m12, m22);
+                DVector3 x = new DVector3(m00, m10, m20);
+                DVector3 y = new DVector3(m01, m11, m21);
+                DVector3 z = new DVector3(m02, m12, m22);
 
                 // Remove scale by normalizing the basis vectors
                 x = x.normalized;
@@ -105,11 +101,11 @@ namespace UC.DoubleMath
                     qz = 0.25 * s;
                 }
 
-                return new DoubleQuaternion(qx, qy, qz, qw).normalized;
+                return new DQuaternion(qx, qy, qz, qw).normalized;
             }
         }
 
-        public static DoubleMatrix3x4 TRS(DoubleVector3 currentTranslation, DoubleQuaternion currentRotation, DoubleVector3 scale)
+        public static DMatrix3x4 TRS(DVector3 currentTranslation, DQuaternion currentRotation, DVector3 scale)
         {
             // Assuming DoubleQuaternion stores x,y,z,w and is normalized or close to it.
             double x = currentRotation.x;
@@ -144,12 +140,12 @@ namespace UC.DoubleMath
             double m21 = (2.0 * (yz + wx)) * sy;
             double m22 = (1.0 - 2.0 * (xx + yy)) * sz;
 
-            return new DoubleMatrix3x4(m00, m01, m02, currentTranslation.x,
+            return new DMatrix3x4(m00, m01, m02, currentTranslation.x,
                                        m10, m11, m12, currentTranslation.y,
                                        m20, m21, m22, currentTranslation.z);
         }
 
-        public static DoubleMatrix3x4 identity => new DoubleMatrix3x4(1.0, 0.0, 0.0, 0.0,
+        public static DMatrix3x4 identity => new DMatrix3x4(1.0, 0.0, 0.0, 0.0,
                                                                       0.0, 1.0, 0.0, 0.0,
                                                                       0.0, 0.0, 1.0, 0.0);
     }
