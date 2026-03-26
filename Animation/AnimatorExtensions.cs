@@ -1,5 +1,6 @@
 using UC;
 using UnityEngine;
+using static UnityEngine.Rendering.DebugUI;
 
 static public class AnimatorExtensions
 {
@@ -54,6 +55,11 @@ static public class AnimatorExtensions
 
         if (current == targetWeight) return null;
 
+        if (duration <= 0.0f)
+        {
+            animator.SetLayerWeight(layerIndex, targetWeight);
+            return null;
+        }
         return animator.Tween().Interpolate(current, targetWeight, duration, (value) => animator.SetLayerWeight(layerIndex, value), n);
     }
 }
