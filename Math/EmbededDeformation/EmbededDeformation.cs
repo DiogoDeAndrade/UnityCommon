@@ -889,15 +889,15 @@ namespace UC.ED
 
             return true;
 #else
-            throw new NotImplementedException();            
+            throw new NotImplementedException();
 #endif
         }
 
+#if MATH_NET_AVAILABLE
         private Vector<double> EvaluateResidualVector(double rotationWeight = 1.0, 
                                                       double regularizationWeight = 10.0,  
                                                       double constraintWeight = 100.0)
         {
-#if MATH_NET_AVAILABLE
             int nodeCount = nodes.Count;
             int directedEdgeCount = 0;
             for (int i = 0; i < nodes.Count; i++)
@@ -999,13 +999,10 @@ namespace UC.ED
             }
 
             return residual;
-#else
-            throw new NotImplementedException();            
-#endif
         }
 
         private int ParamBase(int nodeIndex) => nodeIndex * 12;
-#if MATH_NET_AVAILABLE
+
         private Vector<double> PackNodeParameters()
         {
             int nodeCount = nodes.Count;
@@ -1037,9 +1034,7 @@ namespace UC.ED
 
             return x;
         }
-#endif
 
-#if MATH_NET_AVAILABLE
         private void ApplyNodeParameters(Vector<double> x)
         {
             int nodeCount = nodes.Count;
