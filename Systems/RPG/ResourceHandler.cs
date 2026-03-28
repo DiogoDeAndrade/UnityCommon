@@ -1,4 +1,5 @@
 ﻿using NaughtyAttributes;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,10 +8,12 @@ namespace UC.RPG
 
     public class ResourceHandler : MonoBehaviour, IRPGOwner
     {
+        [Flags]
         public enum OverrideMode
         {
             None = 0,
-            InitialResource = 1
+            InitialValue = 1,
+            MaxValue = 2
         }
 
         public delegate void OnChange(ResourceInstance resourceInstance, ChangeData changeData);
@@ -26,12 +29,15 @@ namespace UC.RPG
         private OverrideMode overrideMode;
         [SerializeField]
         private float       initialValue;
+        [SerializeField]
+        private float       overrideMaxValue;
 
         protected ResourceInstance resourceInstance;
 
         protected bool _fromInstance;
 
-        bool isOverrideInitialResource => (overrideMode & OverrideMode.InitialResource) != 0;
+        bool isOverrideInitialValue => (overrideMode & OverrideMode.InitialValue) != 0;
+        bool isOverrideMaxValue => (overrideMode & OverrideMode.MaxValue) != 0;
 
         public float resource => instance.value;
         public float maxValue => instance.maxValue;
@@ -161,9 +167,12 @@ namespace UC.RPG
 
         public void ResetResource(bool combatText = false)
         {
-            float prevValue = resourceInstance.value;
+            float prevValue = instance.value;
 
-            if (isOverrideInitialResource)
+            if (isOverrideMaxValue)
+                resourceInstance.maxValue = overrideMaxValue;
+
+            if (isOverrideInitialValue)
                 resourceInstance.value = initialValue;
             else
                 resourceInstance.value = type.defaultValue;

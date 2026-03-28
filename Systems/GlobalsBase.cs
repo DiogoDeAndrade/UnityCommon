@@ -25,22 +25,25 @@ namespace UC
 
         protected static GlobalsBase _instanceBase = null;
 
-        public static GlobalsBase instanceBase
+        public static T GetInstanceBase<T>() where T : GlobalsBase
         {
-            get
+            if (_instanceBase) return (T)_instanceBase;
+
+            Debug.Log("Globals not loaded, loading...");
+
+            var allConfigs = Resources.LoadAll<T>("");
+            if (allConfigs.Length == 0)
             {
-                if (_instanceBase) return _instanceBase;
-
-                Debug.Log("Globals not loaded, loading...");
-
-                var allConfigs = Resources.LoadAll<GlobalsBase>("");
-                if (allConfigs.Length == 1)
-                {
-                    _instanceBase = allConfigs[0];
-                }
-
-                return _instanceBase;
+                Debug.LogError("Globals not available - create a globals object!");
             }
+            else if (allConfigs.Length == 1)
+            {
+                _instanceBase = allConfigs[0];
+            }
+
+            return (T)_instanceBase;
         }
+
+        public static GlobalsBase instanceBase => GetInstanceBase<GlobalsBase>();
     }
 }

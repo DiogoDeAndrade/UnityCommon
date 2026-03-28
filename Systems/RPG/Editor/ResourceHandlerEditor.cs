@@ -11,6 +11,7 @@ namespace UC.RPG.Editor
         private SerializedProperty typeProperty;
         private SerializedProperty overrideModeProperty;
         private SerializedProperty initialValueProperty;
+        private SerializedProperty overrideMaxValueProperty;
 
         protected override void OnEnable()
         {
@@ -18,7 +19,8 @@ namespace UC.RPG.Editor
 
             typeProperty = serializedObject.FindProperty("type");  
             overrideModeProperty = serializedObject.FindProperty("overrideMode");  
-            initialValueProperty = serializedObject.FindProperty("initialValue");  
+            initialValueProperty = serializedObject.FindProperty("initialValue");
+            overrideMaxValueProperty = serializedObject.FindProperty("overrideMaxValue");
         }
 
         public override void OnInspectorGUI()
@@ -56,8 +58,10 @@ namespace UC.RPG.Editor
                     {
                         EditorGUILayout.PropertyField(overrideModeProperty);
                         var overrideMode = (ResourceHandler.OverrideMode)overrideModeProperty.enumValueFlag;
-                        if ((overrideMode & ResourceHandler.OverrideMode.InitialResource) != 0)
+                        if ((overrideMode & ResourceHandler.OverrideMode.InitialValue) != 0)
                             EditorGUILayout.PropertyField(initialValueProperty);
+                        if ((overrideMode & ResourceHandler.OverrideMode.MaxValue) != 0)
+                            EditorGUILayout.PropertyField(overrideMaxValueProperty);
                     }
 
                     // Progress Bar Section
@@ -128,11 +132,14 @@ namespace UC.RPG.Editor
 
         protected override (Color, Color, Color) GetColors()
         {
-            var c = GUIUtils.ColorFromHex("#D0FFFF");
+            var backColor = GUIUtils.ColorFromHex("#D0FFFF");
             ResourceHandler handler = (ResourceHandler)target;
-            if ((handler != null) && (handler.type)) c = handler.type.displayBarColor;
+            if ((handler != null) && (handler.type)) backColor = handler.type.displayBarColor;
 
-            return (c, GUIUtils.ColorFromHex("#2f4858"), GUIUtils.ColorFromHex("#86CBFF"));
+            var textColor = GUIUtils.ColorFromHex("#2f4858");
+            if ((handler != null) && (handler.type)) textColor = handler.type.displayTextColor;
+
+            return (backColor, textColor, GUIUtils.ColorFromHex("#FFFFFF"));
         }
 
         protected override bool HasTitleShadow()
