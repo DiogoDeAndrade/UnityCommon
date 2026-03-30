@@ -34,10 +34,15 @@ namespace UC
 
         public AudioSource Play()
         {
-            return Play(1.0f, 1.0f);
+            return Play(1.0f, 1.0f, -float.MaxValue);
         }
 
-        public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f)
+        public AudioSource Play(float crossfadeTime)
+        {
+            return Play(1.0f, 1.0f, crossfadeTime);
+        }
+
+        public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f, float crossfadeTime = -float.MaxValue)
         {
             if (subtitleTrack)
             {
@@ -64,7 +69,7 @@ namespace UC
             }
             else
             {
-                ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), -float.MaxValue, defaultTag);
+                ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), crossfadeTime, defaultTag);
             }
 
             if (subtitleTrack)
