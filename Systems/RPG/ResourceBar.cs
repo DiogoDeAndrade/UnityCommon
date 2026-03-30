@@ -9,7 +9,7 @@ namespace UC.RPG
 
     public class ResourceBar : MonoBehaviour
     {
-        public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY, Text };
+        public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY, Text, FillAmount };
         public enum UpdateMode { Direct, FeedbackLoop, ConstantSpeed };
 
         [SerializeField] private DisplayMode displayMode;
@@ -42,7 +42,7 @@ namespace UC.RPG
         [SerializeField] private string          _textOnEmpty;
         [SerializeField] private TextMeshProUGUI header;
 
-        bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY);
+        bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY) || (displayMode == DisplayMode.FillAmount);
         bool needSpeedVar => (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed));
         bool needColor => (isBar) && (colorChange);
 
@@ -270,6 +270,9 @@ namespace UC.RPG
                     break;
                 case DisplayMode.ScaleImageY:
                     bar.localScale = new Vector3(1.0f, currentT, 1.0f);
+                    break;
+                case DisplayMode.FillAmount:
+                    uiImage.fillAmount = currentT;
                     break;
                 default:
                     break;
