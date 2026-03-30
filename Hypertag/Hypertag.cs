@@ -119,6 +119,7 @@ namespace UC
             var objects = HypertaggedObject.Get(tag);
             foreach (var obj in objects)
             {
+                if (!obj.isActiveAndEnabled) continue;
                 var c = obj.GetComponent<T>();
                 if (c)
                 {
@@ -136,6 +137,7 @@ namespace UC
             var objects = HypertaggedObject.Get(tag);
             foreach (var obj in objects)
             {
+                if (!obj.isActiveAndEnabled) continue;
                 var c = obj.GetComponent<T>();
                 if (c)
                 {
@@ -153,6 +155,7 @@ namespace UC
             var objects = HypertaggedObject.Get(tags);
             foreach (var obj in objects)
             {
+                if (!obj.isActiveAndEnabled) continue;
                 var c = obj.GetComponent<T>();
                 if (c)
                 {

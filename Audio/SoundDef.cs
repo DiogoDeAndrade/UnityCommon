@@ -89,7 +89,7 @@ namespace UC
         private static bool CreateFromSelectionValidate()
         {
             var clips = Selection.GetFiltered<AudioClip>(SelectionMode.DeepAssets);
-            return clips.Length == 1;
+            return (clips.Length == 1) || (clips.Length == Selection.count);
         }
 
         [MenuItem("Assets/Unity Common Tools/Create SoundDef From Selection")]
@@ -102,37 +102,38 @@ namespace UC
             // If user picked exactly one SubtitleTrack and/or one Speaker, treat them as defaults
             SubtitleTrack subtitle = subtitles.Length >= 1 ? subtitles[0] : null;
             Speaker speaker = speakers.Length >= 1 ? speakers[0] : null;
-            AudioClip clip = clips[0];
-
-            // Choose output folder (based on first selected object)
-            var firstPath = AssetDatabase.GetAssetPath(clip);
-            var outFolder = Directory.Exists(firstPath) ? firstPath : Path.GetDirectoryName(firstPath);
-            if (string.IsNullOrEmpty(outFolder)) outFolder = "Assets";
-
-            var sd = ScriptableObject.CreateInstance<SoundDef>();
-            sd.clip = clip;
-            if (speaker)
+            foreach (var clip in clips)
             {
-                sd.soundType = SoundType.Voice;
-                sd.subtitleTrack = subtitle;
-                sd.speaker = speaker;
-                if (speakers.Length > 1)
+                // Choose output folder (based on first selected object)
+                var firstPath = AssetDatabase.GetAssetPath(clip);
+                var outFolder = Directory.Exists(firstPath) ? firstPath : Path.GetDirectoryName(firstPath);
+                if (string.IsNullOrEmpty(outFolder)) outFolder = "Assets";
+
+                var sd = ScriptableObject.CreateInstance<SoundDef>();
+                sd.clip = clip;
+                if (speaker)
                 {
-                    sd.additionalSpeakers = new Speaker[speakers.Length - 1];
-                    for (int i = 1; i < speakers.Length; i++) sd.additionalSpeakers[i - 1] = speakers[i];
+                    sd.soundType = SoundType.Voice;
+                    sd.subtitleTrack = subtitle;
+                    sd.speaker = speaker;
+                    if (speakers.Length > 1)
+                    {
+                        sd.additionalSpeakers = new Speaker[speakers.Length - 1];
+                        for (int i = 1; i < speakers.Length; i++) sd.additionalSpeakers[i - 1] = speakers[i];
+                    }
                 }
-            }
-            else
-            {
-                sd.soundType = SoundType.PrimaryFX;
-                sd.subtitleTrack = subtitle;    
-            }
+                else
+                {
+                    sd.soundType = SoundType.PrimaryFX;
+                    sd.subtitleTrack = subtitle;
+                }
 
-            var assetName = $"{clip.name}.asset";
-            var path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(outFolder, assetName));
+                var assetName = $"{clip.name}.asset";
+                var path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(outFolder, assetName));
 
-            AssetDatabase.CreateAsset(sd, path);
-            EditorUtility.SetDirty(sd);
+                AssetDatabase.CreateAsset(sd, path);
+                EditorUtility.SetDirty(sd);
+            }
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();

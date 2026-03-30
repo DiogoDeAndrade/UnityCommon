@@ -84,6 +84,7 @@ namespace UC
                 var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
                 foreach (var obj in editorL)
                 {
+                    if (!obj.isActiveAndEnabled) continue;
                     if (obj.hypertag == tag) yield return obj;
                 }
                 yield break;
@@ -94,6 +95,7 @@ namespace UC
             {
                 foreach (var obj in l)
                 {
+                    if (!obj.isActiveAndEnabled) continue;
                     yield return obj;
                 }
             }
@@ -107,6 +109,7 @@ namespace UC
                 var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
                 foreach (var obj in editorL)
                 {
+                    if (!obj.isActiveAndEnabled) continue;
                     if (!obj.HasAnyHypertag(tags)) continue;
 
                     yield return obj;
@@ -121,6 +124,7 @@ namespace UC
                 {
                     foreach (var obj in l)
                     {
+                        if (!obj.isActiveAndEnabled) continue;
                         yield return obj;
                     }
                 }
