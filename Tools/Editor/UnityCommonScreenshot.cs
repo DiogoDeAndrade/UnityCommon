@@ -243,7 +243,6 @@ namespace UC
 
             try
             {
-                // For EXR, render into a float RT to avoid surprises.
                 var rtFormat = (ext == ".exr") ? RenderTextureFormat.ARGBFloat : RenderTextureFormat.ARGB32;
 
                 rt = new RenderTexture(width, height, 24, rtFormat)
@@ -257,7 +256,8 @@ namespace UC
                 cam.Render();
 
                 var texFormat = (ext == ".exr") ? TextureFormat.RGBAFloat : TextureFormat.RGBA32;
-                tex = new Texture2D(width, height, texFormat, mipChain: false, linear: true);
+                bool linear = (ext == ".exr");
+                tex = new Texture2D(width, height, texFormat, mipChain: false, linear: linear);
 
                 tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 tex.Apply(false, false);
