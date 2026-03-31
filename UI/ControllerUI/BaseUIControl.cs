@@ -9,7 +9,7 @@ namespace UC
 
     public class BaseUIControl : MonoBehaviour
     {
-        public enum HighlightMode { ImageEnable, ColorSwitch, Animator, Outline };
+        public enum HighlightMode { ImageEnable, ColorSwitch, Animator, Outline, FontChange };
 
         public delegate void OnSelect(BaseUIControl newCntrol, BaseUIControl prevControl);
         public delegate void OnDeselect(BaseUIControl control);
@@ -29,9 +29,17 @@ namespace UC
         [SerializeField, ShowIf(nameof(isOutline)), Min(0.0f)]
         protected float         outlineWidth = 1.0f;
         [SerializeField] 
-        protected TextMeshProUGUI highlighterText;
+        protected TextMeshProUGUI   highlighterText;
         [SerializeField, ShowIf(nameof(needHighlightColor))] 
-        protected Color         highlightColor;
+        protected Color             highlightColor;
+        [SerializeField, ShowIf(nameof(isFontChangeHighlight))] 
+        protected TMP_FontAsset     highlightFont;
+        [SerializeField, ShowIf(nameof(isFontChangeHighlight))] 
+        protected Material          highlightStyle;
+        [SerializeField, ShowIf(nameof(isFontChangeHighlight))] 
+        protected TMP_ColorGradient highlightGradient;
+        [SerializeField, ShowIf(nameof(isFontChangeHighlight))] 
+        protected float             highlightSize;
         [SerializeField] 
         protected BaseUIControl _navUp;
         [SerializeField] 
@@ -48,11 +56,16 @@ namespace UC
         Color               defaultImageColor;
         CanvasGroup         canvasGroup;
         Animator            animator;
+        TMP_FontAsset       normalFont;
+        TMP_ColorGradient   normalGradient;
+        Material            normalStyle;
+        float               normalSize;
 
         private bool needHighlightColor => (highlighterText != null) || (highlightMode == HighlightMode.ColorSwitch);
         private bool needsHighlighterImage => (highlightMode == HighlightMode.ImageEnable);
         private bool needsHighlighterImageEffect => (highlightMode == HighlightMode.Outline);
         private bool isOutline => (highlightMode == HighlightMode.Outline);
+        private bool isFontChangeHighlight => (highlightMode == HighlightMode.FontChange);
 
         public bool isSelected => (parentGroup.uiEnable) && (parentGroup.selectedControl == this);
         public bool isSelectable
@@ -88,6 +101,10 @@ namespace UC
             if (highlighterText)
             {
                 defaultTextColor = highlighterText.color;
+                normalFont = highlighterText.font;
+                normalStyle = highlighterText.fontSharedMaterial;
+                normalSize = highlighterText.fontSize;
+                normalGradient = highlighterText.colorGradientPreset;
             }
             if (highlighterImage)
             {
@@ -145,6 +162,24 @@ namespace UC
             if (highlighterText)
             {
                 highlighterText.color = (isSelected) ? (highlightColor) : (defaultTextColor);
+
+                if (highlightMode == HighlightMode.FontChange)
+                {
+                    if (isSelected)
+                    {
+                        if (highlightFont) highlighterText.font = highlightFont;
+                        if (highlightStyle) highlighterText.fontSharedMaterial = highlightStyle;
+                        if (highlightSize > 0) highlighterText.fontSize = highlightSize;
+                        if (highlightGradient) highlighterText.colorGradientPreset = highlightGradient;
+                    }
+                    else
+                    {
+                        if (highlightFont) highlighterText.font = normalFont;
+                        if (highlightStyle) highlighterText.fontSharedMaterial = normalStyle;
+                        if (highlightSize > 0) highlighterText.fontSize = normalSize;
+                        if (highlightGradient) highlighterText.colorGradientPreset = normalGradient;
+                    }
+                }
             }
         }
 
