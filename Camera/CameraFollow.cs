@@ -18,7 +18,7 @@ namespace UC
         [SerializeField] bool allowZoom;
         [SerializeField, ShowIf(nameof(allowZoom))] float zoomMargin = 1.1f;
         [SerializeField, ShowIf(nameof(allowZoom))] float zoomSpeed = 1.0f;
-        [SerializeField] Vector2 minMaxSize = new Vector2(180.0f, 360.0f);
+        [SerializeField, ShowIf(nameof(allowZoom))] Vector2 minMaxSize = new Vector2(180.0f, 360.0f);
         [SerializeField, ShowIf(nameof(needObject))] Transform targetObject;
         [SerializeField, ShowIf(nameof(needFollowSpeed))] float followSpeed = 0.9f;
         [SerializeField, ShowIf(nameof(needRect))] Rect rect = new Rect(-100.0f, -100.0f, 200.0f, 200.0f);
