@@ -12,7 +12,7 @@ public class SplineSampler : MonoBehaviour
     private SplineContainer spline;
 #endif
     [SerializeField] 
-    private int             sampleCount = 200;
+    protected int           sampleCount = 200;
     [SerializeField] 
     private bool            debugSamples;
     [SerializeField, ShowIf(nameof(debugSamples))] 
