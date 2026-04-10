@@ -64,6 +64,12 @@ namespace UC
             return new Vector2(inV.z, inV.y);
         }
 
+        public static Vector4 xy00(this Vector2 inV)
+        {
+            return new Vector4(inV.x, inV.y, 0, 0);
+        }
+
+
         public static float Random(this Vector2 limits)
         {
             return UnityEngine.Random.Range(limits.x, limits.y);
