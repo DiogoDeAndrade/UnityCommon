@@ -1,4 +1,6 @@
+using UC.DoubleMath;
 using UnityEngine;
+using System;
 
 namespace UC
 {
@@ -318,6 +320,78 @@ namespace UC
             closestB = b0 + d2 * t;
 
             return Vector3.Distance(closestA, closestB);
+        }
+
+        public static double Distance(DVector3 a0, DVector3 a1, DVector3 b0, DVector3 b1, out DVector3 closestA, out DVector3 closestB)
+        {
+            DVector3 d1 = a1 - a0; // Direction of segment A
+            DVector3 d2 = b1 - b0; // Direction of segment B
+            DVector3 r = a0 - b0;
+
+            double a = DVector3.Dot(d1, d1); // Squared length of segment A
+            double e = DVector3.Dot(d2, d2); // Squared length of segment B
+            double f = DVector3.Dot(d2, r);
+
+            double s, t;
+
+            const double Epsilon = 1e-6;
+
+            // Both segments degenerate into points
+            if ((a <= Epsilon) && (e <= Epsilon))
+            {
+                closestA = a0;
+                closestB = b0;
+                return DVector3.Distance(closestA, closestB);
+            }
+
+            // First segment degenerates into a point
+            if (a <= Epsilon)
+            {
+                s = 0.0;
+                t = Math.Clamp(f / e, 0.0, 1.0);
+            }
+            else
+            {
+                double c = DVector3.Dot(d1, r);
+
+                // Second segment degenerates into a point
+                if (e <= Epsilon)
+                {
+                    t = 0.0;
+                    s = Math.Clamp(-c / a, 0.0, 1.0);
+                }
+                else
+                {
+                    double b = DVector3.Dot(d1, d2);
+                    double denom = a * e - b * b;
+
+                    // If not parallel, compute closest point on infinite lines and clamp to segment A
+                    if (denom != 0.0)
+                        s = Math.Clamp((b * f - c * e) / denom, 0.0, 1.0);
+                    else
+                        s = 0.0; // Parallel, pick arbitrary s
+
+                    // Compute point on segment B corresponding to s
+                    t = (b * s + f) / e;
+
+                    // If t out of range, clamp and recompute s
+                    if (t < 0.0)
+                    {
+                        t = 0.0;
+                        s = Math.Clamp(-c / a, 0.0, 1.0);
+                    }
+                    else if (t > 1.0)
+                    {
+                        t = 1.0;
+                        s = Math.Clamp((b - c) / a, 0.0, 1.0);
+                    }
+                }
+            }
+
+            closestA = a0 + d1 * s;
+            closestB = b0 + d2 * t;
+
+            return DVector3.Distance(closestA, closestB);
         }
 
         public static float Distance(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1)

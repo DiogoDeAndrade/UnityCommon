@@ -215,5 +215,27 @@ namespace UC
             }
             Gizmos.DrawLine(prevPos, position + radius * right);
         }
+
+        public static void DrawCircle(Vector3 center, float radius, Vector3 forward, int subdivs = 32)
+        {
+            forward = forward.normalized;
+
+            Vector3 u = (Mathf.Abs(forward.y) < 0.99f) ? Vector3.up : Vector3.right;
+
+            Vector3 r = Vector3.Cross(forward, u).normalized;
+            u = Vector3.Cross(r, forward).normalized;
+
+            float aInc = Mathf.PI * 2.0f / (float)subdivs;
+            for (int i = 0; i < subdivs; i++)
+            {
+                float a1 = aInc * i;
+                float a2 = aInc * (i + 1);
+
+                Vector3 p1 = center + radius * (Mathf.Cos(a1) * r + Mathf.Sin(a1) * u);
+                Vector3 p2 = center + radius * (Mathf.Cos(a2) * r + Mathf.Sin(a2) * u);
+
+                Gizmos.DrawLine(p1, p2);
+            }
+        }
     }
 }

@@ -261,5 +261,67 @@ namespace UC
                 if (node != null) yield return node.data;
             }
         }
+
+        public (int, int) GetSegmentIds(int index)
+        {
+            int currentIndex = 0;
+
+            if (rootNodeId == -1)
+                return (-1, -1);
+
+            if (TryGetSegmentDFS(rootNodeId, index, ref currentIndex, out var result))
+                return result;
+
+            return (-1, -1);
+        }
+
+        public int GetSegmentCount()
+        {
+            if (rootNodeId == -1) return 0;
+
+            return edgeCount;
+        }
+
+        public (Node, Node) GetSegmentNodes(int index)
+        {
+            (int, int) ids = GetSegmentIds(index);
+            if (ids.Item1 == -1) return (null, null);
+
+            return (nodes[ids.Item1], nodes[ids.Item2]);
+        }
+
+        public (Node, Node, int, int) GetSegmentNodesAndIds(int index)
+        {
+            (int, int) ids = GetSegmentIds(index);
+            if (ids.Item1 == -1) return (null, null, -1, -1);
+
+            return (nodes[ids.Item1], nodes[ids.Item2], ids.Item1, ids.Item2);
+        }
+
+        private bool TryGetSegmentDFS(int nodeId, int targetIndex, ref int currentIndex, out (int, int) result)
+        {
+            var node = nodes[nodeId];
+
+            if (node.children != null)
+            {
+                foreach (var childId in node.children)
+                {
+                    // Each parent -> child is a segment
+                    if (currentIndex == targetIndex)
+                    {
+                        result = (nodeId, childId);
+                        return true;
+                    }
+
+                    currentIndex++;
+
+                    if (TryGetSegmentDFS(childId, targetIndex, ref currentIndex, out result))
+                        return true;
+                }
+            }
+
+            result = default;
+            return false;
+        }
     }
 }
