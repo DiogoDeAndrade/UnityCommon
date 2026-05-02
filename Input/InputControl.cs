@@ -11,7 +11,7 @@ namespace UC
     [Serializable]
     public class InputControl
     {
-        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, Any = 4, MousePosition = 5, None = 6 };
+        public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, AnyInputEvent = 4, MousePosition = 5, None = 6 };
 
         [SerializeField]
         private InputType _type;
@@ -33,6 +33,11 @@ namespace UC
         PlayerInput _playerInput;
         bool isVec2;
         float prevValue;
+
+
+        private static bool _gamepadCursorMovedThisFrame;
+        public static void SetGamepadCursorMoved() => _gamepadCursorMovedThisFrame = true;
+        public static void ClearGamepadCursorMoved() => _gamepadCursorMovedThisFrame = false;
 
         public PlayerInput playerInput { get => _playerInput; set { _playerInput = value; RefreshAction(); } }
         public bool needPlayerInput => _type == InputType.NewInput;
@@ -78,8 +83,11 @@ namespace UC
                         }
                     }
                     break;
-                case InputType.Any:
+                case InputType.AnyInputEvent:
+                case InputType.MousePosition:
                     throw (new NotImplementedException($"GetAxis with type={type}"));
+                case InputType.None:
+                    return 0.0f;
                 default:
                     break;
             }
@@ -94,8 +102,10 @@ namespace UC
                 case InputType.Axis:
                 case InputType.Button:
                 case InputType.Key:
-                case InputType.Any:
-                    throw (new NotImplementedException($"GetAxis2D with type={type}"));
+                case InputType.AnyInputEvent:
+                    throw (new NotImplementedException($"GetAxis2 with type={type}"));
+                case InputType.None:
+                    return Vector2.zero;
                 case InputType.NewInput:
                     if (action == null) RefreshAction();
                     if (action != null)
@@ -135,8 +145,14 @@ namespace UC
                     if (action == null) RefreshAction();
                     if (action != null) ret = action.IsPressed();
                     break;
-                case InputType.Any:
+                case InputType.AnyInputEvent:
                     ret = Input.anyKey;
+                    break;
+                case InputType.MousePosition:
+                    ret = Input.anyKey;
+                    break;
+                case InputType.None:
+                    ret = false; 
                     break;
                 default:
                     break;
@@ -164,8 +180,11 @@ namespace UC
                     if (action == null) RefreshAction();
                     if (action != null) ret = action.WasPressedThisFrame();
                     break;
-                case InputType.Any:
+                case InputType.AnyInputEvent:
                     ret = Input.anyKeyDown;
+                    break;
+                case InputType.None:
+                    ret = false;
                     break;
                 default:
                     break;
@@ -193,8 +212,11 @@ namespace UC
                     if (action == null) RefreshAction();
                     if (action != null) ret = action.WasReleasedThisFrame();
                     break;
-                case InputType.Any:
+                case InputType.AnyInputEvent:
                     throw (new NotImplementedException($"IsUp with type={type}"));
+                case InputType.None:
+                    ret = false;
+                    break;
                 default:
                     break;
             }
@@ -374,6 +396,9 @@ namespace UC
 
         public static bool HasMouseMovedThisFrame()
         {
+            // This is for gamepad-based movement (triggered from CursorManager)
+            if (_gamepadCursorMovedThisFrame) return true;
+
 #if ENABLE_LEGACY_INPUT_MANAGER
             // This is frame-based and does not require manual position caching
             return Mathf.Abs(Input.GetAxisRaw("Mouse X")) > 0f ||
@@ -399,8 +424,10 @@ namespace UC
         Button = 1 << 1,
         Key = 1 << 2,
         NewInput = 1 << 3,
-        Any = 1 << 4,
-        All = Axis | Button | Key | NewInput | Any
+        AnyInputEvent = 1 << 4,
+        MousePosition = 1 << 5,
+        NoInput = 1 << 6,
+        All = Axis | Button | Key | NewInput | AnyInputEvent | MousePosition | NoInput
     }
 
     [AttributeUsage(AttributeTargets.Field, Inherited = true, AllowMultiple = false)]

@@ -135,7 +135,7 @@ namespace UC
             {
                 float val = Mathf.Clamp(value + increment, minMaxValue.x, minMaxValue.y);
                 ChangeValue(val);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
 
                 cooldownTimer = changeCooldown;
 
@@ -145,7 +145,7 @@ namespace UC
             {
                 float val = Mathf.Clamp(value - increment, minMaxValue.x, minMaxValue.y);
                 ChangeValue(val);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
 
                 cooldownTimer = changeCooldown;
 

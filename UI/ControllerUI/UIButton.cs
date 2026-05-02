@@ -32,7 +32,8 @@ namespace UC
 
         public override void Interact()
         {
-            if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+            GlobalsBase.uiChangeValueSnd?.Play();
+
             NotifyInteract();
 
             switch (interactEvent)

@@ -61,14 +61,14 @@ namespace UC
             {
                 selectedColor = (selectedColor + 1) % colors.Length;
                 ChangeValue(colors[selectedColor]);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
             }
             else if (dz < 0.0f)
             {
                 selectedColor--;
                 if (selectedColor < 0) selectedColor = colors.Length - 1;
                 ChangeValue(colors[selectedColor]);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
             }
         }
 

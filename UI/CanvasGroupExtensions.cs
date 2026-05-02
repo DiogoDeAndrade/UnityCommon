@@ -7,11 +7,15 @@ namespace UC
     {
         public static Tweener.BaseInterpolator FadeIn(this CanvasGroup group, float time)
         {
+            if (group.alpha == 1.0f) return null;
+
             return group.FadeTo(1.0f, time);
         }
 
         public static Tweener.BaseInterpolator FadeOut(this CanvasGroup group, float time)
         {
+            if (group.alpha == 0.0f) return null;
+
             return group.FadeTo(0.0f, time);
         }
 

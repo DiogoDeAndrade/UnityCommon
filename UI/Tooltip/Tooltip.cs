@@ -14,16 +14,10 @@ namespace UC
         private bool autoFollowCursor;
         [SerializeField, ShowIf(nameof(autoFollowCursor))] 
         private Vector2 tooltipOffset = Vector2.zero;
-        [SerializeField, ShowIf(nameof(autoFollowCursor))]
-        private PlayerInput playerInput;
-        [SerializeField, ShowIf(nameof(hasPlayerInput))]
-        private InputControl mousePositionControl;
 
         protected TextMeshProUGUI text;
         protected CanvasGroup canvasGroup;
         protected RectTransform rectTransform;
-
-        bool hasPlayerInput => autoFollowCursor && (playerInput != null);
 
         protected virtual void Awake()
         {
@@ -31,8 +25,6 @@ namespace UC
             canvasGroup = GetComponent<CanvasGroup>();
             rectTransform = transform as RectTransform;
             canvasGroup.alpha = 0.0f;
-
-            if (playerInput) mousePositionControl.playerInput = playerInput;
         }
         public virtual void Set(object obj)
         {
@@ -59,16 +51,14 @@ namespace UC
             var canvas = TooltipManager.parentCanvas;
             var parentRect = rectTransform.parent as RectTransform;
 
-            Vector2 mousePosition;
-            if (hasPlayerInput) mousePosition = mousePositionControl.GetAxis2();
-            else mousePosition = Input.mousePosition;
+            Vector2 mousePosition = InputControl.GetScreenMousePosition();
 
             Vector2 localPoint;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, mousePosition, canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera, out localPoint);
 
-            if (Input.mousePosition.x < Screen.width * 0.5f)
+            if (mousePosition.x < Screen.width * 0.5f)
             {
-                if (Input.mousePosition.y < Screen.height * 0.5f)
+                if (mousePosition.y < Screen.height * 0.5f)
                 {
                     rectTransform.anchoredPosition = localPoint + new Vector2(tooltipOffset.x, -tooltipOffset.y);
                     rectTransform.pivot = new Vector2(0f, 0f);
@@ -81,7 +71,7 @@ namespace UC
             }
             else
             {
-                if (Input.mousePosition.y < Screen.height * 0.5f)
+                if (mousePosition.y < Screen.height * 0.5f)
                 {
                     rectTransform.anchoredPosition = localPoint + new Vector2(-tooltipOffset.x, -tooltipOffset.y);
                     rectTransform.pivot = new Vector2(1f, 0f);

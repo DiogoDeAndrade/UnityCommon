@@ -105,7 +105,7 @@ namespace UC
             {
                 index = (index + 1) % _possibleValues.Count;
                 ChangeValue(_possibleValues[index]);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
 
                 cooldownTimer = changeCooldown;
 
@@ -115,7 +115,7 @@ namespace UC
             {
                 index = index - 1; if (index < 0) index = _possibleValues.Count - 1;
                 ChangeValue(_possibleValues[index]);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
 
                 cooldownTimer = changeCooldown;
 

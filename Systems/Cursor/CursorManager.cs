@@ -1,6 +1,9 @@
 using NaughtyAttributes;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
+using UnityEngine.U2D;
 using UnityEngine.UI;
 
 namespace UC
@@ -13,19 +16,34 @@ namespace UC
         }
 
         [SerializeField] 
-        private Sprite     defaultCursor;
+        private Sprite          defaultCursor;
         [SerializeField] 
-        private float      fadeTime = 0.15f;
+        private float           fadeTime = 0.15f;
         [SerializeField] 
-        private bool       hwCursor = false;
+        private bool            hwCursor = false;
+        [SerializeField, HideIf(nameof(hwCursor))]
+        private Transform       softCursor;
+        [SerializeField]
+        private bool            linkToUIGroups;
         [SerializeField] 
-        private GameObject attachedObject;
+        private GameObject      attachedObject;
         [SerializeField, ShowIf(nameof(hasCanvas))] 
-        private Camera     uiCamera;
+        private Camera          uiCamera;
+        [SerializeField]
+        private Hypertag        playerTag;
         [SerializeField]
         private PlayerInput     playerInput;
         [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
         private InputControl    returnAttachedObjectControl;
+        [SerializeField]
+        private bool            gamepadCursor;
+        [SerializeField, ShowIf(nameof(gamepadCursor))]
+        private float           gamepadCursorAcceleration;
+        [SerializeField, ShowIf(nameof(gamepadCursor))]
+        private float           gamepadCursorMaxVelocity;
+        [SerializeField, InputPlayer(nameof(playerInput))]
+        private InputControl    gamepadCursorControl;
+
 
         bool hasCanvas() => GetComponentInParent<Canvas>() != null;
 
@@ -40,6 +58,11 @@ namespace UC
         Color           currentColor;
         Vector2         currentSize;
         ICursorGrabData _cursorGrabData;
+        Vector2         gamepadCursorVelocity;
+        Vector2?        gamepadCursorPosition;
+        bool            gamepadWasMoving;
+        List<UIGroup>   allUIGroups;
+        float           allUIGroupsRefreshTimer;
 
         static CursorManager _instance;
 
@@ -65,7 +88,9 @@ namespace UC
         void Start()
         {
             topLevelCanvas = GetComponentInParent<Canvas>();
+
             cursorImage = GetComponent<Image>();
+            if ((cursorImage == null) && (softCursor)) cursorImage = softCursor.GetComponent<Image>();
             canvasGroup = GetComponent<CanvasGroup>();
             rectTransform = transform as RectTransform;
             if ((canvasGroup) && (defaultCursor))
@@ -78,11 +103,22 @@ namespace UC
                 SetCursor(true);
             }
 
-            if ((returnAttachedObjectControl.needPlayerInput) && (playerInput == null))
-                playerInput = FindFirstObjectByType<PlayerInput>();
-            returnAttachedObjectControl.playerInput = playerInput;
+            if (playerTag)
+            {
+                var p = playerTag.FindFirst<PlayerInput>();
+                if (p) playerInput = p;
+            }
 
-            attachedObject?.SetActive(false);
+            if (((returnAttachedObjectControl.needPlayerInput) || ((gamepadCursor) && (gamepadCursorControl.needPlayerInput))) && (playerInput == null))
+                playerInput = FindFirstObjectByType<PlayerInput>();
+
+            returnAttachedObjectControl.playerInput = playerInput;
+            gamepadCursorControl.playerInput = playerInput;
+
+            if (attachedObject)
+            {
+                attachedObject.SetActive(false);
+            }
         }
 
         public void SetCursor(CursorDef def)
@@ -119,6 +155,8 @@ namespace UC
             {
                 cursorImage.sprite = cursor;
                 cursorImage.color = color;
+                var normalizedPivot = cursor.pivot / cursor.rect.size;
+                cursorImage.rectTransform.pivot = normalizedPivot;
             }
             if (size != Vector2.zero)
             {
@@ -135,6 +173,10 @@ namespace UC
                 {
                     Cursor.SetCursor(currentCursor.texture, new Vector2(currentCursor.pivot.x, currentCursor.rect.height - currentCursor.pivot.y), CursorMode.ForceSoftware);
                 }
+            }
+            else
+            {
+                Cursor.visible = false;
             }
         }
 
@@ -182,6 +224,31 @@ namespace UC
 
         private void Update()
         {
+            if (linkToUIGroups)
+            {
+                allUIGroupsRefreshTimer -= Time.unscaledDeltaTime;
+                if (allUIGroupsRefreshTimer <= 0)
+                {
+                    allUIGroups = new(FindObjectsByType<UIGroup>(FindObjectsSortMode.None));
+                    allUIGroupsRefreshTimer = 2.0f;
+                }
+
+                bool activate = false;
+                bool enableGamepad = false;
+                foreach (var uiGroup in allUIGroups)
+                {
+                    if ((uiGroup.uiEnable) && (uiGroup.enableMouseSupport))
+                    {
+                        activate = true;
+
+                        if (uiGroup.enableGamepadCursor) enableGamepad = true;
+                    }
+                }
+
+                SetCursor(activate);
+                this.gamepadCursor = enableGamepad && activate;
+            }
+
             if ((attachedObject) && (attachedObject.gameObject.activeInHierarchy))
             {
                 RectTransform rt = attachedObject.transform as RectTransform;
@@ -189,14 +256,36 @@ namespace UC
                 {
                     Camera c = (topLevelCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? (null) : (topLevelCanvas.worldCamera);
                     Vector2 cursorPos;
-                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, Input.mousePosition, c, out cursorPos);
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, InputControl.GetScreenMousePosition(), c, out cursorPos);
                     attachedObject.transform.localPosition = cursorPos;
                 }
                 else
                 {
-                    var pt = uiCamera.ScreenToWorldPoint(Input.mousePosition);
+                    var pt = uiCamera.ScreenToWorldPoint(InputControl.GetScreenMousePosition());
                     attachedObject.transform.position = new Vector3(pt.x, pt.y, attachedObject.transform.position.z);
                 }
+            }
+            if ((softCursor) && (!hwCursor) && (softCursor.gameObject.activeInHierarchy))
+            {
+                RectTransform rt = softCursor.transform as RectTransform;
+                if (rt)
+                {
+                    Camera c = (topLevelCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? (null) : (topLevelCanvas.worldCamera);
+                    Vector2 cursorPos;
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, InputControl.GetScreenMousePosition(), c, out cursorPos);
+                    softCursor.transform.localPosition = cursorPos;
+                }
+                else
+                {
+                    var pt = uiCamera.ScreenToWorldPoint(InputControl.GetScreenMousePosition());
+                    softCursor.transform.position = new Vector3(pt.x, pt.y, softCursor.transform.position.z);
+                }
+            }
+
+            InputControl.ClearGamepadCursorMoved();
+            if (gamepadCursor)
+            {
+                UpdateGamepadCursor();
             }
 
             if (returnAttachedObjectControl.IsDown())
@@ -209,6 +298,68 @@ namespace UC
                     }                    
                 }
             }
+        }
+
+        void UpdateGamepadCursor()
+        {
+            var input = gamepadCursorControl.GetAxis2();
+
+            float screenScale = Screen.height;
+
+            // Initialize tracked position from actual mouse on first use
+            if (!gamepadCursorPosition.HasValue)
+                gamepadCursorPosition = InputControl.GetScreenMousePosition();
+
+            // Snap velocity to zero when reversing direction
+            if (Mathf.Abs(input.x) > 0.01f)
+            {
+                if (input.x * gamepadCursorVelocity.x < 0f)
+                    gamepadCursorVelocity.x = 0f;
+                gamepadCursorVelocity.x += input.x * gamepadCursorAcceleration * screenScale * Time.unscaledDeltaTime;
+            }
+            else
+            {
+                gamepadCursorVelocity.x = 0f;
+            }
+
+            if (Mathf.Abs(input.y) > 0.01f)
+            {
+                if (input.y * gamepadCursorVelocity.y < 0f)
+                    gamepadCursorVelocity.y = 0f;
+                gamepadCursorVelocity.y += input.y * gamepadCursorAcceleration * screenScale * Time.unscaledDeltaTime;
+            }
+            else
+            {
+                gamepadCursorVelocity.y = 0f;
+            }
+
+            float maxSpeed = gamepadCursorMaxVelocity * screenScale;
+            gamepadCursorVelocity.x = Mathf.Clamp(gamepadCursorVelocity.x, -maxSpeed, maxSpeed);
+            gamepadCursorVelocity.y = Mathf.Clamp(gamepadCursorVelocity.y, -maxSpeed, maxSpeed);
+
+            if (gamepadCursorVelocity.sqrMagnitude > 0.01f)
+            {
+                var pos = gamepadCursorPosition.Value + gamepadCursorVelocity * Time.unscaledDeltaTime;
+                pos.x = Mathf.Clamp(pos.x, 0, Screen.width);
+                pos.y = Mathf.Clamp(pos.y, 0, Screen.height);
+                gamepadCursorPosition = pos;
+
+                InputState.Change(Mouse.current.position, pos);
+                InputState.Change(Mouse.current.delta, Vector2.zero);
+                gamepadWasMoving = true;
+                InputControl.SetGamepadCursorMoved();
+            }
+            else if (gamepadWasMoving)
+            {
+                // Sync the OS cursor to where the gamepad left it
+                Mouse.current.WarpCursorPosition(gamepadCursorPosition.Value);
+                InputState.Change(Mouse.current.delta, Vector2.zero);
+                gamepadWasMoving = false;
+            }
+
+            // Sync tracked position if real mouse moves
+            if (InputControl.HasMouseMovedThisFrame())
+                gamepadCursorPosition = InputControl.GetScreenMousePosition();
         }
 
         public static CursorManager instance
