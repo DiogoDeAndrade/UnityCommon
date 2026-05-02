@@ -18,7 +18,7 @@ namespace UC.ED
     [Serializable]
     public class EDNode
     {
-        public DVector3    restPosition;
+        public DVector3         restPosition;
         public List<int>        neighbors = new();
 
         [SerializeField, HideInInspector]
@@ -112,18 +112,54 @@ namespace UC.ED
         public DVector3 targetPosition;
     }
 
+    [Serializable]
+    public struct NavEDStructureBindings
+    {
+        public int              treeId;
+        public int              nodeId;
+        public EDVertexBinding  binding;
+    }
+
+    [Serializable]
+    public struct NavEDClearance
+    {
+        public int      treeId;
+        public int      segmentId;
+        public float    clearance;
+    }
+
     public delegate bool HasLOS(Vector3 p1, Vector3 p2);
 
     [Serializable]
     public class EmbededDeformation
     {
-        public DVector3[]               restVertices;
-        public int[]                    triangles;
+        public DVector3[]                       restVertices;
+        public int[]                            triangles;
 
-        public List<EDNode>             nodes = new();
-        public EDVertexBinding[]        bindings;
-        public List<EDHandleConstraint> handleConstraints = new();
-        public List<EDVertexConstraint> vertexConstraints = new();
+        public List<EDNode>                     nodes = new();
+        public EDVertexBinding[]                bindings;
+        public List<EDHandleConstraint>         handleConstraints = new();
+        public List<EDVertexConstraint>         vertexConstraints = new();
+        public List<NavEDClearance>             originalClearance = new();
+        public TopologyStatic                   navMeshTopology;
+        public List<Tree<Graph2Structure.Node>> structureTree;
+        public List<NavEDStructureBindings>     structureBindingsList;
+        public List<NavEDClearance>             currentClearance;
+        
+        private Dictionary<(int treeId, int nodeId), EDVertexBinding> _structureBindings = new();
+        public Dictionary<(int treeId, int nodeId), EDVertexBinding> structureBindings => ((_structureBindings == null) || (_structureBindings.Count == 0)) ? RebuildStructureBindings() : _structureBindings;
+
+        public Dictionary<(int treeId, int segmentId), float> originalClearanceLookup;
+
+        Dictionary<(int treeId, int nodeId), EDVertexBinding> RebuildStructureBindings()
+        {
+            _structureBindings = new();
+            foreach (var sbl in structureBindingsList)
+            {
+                _structureBindings[(sbl.treeId, sbl.nodeId)] = sbl.binding;
+            }
+            return _structureBindings;
+        }
 
         public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, 
                                           BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
@@ -428,205 +464,180 @@ namespace UC.ED
             int nodeCount = nodes.Count;
             bindings = new EDVertexBinding[vertexCount];
 
+            for (int vId = 0; vId < vertexCount; vId++)
+            {
+                DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
+
+                bindings[vId] = GetBinding(p, bindMode, weightMode, k, power, sigma);
+            }
+        }
+
+        EDVertexBinding GetBinding(DVector3 p, BindingSelectionMode bindMode, BindingWeightMode weightMode, int k = 4, float power = 2.0f, float sigma = 1.0f)
+        {
+            EDVertexBinding ret = new();
+
+            double epsilon = 1e-8;
+            double sigmaSq = sigma * sigma;
+
             switch (bindMode)
             {
                 case BindingSelectionMode.ClosestOne:
-                    BindClosestOne(topology);
-                    break;
+                    {
+                        int closestNode = GetClosestNodeIndex(p);
 
+                        ret = new EDVertexBinding
+                        {
+                            nodeIndices = new int[] { closestNode },
+                            weights = new double[] { 1.0f }
+                        };
+                    }
+                    break;
                 case BindingSelectionMode.NearestK:
                     switch (weightMode)
                     {
                         case BindingWeightMode.Uniform:
-                            BindNearestK_Uniform(topology, k);
+                            ret = GetNearestK_Generic(p, k, (dSq, dMaxSq) => 1.0);
                             break;
                         case BindingWeightMode.InversePower:
-                            BindNearestK_InversePower(topology, k, power);
+                            ret = GetNearestK_Generic(p, k,
+                                                      (dSq, _) =>
+                                                      {
+                                                          double d = Math.Sqrt(dSq);
+                                                          return 1.0 / Math.Pow(d + epsilon, power);
+                                                      });
                             break;
                         case BindingWeightMode.Gaussian:
-                            BindNearestK_Gaussian(topology, k,sigma);
+                            ret = GetNearestK_Generic(p,  k,
+                                                      (dSq, _) =>
+                                                      {
+                                                          return Math.Exp(-dSq / (2.0 * sigmaSq));
+                                                      });
                             break;
                         case BindingWeightMode.OriginalED:
-                            BindNearestK_EDStyle(topology, k);
+                            epsilon = 1e-12;
+                            ret = GetNearestK_Generic(p,  k,
+                                                      (dSq, dMaxSq) =>
+                                                      {
+                                                          double d = Math.Sqrt(dSq);
+                                                          double dMax = Math.Sqrt(Math.Max(dMaxSq, epsilon));
+                                                      
+                                                          double w = 1.0 - (d / dMax);
+                                                          if (w < 0.0) w = 0.0;
+                                                      
+                                                          return w * w;
+                                                      });
                             break;
                         default:
                             break;
                     }
                     break;
-
                 default:
                     Debug.LogWarning($"BuildBindings: unsupported link mode {bindMode}.");
                     break;
             }
+
+            return ret;
         }
 
-        void BindClosestOne(TopologyStatic topology)
+        EDVertexBinding GetNearestK_Generic(DVector3 p, int k, Func<double, double, double> weightFunc)
         {
-            int vertexCount = topology.vertexCount;
-
-            for (int vId = 0; vId < vertexCount; vId++)
-            {
-                DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
-                int closestNode = GetClosestNodeIndex(p);
-
-                bindings[vId] = new EDVertexBinding
-                {
-                    nodeIndices = new int[] { closestNode },
-                    weights = new double[] { 1.0f }
-                };
-            }
-        }
-
-        void BindNearestK_Generic(TopologyStatic topology, int k, Func<double, double, double> weightFunc)
-        {
-            int vertexCount = topology.vertexCount;
             int nodeCount = nodes.Count;
             int actualK = Mathf.Clamp(k, 1, nodeCount);
 
             const double epsilon = 1e-12;
             const double snapDistanceSq = 1e-12;
 
-            for (int vId = 0; vId < vertexCount; vId++)
+            int[] bestIndices = new int[actualK];
+            double[] bestDistSq = new double[actualK];
+
+            for (int i = 0; i < actualK; i++)
             {
-                DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
+                bestIndices[i] = -1;
+                bestDistSq[i] = double.MaxValue;
+            }
 
-                int[] bestIndices = new int[actualK];
-                double[] bestDistSq = new double[actualK];
+            // Find K nearest
+            for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
+            {
+                double dSq = (nodes[nodeIndex].restPosition - p).sqrMagnitude;
 
-                for (int i = 0; i < actualK; i++)
+                for (int slot = 0; slot < actualK; slot++)
                 {
-                    bestIndices[i] = -1;
-                    bestDistSq[i] = double.MaxValue;
-                }
-
-                // Find K nearest
-                for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
-                {
-                    double dSq = (nodes[nodeIndex].restPosition - p).sqrMagnitude;
-
-                    for (int slot = 0; slot < actualK; slot++)
+                    if (dSq < bestDistSq[slot])
                     {
-                        if (dSq < bestDistSq[slot])
+                        for (int shift = actualK - 1; shift > slot; shift--)
                         {
-                            for (int shift = actualK - 1; shift > slot; shift--)
-                            {
-                                bestDistSq[shift] = bestDistSq[shift - 1];
-                                bestIndices[shift] = bestIndices[shift - 1];
-                            }
-
-                            bestDistSq[slot] = dSq;
-                            bestIndices[slot] = nodeIndex;
-                            break;
+                            bestDistSq[shift] = bestDistSq[shift - 1];
+                            bestIndices[shift] = bestIndices[shift - 1];
                         }
-                    }
-                }
 
-                double[] weights = new double[actualK];
-
-                // Snap
-                bool snapped = false;
-                for (int i = 0; i < actualK; i++)
-                {
-                    if (bestIndices[i] >= 0 && bestDistSq[i] <= snapDistanceSq)
-                    {
-                        for (int j = 0; j < actualK; j++)
-                            weights[j] = 0.0;
-
-                        weights[i] = 1.0;
-                        snapped = true;
+                        bestDistSq[slot] = dSq;
+                        bestIndices[slot] = nodeIndex;
                         break;
                     }
                 }
+            }
 
-                if (!snapped)
+            double[] weights = new double[actualK];
+
+            // Snap
+            bool snapped = false;
+            for (int i = 0; i < actualK; i++)
+            {
+                if (bestIndices[i] >= 0 && bestDistSq[i] <= snapDistanceSq)
                 {
-                    double weightSum = 0.0;
+                    for (int j = 0; j < actualK; j++)
+                        weights[j] = 0.0;
 
-                    double dMaxSq = bestDistSq[actualK - 1];
+                    weights[i] = 1.0;
+                    snapped = true;
+                    break;
+                }
+            }
 
-                    for (int i = 0; i < actualK; i++)
+            if (!snapped)
+            {
+                double weightSum = 0.0;
+
+                double dMaxSq = bestDistSq[actualK - 1];
+
+                for (int i = 0; i < actualK; i++)
+                {
+                    if (bestIndices[i] < 0)
                     {
-                        if (bestIndices[i] < 0)
-                        {
-                            weights[i] = 0.0;
-                            continue;
-                        }
-
-                        double w = weightFunc(bestDistSq[i], dMaxSq);
-
-                        weights[i] = w;
-                        weightSum += w;
+                        weights[i] = 0.0;
+                        continue;
                     }
 
-                    if (weightSum > epsilon)
-                    {
-                        for (int i = 0; i < actualK; i++)
-                            weights[i] /= weightSum;
-                    }
-                    else
-                    {
-                        int validCount = 0;
-                        for (int i = 0; i < actualK; i++)
-                            if (bestIndices[i] >= 0) validCount++;
+                    double w = weightFunc(bestDistSq[i], dMaxSq);
 
-                        double fallback = validCount > 0 ? 1.0 / validCount : 0.0;
-
-                        for (int i = 0; i < actualK; i++)
-                            weights[i] = (bestIndices[i] >= 0) ? fallback : 0.0;
-                    }
+                    weights[i] = w;
+                    weightSum += w;
                 }
 
-                bindings[vId] = new EDVertexBinding
+                if (weightSum > epsilon)
                 {
-                    nodeIndices = bestIndices,
-                    weights = weights
-                };
+                    for (int i = 0; i < actualK; i++)
+                        weights[i] /= weightSum;
+                }
+                else
+                {
+                    int validCount = 0;
+                    for (int i = 0; i < actualK; i++)
+                        if (bestIndices[i] >= 0) validCount++;
+
+                    double fallback = validCount > 0 ? 1.0 / validCount : 0.0;
+
+                    for (int i = 0; i < actualK; i++)
+                        weights[i] = (bestIndices[i] >= 0) ? fallback : 0.0;
+                }
             }
-        }
 
-        void BindNearestK_Uniform(TopologyStatic topology, int k)
-        {
-            BindNearestK_Generic(topology, k, (dSq, dMaxSq) => 1.0);
-        }
-
-        void BindNearestK_InversePower(TopologyStatic topology, int k, float power)
-        {
-            const double epsilon = 1e-8;
-
-            BindNearestK_Generic(topology, k, 
-                (dSq, _) =>
-                {
-                    double d = Math.Sqrt(dSq);
-                    return 1.0 / Math.Pow(d + epsilon, power);
-                });
-        }
-
-        void BindNearestK_Gaussian(TopologyStatic topology, int k, double sigma)
-        {
-            double sigmaSq = sigma * sigma;
-
-            BindNearestK_Generic(topology, k, 
-                (dSq, _) =>
-                {
-                    return Math.Exp(-dSq / (2.0 * sigmaSq));
-                });
-        }
-
-        void BindNearestK_EDStyle(TopologyStatic topology, int k)
-        {
-            const double epsilon = 1e-12;
-
-            BindNearestK_Generic(topology, k,
-                (dSq, dMaxSq) =>
-                {
-                    double d = Math.Sqrt(dSq);
-                    double dMax = Math.Sqrt(Math.Max(dMaxSq, epsilon));
-
-                    double w = 1.0 - (d / dMax);
-                    if (w < 0.0) w = 0.0;
-
-                    return w * w;
-                });
+            return new EDVertexBinding
+            {
+                nodeIndices = bestIndices,
+                weights = weights
+            };
         }
 
         private void BuildGraphFromBindings()
@@ -735,16 +746,14 @@ namespace UC.ED
             return deformed;
         }
 
-        public DVector3 DeformVertexFromCurrentNodeTransforms(int vertexId)
+        public DVector3 DeformVertex(DVector3 v, EDVertexBinding binding)
         {
-            DVector3    v = restVertices[vertexId];
-            var         binding = bindings[vertexId];
-            DVector3    result = DVector3.zero;
+            DVector3 result = DVector3.zero;
 
             for (int i = 0; i < binding.nodeIndices.Length; i++)
             {
-                int     nodeIndex = binding.nodeIndices[i];
-                double  w = binding.weights[i];
+                int nodeIndex = binding.nodeIndices[i];
+                double w = binding.weights[i];
 
                 var node = nodes[nodeIndex];
 
@@ -756,6 +765,14 @@ namespace UC.ED
             }
 
             return result;
+        }
+
+        public DVector3 DeformVertexFromCurrentNodeTransforms(int vertexId)
+        {
+            DVector3    v = restVertices[vertexId];
+            var         binding = bindings[vertexId];
+
+            return DeformVertex(v, binding);
         }
 
         public bool SolveTranslationsOnly(double constraintWeight = 1.0, double smoothnessWeight = 0.1, bool resetBeforeSolve = true)
@@ -894,9 +911,10 @@ namespace UC.ED
         }
 
 #if MATH_NET_AVAILABLE
-        private Vector<double> EvaluateResidualVector(double rotationWeight = 1.0, 
-                                                      double regularizationWeight = 10.0,  
-                                                      double constraintWeight = 100.0)
+        private Vector<double> EvaluateResidualVector(double rotationWeight,
+                                                      double regularizationWeight,  
+                                                      double constraintWeight,
+                                                      double clearanceWeight)
         {
             int nodeCount = nodes.Count;
             int directedEdgeCount = 0;
@@ -905,12 +923,18 @@ namespace UC.ED
             int constraintCount = vertexConstraints.Count;
 
             int residualCount = 6 * nodeCount + 3 * directedEdgeCount + 3 * constraintCount;
+            if (clearanceWeight > 0)
+            {
+                for (int i = 0; i < structureTree.Count; i++)
+                    residualCount += 1 * structureTree[i].edgeCount;
+            }
 
             Vector<double> residual = DenseVector.Create(residualCount, 0.0);
 
             double wRot = Math.Sqrt(rotationWeight);
             double wReg = Math.Sqrt(regularizationWeight);
             double wCon = Math.Sqrt(constraintWeight);
+            double wClearance = Math.Sqrt(clearanceWeight);
 
             int row = 0;
 
@@ -941,7 +965,7 @@ namespace UC.ED
             }
 
             // -------------------------------------------------------------
-            // 2) Regularization residuals: 3 per undirected edge
+            // 2) Regularization residuals: 3 per directed edge
             //
             //    R_j (g_k - g_j) + g_j + t_j - (g_k + t_k)
             //    Basically, we find where node j predicts node k should end up
@@ -996,6 +1020,18 @@ namespace UC.ED
                 residual[row++] = wCon * r.x;
                 residual[row++] = wCon * r.y;
                 residual[row++] = wCon * r.z;
+            }
+
+            if (clearanceWeight > 0)
+            {
+                // -------------------------------------------------------------
+                // 4) Clearance constraints - allow for clearance to grow, but constrained it going smaller
+                //
+                // -------------------------------------------------------------
+                for (int i = 0; i < currentClearance.Count; i++)
+                {
+                    residual[row++] = wClearance * ComputeClearanceLoss(originalClearance[i].clearance, currentClearance[i].clearance);
+                }
             }
 
             return residual;
@@ -1068,9 +1104,10 @@ namespace UC.ED
         }
 
         private Matrix<double> BuildNumericalJacobian(Vector<double> x,
-                                                      double rotationWeight = 1.0,
-                                                      double regularizationWeight = 10.0,
-                                                      double constraintWeight = 100.0,
+                                                      double rotationWeight,
+                                                      double regularizationWeight,
+                                                      double constraintWeight,
+                                                      double connectorConstraintWeight,
                                                       double epsilon = 1e-6)
         {
             int paramCount = x.Count;
@@ -1079,7 +1116,7 @@ namespace UC.ED
             ApplyNodeParameters(x);
 
             // Base residual
-            Vector<double> f0 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
+            Vector<double> f0 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0);
 
             int residualCount = f0.Count;
 
@@ -1102,7 +1139,7 @@ namespace UC.ED
                 ApplyNodeParameters(xPerturbed);
 
                 // Evaluate new residual
-                Vector<double> f1 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
+                Vector<double> f1 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0);
 
                 // Compute column i
                 for (int r = 0; r < residualCount; r++)
@@ -1272,8 +1309,11 @@ namespace UC.ED
             return row + 3;
         }
 
-        public Matrix<double> BuildAnalyticalJacobian(out double jNorm, double rotationWeight = 1.0, double regularizationWeight = 10.0, double constraintWeight = 100.0)
+        public Matrix<double> BuildJacobian(out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight)
         {
+            // First rows are rotation constraints, then regularization, then positional constraints, then clearance constraints (if enabled)
+            // We also compute an estimate of the Jacobian norm while filling it, which can be used for scaling other terms
+            // Rotation, regularization, and constraint blocks are calculated analytically, while clearance is currently left for numerical differentiation
             jNorm = 0.0;
 
             int nodeCount = nodes.Count;
@@ -1285,6 +1325,11 @@ namespace UC.ED
             int constraintCount = vertexConstraints.Count;
 
             int rowCount = 6 * nodeCount + 3 * directedEdgeCount + 3 * constraintCount;
+            if (clearanceWeight > 0)
+            {
+                for (int i = 0; i < structureTree.Count; i++)
+                    rowCount += 1 * structureTree[i].edgeCount;
+            }
             int colCount = 12 * nodeCount;
 
             var J = DenseMatrix.Create(rowCount, colCount, 0.0);
@@ -1292,6 +1337,7 @@ namespace UC.ED
             double wRot = Math.Sqrt(rotationWeight);
             double wReg = Math.Sqrt(regularizationWeight);
             double wCon = Math.Sqrt(constraintWeight);
+            double wClearance = Math.Sqrt(clearanceWeight);
 
             int row = 0;
 
@@ -1310,9 +1356,51 @@ namespace UC.ED
             for (int c = 0; c < constraintCount; c++)
                 row = FillConstraintJacobianBlock(J, row, vertexConstraints[c].vertexIndex, wCon, ref jNorm);
 
+            if (clearanceWeight > 0)
+            {
+                for (int i = 0; i < structureTree.Count; i++)
+                {
+                    for (int j = 0; j < structureTree[i].edgeCount; j++)
+                    {
+                        row = FillClearanceJacobianBlock(J, row, i, j, wClearance, ref jNorm);
+                    }
+                }                    
+            }
+
             jNorm = Math.Sqrt(jNorm);
 
             return J;
+        }
+
+        private int FillClearanceJacobianBlock(DenseMatrix J, int row, int treeIndex, int segmentIndex, double wClearance, ref double jNorm)
+        {
+            Vector<double> x0 = PackNodeParameters();
+
+            // Base residual value for this segment
+            double r0 = EvaluateSingleClearanceResidual(treeIndex, segmentIndex, wClearance);
+
+            for (int col = 0; col < x0.Count; col++)
+            {
+                double original = x0[col];
+
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+                x0[col] = original + eps;
+
+                ApplyNodeParameters(x0);
+
+                double r1 = EvaluateSingleClearanceResidual(treeIndex, segmentIndex, wClearance);
+
+                J[row, col] = (r1 - r0) / eps;
+
+                x0[col] = original;
+            }
+
+            ApplyNodeParameters(x0);
+
+            for (int col = 0; col < x0.Count; col++)
+                jNorm += J[row, col] * J[row, col];
+
+            return row + 1;
         }
 
         public void DebugJacobianNullspace(Matrix<double> J, double singularValueTolerance = 1e-10, int topCount = 20)
@@ -1447,7 +1535,7 @@ namespace UC.ED
             {
                 ApplyNodeParameters(x);
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
+                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0);
                 double error = f.L2Norm();
 
                 //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
@@ -1460,7 +1548,7 @@ namespace UC.ED
                 }
 
                 //var J2 = BuildNumericalJacobian(x, rotationWeight, regularizationWeight, constraintWeight);
-                var J = BuildAnalyticalJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight);
+                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0);
 
                 //double diff = (J - J2).FrobeniusNorm();
                 //double rel = diff / Math.Max(1e-12, J2.FrobeniusNorm());
@@ -1532,7 +1620,7 @@ namespace UC.ED
             {
                 ApplyNodeParameters(x);
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
+                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0);
                 double error = f.L2Norm();
 
                 //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
@@ -1546,7 +1634,7 @@ namespace UC.ED
                 if (error < residualTolerance)
                     break;
 
-                var J = BuildAnalyticalJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight);
+                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0);
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                     break;
@@ -1592,7 +1680,7 @@ namespace UC.ED
                     var xCandidate = x + delta;
                     ApplyNodeParameters(xCandidate);
 
-                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight);
+                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0);
                     double candidateError = fCandidate.L2Norm();
 
                     if (!double.IsFinite(candidateError))
@@ -1637,6 +1725,147 @@ namespace UC.ED
 #endif
         }
 
+        public void SolveED_Nav(int maxIterations = 10,
+                                double rotationWeight = 1.0,
+                                double regularizationWeight = 10.0,
+                                double constraintWeight = 100.0,                                
+                                double clearanceWeight = 5.0,
+                                double lambda = 1e-3,
+                                double residualTolerance = 1e-5,
+                                double stepTolerance = 1e-6,
+                                bool resetBeforeSolve = true,
+                                bool adaptiveLambda = true)
+        {
+            if (resetBeforeSolve)
+                ResetDeformation();
+
+            // Build lookup for originalClearance, optimize loss calculations
+            originalClearanceLookup = new();
+            foreach (var oc in originalClearance)
+            {
+                originalClearanceLookup[(oc.treeId, oc.segmentId)] = oc.clearance;
+            }
+
+#if MATH_NET_AVAILABLE
+            var x = PackNodeParameters();
+            double currentLambda = lambda;
+
+            int iter = 0;
+            for (iter = 0; iter < maxIterations; iter++)
+            {
+                ApplyNodeParameters(x);
+                UpdateClearance();
+
+                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight);
+                double error = f.L2Norm();
+
+                //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
+
+                if (!double.IsFinite(error))
+                {
+                    Debug.LogError($"[ED] Residual became non-finite after {iter} iterations.");
+                    return;
+                }
+
+                if (error < residualTolerance)
+                    break;
+
+                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight);
+
+                if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
+                    break;
+
+                var JT = J.Transpose();
+                var H = JT * J;     // approximate Hessian
+                var g = JT * f;     // gradient term
+
+                Vector<double> delta = null;
+                bool solved = false;
+
+                // Try current lambda, optionally increasing it if solve or step is bad
+                for (int attempt = 0; attempt < 8; attempt++)
+                {
+                    var Hlm = H.Clone();
+
+                    for (int i = 0; i < Hlm.RowCount; i++)
+                        Hlm[i, i] += currentLambda;
+
+                    try
+                    {
+                        delta = Hlm.Solve(-g);
+                    }
+                    catch
+                    {
+                        delta = null;
+                    }
+
+                    if (delta == null)
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    double stepNorm = delta.L2Norm();
+                    if (!double.IsFinite(stepNorm))
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    // Candidate step
+                    var xCandidate = x + delta;
+                    ApplyNodeParameters(xCandidate);
+                    UpdateClearance();
+
+                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight);
+                    double candidateError = fCandidate.L2Norm();
+
+                    if (!double.IsFinite(candidateError))
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    // Accept only if it improves the residual
+                    if (candidateError <= error)
+                    {
+                        x = xCandidate;
+                        solved = true;
+
+                        if (adaptiveLambda)
+                            currentLambda = Math.Max(currentLambda * 0.3, 1e-12);
+
+                        if (stepNorm < stepTolerance)
+                        {
+                            ApplyNodeParameters(x);
+                            Debug.Log($"Ran {iter} iterations...");
+                            return;
+                        }
+
+                        break;
+                    }
+                    else
+                    {
+                        currentLambda *= 10.0;
+                    }
+                }
+
+                if (!solved)
+                {
+                    Debug.LogWarning("[ED] LM could not find an improving step.");
+                    break;
+                }
+            }
+
+            ApplyNodeParameters(x);
+            UpdateClearance();
+
+            Debug.Log($"Ran {iter} iterations...");
+#else
+    throw new NotImplementedException();
+#endif
+        }
+
         private List<(int a, int b)> CollectUniqueEdges()
         {
             List<(int a, int b)> result = new();
@@ -1663,6 +1892,269 @@ namespace UC.ED
             }
 
             return result;
+        }
+
+        public void SetNavEDParameters(List<Tree<Graph2Structure.Node>> structureTree, TopologyStatic navMeshTopology,
+                                       BindingSelectionMode bindMode, BindingWeightMode weightMode,
+                                       int k = 4, // When BindingSelectionMode = closest-K
+                                       float power = 2.0f,
+                                       float sigma = 1.0f)
+        {
+            this.structureTree = structureTree;
+            this.navMeshTopology = navMeshTopology;
+            
+            structureBindingsList = new();
+
+            for (int i = 0; i < structureTree.Count; i++)
+            {
+                var tree = structureTree[i];
+
+                for (int j = 0; j < tree.GetSegmentCount(); j++)
+                {
+                    (var n1, var n2) = tree.GetSegmentIds(j);
+
+                    if (!structureBindings.ContainsKey((i, n1)))
+                    {
+                        DVector3 p = new DVector3(tree.GetNode(n1).pos);
+                        structureBindingsList.Add(new NavEDStructureBindings
+                        {
+                            treeId = i,
+                            nodeId = n1,
+                            binding = GetBinding(p, bindMode, weightMode, k, power, sigma)
+                        });
+                    }
+                    if (!structureBindings.ContainsKey((i, n2)))
+                    {
+                        DVector3 p = new DVector3(tree.GetNode(n2).pos);
+                        structureBindingsList.Add(new NavEDStructureBindings
+                        {
+                            treeId = i,
+                            nodeId = n2,
+                            binding = GetBinding(p, bindMode, weightMode, k, power, sigma)
+                        });
+                    }
+                }
+            }
+
+            RebuildStructureBindings();
+
+            originalClearance = new();
+            ComputeClearance(false, originalClearance);
+
+            LogClearance("Original clearance:", originalClearance);
+        }
+
+        public void LogCurrentClearance()
+        {
+            List<NavEDClearance> result = new();
+            ComputeClearance(true, result);
+
+            LogClearance("Current clearance:", result);
+        }
+
+        void LogClearance(string title, List<NavEDClearance> clearanceData)
+        {
+            string sb = $"{title}\n";
+            foreach (var cd in clearanceData)
+            {
+                sb += $"Tree {cd.treeId} / Segment {cd.segmentId} = {cd.clearance}\n";
+            }
+            Debug.Log(sb);
+        }
+
+        void ComputeClearance(bool useCurrentDeformation, List<NavEDClearance> clearanceData)
+        {
+            for (int i = 0; i < structureTree.Count; i++)
+            {
+                var tree = structureTree[i];
+
+                for (int j = 0; j < tree.GetSegmentCount(); j++)
+                {
+                    (var n1, var n2, var id1, var id2) = tree.GetSegmentNodesAndIds(j);
+                    if ((n1 == null) || (n2 == null)) continue;
+
+                    Vector3 p1, p2;
+                    if (useCurrentDeformation)
+                    {
+                        p1 = DeformVertex(n1.data.pos.ToDVector3(), structureBindings[(i, id1)]).ToVector3();
+                        p2 = DeformVertex(n2.data.pos.ToDVector3(), structureBindings[(i, id2)]).ToVector3();
+                    }
+                    else
+                    {
+                        p1 = n1.data.pos;
+                        p2 = n2.data.pos;
+                    }
+
+                    float clearance = GetClearance(p1, p2, useCurrentDeformation);
+
+                    var cData = new NavEDClearance
+                    {
+                        treeId = i,
+                        segmentId = j,
+                        clearance = clearance
+                    };
+                    clearanceData.Add(cData);                    
+                }
+            }
+        }
+
+        private double EvaluateSingleClearanceResidual(int treeIndex, int segmentIndex, double wClearance)
+        {
+            // Always calculates based on current deformation
+            var tree = structureTree[treeIndex];
+            (var n1, var n2, var id1, var id2) = tree.GetSegmentNodesAndIds(segmentIndex);
+
+            var p1 = DeformVertex(n1.data.pos.ToDVector3(), structureBindings[(treeIndex, id1)]);
+            var p2 = DeformVertex(n2.data.pos.ToDVector3(), structureBindings[(treeIndex, id2)]);
+
+            double current = GetClearance(p1, p2);
+
+            double original = originalClearanceLookup[(treeIndex, segmentIndex)];
+
+            double loss = ComputeClearanceLoss(original, current);
+            return wClearance * loss;
+        }
+
+        private double ComputeClearanceLoss(double original, double current)
+        {
+            // Simple hinge loss that only penalizes clearance reductions, not increases - dependent on the world scale
+            //return Math.Max(0.0, original - current);
+
+            const double epsilon = 1e-3; // Small value to prevent division by zero and very large losses when original clearance is very small
+            const double power = 1.0; // Exponent to control how aggressively we penalize clearance reductions - higher values will focus more on smaller reductions - > 1 works bad, there's probably an issue somewhere
+            return Math.Max(0, Math.Pow((original - current) / (original - epsilon), power));
+        }
+
+        double GetClearance(DVector3 p1, DVector3 p2)
+        {
+            // Always calculates based on current deformation
+            DVector3 dir = p2 - p1;
+            if (dir.sqrMagnitude < 1e-3) return 0.0f;
+
+            double maxDist = dir.magnitude;
+            dir /= maxDist;
+
+            double minClearance = double.MaxValue;
+            foreach (var edge in navMeshTopology.edges)
+            {
+                if (!edge.isBoundary) continue;
+
+                if (IsConnectorEdge(edge)) continue;
+
+                // This needs to change to use deformed positions instead of original positions
+                var e1 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i1);
+                var e2 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i2);
+
+                // Edge projection interval [minT, maxT] onto p1->p2
+                double t1 = DVector3.Dot(e1 - p1, dir);
+                double t2 = DVector3.Dot(e2 - p1, dir);
+                double minT = Math.Min(t1, t2);
+                double maxT = Math.Max(t1, t2);
+
+                // No overlap with segment [0,maxDist]
+                if ((maxT < 0.0f) || (minT > maxDist)) continue;
+
+                double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
+                if (d < minClearance)
+                {
+                    minClearance = d;
+                }
+            }
+
+            return minClearance;
+        }
+
+        float GetClearance(Vector3 p1, Vector3 p2, bool useCurrentDeformation)
+        {
+            Vector3 dir = p2 - p1;
+            if (dir.sqrMagnitude < 1e-3) return 0.0f;
+
+            float maxDist = dir.magnitude;
+            dir /= maxDist;
+
+            float minClearance = float.MaxValue;
+            foreach (var edge in navMeshTopology.edges)
+            {
+                if (!edge.isBoundary) continue;
+
+                if (IsConnectorEdge(edge)) continue;
+
+                // This needs to change to use deformed positions instead of original positions
+                Vector3 e1, e2;
+                if (useCurrentDeformation)
+                {
+                    e1 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i1).ToVector3();
+                    e2 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i2).ToVector3();
+                }
+                else
+                {
+                    e1 = navMeshTopology.GetVertexPosition(edge.vertices.i1);
+                    e2 = navMeshTopology.GetVertexPosition(edge.vertices.i2);
+                }
+
+                // Edge projection interval [minT, maxT] onto p1->p2
+                float t1 = Vector3.Dot(e1 - p1, dir);
+                float t2 = Vector3.Dot(e2 - p1, dir);
+                float minT = Mathf.Min(t1, t2);
+                float maxT = Mathf.Max(t1, t2);
+
+                // No overlap with segment [0,1]
+                if ((maxT < 0.0f) || (minT > maxDist)) continue;
+
+                float d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
+                if (d < minClearance)
+                {
+                    minClearance = d;
+                }
+            }
+
+            return minClearance;
+        }
+
+        bool IsConnectorEdge(TopologyStatic.TEdge edge)
+        {
+            foreach (var h in handleConstraints)
+            {
+                if ((h.vertexIndices.Contains(edge.vertices.i1)) &&
+                    (h.vertexIndices.Contains(edge.vertices.i2))) return true;
+            }
+
+            return false;
+        }
+
+        public int GetTreeCount() => structureTree.Count;
+        public int GetSegmentCount(int treeIndex) => structureTree[treeIndex].edgeCount;
+
+        public (Vector3, Vector3) GetSegment(int treeIndex, int segIndex)
+        {
+            var ids = structureTree[treeIndex].GetSegmentIds(segIndex);
+
+            DVector3    p1 = structureTree[treeIndex].GetNode(ids.Item1).pos.ToDVector3();
+            var         b1 = structureBindings[(treeIndex, ids.Item1)];
+            DVector3    p2 = structureTree[treeIndex].GetNode(ids.Item2).pos.ToDVector3();
+            var         b2 = structureBindings[(treeIndex, ids.Item2)];
+
+            var dp1 = DeformVertex(p1, b1);
+            var dp2 = DeformVertex(p2, b2);
+
+            return (dp1.ToVector3(), dp2.ToVector3());
+        }
+
+        public void UpdateClearance()
+        {
+            currentClearance = new();
+            ComputeClearance(true, currentClearance);
+        }
+
+        public float GetClearance(int treeIndex, int segIndex)
+        {
+            foreach (var cc in currentClearance)
+            {
+                if ((cc.treeId == treeIndex) &&
+                    (cc.segmentId == segIndex)) return cc.clearance;
+            }
+
+            return 0.0f;
         }
     }
 }

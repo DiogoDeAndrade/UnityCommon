@@ -8,6 +8,11 @@ namespace UC.DoubleMath
     {
         public double x, y, z;
 
+        public DVector3(Vector3 v)
+        {
+            this.x = (double)v.x; this.y = (double)v.y; this.z = (double)v.z;
+        }
+
         public DVector3(double x, double y, double z)
         {
             this.x = x; this.y = y; this.z = z;
@@ -15,6 +20,9 @@ namespace UC.DoubleMath
 
         public static double Dot(DVector3 a, DVector3 b)
             => a.x * b.x + a.y * b.y + a.z * b.z;
+
+        public static double Distance(DVector3 a, DVector3 b)
+            => (b - a).magnitude;
 
         public static DVector3 operator +(DVector3 a, DVector3 b)
             => new(a.x + b.x, a.y + b.y, a.z + b.z);

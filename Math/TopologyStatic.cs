@@ -67,10 +67,11 @@ namespace UC
             public Vector3 GetMidpoint(List<TVertex> allVertices) => (allVertices[vertices.i1].position + allVertices[vertices.i2].position) * 0.5f;
             public float GetLength(List<TVertex> allVertices) => Vector3.Distance(allVertices[vertices.i1].position, allVertices[vertices.i2].position);
 
-            internal bool UsesVertex(int index)
+            public bool UsesVertex(int index)
             {
                 return (vertices.i1 == index) || (vertices.i2 == index);
             }
+            public bool isBoundary => triangles.Count == 1;
         }
 
         [System.Serializable]
