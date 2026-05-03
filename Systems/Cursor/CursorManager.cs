@@ -121,6 +121,11 @@ namespace UC
             }
         }
 
+        public void SetDefaultCursor()
+        {
+            SetCursor(defaultCursor, defaultColor, defaultSize);
+        }
+
         public void SetCursor(CursorDef def)
         {
             if (def != null)

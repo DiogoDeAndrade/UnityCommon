@@ -54,9 +54,23 @@ namespace UC
             return lastTooltip;
         }
 
+        private void _ResetTooltip()
+        {
+            if (forceSingleTooltip && (lastTooltip != null))
+            {
+                Destroy(lastTooltip.gameObject);
+                lastTooltip = null;
+            }
+        }
+
         public static Tooltip CreateTooltip()
         {
             return instance._CreateTooltip();
+        }
+
+        public static void ResetTooltip()
+        {
+            instance._ResetTooltip();
         }
 
         public static Camera referenceCamera => instance._referenceCamera;

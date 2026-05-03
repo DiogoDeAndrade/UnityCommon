@@ -95,12 +95,11 @@ namespace UC
                 mouseClickControl.playerInput = playerInput;
             }
 
-            if (initialControl)
+            _uiEnable = enableOnStart;
+            if ((initialControl) && (_uiEnable))
             {
                 selectedControl = initialControl;
             }
-
-            _uiEnable = enableOnStart;
 
             if (_enableMouseSupport)
             {
@@ -230,9 +229,7 @@ namespace UC
 
                         if (interact)
                         {
-                            GlobalsBase.uiSelectSnd?.Play();
-                            _selectedControl?.Interact();
-                            OnSelect();
+                            RunInteraction(_selectedControl, selectedFromMouse);
                         }
                     }
                     else if ((interactControl.IsPressed()) && (_selectedControl) && (_selectedControl.isContinuous))
@@ -242,6 +239,15 @@ namespace UC
                     }
                 }
             }
+        }
+
+        public void RunInteraction(BaseUIControl ctrl, bool fromMouse)
+        {
+            _selectedControl = ctrl;
+            selectedFromMouse = fromMouse;
+            GlobalsBase.uiSelectSnd?.Play();
+            _selectedControl?.Interact();
+            OnSelect();
         }
 
         BaseUIControl GetControlOnPointer()
@@ -316,6 +322,12 @@ namespace UC
                 selectedControl = initialControl;
                 cooldownTimer = moveCooldown;
             }
+
+            NotifyEnableUI(value);
+        }
+
+        protected virtual void NotifyEnableUI(bool value)
+        {
         }
 
         IEnumerator WaitFrameAndForceMousePointerUpdate()
