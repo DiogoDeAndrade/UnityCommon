@@ -25,6 +25,8 @@ namespace UC
         private PlayerInput     playerInput;
         [SerializeField, ShowIf(nameof(enableInput)), InputPlayer(nameof(playerInput)), InputButton]
         private InputControl    inventoryButton;
+        [SerializeField]
+        private Item[]          initialItems;
 
                     InventoryDisplay    inventoryDisplay;
                     InventoryInstance   inventoryInstance;
@@ -37,6 +39,9 @@ namespace UC
                 if (inventoryInstance == null)
                 {
                     inventoryInstance = new(limited, maxSlots);
+                    foreach (var item in initialItems)
+                        inventoryInstance.Add(item);
+
                     inventoryInstance.onChange += InventoryInstance_onChange;
                     _fromInstance = false;
                 }
@@ -77,19 +82,19 @@ namespace UC
             }
         }
 
-        public int Add(Item item, int quantity) => inventoryInstance.Add(item, quantity);
-        public bool Add(Item item) => inventoryInstance.Add(item);
-        public int Remove(Item item, int count) => inventoryInstance.Remove(item, count);
-        public bool Remove(Item item) => inventoryInstance.Remove(item);
-        public (Item, int) GetSlotContent(int slot) => inventoryInstance.GetSlotContent(slot);        
-        public bool HasItem(Item item) => inventoryInstance.HasItem(item);
-        public bool HasItems() => inventoryInstance.HasItems();
-        public int GetItemCount(Item item) => inventoryInstance.GetItemCount(item);
-        public IEnumerator<(int slot, Item item, int count)> GetEnumerator() => inventoryInstance.GetEnumerator();
+        public int Add(Item item, int quantity) => instance.Add(item, quantity);
+        public bool Add(Item item) => instance.Add(item);
+        public int Remove(Item item, int count) => instance.Remove(item, count);
+        public bool Remove(Item item) => instance.Remove(item);
+        public (Item, int) GetSlotContent(int slot) => instance.GetSlotContent(slot);        
+        public bool HasItem(Item item) => instance.HasItem(item);
+        public bool HasItems() => instance.HasItems();
+        public int GetItemCount(Item item) => instance.GetItemCount(item);
+        public IEnumerator<(int slot, Item item, int count)> GetEnumerator() => instance.GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        public bool RemoveBySlot(int slotIndex, int count) => inventoryInstance.RemoveBySlot(slotIndex, count);
+        public bool RemoveBySlot(int slotIndex, int count) => instance.RemoveBySlot(slotIndex, count);
 
-        public void SetOnSlot(int slotIndex, Item item, int count) => inventoryInstance.SetOnSlot(slotIndex, item, count);
+        public void SetOnSlot(int slotIndex, Item item, int count) => instance.SetOnSlot(slotIndex, item, count);
     }
 }

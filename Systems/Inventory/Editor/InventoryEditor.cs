@@ -13,6 +13,7 @@ namespace UC.Editor
         private SerializedProperty enableInputProperty;
         private SerializedProperty playerInputProperty;
         private SerializedProperty inventoryButtonProperty;
+        private SerializedProperty initialItemsProperty;
 
         protected override void OnEnable()
         {
@@ -23,6 +24,7 @@ namespace UC.Editor
             enableInputProperty = serializedObject.FindProperty("enableInput");
             playerInputProperty = serializedObject.FindProperty("playerInput");
             inventoryButtonProperty = serializedObject.FindProperty("inventoryButton");
+            initialItemsProperty = serializedObject.FindProperty("initialItems");
         }
 
         public override void OnInspectorGUI()
@@ -50,6 +52,8 @@ namespace UC.Editor
                     EditorGUILayout.PropertyField(playerInputProperty);
                     EditorGUILayout.PropertyField(inventoryButtonProperty);
                 }
+
+                EditorGUILayout.PropertyField(initialItemsProperty);
 
                 EditorGUILayout.Space(10);
 

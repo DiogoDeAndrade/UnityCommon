@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
-using UnityEngine.U2D;
 using UnityEngine.UI;
 
 namespace UC
@@ -26,7 +25,7 @@ namespace UC
         [SerializeField]
         private bool            linkToUIGroups;
         [SerializeField] 
-        private GameObject      attachedObject;
+        private GameObject      defaultAttachedObject;
         [SerializeField, ShowIf(nameof(hasCanvas))] 
         private Camera          uiCamera;
         [SerializeField]
@@ -53,6 +52,7 @@ namespace UC
         CanvasGroup     canvasGroup;
         Vector2         defaultSize = Vector2.zero;
         Color           defaultColor = Color.white;
+        GameObject      currentAttachedObject;
 
         Sprite          currentCursor;
         Color           currentColor;
@@ -115,9 +115,9 @@ namespace UC
             returnAttachedObjectControl.playerInput = playerInput;
             gamepadCursorControl.playerInput = playerInput;
 
-            if (attachedObject)
+            if (defaultAttachedObject)
             {
-                attachedObject.SetActive(false);
+                defaultAttachedObject.SetActive(false);
             }
         }
 
@@ -196,19 +196,48 @@ namespace UC
             }
         }
 
+        public GameObject AttachPrefabToCursor(GameObject prefab)
+        {
+            if ((currentAttachedObject != null) && (currentAttachedObject != defaultAttachedObject))
+            {
+                Destroy(currentAttachedObject);
+                currentAttachedObject = null;
+            }
+
+            if (prefab)
+            {
+                currentAttachedObject = Instantiate(prefab, transform);
+            }
+
+            return currentAttachedObject;
+        }
+        public void DetachFromCursor()
+        {
+            if ((currentAttachedObject == defaultAttachedObject) && (defaultAttachedObject != null))
+            {
+                defaultAttachedObject.SetActive(false);
+            }
+            else if (currentAttachedObject != null) 
+            {
+                Destroy(currentAttachedObject);
+                currentAttachedObject = null;
+            }
+        }
+
+
         public GameObject AttachToCursor(Sprite displaySprite, Color displaySpriteColor)
         {
-            if (attachedObject == null) return null;
+            if (defaultAttachedObject == null) return null;
 
             if (displaySprite == null)
             {
-                attachedObject.SetActive(false);
-                return attachedObject;
+                defaultAttachedObject.SetActive(false);
+                return defaultAttachedObject;
             }
 
-            attachedObject.SetActive(true);
+            defaultAttachedObject.SetActive(true);
 
-            Image image = attachedObject.GetComponent<Image>();
+            Image image = defaultAttachedObject.GetComponent<Image>();
             if (image)
             {
                 image.sprite = displaySprite;
@@ -216,7 +245,7 @@ namespace UC
             }
             else
             {
-                SpriteRenderer spriteRenderer = attachedObject.GetComponent<SpriteRenderer>();
+                SpriteRenderer spriteRenderer = defaultAttachedObject.GetComponent<SpriteRenderer>();
                 if (spriteRenderer)
                 {
                     spriteRenderer.sprite = displaySprite;
@@ -224,7 +253,9 @@ namespace UC
                 }
             }
 
-            return attachedObject;
+            currentAttachedObject = defaultAttachedObject;
+
+            return defaultAttachedObject;
         }
 
         private void Update()
@@ -254,20 +285,20 @@ namespace UC
                 this.gamepadCursor = enableGamepad && activate;
             }
 
-            if ((attachedObject) && (attachedObject.gameObject.activeInHierarchy))
+            if ((currentAttachedObject) && (currentAttachedObject.gameObject.activeInHierarchy))
             {
-                RectTransform rt = attachedObject.transform as RectTransform;
+                RectTransform rt = currentAttachedObject.transform as RectTransform;
                 if (rt)
                 {
                     Camera c = (topLevelCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? (null) : (topLevelCanvas.worldCamera);
                     Vector2 cursorPos;
                     RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, InputControl.GetScreenMousePosition(), c, out cursorPos);
-                    attachedObject.transform.localPosition = cursorPos;
+                    currentAttachedObject.transform.localPosition = cursorPos;
                 }
                 else
                 {
                     var pt = uiCamera.ScreenToWorldPoint(InputControl.GetScreenMousePosition());
-                    attachedObject.transform.position = new Vector3(pt.x, pt.y, attachedObject.transform.position.z);
+                    currentAttachedObject.transform.position = new Vector3(pt.x, pt.y, currentAttachedObject.transform.position.z);
                 }
             }
             if ((softCursor) && (!hwCursor) && (softCursor.gameObject.activeInHierarchy))
