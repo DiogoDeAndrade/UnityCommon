@@ -143,6 +143,8 @@ namespace UC
         {
             base.Update();
 
+            if ((parentGroup != null) && (!parentGroup.uiEnable)) return;
+
             if (hasShortcut)
             {
                 if (shortcut.IsDown())

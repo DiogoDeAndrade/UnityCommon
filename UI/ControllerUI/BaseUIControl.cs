@@ -51,16 +51,17 @@ namespace UC
         [SerializeField] 
         protected bool          enableTooltip;
 
-        protected UIGroup   parentGroup;
-        Color               defaultTextColor;
-        Color               defaultImageColor;
-        CanvasGroup         canvasGroup;
-        Animator            animator;
-        TMP_FontAsset       normalFont;
-        TMP_ColorGradient   normalGradient;
-        Material            normalStyle;
-        float               normalSize;
-        Tooltip             currentTooltip;
+        protected UIGroup       parentGroup;
+        protected RectTransform rectTransform;
+        Color                   defaultTextColor;
+        Color                   defaultImageColor;
+        CanvasGroup             canvasGroup;
+        Animator                animator;
+        TMP_FontAsset           normalFont;
+        TMP_ColorGradient       normalGradient;
+        Material                normalStyle;
+        float                   normalSize;
+        Tooltip                 currentTooltip;
 
         private bool needHighlightColor => (highlighterText != null) || (highlightMode == HighlightMode.ColorSwitch);
         private bool needsHighlighterImage => (highlightMode == HighlightMode.ImageEnable);
@@ -96,6 +97,7 @@ namespace UC
 
         protected virtual void Start()
         {
+            rectTransform = transform as RectTransform;
             parentGroup = GetComponentInParent<UIGroup>();
             canvasGroup = GetComponent<CanvasGroup>();
 

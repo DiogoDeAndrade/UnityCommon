@@ -11,6 +11,9 @@ namespace UC
 {
     public class UIGroup : MonoBehaviour
     {
+        public delegate void OnEnableUI(bool enable);
+        public event OnEnableUI onEnableUI;
+
         [SerializeField]
         protected int               playerId;
         [SerializeField]
@@ -39,7 +42,7 @@ namespace UC
         protected InputControl      mouseClickControl;
 
         protected float                 cooldownTimer;
-        [SerializeField, NaughtyAttributes.ReadOnly]
+        [SerializeField, ReadOnly]
         protected BaseUIControl         _selectedControl;
         protected bool                  selectedFromMouse;
         protected int                   mouseSkipFrames = 4;
@@ -328,6 +331,7 @@ namespace UC
 
         protected virtual void NotifyEnableUI(bool value)
         {
+            onEnableUI?.Invoke(value);
         }
 
         IEnumerator WaitFrameAndForceMousePointerUpdate()
