@@ -7,11 +7,12 @@ using System.Text;
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
-#endif   
+#endif
 
+#if UC_ENABLE_ED
 namespace UC.ED
-{
-/*    public enum BindingSelectionMode { ClosestOne, NearestK };
+{  
+    public enum BindingSelectionMode { ClosestOne, NearestK };
     public enum BindingWeightMode { Uniform, InversePower, Gaussian, OriginalED };
     public enum GraphLinkMode { PartitionAdjacency, SharedBindings, DirectionAware };
 
@@ -2299,5 +2300,6 @@ namespace UC.ED
         {
             return currentClearance[segIndex];
         }
-    }*/
+    }
 }
+#endif
