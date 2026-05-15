@@ -39,6 +39,12 @@ namespace UC.DoubleMath
         public static DVector3 operator -(DVector3 a, DVector3 b)
             => new(a.x - b.x, a.y - b.y, a.z - b.z);
 
+        public void Normalize()
+        {
+            double n = magnitude;
+            x /= n; y /= n; z /= n;
+        }
+
         public DVector3 normalized
         {
             get
@@ -65,6 +71,17 @@ namespace UC.DoubleMath
         }
 
         public Vector3 ToVector3() {  return new Vector3((float)x, (float)y, (float)z); }
+
+        public static DVector3 Cross(DVector3 a, DVector3 b)
+        {
+            return new(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+        }
+
+        public static DVector3 ProjectOnPlane(DVector3 a, DVector3 b)
+        {
+            var bn = b.normalized;
+            return a - Dot(a, bn) * bn;
+        }
 
         public static DVector3 zero => new DVector3(0.0, 0.0, 0.0);
         public static DVector3 one => new DVector3(1, 1, 1);

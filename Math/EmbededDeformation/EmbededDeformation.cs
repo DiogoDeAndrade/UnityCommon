@@ -113,19 +113,13 @@ namespace UC.ED
     }
 
     [Serializable]
-    public struct NavEDStructureBindings
+    public class NavEDSegments
     {
-        public int              treeId;
-        public int              nodeId;
-        public EDVertexBinding  binding;
-    }
-
-    [Serializable]
-    public struct NavEDClearance
-    {
-        public int      treeId;
-        public int      segmentId;
-        public float    clearance;
+        public DVector3         p1, p2;
+        public EDVertexBinding  bind1, bind2;
+        public DVector3         center;
+        public DVector3         normal, probeT, probeB;
+        public EDVertexBinding  cBind, tBind, bBind;
     }
 
     public delegate bool HasLOS(Vector3 p1, Vector3 p2);
@@ -140,26 +134,13 @@ namespace UC.ED
         public EDVertexBinding[]                bindings;
         public List<EDHandleConstraint>         handleConstraints = new();
         public List<EDVertexConstraint>         vertexConstraints = new();
-        public List<NavEDClearance>             originalClearance = new();
+        public List<double>                     originalClearance = new();
         public TopologyStatic                   navMeshTopology;
-        public List<Tree<Graph2Structure.Node>> structureTree;
-        public List<NavEDStructureBindings>     structureBindingsList;
-        public List<NavEDClearance>             currentClearance;
-        
-        private Dictionary<(int treeId, int nodeId), EDVertexBinding> _structureBindings = new();
-        public Dictionary<(int treeId, int nodeId), EDVertexBinding> structureBindings => ((_structureBindings == null) || (_structureBindings.Count == 0)) ? RebuildStructureBindings() : _structureBindings;
-
-        public Dictionary<(int treeId, int segmentId), float> originalClearanceLookup;
-
-        Dictionary<(int treeId, int nodeId), EDVertexBinding> RebuildStructureBindings()
-        {
-            _structureBindings = new();
-            foreach (var sbl in structureBindingsList)
-            {
-                _structureBindings[(sbl.treeId, sbl.nodeId)] = sbl.binding;
-            }
-            return _structureBindings;
-        }
+        public List<NavEDSegments>              structure;
+        public List<double>                     currentClearance;
+        public float                            maxSlope = 45.0f;
+        public float                            slopeSoftBand = 5.0f;
+        public Vector3                          upVector = Vector3.up;
 
         public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, 
                                           BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
@@ -914,7 +895,8 @@ namespace UC.ED
         private Vector<double> EvaluateResidualVector(double rotationWeight,
                                                       double regularizationWeight,  
                                                       double constraintWeight,
-                                                      double clearanceWeight)
+                                                      double clearanceWeight,
+                                                      double slopeWeight)
         {
             int nodeCount = nodes.Count;
             int directedEdgeCount = 0;
@@ -925,8 +907,11 @@ namespace UC.ED
             int residualCount = 6 * nodeCount + 3 * directedEdgeCount + 3 * constraintCount;
             if (clearanceWeight > 0)
             {
-                for (int i = 0; i < structureTree.Count; i++)
-                    residualCount += 1 * structureTree[i].edgeCount;
+                residualCount += 1 * structure.Count;
+            }
+            if (slopeWeight > 0)
+            {
+                residualCount += 1 * structure.Count;
             }
 
             Vector<double> residual = DenseVector.Create(residualCount, 0.0);
@@ -935,6 +920,7 @@ namespace UC.ED
             double wReg = Math.Sqrt(regularizationWeight);
             double wCon = Math.Sqrt(constraintWeight);
             double wClearance = Math.Sqrt(clearanceWeight);
+            double wSlope = Math.Sqrt(slopeWeight);
 
             int row = 0;
 
@@ -1030,7 +1016,18 @@ namespace UC.ED
                 // -------------------------------------------------------------
                 for (int i = 0; i < currentClearance.Count; i++)
                 {
-                    residual[row++] = wClearance * ComputeClearanceLoss(originalClearance[i].clearance, currentClearance[i].clearance);
+                    residual[row++] = wClearance * ComputeClearanceLoss(originalClearance[i], currentClearance[i]);
+                }
+            }
+
+            if (slopeWeight > 0)
+            {
+                // -------------------------------------------------------------
+                // 5) Slope constraints
+                // -------------------------------------------------------------
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    residual[row++] = EvaluateSingleSlopeResidual(i, wSlope);
                 }
             }
 
@@ -1116,7 +1113,7 @@ namespace UC.ED
             ApplyNodeParameters(x);
 
             // Base residual
-            Vector<double> f0 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0);
+            Vector<double> f0 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
 
             int residualCount = f0.Count;
 
@@ -1139,7 +1136,7 @@ namespace UC.ED
                 ApplyNodeParameters(xPerturbed);
 
                 // Evaluate new residual
-                Vector<double> f1 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0);
+                Vector<double> f1 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
 
                 // Compute column i
                 for (int r = 0; r < residualCount; r++)
@@ -1309,11 +1306,11 @@ namespace UC.ED
             return row + 3;
         }
 
-        public Matrix<double> BuildJacobian(out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight)
+        public Matrix<double> BuildJacobian(out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight)
         {
             // First rows are rotation constraints, then regularization, then positional constraints, then clearance constraints (if enabled)
             // We also compute an estimate of the Jacobian norm while filling it, which can be used for scaling other terms
-            // Rotation, regularization, and constraint blocks are calculated analytically, while clearance is currently left for numerical differentiation
+            // Rotation, regularization, and constraint blocks are calculated analytically, while clearance and slope weight is currently left for numerical differentiation
             jNorm = 0.0;
 
             int nodeCount = nodes.Count;
@@ -1327,8 +1324,11 @@ namespace UC.ED
             int rowCount = 6 * nodeCount + 3 * directedEdgeCount + 3 * constraintCount;
             if (clearanceWeight > 0)
             {
-                for (int i = 0; i < structureTree.Count; i++)
-                    rowCount += 1 * structureTree[i].edgeCount;
+                rowCount += 1 * structure.Count;
+            }
+            if (slopeWeight > 0)
+            {
+                rowCount += 1 * structure.Count;
             }
             int colCount = 12 * nodeCount;
 
@@ -1338,6 +1338,7 @@ namespace UC.ED
             double wReg = Math.Sqrt(regularizationWeight);
             double wCon = Math.Sqrt(constraintWeight);
             double wClearance = Math.Sqrt(clearanceWeight);
+            double wSlope = Math.Sqrt(slopeWeight);
 
             int row = 0;
 
@@ -1358,13 +1359,18 @@ namespace UC.ED
 
             if (clearanceWeight > 0)
             {
-                for (int i = 0; i < structureTree.Count; i++)
+                for (int i = 0; i < structure.Count; i++)
                 {
-                    for (int j = 0; j < structureTree[i].edgeCount; j++)
-                    {
-                        row = FillClearanceJacobianBlock(J, row, i, j, wClearance, ref jNorm);
-                    }
+                    row = FillClearanceJacobianBlock(J, row, i, wClearance, ref jNorm);
                 }                    
+            }
+
+            if (slopeWeight > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    row = FillSlopeJacobianBlock(J, row, i, wSlope, ref jNorm);
+                }
             }
 
             jNorm = Math.Sqrt(jNorm);
@@ -1372,12 +1378,12 @@ namespace UC.ED
             return J;
         }
 
-        private int FillClearanceJacobianBlock(DenseMatrix J, int row, int treeIndex, int segmentIndex, double wClearance, ref double jNorm)
+        private int FillClearanceJacobianBlock(DenseMatrix J, int row, int segmentIndex, double wClearance, ref double jNorm)
         {
             Vector<double> x0 = PackNodeParameters();
 
             // Base residual value for this segment
-            double r0 = EvaluateSingleClearanceResidual(treeIndex, segmentIndex, wClearance);
+            double r0 = EvaluateSingleClearanceResidual(segmentIndex, wClearance);
 
             for (int col = 0; col < x0.Count; col++)
             {
@@ -1388,13 +1394,50 @@ namespace UC.ED
 
                 ApplyNodeParameters(x0);
 
-                double r1 = EvaluateSingleClearanceResidual(treeIndex, segmentIndex, wClearance);
+                double r1 = EvaluateSingleClearanceResidual(segmentIndex, wClearance);
 
                 J[row, col] = (r1 - r0) / eps;
 
                 x0[col] = original;
             }
 
+            ApplyNodeParameters(x0);
+
+            for (int col = 0; col < x0.Count; col++)
+                jNorm += J[row, col] * J[row, col];
+
+            return row + 1;
+        }
+
+        private int FillSlopeJacobianBlock(DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
+        {
+            Vector<double> x0 = PackNodeParameters();
+
+            // Base residual value for this segment.
+            double r0 = EvaluateSingleSlopeResidual(segmentIndex, wSlope);
+
+            if (r0 <= 1e-12)
+            {
+                return row + 1;
+            }
+
+            for (int col = 0; col < x0.Count; col++)
+            {
+                double original = x0[col];
+
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+                x0[col] = original + eps;
+                ApplyNodeParameters(x0);
+
+                double r1 = EvaluateSingleSlopeResidual(segmentIndex, wSlope);
+
+                J[row, col] = (r1 - r0) / eps;
+
+                x0[col] = original;
+            }
+
+            // Restore original node parameters.
             ApplyNodeParameters(x0);
 
             for (int col = 0; col < x0.Count; col++)
@@ -1535,7 +1578,7 @@ namespace UC.ED
             {
                 ApplyNodeParameters(x);
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0);
+                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0, 0);
                 double error = f.L2Norm();
 
                 //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
@@ -1548,7 +1591,7 @@ namespace UC.ED
                 }
 
                 //var J2 = BuildNumericalJacobian(x, rotationWeight, regularizationWeight, constraintWeight);
-                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0);
+                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0, 0);
 
                 //double diff = (J - J2).FrobeniusNorm();
                 //double rel = diff / Math.Max(1e-12, J2.FrobeniusNorm());
@@ -1620,7 +1663,7 @@ namespace UC.ED
             {
                 ApplyNodeParameters(x);
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0);
+                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0, 0);
                 double error = f.L2Norm();
 
                 //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
@@ -1634,7 +1677,7 @@ namespace UC.ED
                 if (error < residualTolerance)
                     break;
 
-                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0);
+                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                     break;
@@ -1680,7 +1723,7 @@ namespace UC.ED
                     var xCandidate = x + delta;
                     ApplyNodeParameters(xCandidate);
 
-                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0);
+                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0, 0);
                     double candidateError = fCandidate.L2Norm();
 
                     if (!double.IsFinite(candidateError))
@@ -1729,7 +1772,8 @@ namespace UC.ED
                                 double rotationWeight = 1.0,
                                 double regularizationWeight = 10.0,
                                 double constraintWeight = 100.0,                                
-                                double clearanceWeight = 5.0,
+                                double clearanceWeight = 100.0,
+                                double slopeWeight = 100.0,
                                 double lambda = 1e-3,
                                 double residualTolerance = 1e-5,
                                 double stepTolerance = 1e-6,
@@ -1738,13 +1782,6 @@ namespace UC.ED
         {
             if (resetBeforeSolve)
                 ResetDeformation();
-
-            // Build lookup for originalClearance, optimize loss calculations
-            originalClearanceLookup = new();
-            foreach (var oc in originalClearance)
-            {
-                originalClearanceLookup[(oc.treeId, oc.segmentId)] = oc.clearance;
-            }
 
 #if MATH_NET_AVAILABLE
             var x = PackNodeParameters();
@@ -1756,7 +1793,7 @@ namespace UC.ED
                 ApplyNodeParameters(x);
                 UpdateClearance();
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight);
+                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
                 double error = f.L2Norm();
 
                 //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
@@ -1770,7 +1807,7 @@ namespace UC.ED
                 if (error < residualTolerance)
                     break;
 
-                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight);
+                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                     break;
@@ -1817,7 +1854,7 @@ namespace UC.ED
                     ApplyNodeParameters(xCandidate);
                     UpdateClearance();
 
-                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight);
+                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
                     double candidateError = fCandidate.L2Norm();
 
                     if (!double.IsFinite(candidateError))
@@ -1894,221 +1931,306 @@ namespace UC.ED
             return result;
         }
 
-        public void SetNavEDParameters(List<Tree<Graph2Structure.Node>> structureTree, TopologyStatic navMeshTopology,
+        public void ClearStructure()
+        {
+            structure = new();
+        }
+
+        public void AddStructureSegment(Vector3 p1, Vector3 p2, Vector3 normal)
+        {
+            var c = (p1 + p2) * 0.5f;
+            var n0 = normal.normalized;
+
+            structure.Add(new NavEDSegments
+            {
+                p1 = p1.ToDVector3(),
+                p2 = p2.ToDVector3(),
+                center = c.ToDVector3(),
+                normal = n0.ToDVector3()
+            });
+        }
+
+        public void SetNavEDParameters(TopologyStatic navMeshTopology, 
+                                       float agentRadius, float maxSlope, float slopeSoftBand, Vector3 upVector,
                                        BindingSelectionMode bindMode, BindingWeightMode weightMode,
                                        int k = 4, // When BindingSelectionMode = closest-K
                                        float power = 2.0f,
                                        float sigma = 1.0f)
         {
-            this.structureTree = structureTree;
+            this.maxSlope = maxSlope;
+            this.slopeSoftBand = slopeSoftBand;
+            this.upVector = upVector.normalized;
             this.navMeshTopology = navMeshTopology;
             
-            structureBindingsList = new();
-
-            for (int i = 0; i < structureTree.Count; i++)
+            for (int i = 0; i < structure.Count; i++)
             {
-                var tree = structureTree[i];
+                var seg = structure[i];
+                seg.bind1 = GetBinding(seg.p1, bindMode, weightMode, k, power, sigma);
+                seg.bind2 = GetBinding(seg.p2, bindMode, weightMode, k, power, sigma);
 
-                for (int j = 0; j < tree.GetSegmentCount(); j++)
-                {
-                    (var n1, var n2) = tree.GetSegmentIds(j);
+                // Build tangent space
+                var dir = (seg.p2 - seg.p1).normalized;
+                var t = DVector3.ProjectOnPlane(dir, seg.normal).normalized;
+                var b = DVector3.Cross(seg.normal, t).normalized;
 
-                    if (!structureBindings.ContainsKey((i, n1)))
-                    {
-                        DVector3 p = new DVector3(tree.GetNode(n1).pos);
-                        structureBindingsList.Add(new NavEDStructureBindings
-                        {
-                            treeId = i,
-                            nodeId = n1,
-                            binding = GetBinding(p, bindMode, weightMode, k, power, sigma)
-                        });
-                    }
-                    if (!structureBindings.ContainsKey((i, n2)))
-                    {
-                        DVector3 p = new DVector3(tree.GetNode(n2).pos);
-                        structureBindingsList.Add(new NavEDStructureBindings
-                        {
-                            treeId = i,
-                            nodeId = n2,
-                            binding = GetBinding(p, bindMode, weightMode, k, power, sigma)
-                        });
-                    }
-                }
+                seg.probeT = seg.center + agentRadius * 0.1 * t;
+                seg.probeB = seg.center + agentRadius * 0.1 * b;
+
+                seg.cBind = GetBinding(seg.center, bindMode, weightMode, k, power, sigma);
+                seg.tBind = GetBinding(seg.probeT, bindMode, weightMode, k, power, sigma);
+                seg.bBind = GetBinding(seg.probeB, bindMode, weightMode, k, power, sigma);
             }
-
-            RebuildStructureBindings();
 
             originalClearance = new();
             ComputeClearance(false, originalClearance);
 
-            LogClearance("Original clearance:", originalClearance);
+            LogClearance("Original clearance:", originalClearance, originalClearance);
         }
 
         public void LogCurrentClearance()
         {
-            List<NavEDClearance> result = new();
+            List<double> result = new();
             ComputeClearance(true, result);
 
-            LogClearance("Current clearance:", result);
+            LogClearance("Current clearance:", originalClearance, result);
         }
 
-        void LogClearance(string title, List<NavEDClearance> clearanceData)
+        void LogClearance(string title, List<double> originalClearance, List<double> currentClearance)
         {
+            const double epsilon = 1e-8;
+
             string sb = $"{title}\n";
-            foreach (var cd in clearanceData)
+
+            double shrinkageSum = 0.0;
+            double shrinkageSqSum = 0.0;
+            double activeShrinkageSum = 0.0;
+            int activeShrinkageCount = 0;
+
+            double maxShrinkage = double.MinValue;
+            int maxShrinkageIndex = -1;
+            int invalidSegments = 0;
+
+            for (int i = 0; i < currentClearance.Count; i++)
             {
-                sb += $"Tree {cd.treeId} / Segment {cd.segmentId} = {cd.clearance}\n";
+                double original = originalClearance[i];
+                double current = currentClearance[i];
+
+                if ((original == double.MaxValue) || (current == double.MaxValue))
+                {
+                    sb += $"Segment {i} = INVALID (orig = {original}, current = {current})\n";
+                    invalidSegments++;
+                    continue;
+                }
+
+                double shrinkage = (original - current) / Math.Max(original, epsilon);
+
+                shrinkageSum += shrinkage;
+                shrinkageSqSum += shrinkage * shrinkage;
+
+                if (shrinkage > 0.0)
+                {
+                    activeShrinkageSum += shrinkage;
+                    activeShrinkageCount++;
+                }
+
+                if (shrinkage > maxShrinkage)
+                {
+                    maxShrinkage = shrinkage;
+                    maxShrinkageIndex = i;
+                }
+
+                sb += $"Segment {i} = {current} (orig = {original}, shrinkage = {shrinkage:P2})\n";
             }
+
+            int validSegments = currentClearance.Count - invalidSegments;
+
+            double shrinkageMean = (validSegments > 0) ? (shrinkageSum / validSegments) : 0.0;
+            double shrinkageVariance = (validSegments > 0) ? (shrinkageSqSum / validSegments - shrinkageMean * shrinkageMean) : 0.0;
+            double activeShrinkageMean = (activeShrinkageCount > 0) ? (activeShrinkageSum / activeShrinkageCount) : 0.0;
+
+            sb += "\n";
+            sb += $"Shrinkage Mean = {shrinkageMean:P2}\n";
+            sb += $"Shrinkage Variance = {shrinkageVariance:F6}\n";
+            sb += $"Active Shrinkage Mean = {activeShrinkageMean:P2}\n";
+            sb += $"Max Shrinkage = {maxShrinkage:P2} (Segment {maxShrinkageIndex})\n";
+            sb += $"Invalid segments = {invalidSegments}\n";
+
             Debug.Log(sb);
         }
 
-        void ComputeClearance(bool useCurrentDeformation, List<NavEDClearance> clearanceData)
+        void ComputeClearance(bool useCurrentDeformation, List<double> clearanceData)
         {
-            for (int i = 0; i < structureTree.Count; i++)
+            foreach (var seg in structure)
             {
-                var tree = structureTree[i];
-
-                for (int j = 0; j < tree.GetSegmentCount(); j++)
+                DVector3 p1, p2;
+                if (useCurrentDeformation)
                 {
-                    (var n1, var n2, var id1, var id2) = tree.GetSegmentNodesAndIds(j);
-                    if ((n1 == null) || (n2 == null)) continue;
+                    p1 = DeformVertex(seg.p1, seg.bind1);
+                    p2 = DeformVertex(seg.p2, seg.bind2);
+                }
+                else
+                {
+                    p1 = seg.p1;
+                    p2 = seg.p2;
+                }
 
-                    Vector3 p1, p2;
-                    if (useCurrentDeformation)
-                    {
-                        p1 = DeformVertex(n1.data.pos.ToDVector3(), structureBindings[(i, id1)]).ToVector3();
-                        p2 = DeformVertex(n2.data.pos.ToDVector3(), structureBindings[(i, id2)]).ToVector3();
-                    }
-                    else
-                    {
-                        p1 = n1.data.pos;
-                        p2 = n2.data.pos;
-                    }
-
-                    float clearance = GetClearance(p1, p2, useCurrentDeformation);
-
-                    var cData = new NavEDClearance
-                    {
-                        treeId = i,
-                        segmentId = j,
-                        clearance = clearance
-                    };
-                    clearanceData.Add(cData);                    
+                if (GetClearance(p1, p2, useCurrentDeformation, out var clearance))
+                {
+                    clearanceData.Add(clearance);
+                }
+                else
+                {
+                    // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - set it to double.MaxValue to be able to identify it and make a loss of zero in that case
+                    clearanceData.Add(double.MaxValue);
                 }
             }
         }
 
-        private double EvaluateSingleClearanceResidual(int treeIndex, int segmentIndex, double wClearance)
+        private double EvaluateSingleClearanceResidual(int index, double wClearance)
         {
+            double original = originalClearance[index];
+
             // Always calculates based on current deformation
-            var tree = structureTree[treeIndex];
-            (var n1, var n2, var id1, var id2) = tree.GetSegmentNodesAndIds(segmentIndex);
+            var seg = structure[index];
 
-            var p1 = DeformVertex(n1.data.pos.ToDVector3(), structureBindings[(treeIndex, id1)]);
-            var p2 = DeformVertex(n2.data.pos.ToDVector3(), structureBindings[(treeIndex, id2)]);
+            var p1 = DeformVertex(seg.p1, seg.bind1);
+            var p2 = DeformVertex(seg.p2, seg.bind2);
 
-            double current = GetClearance(p1, p2);
-
-            double original = originalClearanceLookup[(treeIndex, segmentIndex)];
+            if (!GetClearance(p1, p2, true, out var current))
+            {
+                // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - set it to double.MaxValue to be able to identify it and make a loss of zero in that case
+                return 0.0;
+            }
 
             double loss = ComputeClearanceLoss(original, current);
             return wClearance * loss;
         }
 
+        private double EvaluateSingleSlopeResidual(int segmentIndex, double wSlope)
+        {
+            // Normalized hinge:
+            //   0 at or below maxSlope - softBand
+            //   1 at maxSlope
+            //   >1 beyond maxSlope
+            // -------------------------------------------------------------
+            double hardAngleDeg = maxSlope;
+            double softAngleDeg = Math.Max(0.0, maxSlope - slopeSoftBand);
+
+            double hardAngle = hardAngleDeg * Math.PI / 180.0;
+            double softAngle = softAngleDeg * Math.PI / 180.0;
+
+            double hardDot = Math.Cos(hardAngle);
+            double softDot = Math.Cos(softAngle);
+
+            double denom = Math.Max(softDot - hardDot, 1e-12);
+
+            Vector3 upNorm = upVector.normalized;
+            Vector3 segNormal = GetSegmentSlopeNormal(segmentIndex);
+
+            double penalty;
+
+            if (segNormal.sqrMagnitude < 1e-12f)
+            {
+                // Degenerate frame: strongly invalid.
+                penalty = 1.0;
+            }
+            else
+            {
+                segNormal.Normalize();
+
+                double dp = Vector3.Dot(segNormal, upNorm);
+                dp = Math.Clamp(dp, -1.0, 1.0);
+
+                penalty = Math.Max(0.0, (softDot - dp) / denom);
+            }
+
+            return wSlope * penalty;
+        }
+
         private double ComputeClearanceLoss(double original, double current)
         {
+            if ((original == double.MaxValue) || (current == double.MaxValue)) 
+            {
+                // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - return zero loss in that case
+                return 0;
+            }
             // Simple hinge loss that only penalizes clearance reductions, not increases - dependent on the world scale
             //return Math.Max(0.0, original - current);
 
             const double epsilon = 1e-3; // Small value to prevent division by zero and very large losses when original clearance is very small
             const double power = 1.0; // Exponent to control how aggressively we penalize clearance reductions - higher values will focus more on smaller reductions - > 1 works bad, there's probably an issue somewhere
-            return Math.Max(0, Math.Pow((original - current) / (original - epsilon), power));
-        }
+            return Math.Max(0, Math.Pow((original - current) / (original + epsilon), power));
+        }        
 
-        double GetClearance(DVector3 p1, DVector3 p2)
+        bool GetClearance(DVector3 p1, DVector3 p2, bool useCurrentDeformation, out double minClearance)
         {
+            minClearance = double.MaxValue;
+
             // Always calculates based on current deformation
             DVector3 dir = p2 - p1;
-            if (dir.sqrMagnitude < 1e-3) return 0.0f;
+            if (dir.sqrMagnitude < 1e-3) return false;
 
             double maxDist = dir.magnitude;
             dir /= maxDist;
-
-            double minClearance = double.MaxValue;
-            foreach (var edge in navMeshTopology.edges)
+            
+            if (useCurrentDeformation)
             {
-                if (!edge.isBoundary) continue;
-
-                if (IsConnectorEdge(edge)) continue;
-
-                // This needs to change to use deformed positions instead of original positions
-                var e1 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i1);
-                var e2 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i2);
-
-                // Edge projection interval [minT, maxT] onto p1->p2
-                double t1 = DVector3.Dot(e1 - p1, dir);
-                double t2 = DVector3.Dot(e2 - p1, dir);
-                double minT = Math.Min(t1, t2);
-                double maxT = Math.Max(t1, t2);
-
-                // No overlap with segment [0,maxDist]
-                if ((maxT < 0.0f) || (minT > maxDist)) continue;
-
-                double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
-                if (d < minClearance)
+                foreach (var edge in navMeshTopology.edges)
                 {
-                    minClearance = d;
+                    if (!edge.isBoundary) continue;
+
+                    if (IsConnectorEdge(edge)) continue;
+
+                    // This needs to change to use deformed positions instead of original positions
+                    var e1 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i1);
+                    var e2 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i2);
+
+                    // Edge projection interval [minT, maxT] onto p1->p2
+                    double t1 = DVector3.Dot(e1 - p1, dir);
+                    double t2 = DVector3.Dot(e2 - p1, dir);
+                    double minT = Math.Min(t1, t2);
+                    double maxT = Math.Max(t1, t2);
+
+                    // No overlap with segment [0,maxDist]
+                    if ((maxT < 0.0f) || (minT > maxDist)) continue;
+
+                    double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
+                    if (d < minClearance)
+                    {
+                        minClearance = d;
+                    }
+                }
+            }
+            else
+            {
+                foreach (var edge in navMeshTopology.edges)
+                {
+                    if (!edge.isBoundary) continue;
+
+                    if (IsConnectorEdge(edge)) continue;
+
+                    // This needs to change to use deformed positions instead of original positions
+                    var e1 = navMeshTopology.GetVertexPosition(edge.vertices.i1).ToDVector3();
+                    var e2 = navMeshTopology.GetVertexPosition(edge.vertices.i2).ToDVector3();
+
+                    // Edge projection interval [minT, maxT] onto p1->p2
+                    double t1 = DVector3.Dot(e1 - p1, dir);
+                    double t2 = DVector3.Dot(e2 - p1, dir);
+                    double minT = Math.Min(t1, t2);
+                    double maxT = Math.Max(t1, t2);
+
+                    // No overlap with segment [0,maxDist]
+                    if ((maxT < 0.0f) || (minT > maxDist)) continue;
+
+                    double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
+                    if (d < minClearance)
+                    {
+                        minClearance = d;
+                    }
                 }
             }
 
-            return minClearance;
-        }
-
-        float GetClearance(Vector3 p1, Vector3 p2, bool useCurrentDeformation)
-        {
-            Vector3 dir = p2 - p1;
-            if (dir.sqrMagnitude < 1e-3) return 0.0f;
-
-            float maxDist = dir.magnitude;
-            dir /= maxDist;
-
-            float minClearance = float.MaxValue;
-            foreach (var edge in navMeshTopology.edges)
-            {
-                if (!edge.isBoundary) continue;
-
-                if (IsConnectorEdge(edge)) continue;
-
-                // This needs to change to use deformed positions instead of original positions
-                Vector3 e1, e2;
-                if (useCurrentDeformation)
-                {
-                    e1 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i1).ToVector3();
-                    e2 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i2).ToVector3();
-                }
-                else
-                {
-                    e1 = navMeshTopology.GetVertexPosition(edge.vertices.i1);
-                    e2 = navMeshTopology.GetVertexPosition(edge.vertices.i2);
-                }
-
-                // Edge projection interval [minT, maxT] onto p1->p2
-                float t1 = Vector3.Dot(e1 - p1, dir);
-                float t2 = Vector3.Dot(e2 - p1, dir);
-                float minT = Mathf.Min(t1, t2);
-                float maxT = Mathf.Max(t1, t2);
-
-                // No overlap with segment [0,1]
-                if ((maxT < 0.0f) || (minT > maxDist)) continue;
-
-                float d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
-                if (d < minClearance)
-                {
-                    minClearance = d;
-                }
-            }
-
-            return minClearance;
+            return (minClearance != double.MaxValue);
         }
 
         bool IsConnectorEdge(TopologyStatic.TEdge edge)
@@ -2122,22 +2244,49 @@ namespace UC.ED
             return false;
         }
 
-        public int GetTreeCount() => structureTree.Count;
-        public int GetSegmentCount(int treeIndex) => structureTree[treeIndex].edgeCount;
+        public int GetSegmentCount() => structure.Count;
 
-        public (Vector3, Vector3) GetSegment(int treeIndex, int segIndex)
+        public (Vector3, Vector3) GetSegment(int segIndex)
         {
-            var ids = structureTree[treeIndex].GetSegmentIds(segIndex);
+            var         seg = structure[segIndex];
 
-            DVector3    p1 = structureTree[treeIndex].GetNode(ids.Item1).pos.ToDVector3();
-            var         b1 = structureBindings[(treeIndex, ids.Item1)];
-            DVector3    p2 = structureTree[treeIndex].GetNode(ids.Item2).pos.ToDVector3();
-            var         b2 = structureBindings[(treeIndex, ids.Item2)];
-
-            var dp1 = DeformVertex(p1, b1);
-            var dp2 = DeformVertex(p2, b2);
+            var dp1 = DeformVertex(seg.p1, seg.bind1);
+            var dp2 = DeformVertex(seg.p2, seg.bind2);
 
             return (dp1.ToVector3(), dp2.ToVector3());
+        }
+
+        public Vector3 GetSegmentSlopeDirection(int segIndex)
+        {
+            (var p1, var p2) = GetSegment(segIndex);
+            Vector3 dir = p2 - p1;
+            float len = dir.magnitude;
+
+            if (len < 1e-6f) return Vector3.zero;
+
+            dir /= len;
+
+            return dir;
+        }
+
+        public Vector3 GetSegmentSlopeNormal(int segIndex)
+        {
+            var seg = structure[segIndex];
+
+            var q0 = DeformVertex(seg.center, seg.cBind);
+            var qT = DeformVertex(seg.probeT, seg.tBind);
+            var qB = DeformVertex(seg.probeB, seg.bBind);
+
+            DVector3 t = qT - q0;
+            DVector3 b = qB - q0;
+
+            DVector3 n = DVector3.Cross(t, b);
+
+            if (n.sqrMagnitude < 1e-12f) return Vector3.zero;
+
+            n.Normalize();
+
+            return n.ToVector3();
         }
 
         public void UpdateClearance()
@@ -2146,15 +2295,9 @@ namespace UC.ED
             ComputeClearance(true, currentClearance);
         }
 
-        public float GetClearance(int treeIndex, int segIndex)
+        public double GetClearance(int segIndex)
         {
-            foreach (var cc in currentClearance)
-            {
-                if ((cc.treeId == treeIndex) &&
-                    (cc.segmentId == segIndex)) return cc.clearance;
-            }
-
-            return 0.0f;
+            return currentClearance[segIndex];
         }
     }
 }

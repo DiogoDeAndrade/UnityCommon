@@ -237,5 +237,66 @@ namespace UC
                 Gizmos.DrawLine(p1, p2);
             }
         }
+
+        public static void DrawCapsule2d(Vector3 p1, Vector3 p2, float radius, Vector3 up, int subdivs = 32)
+        {
+            Vector3 dir = (p2 - p1);
+            float length = dir.magnitude;
+
+            if (length < 1e-6f)
+            {
+                // Degenerate case: just draw a circle
+                DrawCircle(p1, radius, up, subdivs);
+                return;
+            }
+
+            dir /= length;
+
+            // Build orthonormal basis in the plane defined by 'up'
+            Vector3 right = Vector3.Cross(up.normalized, dir).normalized;
+            Vector3 forward = Vector3.Cross(dir, right).normalized; // re-orthogonalize (optional)
+
+            // Draw side lines
+            Vector3 offset = right * radius;
+
+            Gizmos.DrawLine(p1 + offset, p2 + offset);
+            Gizmos.DrawLine(p1 - offset, p2 - offset);
+
+            // Draw semicircles
+            int halfSubdivs = Mathf.Max(2, subdivs / 2);
+            float angleInc = Mathf.PI / halfSubdivs;
+
+            // First cap (center = p1)
+            for (int i = 0; i < halfSubdivs; i++)
+            {
+                float a1 = angleInc * i;
+                float a2 = angleInc * (i + 1);
+
+                // Sweep from -right to +right around p1
+                Vector3 d1 = Mathf.Cos(a1) * (-right) + Mathf.Sin(a1) * (-dir);
+                Vector3 d2 = Mathf.Cos(a2) * (-right) + Mathf.Sin(a2) * (-dir);
+
+                Vector3 c1 = p1 + radius * d1;
+                Vector3 c2 = p1 + radius * d2;
+
+                Gizmos.DrawLine(c1, c2);
+            }
+
+            // Second cap (center = p2)
+            for (int i = 0; i < halfSubdivs; i++)
+            {
+                float a1 = angleInc * i;
+                float a2 = angleInc * (i + 1);
+
+                // Sweep from +right to -right around p2
+                Vector3 d1 = Mathf.Cos(a1) * (right) + Mathf.Sin(a1) * (dir);
+                Vector3 d2 = Mathf.Cos(a2) * (right) + Mathf.Sin(a2) * (dir);
+
+                Vector3 c1 = p2 + radius * d1;
+                Vector3 c2 = p2 + radius * d2;
+
+                Gizmos.DrawLine(c1, c2);
+            }
+        }
     }
 }
