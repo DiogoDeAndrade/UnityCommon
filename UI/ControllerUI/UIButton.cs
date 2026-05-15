@@ -1,7 +1,7 @@
 using NaughtyAttributes;
-using System;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 namespace UC
@@ -23,16 +23,37 @@ namespace UC
         private BigTextScroll   creditsScroll;
         [SerializeField, ShowIf(nameof(needUnityAction))]
         private UnityEvent      unityEvent;
+        [SerializeField]
+        private bool            hasShortcut;
+        [SerializeField, ShowIf(nameof(hasShortcut))]
+        private PlayerInput     playerInput;
+        [SerializeField, ShowIf(nameof(hasShortcut))]
+        private Hypertag        playerTag;
+        [SerializeField, ShowIf(nameof(hasShortcut)), InputButton]
+        private UC.InputControl shortcut;
 
         bool needPanel => interactEvent == AutoEvent.SwitchPanel;
         bool needScene => interactEvent == AutoEvent.ChangeScene;
-        bool needFadeTime => (interactEvent != AutoEvent.None);
+        bool needFadeTime => (interactEvent != AutoEvent.None) && (interactEvent != AutoEvent.UnityAction);
         bool needCredits => (interactEvent == AutoEvent.ShowCredits);
         bool needUnityAction => (interactEvent == AutoEvent.UnityAction);
 
+        protected override void Start()
+        {
+            base.Start();
+
+            if (hasShortcut)
+            {
+                if (playerInput == null)
+                    playerInput = playerTag.FindFirst<PlayerInput>();
+                shortcut.playerInput = playerInput;
+            }
+        }
+
         public override void Interact()
         {
-            if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+            GlobalsBase.uiChangeValueSnd?.Play();
+
             NotifyInteract();
 
             switch (interactEvent)
@@ -116,6 +137,21 @@ namespace UC
             cg = parentGroup.GetComponent<CanvasGroup>();
             if (cg) cg.FadeOut(fadeTime).SetUnscaledTime(parentGroup.useUnscaledTime);
             parentGroup.EnableUI(false);
+        }
+
+        protected override void Update()
+        {
+            base.Update();
+
+            if ((parentGroup != null) && (!parentGroup.uiEnable)) return;
+
+            if (hasShortcut)
+            {
+                if (shortcut.IsDown())
+                {
+                    parentGroup.RunInteraction(this, false);
+                }
+            }
         }
     }
 }

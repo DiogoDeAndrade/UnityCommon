@@ -68,14 +68,14 @@ namespace UC
             {
                 selectedItem = (selectedItem + 1) % options.Length;
                 ChangeValue(options[selectedItem]);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
             }
             else if (dz < 0.0f)
             {
                 selectedItem--;
                 if (selectedItem < 0) selectedItem = options.Length - 1;
                 ChangeValue(options[selectedItem]);
-                if (changeSnd) SoundManager.PlaySound(SoundType.SecondaryFX, changeSnd);
+                GlobalsBase.uiChangeValueSnd?.Play();
             }
         }
 

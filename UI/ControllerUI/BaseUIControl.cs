@@ -49,17 +49,19 @@ namespace UC
         [SerializeField] 
         protected BaseUIControl _navRight;
         [SerializeField] 
-        protected AudioClip changeSnd;
+        protected bool          enableTooltip;
 
-        protected UIGroup   parentGroup;
-        Color               defaultTextColor;
-        Color               defaultImageColor;
-        CanvasGroup         canvasGroup;
-        Animator            animator;
-        TMP_FontAsset       normalFont;
-        TMP_ColorGradient   normalGradient;
-        Material            normalStyle;
-        float               normalSize;
+        protected UIGroup       parentGroup;
+        protected RectTransform rectTransform;
+        Color                   defaultTextColor;
+        Color                   defaultImageColor;
+        CanvasGroup             canvasGroup;
+        Animator                animator;
+        TMP_FontAsset           normalFont;
+        TMP_ColorGradient       normalGradient;
+        Material                normalStyle;
+        float                   normalSize;
+        Tooltip                 currentTooltip;
 
         private bool needHighlightColor => (highlighterText != null) || (highlightMode == HighlightMode.ColorSwitch);
         private bool needsHighlighterImage => (highlightMode == HighlightMode.ImageEnable);
@@ -95,6 +97,7 @@ namespace UC
 
         protected virtual void Start()
         {
+            rectTransform = transform as RectTransform;
             parentGroup = GetComponentInParent<UIGroup>();
             canvasGroup = GetComponent<CanvasGroup>();
 
@@ -186,11 +189,26 @@ namespace UC
         public virtual void NotifySelect(BaseUIControl prevControl)
         {
             onSelect?.Invoke(this, prevControl);
+
+            if ((enableTooltip) && (currentTooltip == null))
+            {
+                currentTooltip = TooltipManager.CreateTooltip();
+                if (currentTooltip != null)
+                {
+                    var defaultTooltipText = currentTooltip as UIDefaultTooltip;
+                    defaultTooltipText?.Set(this);
+                }
+            }
         }
 
         public virtual void NotifyDeselect()
         {
             onDeselect?.Invoke(this);
+
+            if (currentTooltip)
+            {
+                Destroy(currentTooltip.gameObject);
+            }
         }
 
         protected virtual void NotifyChange()
@@ -217,6 +235,8 @@ namespace UC
         {
             parentGroup = grp;
         }
+
+        public UIGroup GetGroup() => parentGroup;
 
         public virtual void MoveHorizontal(float dz, bool isDown)
         {
@@ -255,6 +275,11 @@ namespace UC
         public void SetNavRight(BaseUIControl control) { _navRight = control; }
         public void SetNavUp(BaseUIControl control) { _navUp = control; }
         public void SetNavDown(BaseUIControl control) { _navDown = control; }
+
+        public virtual string TooltipGetText(int index)
+        {
+            return string.Empty;
+        }
     }
 
     public class UIControl<T> : BaseUIControl where T : IEquatable<T>

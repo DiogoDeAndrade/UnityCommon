@@ -16,11 +16,22 @@ namespace UC
         private ResourceType _healthResource;
         [SerializeField] 
         private Hypertag    _weaponSlot;
+        [SerializeField]
+        protected SoundDef  _uiMoveSnd;
+        [SerializeField]
+        protected SoundDef  _uiSelectSnd;
+        [SerializeField]
+        protected SoundDef  _uiChangeValueSnd;
+
 
         public static LayerMask obstacleMask => instanceBase?._obstacleMask ?? ~0;
         public static LayerMask groundMask => instanceBase?._groundMask ?? ~0;
         public static ResourceType healthResource => instanceBase?._healthResource ?? null;
         public static Hypertag defaultWeaponSlot => instanceBase._weaponSlot;
+
+        public static SoundDef uiMoveSnd => instanceBase._uiMoveSnd;
+        public static SoundDef uiSelectSnd => instanceBase._uiSelectSnd;
+        public static SoundDef uiChangeValueSnd => instanceBase._uiChangeValueSnd;
 
 
         protected static GlobalsBase _instanceBase = null;

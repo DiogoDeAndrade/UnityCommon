@@ -1,3 +1,4 @@
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace UC
@@ -74,5 +75,9 @@ namespace UC
 
             return transform.Tween().Interpolate(0.0f, 1.0f, time, (currentValue) => transform.rotation = Quaternion.Slerp(srcRotation, targetRotation, currentValue), name);
         }
+
+        public static Vector3 localUp(this Transform transform) => transform.localRotation * Vector3.up;
+        public static Vector3 localRight(this Transform transform) => transform.localRotation * Vector3.right;
+        public static Vector3 localForward(this Transform transform) => transform.localRotation * Vector3.forward;
     }
 }

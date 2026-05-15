@@ -11,7 +11,7 @@ using MathNet.Numerics.LinearAlgebra.Double;
 
 namespace UC.ED
 {
-    public enum BindingSelectionMode { ClosestOne, NearestK };
+/*    public enum BindingSelectionMode { ClosestOne, NearestK };
     public enum BindingWeightMode { Uniform, InversePower, Gaussian, OriginalED };
     public enum GraphLinkMode { PartitionAdjacency, SharedBindings, DirectionAware };
 
@@ -2299,5 +2299,5 @@ namespace UC.ED
         {
             return currentClearance[segIndex];
         }
-    }
+    }*/
 }

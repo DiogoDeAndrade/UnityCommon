@@ -1,3 +1,4 @@
+using NaughtyAttributes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -8,34 +9,44 @@ using UnityEngine.UI;
 
 namespace UC
 {
-
     public class UIGroup : MonoBehaviour
     {
+        public delegate void OnEnableUI(bool enable);
+        public event OnEnableUI onEnableUI;
+
         [SerializeField]
-        protected int playerId;
+        protected int               playerId;
         [SerializeField]
-        protected bool enableOnStart = true;
+        protected bool              enableOnStart = true;
         [SerializeField]
-        protected float moveCooldown = 0.1f;
+        protected float             moveCooldown = 0.1f;
         [SerializeField]
-        protected PlayerInput playerInput;
+        protected Hypertag          playerInputTag;
+        [SerializeField]
+        protected PlayerInput       playerInput;
         [SerializeField, InputPlayer(nameof(playerInput))]
-        protected InputControl horizontalControl;
+        protected InputControl      horizontalControl;
         [SerializeField, InputPlayer(nameof(playerInput))]
-        protected InputControl verticalControl;
+        protected InputControl      verticalControl;
         [SerializeField, InputPlayer(nameof(playerInput)), InputButton]
-        protected InputControl interactControl;
-        [SerializeField] AudioClip moveSnd;
-        [SerializeField] AudioClip selectSnd;
+        protected InputControl      interactControl;
 
         [SerializeField] protected BaseUIControl initialControl;
         [SerializeField] protected bool _useUnscaledTime = false;
         [SerializeField] protected bool _enableMouseSupport = false;
+        [SerializeField, ShowIf(nameof(_enableMouseSupport))] 
+        protected bool clickToSelect = false;
+        [SerializeField, ShowIf(nameof(_enableMouseSupport))] 
+        protected bool gamepadCursor = false;
+        [SerializeField, InputPlayer(nameof(playerInput)), InputButton, ShowIf(nameof(needClickControl))]
+        protected InputControl      mouseClickControl;
 
         protected float                 cooldownTimer;
+        [SerializeField, ReadOnly]
         protected BaseUIControl         _selectedControl;
         protected bool                  selectedFromMouse;
         protected int                   mouseSkipFrames = 4;
+        protected float                 timeOfLastMouseMove = -float.MaxValue;
         protected bool                  _verticalReset = true;
         protected bool                  _horizontalReset = true;
         protected bool                  _uiEnable = true;
@@ -44,6 +55,10 @@ namespace UC
         protected List<RaycastResult>   raycasterResults = new();
 
         public bool enableMouseSupport => _enableMouseSupport;
+        public bool enableGamepadCursor => gamepadCursor && _enableMouseSupport;
+        public bool isMouseActive(float windowTime) => _enableMouseSupport && (selectedFromMouse || ((GetTime() - timeOfLastMouseMove) < windowTime));
+
+        private bool needClickControl => _enableMouseSupport && clickToSelect;
 
         public BaseUIControl selectedControl
         {
@@ -51,7 +66,7 @@ namespace UC
             set
             {
                 var prevControl = _selectedControl;
-                if (_selectedControl != null) _selectedControl.NotifyDeselect();
+                if ((_selectedControl != null) && (_selectedControl != value)) _selectedControl.NotifyDeselect();
                 _selectedControl = value;
                 if (_selectedControl != null) _selectedControl.NotifySelect(prevControl);
             }
@@ -59,9 +74,17 @@ namespace UC
 
         public bool uiEnable => _uiEnable;
         public bool useUnscaledTime => _useUnscaledTime;
-
+        
+        protected float GetTime() => (useUnscaledTime) ? (Time.unscaledTime) : (Time.time);
+        
         protected virtual void Start()
         {
+            if (playerInputTag)
+            {
+                var pi = playerInputTag.FindFirst<PlayerInput>();
+                if (pi) playerInput = pi;
+            }
+
             if ((playerId != -1) && (playerInput))
             {
                 MasterInputManager.SetupInput(playerId, playerInput);
@@ -72,14 +95,14 @@ namespace UC
                 horizontalControl.playerInput = playerInput;
                 verticalControl.playerInput = playerInput;
                 interactControl.playerInput = playerInput;
-            }
-
-            if (initialControl)
-            {
-                selectedControl = initialControl;
+                mouseClickControl.playerInput = playerInput;
             }
 
             _uiEnable = enableOnStart;
+            if ((initialControl) && (_uiEnable))
+            {
+                selectedControl = initialControl;
+            }
 
             if (_enableMouseSupport)
             {
@@ -97,7 +120,20 @@ namespace UC
             if (mouseSkipFrames > 0) mouseSkipFrames--;
             if ((_enableMouseSupport) && ((mouseSkipFrames <= 0) || (forceMouseUpdate)))
             {
-                if ((InputControl.HasMouseMovedThisFrame()) || (forceMouseUpdate))
+                bool runMouseControl = false;
+
+                if (clickToSelect)
+                {
+                    runMouseControl = (mouseClickControl.IsDown()) || (forceMouseUpdate);
+                }
+                else
+                {
+                    runMouseControl = (InputControl.HasMouseMovedThisFrame()) || (forceMouseUpdate);
+                }
+
+                if (InputControl.HasMouseMovedThisFrame()) timeOfLastMouseMove = GetTime();
+
+                if (runMouseControl)
                 {
                     var ctrl = GetControlOnPointer();
                     if (forceMouseUpdate)
@@ -111,8 +147,11 @@ namespace UC
                     }
                     else
                     {
-                        selectedControl = ctrl;
-                        selectedFromMouse = (selectedControl != null);
+                        if ((!clickToSelect) || (ctrl != null))
+                        {
+                            selectedControl = ctrl;
+                            selectedFromMouse = (selectedControl != null);
+                        }
                     }
                 }
             }
@@ -142,7 +181,7 @@ namespace UC
                                 _selectedControl = (next) ? (next) : (_selectedControl);
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
-                                if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
+                                GlobalsBase.uiMoveSnd?.Play();
                                 selectedFromMouse = false;
                             }
                             else if (dy > 0.5f)
@@ -151,7 +190,7 @@ namespace UC
                                 _selectedControl = (next) ? (next) : (_selectedControl);
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
-                                if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
+                                GlobalsBase.uiMoveSnd?.Play();
                                 selectedFromMouse = false;
                             }
                         }
@@ -164,6 +203,7 @@ namespace UC
                         else
                         {
                             _selectedControl?.MoveHorizontal(dx, _horizontalReset);
+                            selectedFromMouse = false;
                             _horizontalReset = false;
                         }
                     }
@@ -192,9 +232,7 @@ namespace UC
 
                         if (interact)
                         {
-                            if (selectSnd) SoundManager.PlaySound(SoundType.SecondaryFX, selectSnd);
-                            _selectedControl?.Interact();
-                            OnSelect();
+                            RunInteraction(_selectedControl, selectedFromMouse);
                         }
                     }
                     else if ((interactControl.IsPressed()) && (_selectedControl) && (_selectedControl.isContinuous))
@@ -204,6 +242,15 @@ namespace UC
                     }
                 }
             }
+        }
+
+        public void RunInteraction(BaseUIControl ctrl, bool fromMouse)
+        {
+            _selectedControl = ctrl;
+            selectedFromMouse = fromMouse;
+            GlobalsBase.uiSelectSnd?.Play();
+            _selectedControl?.Interact();
+            OnSelect();
         }
 
         BaseUIControl GetControlOnPointer()
@@ -221,7 +268,7 @@ namespace UC
                     if (ctrl == null) ctrl = ray.gameObject.GetComponentInParent<BaseUIControl>();
                     if (ctrl)
                     {
-                        if (ctrl.isSelectable)
+                        if ((ctrl.GetGroup() == this) && (ctrl.isSelectable))
                         {
                             return selectedControl = ctrl;
                         }
@@ -251,10 +298,10 @@ namespace UC
 
         public void SetControl(BaseUIControl control)
         {
-            _selectedControl = control;
+            selectedControl = control;
             cooldownTimer = moveCooldown;
             _verticalReset = false;
-            if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd);
+            GlobalsBase.uiMoveSnd?.Play();
         }
 
         public void EnableUI(bool value)
@@ -278,6 +325,13 @@ namespace UC
                 selectedControl = initialControl;
                 cooldownTimer = moveCooldown;
             }
+
+            NotifyEnableUI(value);
+        }
+
+        protected virtual void NotifyEnableUI(bool value)
+        {
+            onEnableUI?.Invoke(value);
         }
 
         IEnumerator WaitFrameAndForceMousePointerUpdate()
