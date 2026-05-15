@@ -143,7 +143,18 @@ namespace UC.ED
         public float                            slopeSoftBand = 5.0f;
         public Vector3                          upVector = Vector3.up;
 
-        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, 
+        int deformGraphEdgeCount
+        {
+            get
+            {
+                int count = 0;
+                for (int i = 0; i < nodes.Count; i++)
+                    count += nodes[i].neighbors.Count;
+                return count / 2; // Undirected graph, each edge is counted twice.
+            }
+        }
+
+        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes, 
                                           BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
                                           int k = 4, // When BindingSelectionMode = closest-K
                                           float maxBindDistance = 2.0f, // When GraphLinKMode = DirectionAware
@@ -182,7 +193,6 @@ namespace UC.ED
             //    - then radius-pruned fill over remaining vertices
             // -----------------------------------------------------------------
             float minDistanceSq = minDistance * minDistance;
-            List<int> sampledVertexIds = new();
 
             HashSet<int> forcedSet = (forcedVertices != null) ? (new HashSet<int>(forcedVertices)) : (new HashSet<int>());
 
@@ -193,7 +203,17 @@ namespace UC.ED
                 if ((vId < 0) || (vId >= topology.vertexCount))
                     continue;
 
-                TryAddSampleVertex(vId, topology, sampledVertexIds, 0.0f);
+                TryAddSampleVertex(vId, topology, 0.0f);
+            }
+
+            // Add structure nodes
+            if ((structure != null) && (forceStructureNodes))
+            for (int i = 0; i < structure.Count; i++)
+            {
+                var seg = structure[i];
+                int idx1 = TryAddSampleVertex(seg.p1, minDistanceSq);
+                int idx2 = TryAddSampleVertex(seg.p2, minDistanceSq);
+                //AddUndirectedNeighbor(idx1, idx2);
             }
 
             // Fill remaining graph with radius-pruned vertex samples
@@ -202,25 +222,14 @@ namespace UC.ED
                 if (forcedSet.Contains(vId))
                     continue;
 
-                TryAddSampleVertex(vId, topology, sampledVertexIds, minDistanceSq);
+                TryAddSampleVertex(vId, topology, minDistanceSq);
             }
 
             // Fallback safety
-            if ((sampledVertexIds.Count == 0) && (topology.vertexCount > 0))
+            if ((nodes.Count == 0) && (topology.vertexCount > 0))
             {
-                sampledVertexIds.Add(0);
-            }
-
-            // Create ED nodes
-            nodes.Capacity = sampledVertexIds.Count;
-            for (int i = 0; i < sampledVertexIds.Count; i++)
-            {
-                int vId = sampledVertexIds[i];
-                nodes.Add(new EDNode
-                {
-                    restPosition = topology.GetVertexPosition(vId).ToDVector3(),
-                    neighbors = new List<int>()
-                });
+                Debug.LogError("Failed to generate ED deformation graph: no nodes were sampled.");
+                return;
             }
 
             // -----------------------------------------------------------------
@@ -246,7 +255,7 @@ namespace UC.ED
                     break;
             }
 
-            Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}");
+            Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}, Edges={deformGraphEdgeCount}");
         }
 
         private struct DirectionAwareCandidate
@@ -311,7 +320,7 @@ namespace UC.ED
                     Vector3 delta = pj - pi;
 
                     float distSq = delta.sqrMagnitude;
-                    if (distSq <= eps || distSq > maxBindDistanceSq)
+                    if ((distSq <= eps) || (distSq > maxBindDistanceSq))
                         continue;
 
                     if ((hasLOSFunction != null) && (!hasLOSFunction(pi, pj)))
@@ -351,19 +360,38 @@ namespace UC.ED
             }
         }
 
-        private bool TryAddSampleVertex(int vertexId, TopologyStatic topology, List<int> sampledVertexIds, float minDistanceSq)
+        private int TryAddSampleVertex(int vertexId, TopologyStatic topology, float minDistanceSq)
         {
-            Vector3 p = topology.GetVertexPosition(vertexId);
+            return TryAddSampleVertex(topology.GetVertexPosition(vertexId).ToDVector3(), minDistanceSq);
+        }
 
-            for (int i = 0; i < sampledVertexIds.Count; i++)
+        private int TryAddSampleVertex(DVector3 pos, float minDistanceSq)
+        {
+            if (minDistanceSq > 0.0f)
             {
-                Vector3 q = topology.GetVertexPosition(sampledVertexIds[i]);
-                if ((p - q).sqrMagnitude < minDistanceSq)
-                    return false;
+                int index = GetSampledVertexIndex(pos, minDistanceSq);
+                if (index != -1) return index;
             }
 
-            sampledVertexIds.Add(vertexId);
-            return true;
+            nodes.Add(new EDNode
+            {
+                restPosition = pos,
+                neighbors = new List<int>()
+            });
+
+            return nodes.Count - 1;
+        }
+
+        private int GetSampledVertexIndex(DVector3 pos, double tolerance)
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                DVector3 q = nodes[i].restPosition;
+                if ((pos - q).sqrMagnitude < tolerance)
+                    return i;
+            }
+
+            return -1;
         }
 
         private int GetClosestNodeIndex(DVector3 p)
@@ -386,7 +414,7 @@ namespace UC.ED
 
         private void AddUndirectedNeighbor(int a, int b)
         {
-            if (a < 0 || b < 0 || a == b)
+            if ((a < 0) || (b < 0) || (a == b))
                 return;
 
             if (!nodes[a].neighbors.Contains(b))
@@ -751,6 +779,10 @@ namespace UC.ED
 
         public DVector3 DeformVertexFromCurrentNodeTransforms(int vertexId)
         {
+            if ((vertexId < 0) || (vertexId >= restVertices.Length) || (bindings == null) || (vertexId >= bindings.Length))
+            {
+                return DVector3.zero;
+            }
             DVector3    v = restVertices[vertexId];
             var         binding = bindings[vertexId];
 
