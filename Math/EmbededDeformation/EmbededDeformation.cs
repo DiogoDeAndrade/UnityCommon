@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UC.DoubleMath;
 using System.Text;
+using UnityEditor.Experimental.GraphView;
+
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
@@ -21,74 +23,286 @@ namespace UC.ED
     {
         public DVector3         restPosition;
         public List<int>        neighbors = new();
+    }
 
-        [SerializeField, HideInInspector]
-        private DVector3       _currentTranslation = DVector3.zero;
-        [SerializeField, HideInInspector]
-        private DQuaternion    _currentRotation = DQuaternion.identity;
-        [SerializeField, HideInInspector]
-        private DMatrix3x4     _currentMatrix = DMatrix3x4.identity;
-        [SerializeField, HideInInspector]
-        private bool                _recomputeMatrix = false;
-        [SerializeField, HideInInspector]
-        private bool                _recomputeTranslation= false;
-        [SerializeField, HideInInspector]
-        private bool                _recomputeRotation = false;
+    [Serializable]
+    class EDClearanceCache
+    {
+        [SerializeField]
+        private readonly double[] values;
 
-        public DVector3 currentTranslation
+        public EDClearanceCache(int count)
         {
-            get { if (_recomputeTranslation) UpdateTranslationFromMatrix(); return _currentTranslation; }
-            set { _currentTranslation = value; _recomputeMatrix = true; _recomputeTranslation = false; }
-        }
-        public DQuaternion currentRotation
-        {
-            get { if (_recomputeRotation) UpdateRotationFromMatrix();  return _currentRotation; }
-            set { _currentRotation = value; _recomputeMatrix = true; _recomputeRotation = false; }
+            values = new double[count];
         }
 
-        public DMatrix3x4 currentMatrix
+        public EDClearanceCache Clone()
         {
-            get { if (_recomputeMatrix) UpdateMatrixFromTranslationRotation(); return _currentMatrix; }
-            set 
-            { 
-                _currentMatrix =  value; 
-                _recomputeMatrix = false;
-                _recomputeTranslation = _recomputeRotation = true;
+            var clone = new EDClearanceCache(values.Length);
+            Array.Copy(values, clone.values, values.Length);
+            return clone;
+        }
+
+        public double Get(int index) => values[index];
+
+        public void Set(int index, double value)
+        {
+            values[index] = value;
+        }
+    }
+
+    [Serializable]
+    class EDState
+    {
+        [SerializeField]
+        private double[]        parameters; // 12 * nodeCount
+        [SerializeField]
+        public EDClearanceCache clearances;
+
+        public EDState(int nodeCount)
+        {
+            parameters = new double[12 * nodeCount];
+            // Set all matrices to identity
+            for (int i = 0; i < nodeCount; i++)
+            {
+                int baseIndex = i * 12;
+                parameters[baseIndex + 0] = 
+                parameters[baseIndex + 5] = 
+                parameters[baseIndex + 10] = 1.0; 
+            }
+        }   
+
+        public double Get(int index) => parameters[index];
+        public void Set(int index, double value)
+        {
+            parameters[index] = value;
+        }
+
+        public int Count => parameters.Length;
+
+        public void SetTranslation(int nodeIndex, double x, double y, double z)
+        {
+            int o = nodeIndex * 12;
+
+            parameters[o + 3] = x;
+            parameters[o + 7] = y;
+            parameters[o + 11] = z;
+        }
+
+        public void ResetRotation(int nodeIndex)
+        {
+            int o = nodeIndex * 12;
+
+            parameters[o + 0] = 1.0;
+            parameters[o + 1] = 0.0;
+            parameters[o + 2] = 0.0;
+
+            parameters[o + 4] = 0.0;
+            parameters[o + 5] = 1.0;
+            parameters[o + 6] = 0.0;
+
+            parameters[o + 8] = 0.0;
+            parameters[o + 9] = 0.0;
+            parameters[o + 10] = 1.0;
+        }
+
+        public void Apply(Vector<double> delta, double damping)
+        {
+            if (delta == null)
+                throw new ArgumentNullException(nameof(delta));
+
+            if (delta.Count != parameters.Length)
+            {
+                throw new ArgumentException($"Delta size mismatch. Delta={delta.Count}, State={parameters.Length}");
+            }
+
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                double v = parameters[i] + damping * delta[i];
+
+                if (!double.IsFinite(v))
+                {
+                    throw new InvalidOperationException($"Non-finite state parameter at index {i}.");
+                }
+
+                parameters[i] = v;
             }
         }
 
-        public DVector3 axisX
+        public EDState Clone()
         {
-            get { var M = currentMatrix; return new DVector3(M.m00, M.m10, M.m20); }
-        }
-        public DVector3 axisY
-        {
-            get { var M = currentMatrix; return new DVector3(M.m01, M.m11, M.m21); }
-        }
-        public DVector3 axisZ
-        {
-            get { var M = currentMatrix; return new DVector3(M.m02, M.m12, M.m22); }
+            EDState clone = new EDState(parameters.Length / 12);
+            Array.Copy(parameters, clone.parameters, parameters.Length);
+            clone.clearances = clearances.Clone();
+            return clone;
         }
 
-        private void UpdateTranslationFromMatrix()
+        public EDState CloneAndApply(Vector<double> delta, double damping = 1.0)
         {
-            _currentTranslation = _currentMatrix.translation;
-            _recomputeTranslation = false;
+            EDState clone = Clone();
+            clone.Apply(delta, damping);
+            return clone;
         }
 
-        private void UpdateRotationFromMatrix()
+        public double GetClearance(int index) => clearances.Get(index);
+
+        public DVector3 TransformOffset(int nodeIndex, DVector3 localOffset)
         {
-            _currentRotation = _currentMatrix.rotation;
-            _recomputeRotation = false;
+            int o = nodeIndex * 12;
+
+            double m00 = Get(o + 0);
+            double m01 = Get(o + 1);
+            double m02 = Get(o + 2);
+            double m03 = Get(o + 3);
+
+            double m10 = Get(o + 4);
+            double m11 = Get(o + 5);
+            double m12 = Get(o + 6);
+            double m13 = Get(o + 7);
+
+            double m20 = Get(o + 8);
+            double m21 = Get(o + 9);
+            double m22 = Get(o + 10);
+            double m23 = Get(o + 11);
+
+            return new DVector3(
+                m00 * localOffset.x + m01 * localOffset.y + m02 * localOffset.z + m03,
+                m10 * localOffset.x + m11 * localOffset.y + m12 * localOffset.z + m13,
+                m20 * localOffset.x + m21 * localOffset.y + m22 * localOffset.z + m23
+            );
+        }
+    }
+
+    [Serializable]
+    readonly struct EDStateView
+    {
+        [SerializeField]
+        private readonly EDState            parentState;
+        [SerializeField]
+        private readonly int                perturbedIndex;
+        [SerializeField]
+        private readonly double             perturbation;
+        [SerializeField]
+        private readonly EDClearanceCache   _clearances;
+
+        public EDStateView(EDState parameters, EDClearanceCache clearances = null)
+        {
+            this.parentState = parameters;
+            this.perturbedIndex = -1;
+            this.perturbation = 0.0;
+            this._clearances = clearances;
         }
 
-        private void UpdateMatrixFromTranslationRotation()
+        public EDStateView(EDState parameters, int perturbedIndex, double perturbation, EDClearanceCache clearances = null)
         {
-            currentMatrix = DMatrix3x4.TRS(currentTranslation, currentRotation, DVector3.one);
-            _recomputeMatrix = false;
+            this.parentState = parameters;
+            this.perturbedIndex = perturbedIndex;
+            this.perturbation = perturbation;
+            this._clearances = clearances;
         }
 
-        public Vector3 debugNodePosition => (restPosition + currentTranslation).ToVector3();
+        public EDClearanceCache clearances => (_clearances == null) ? (parentState.clearances) : (_clearances);
+        public double Get(int index) => (index == (perturbedIndex)) ? (parentState.Get(index) + perturbation) : (parentState.Get(index));
+
+        public DVector3 DeformVertex(int nodeIndex, DVector3 p, DVector3 restPos)
+        {
+            return TransformOffset(nodeIndex, p - restPos) + restPos;
+        }
+
+        public DVector3 TransformOffset(int nodeIndex, DVector3 localOffset)
+        {
+            int o = nodeIndex * 12;
+
+            double m00 = Get(o + 0);
+            double m01 = Get(o + 1);
+            double m02 = Get(o + 2);
+            double m03 = Get(o + 3);
+
+            double m10 = Get(o + 4);
+            double m11 = Get(o + 5);
+            double m12 = Get(o + 6);
+            double m13 = Get(o + 7);
+
+            double m20 = Get(o + 8);
+            double m21 = Get(o + 9);
+            double m22 = Get(o + 10);
+            double m23 = Get(o + 11);
+
+            return new DVector3(
+                m00 * localOffset.x + m01 * localOffset.y + m02 * localOffset.z + m03,
+                m10 * localOffset.x + m11 * localOffset.y + m12 * localOffset.z + m13,
+                m20 * localOffset.x + m21 * localOffset.y + m22 * localOffset.z + m23
+            );
+        }
+
+        public DVector3 TransformVector(int nodeIndex, DVector3 localVector)
+        {
+            int o = nodeIndex * 12;
+
+            double m00 = Get(o + 0);
+            double m01 = Get(o + 1);
+            double m02 = Get(o + 2);
+            double m03 = Get(o + 3);
+
+            double m10 = Get(o + 4);
+            double m11 = Get(o + 5);
+            double m12 = Get(o + 6);
+            double m13 = Get(o + 7);
+
+            double m20 = Get(o + 8);
+            double m21 = Get(o + 9);
+            double m22 = Get(o + 10);
+            double m23 = Get(o + 11);
+
+            return new DVector3(
+                m00 * localVector.x + m01 * localVector.y + m02 * localVector.z,
+                m10 * localVector.x + m11 * localVector.y + m12 * localVector.z,
+                m20 * localVector.x + m21 * localVector.y + m22 * localVector.z
+            );
+        }
+
+
+        public DVector3 GetAxisX(int nodeIndex)
+        {
+            int o = nodeIndex * 12;
+
+            return new DVector3(
+                Get(o + 0),  // m00
+                Get(o + 4),  // m10
+                Get(o + 8)   // m20
+            );
+        }
+        public DVector3 GetAxisY(int nodeIndex)
+        {
+            int o = nodeIndex * 12;
+
+            return new DVector3(
+                Get(o + 1),  // m01
+                Get(o + 5),  // m11
+                Get(o + 9)   // m21
+            );
+        }
+        public DVector3 GetAxisZ(int nodeIndex)
+        {
+            int o = nodeIndex * 12;
+
+            return new DVector3(
+                Get(o + 2),   // m02
+                Get(o + 6),   // m12
+                Get(o + 10)   // m22
+            );
+        }
+
+        public DVector3 GetTranslation(int nodeIndex)
+        {
+            int o = nodeIndex * 12;
+
+            return new DVector3(
+                Get(o + 3),   // m03
+                Get(o + 7),   // m13
+                Get(o + 11)   // m23
+            );
+        }
     }
 
     [Serializable]
@@ -128,20 +342,41 @@ namespace UC.ED
     [Serializable]
     public class EmbededDeformation
     {
-        public DVector3[]                       restVertices;
-        public int[]                            triangles;
+        public DVector3[] restVertices;
+        public int[] triangles;
 
-        public List<EDNode>                     nodes = new();
-        public EDVertexBinding[]                bindings;
-        public List<EDHandleConstraint>         handleConstraints = new();
-        public List<EDVertexConstraint>         vertexConstraints = new();
-        public List<double>                     originalClearance = new();
-        public TopologyStatic                   navMeshTopology;
-        public List<NavEDSegments>              structure;
-        public List<double>                     currentClearance;
-        public float                            maxSlope = 45.0f;
-        public float                            slopeSoftBand = 5.0f;
-        public Vector3                          upVector = Vector3.up;
+        public List<EDNode> nodes = new();
+        public EDVertexBinding[] bindings;
+        public List<EDHandleConstraint> handleConstraints = new();
+        public List<EDVertexConstraint> vertexConstraints = new();
+        public TopologyStatic navMeshTopology;
+        public List<NavEDSegments> structure;
+        public float maxSlope = 45.0f;
+        public float slopeSoftBand = 5.0f;
+        public Vector3 upVector = Vector3.up;
+
+        [SerializeField]
+        private EDState currentState;
+        [SerializeField]
+        private EDState restState;
+        private EDStateView restStateView;
+
+           
+#if UC_PROFILER_ENABLE
+        DebugProfiler timePack;
+        DebugProfiler timeIteration;
+        DebugProfiler timeResidualEvaluate;
+        DebugProfiler timeJacobianBuild;
+        DebugProfiler timeSolve;
+        DebugProfiler timeApplyParameters;
+        DebugProfiler timeUpdateClearance;
+        DebugProfiler timeJacobianBuildConstraint;
+        DebugProfiler timeJacobianBuildRotation;
+        DebugProfiler timeJacobianBuildRegularization;
+        DebugProfiler timeJacobianBuildSlope;
+        DebugProfiler timeJacobianBuildClearance;
+#endif
+
 
         int deformGraphEdgeCount
         {
@@ -154,13 +389,13 @@ namespace UC.ED
             }
         }
 
-        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes, 
+        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
                                           BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
                                           int k = 4, // When BindingSelectionMode = closest-K
                                           float maxBindDistance = 2.0f, // When GraphLinKMode = DirectionAware
                                           float minBindAngle = 20.0f, // When GraphLinKMode = DirectionAware
                                           HasLOS hasLOSFunction = null, // When GraphLinKMode = DirectionAware
-                                          float power = 2.0f, 
+                                          float power = 2.0f,
                                           float sigma = 1.0f) // When BindingSelectionMode = closest-K and BindingWeightMode = InversePower
         {
             if (topology == null)
@@ -208,13 +443,13 @@ namespace UC.ED
 
             // Add structure nodes
             if ((structure != null) && (forceStructureNodes))
-            for (int i = 0; i < structure.Count; i++)
-            {
-                var seg = structure[i];
-                int idx1 = TryAddSampleVertex(seg.p1, minDistanceSq);
-                int idx2 = TryAddSampleVertex(seg.p2, minDistanceSq);
-                //AddUndirectedNeighbor(idx1, idx2);
-            }
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    var seg = structure[i];
+                    int idx1 = TryAddSampleVertex(seg.p1, minDistanceSq);
+                    int idx2 = TryAddSampleVertex(seg.p2, minDistanceSq);
+                    //AddUndirectedNeighbor(idx1, idx2);
+                }
 
             // Fill remaining graph with radius-pruned vertex samples
             for (int vId = 0; vId < topology.vertexCount; vId++)
@@ -255,14 +490,18 @@ namespace UC.ED
                     break;
             }
 
+            currentState = new EDState(nodes.Count);
+            restState = new EDState(nodes.Count);
+            restStateView = new EDStateView(restState);
+
             Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}, Edges={deformGraphEdgeCount}");
         }
 
         private struct DirectionAwareCandidate
         {
-            public int      nodeIndex;
-            public double   distanceSq;
-            public Vector3  direction;
+            public int nodeIndex;
+            public double distanceSq;
+            public Vector3 direction;
         }
 
         void BuildGraphDirectionAware(float maxBindDistance, float minBindAngle, HasLOS hasLOSFunction)
@@ -326,7 +565,7 @@ namespace UC.ED
                     if ((hasLOSFunction != null) && (!hasLOSFunction(pi, pj)))
                         continue;
 
-                    float   dist = Mathf.Sqrt(distSq);
+                    float dist = Mathf.Sqrt(distSq);
                     Vector3 dir = delta / dist;
 
                     candidates.Add(new DirectionAwareCandidate
@@ -517,7 +756,7 @@ namespace UC.ED
                                                       });
                             break;
                         case BindingWeightMode.Gaussian:
-                            ret = GetNearestK_Generic(p,  k,
+                            ret = GetNearestK_Generic(p, k,
                                                       (dSq, _) =>
                                                       {
                                                           return Math.Exp(-dSq / (2.0 * sigmaSq));
@@ -525,15 +764,15 @@ namespace UC.ED
                             break;
                         case BindingWeightMode.OriginalED:
                             epsilon = 1e-12;
-                            ret = GetNearestK_Generic(p,  k,
+                            ret = GetNearestK_Generic(p, k,
                                                       (dSq, dMaxSq) =>
                                                       {
                                                           double d = Math.Sqrt(dSq);
                                                           double dMax = Math.Sqrt(Math.Max(dMaxSq, epsilon));
-                                                      
+
                                                           double w = 1.0 - (d / dMax);
                                                           if (w < 0.0) w = 0.0;
-                                                      
+
                                                           return w * w;
                                                       });
                             break;
@@ -738,10 +977,8 @@ namespace UC.ED
 
         public void ResetDeformation()
         {
-            foreach (var node in nodes)
-            {
-                node.currentMatrix = DMatrix3x4.identity;
-            }
+            currentState = new EDState(nodes.Count);
+            ComputeClearance(currentState);
         }
 
         public Vector3[] DeformVerticesFromCurrentNodeTransforms()
@@ -749,14 +986,16 @@ namespace UC.ED
             Vector3[] deformed = new Vector3[restVertices.Length];
 
             for (int vId = 0; vId < restVertices.Length; vId++)
-            {                
-                deformed[vId] = DeformVertexFromCurrentNodeTransforms(vId).ToVector3();
+            {
+                var vertex = restVertices[vId];
+                var binding = bindings[vId];
+                deformed[vId] = DeformVertex(vertex, binding, new EDStateView(currentState)).ToVector3();
             }
 
             return deformed;
         }
 
-        public DVector3 DeformVertex(DVector3 v, EDVertexBinding binding)
+        private DVector3 DeformVertex(DVector3 v, EDVertexBinding binding, EDStateView state)
         {
             DVector3 result = DVector3.zero;
 
@@ -766,10 +1005,9 @@ namespace UC.ED
                 double w = binding.weights[i];
 
                 var node = nodes[nodeIndex];
-
                 DVector3 g = node.restPosition;
 
-                DVector3 transformed = node.currentMatrix.MultiplyPoint(v - g) + g;
+                DVector3 transformed = state.DeformVertex(nodeIndex, v, g);
 
                 result += w * transformed;
             }
@@ -783,10 +1021,10 @@ namespace UC.ED
             {
                 return DVector3.zero;
             }
-            DVector3    v = restVertices[vertexId];
-            var         binding = bindings[vertexId];
-
-            return DeformVertex(v, binding);
+            DVector3 v = restVertices[vertexId];
+            var binding = bindings[vertexId];
+                
+            return DeformVertex(v, binding, new EDStateView(currentState));
         }
 
         public bool SolveTranslationsOnly(double constraintWeight = 1.0, double smoothnessWeight = 0.1, bool resetBeforeSolve = true)
@@ -808,11 +1046,7 @@ namespace UC.ED
 
             if ((vertexConstraints == null) || (vertexConstraints.Count == 0))
             {
-                Debug.LogWarning("SolveTranslationsOnly: no vertex constraints, resetting translations.");
-                for (int i = 0; i < nodes.Count; i++)
-                {
-                    nodes[i].currentMatrix = DMatrix3x4.identity;
-                }
+                ResetDeformation();
                 return true;
             }
 
@@ -914,8 +1148,8 @@ namespace UC.ED
             // -----------------------------------------------------------------
             for (int i = 0; i < nodeCount; i++)
             {
-                nodes[i].currentTranslation = new DVector3(tx[i], ty[i], tz[i]);
-                nodes[i].currentRotation = DQuaternion.identity;
+                currentState.SetTranslation(i, tx[i], ty[i], tz[i]);
+                currentState.ResetRotation(i);
             }
 
             return true;
@@ -925,12 +1159,15 @@ namespace UC.ED
         }
 
 #if MATH_NET_AVAILABLE
-        private Vector<double> EvaluateResidualVector(double rotationWeight,
-                                                      double regularizationWeight,  
+        private Vector<double> EvaluateResidualVector(EDStateView state,
+                                                      double rotationWeight,
+                                                      double regularizationWeight,
                                                       double constraintWeight,
                                                       double clearanceWeight,
                                                       double slopeWeight)
         {
+            DebugProfiler.DebugMark(timeResidualEvaluate);
+
             int nodeCount = nodes.Count;
             int directedEdgeCount = 0;
             for (int i = 0; i < nodes.Count; i++)
@@ -970,9 +1207,9 @@ namespace UC.ED
             // -------------------------------------------------------------
             for (int i = 0; i < nodeCount; i++)
             {
-                var axisX = nodes[i].axisX;
-                var axisY = nodes[i].axisY;
-                var axisZ = nodes[i].axisZ;
+                var axisX = state.GetAxisX(i);
+                var axisY = state.GetAxisY(i);
+                var axisZ = state.GetAxisZ(i);
 
                 residual[row++] = wRot * DVector3.Dot(axisX, axisY);
                 residual[row++] = wRot * DVector3.Dot(axisX, axisZ);
@@ -994,18 +1231,18 @@ namespace UC.ED
             // -------------------------------------------------------------
             for (int j = 0; j < nodeCount; j++)
             {
-                EDNode      nodeJ = nodes[j];
-                DVector3    gj = nodeJ.restPosition;
-                DVector3    tj = nodeJ.currentTranslation;
+                EDNode nodeJ = nodes[j];
+                DVector3 gj = nodeJ.restPosition;
+                DVector3 tj = state.GetTranslation(j);
 
                 foreach (int k in nodeJ.neighbors)
                 {
                     EDNode nodeK = nodes[k];
                     DVector3 gk = nodeK.restPosition;
-                    DVector3 tk = nodeK.currentTranslation;
+                    DVector3 tk = state.GetTranslation(k);
 
                     DVector3 diff = gk - gj;
-                    DVector3 rotatedDiff = nodeJ.currentMatrix.MultiplyVector(diff);
+                    DVector3 rotatedDiff = state.TransformVector(j, diff);
 
                     DVector3 r = rotatedDiff + gj + tj - (gk + tk);
 
@@ -1033,7 +1270,7 @@ namespace UC.ED
                     continue;
                 }
 
-                DVector3 deformed = DeformVertexFromCurrentNodeTransforms(vc.vertexIndex);
+                DVector3 deformed = DeformVertex(restVertices[vc.vertexIndex], bindings[vc.vertexIndex], state);
                 DVector3 r = deformed - vc.targetPosition;
 
                 residual[row++] = wCon * r.x;
@@ -1047,9 +1284,12 @@ namespace UC.ED
                 // 4) Clearance constraints - allow for clearance to grow, but constrained it going smaller
                 //
                 // -------------------------------------------------------------
-                for (int i = 0; i < currentClearance.Count; i++)
+                for (int i = 0; i < structure.Count; i++)
                 {
-                    residual[row++] = wClearance * ComputeClearanceLoss(originalClearance[i], currentClearance[i]);
+                    var originalClearance = restState.clearances.Get(i);
+                    var currentClearance = state.clearances.Get(i);
+
+                    residual[row++] = wClearance * ComputeClearanceLoss(originalClearance, currentClearance);
                 }
             }
 
@@ -1060,17 +1300,21 @@ namespace UC.ED
                 // -------------------------------------------------------------
                 for (int i = 0; i < structure.Count; i++)
                 {
-                    residual[row++] = EvaluateSingleSlopeResidual(i, wSlope);
+                    residual[row++] = EvaluateSingleSlopeResidual(state, i, wSlope);
                 }
             }
+
+            DebugProfiler.DebugMark(timeResidualEvaluate);
 
             return residual;
         }
 
         private int ParamBase(int nodeIndex) => nodeIndex * 12;
 
-        private Vector<double> PackNodeParameters()
+        /*private Vector<double> PackNodeParameters()
         {
+            DebugProfiler.DebugMark(timePack);
+
             int nodeCount = nodes.Count;
             Vector<double> x = DenseVector.Create(nodeCount * 12, 0.0);
 
@@ -1098,11 +1342,15 @@ namespace UC.ED
                 x[baseIdx + 11] = m.m23;
             }
 
-            return x;
-        }
+            DebugProfiler.DebugMark(timePack);
 
-        private void ApplyNodeParameters(Vector<double> x)
+            return x;
+        }*/
+
+        /*private void ApplyNodeParameters(Vector<double> x)
         {
+            DebugProfiler.DebugMark(timeApplyParameters);
+
             int nodeCount = nodes.Count;
 
             for (int i = 0; i < nodeCount; i++)
@@ -1131,71 +1379,56 @@ namespace UC.ED
 
                 nodes[i].currentMatrix = m;
             }
-        }
 
-        private Matrix<double> BuildNumericalJacobian(Vector<double> x,
+            DebugProfiler.DebugMark(timeApplyParameters);
+        }*/
+
+        private Matrix<double> BuildNumericalJacobian(EDState state,
                                                       double rotationWeight,
                                                       double regularizationWeight,
                                                       double constraintWeight,
-                                                      double connectorConstraintWeight,
                                                       double epsilon = 1e-6)
         {
-            int paramCount = x.Count;
-
-            // Apply base state
-            ApplyNodeParameters(x);
-
             // Base residual
-            Vector<double> f0 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+            Vector<double> f0 = EvaluateResidualVector(new EDStateView(state), rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
 
             int residualCount = f0.Count;
 
-            Matrix<double> J = DenseMatrix.Create(residualCount, paramCount, 0.0);
+            Matrix<double> J = DenseMatrix.Create(residualCount, state.Count, 0.0);
 
             // Temporary working vector
-            Vector<double> xPerturbed = x.Clone();
-
-            for (int i = 0; i < paramCount; i++)
+            for (int i = 0; i < state.Count; i++)
             {
-                double original = xPerturbed[i];
-
-                double scale = Math.Max(1.0, Math.Abs(original));
-                double eps = 1e-6 * scale;
+                double scale = Math.Max(1.0, Math.Abs(state.Get(i)));
+                double eps = epsilon * scale;
 
                 // Perturb parameter
-                xPerturbed[i] = original + eps;
-
-                // Apply perturbed parameters
-                ApplyNodeParameters(xPerturbed);
+                var modifiedState = new EDStateView(state, i, eps);
 
                 // Evaluate new residual
-                Vector<double> f1 = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+                Vector<double> f1 = EvaluateResidualVector(modifiedState, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
 
                 // Compute column i
                 for (int r = 0; r < residualCount; r++)
                 {
                     J[r, i] = (f1[r] - f0[r]) / eps;
                 }
-
-                // Restore parameter
-                xPerturbed[i] = original;
             }
-
-            // Restore original state
-            ApplyNodeParameters(x);
 
             return J;
         }
 
-        private int FillRotationJacobianBlock(Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
+        private int FillRotationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
         {
+            DebugProfiler.DebugMark(timeJacobianBuildRotation);
+
             int p = ParamBase(nodeIndex);
-            var aX = nodes[nodeIndex].axisX;
-            var aY = nodes[nodeIndex].axisY;
-            var aZ = nodes[nodeIndex].axisZ;
+            var aX = state.GetAxisX(nodeIndex);
+            var aY = state.GetAxisY(nodeIndex);
+            var aZ = state.GetAxisZ(nodeIndex);
 
             // r0 = X·Y
-            J[row, p + 0] = wRot * aY.x; 
+            J[row, p + 0] = wRot * aY.x;
             J[row, p + 3] = wRot * aY.y;
             J[row, p + 6] = wRot * aY.z;
             J[row, p + 1] = wRot * aX.x;
@@ -1245,11 +1478,15 @@ namespace UC.ED
 
             jNormRunningTotalSq += 6.0 * wRot * wRot * (ax2 + ay2 + az2);
 
+            DebugProfiler.DebugMark(timeJacobianBuildRotation);
+
             return row;
         }
 
-        private int FillRegularizationJacobianBlock(Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
+        private int FillRegularizationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
         {
+            DebugProfiler.DebugMark(timeJacobianBuildRegularization);
+
             int pj = ParamBase(nodeJ);
             int pk = ParamBase(nodeK);
 
@@ -1262,46 +1499,51 @@ namespace UC.ED
             double dz = d.z;
 
             // r.x
-            J[row, pj + 0] = wReg * dx;
-            J[row, pj + 1] = wReg * dy;
-            J[row, pj + 2] = wReg * dz;
-            J[row, pj + 9] = wReg * 1.0;
-            J[row, pk + 9] = wReg * -1.0;
+            J[row, pj + 0] = wReg * dx;   // m00
+            J[row, pj + 1] = wReg * dy;   // m01
+            J[row, pj + 2] = wReg * dz;   // m02
+            J[row, pj + 3] = wReg * 1.0;  // m03 / tx_j
+            J[row, pk + 3] = wReg * -1.0; // tx_k
             row++;
 
             // r.y
-            J[row, pj + 3] = wReg * dx;
-            J[row, pj + 4] = wReg * dy;
-            J[row, pj + 5] = wReg * dz;
-            J[row, pj + 10] = wReg * 1.0;
-            J[row, pk + 10] = wReg * -1.0;
+            J[row, pj + 4] = wReg * dx;   // m10
+            J[row, pj + 5] = wReg * dy;   // m11
+            J[row, pj + 6] = wReg * dz;   // m12
+            J[row, pj + 7] = wReg * 1.0;  // m13 / ty_j
+            J[row, pk + 7] = wReg * -1.0; // ty_k
             row++;
 
             // r.z
-            J[row, pj + 6] = wReg * dx;
-            J[row, pj + 7] = wReg * dy;
-            J[row, pj + 8] = wReg * dz;
-            J[row, pj + 11] = wReg * 1.0;
-            J[row, pk + 11] = wReg * -1.0;
+            J[row, pj + 8] = wReg * dx;   // m20
+            J[row, pj + 9] = wReg * dy;   // m21
+            J[row, pj + 10] = wReg * dz;   // m22
+            J[row, pj + 11] = wReg * 1.0;  // m23 / tz_j
+            J[row, pk + 11] = wReg * -1.0; // tz_k
             row++;
 
             double d2 = dx * dx + dy * dy + dz * dz;
             jNormRunningTotalSq += 3.0 * wReg * wReg * (d2 + 2.0);
 
+            DebugProfiler.DebugMark(timeJacobianBuildRegularization);
+
             return row;
         }
 
-        private int FillConstraintJacobianBlock(Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
+        private int FillConstraintJacobianBlock(EDStateView state, Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
         {
+            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+
             DVector3 v = restVertices[vertexIndex];
             EDVertexBinding binding = bindings[vertexIndex];
 
             for (int b = 0; b < binding.nodeIndices.Length; b++)
             {
                 int nodeIndex = binding.nodeIndices[b];
-                if (nodeIndex < 0) continue;
+                if (nodeIndex < 0)
+                    continue;
 
-                double wb = (binding.weights != null && b < binding.weights.Length) ? binding.weights[b] : 1.0 / binding.nodeIndices.Length;
+                double wb = ((binding.weights != null) && (b < binding.weights.Length)) ? (binding.weights[b]) : (1.0 / binding.nodeIndices.Length);
 
                 int p = ParamBase(nodeIndex);
 
@@ -1315,32 +1557,36 @@ namespace UC.ED
                 double s = wCon * wb;
 
                 // residual x
-                J[row + 0, p + 0] += s * ux;
-                J[row + 0, p + 1] += s * uy;
-                J[row + 0, p + 2] += s * uz;
-                J[row + 0, p + 9] += s;
+                J[row + 0, p + 0] += s * ux; // m00
+                J[row + 0, p + 1] += s * uy; // m01
+                J[row + 0, p + 2] += s * uz; // m02
+                J[row + 0, p + 3] += s;      // m03 / tx
 
                 // residual y
-                J[row + 1, p + 3] += s * ux;
-                J[row + 1, p + 4] += s * uy;
-                J[row + 1, p + 5] += s * uz;
-                J[row + 1, p + 10] += s;
+                J[row + 1, p + 4] += s * ux; // m10
+                J[row + 1, p + 5] += s * uy; // m11
+                J[row + 1, p + 6] += s * uz; // m12
+                J[row + 1, p + 7] += s;      // m13 / ty
 
                 // residual z
-                J[row + 2, p + 6] += s * ux;
-                J[row + 2, p + 7] += s * uy;
-                J[row + 2, p + 8] += s * uz;
-                J[row + 2, p + 11] += s;
+                J[row + 2, p + 8] += s * ux; // m20
+                J[row + 2, p + 9] += s * uy; // m21
+                J[row + 2, p + 10] += s * uz; // m22
+                J[row + 2, p + 11] += s;      // m23 / tz
 
                 double u2 = ux * ux + uy * uy + uz * uz;
                 jNormRunningTotalSq += 3.0 * s * s * (u2 + 1.0);
             }
 
+            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+
             return row + 3;
         }
 
-        public Matrix<double> BuildJacobian(out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight)
+        Matrix<double> BuildJacobian(EDState state, out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight)
         {
+            DebugProfiler.DebugMark(timeJacobianBuild);
+
             // First rows are rotation constraints, then regularization, then positional constraints, then clearance constraints (if enabled)
             // We also compute an estimate of the Jacobian norm while filling it, which can be used for scaling other terms
             // Rotation, regularization, and constraint blocks are calculated analytically, while clearance and slope weight is currently left for numerical differentiation
@@ -1375,106 +1621,118 @@ namespace UC.ED
 
             int row = 0;
 
+            var stateView = new EDStateView(state);
+
             // Rotation
             for (int i = 0; i < nodeCount; i++)
-                row = FillRotationJacobianBlock(J, row, i, wRot, ref jNorm);
+            {
+                row = FillRotationJacobianBlock(stateView, J, row, i, wRot, ref jNorm);
+            }
 
             // Regularization (directed)
             for (int j = 0; j < nodeCount; j++)
             {
                 foreach (int k in nodes[j].neighbors)
-                    row = FillRegularizationJacobianBlock(J, row, j, k, wReg, ref jNorm);
+                {
+                    row = FillRegularizationJacobianBlock(stateView, J, row, j, k, wReg, ref jNorm);
+                }
             }
 
             // Constraints
             for (int c = 0; c < constraintCount; c++)
-                row = FillConstraintJacobianBlock(J, row, vertexConstraints[c].vertexIndex, wCon, ref jNorm);
+            {
+                row = FillConstraintJacobianBlock(stateView, J, row, vertexConstraints[c].vertexIndex, wCon, ref jNorm);
+            }
 
             if (clearanceWeight > 0)
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
-                    row = FillClearanceJacobianBlock(J, row, i, wClearance, ref jNorm);
-                }                    
+                    row = FillClearanceJacobianBlock(state, J, row, i, wClearance, ref jNorm);
+                }
             }
 
             if (slopeWeight > 0)
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
-                    row = FillSlopeJacobianBlock(J, row, i, wSlope, ref jNorm);
+                    row = FillSlopeJacobianBlock(state, J, row, i, wSlope, ref jNorm);
                 }
             }
 
             jNorm = Math.Sqrt(jNorm);
 
+            DebugProfiler.DebugMark(timeJacobianBuild);
+
             return J;
         }
 
-        private int FillClearanceJacobianBlock(DenseMatrix J, int row, int segmentIndex, double wClearance, ref double jNorm)
+        private int FillClearanceJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, ref double jNorm)
         {
-            Vector<double> x0 = PackNodeParameters();
+            DebugProfiler.DebugMark(timeJacobianBuildClearance);
 
-            // Base residual value for this segment
-            double r0 = EvaluateSingleClearanceResidual(segmentIndex, wClearance);
+            var baseView = new EDStateView(state);
 
-            for (int col = 0; col < x0.Count; col++)
+            // Base residual value for this segment.
+            double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance);
+
+            // Optional but useful for hinge-like residuals.
+            // If inactive, the row is zero.
+            if (Math.Abs(r0) <= 1e-12)
             {
-                double original = x0[col];
-
-                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
-                x0[col] = original + eps;
-
-                ApplyNodeParameters(x0);
-
-                double r1 = EvaluateSingleClearanceResidual(segmentIndex, wClearance);
-
-                J[row, col] = (r1 - r0) / eps;
-
-                x0[col] = original;
+                DebugProfiler.DebugMark(timeJacobianBuildClearance);
+                return row + 1;
             }
 
-            ApplyNodeParameters(x0);
+            for (int col = 0; col < state.Count; col++)
+            {
+                double original = state.Get(col);
 
-            for (int col = 0; col < x0.Count; col++)
-                jNorm += J[row, col] * J[row, col];
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+                var modified = new EDStateView(state, col, eps);
+
+                double r1 = EvaluateSingleClearanceResidual(modified, segmentIndex, wClearance);
+
+                double v = (r1 - r0) / eps;
+                J[row, col] = v;
+                jNorm += v * v;
+            }
+
+            DebugProfiler.DebugMark(timeJacobianBuildClearance);
 
             return row + 1;
         }
 
-        private int FillSlopeJacobianBlock(DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
+        private int FillSlopeJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
         {
-            Vector<double> x0 = PackNodeParameters();
+            DebugProfiler.DebugMark(timeJacobianBuildSlope);
+
+            var baseView = new EDStateView(state);
 
             // Base residual value for this segment.
-            double r0 = EvaluateSingleSlopeResidual(segmentIndex, wSlope);
+            double r0 = EvaluateSingleSlopeResidual(baseView, segmentIndex, wSlope);
 
             if (r0 <= 1e-12)
             {
+                DebugProfiler.DebugMark(timeJacobianBuildSlope);
                 return row + 1;
             }
 
-            for (int col = 0; col < x0.Count; col++)
+            for (int col = 0; col < state.Count; col++)
             {
-                double original = x0[col];
+                double original = state.Get(col);
 
                 double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+                var modifiedState = new EDStateView(state, col, eps);
 
-                x0[col] = original + eps;
-                ApplyNodeParameters(x0);
-
-                double r1 = EvaluateSingleSlopeResidual(segmentIndex, wSlope);
+                double r1 = EvaluateSingleSlopeResidual(modifiedState, segmentIndex, wSlope);
 
                 J[row, col] = (r1 - r0) / eps;
 
-                x0[col] = original;
+                jNorm += J[row, col] * J[row, col];
             }
 
-            // Restore original node parameters.
-            ApplyNodeParameters(x0);
-
-            for (int col = 0; col < x0.Count; col++)
-                jNorm += J[row, col] * J[row, col];
+            DebugProfiler.DebugMark(timeJacobianBuildSlope);
 
             return row + 1;
         }
@@ -1602,43 +1860,33 @@ namespace UC.ED
                                double stepTolerance = 1e-6,
                                bool resetBeforeSolve = true)
         {
-            if (resetBeforeSolve) ResetDeformation();
+            if (resetBeforeSolve)
+                ResetDeformation();
 
 #if MATH_NET_AVAILABLE
-            var x = PackNodeParameters();
+            if (currentState == null)
+                currentState = new EDState(nodes.Count);
 
             for (int iter = 0; iter < maxIterations; iter++)
             {
-                ApplyNodeParameters(x);
+                var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0, 0);
+                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+
                 double error = f.L2Norm();
-
-                //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
 
                 // Already solved / close enough
                 if (!double.IsFinite(error) || error < residualTolerance)
                 {
-                    //Debug.Log($"[ED] Converged before solve at iteration {iter}");
                     break;
                 }
 
-                //var J2 = BuildNumericalJacobian(x, rotationWeight, regularizationWeight, constraintWeight);
-                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0, 0);
+                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
 
-                //double diff = (J - J2).FrobeniusNorm();
-                //double rel = diff / Math.Max(1e-12, J2.FrobeniusNorm());
-
-                //Debug.Log($"Jacobian diff = {diff}, relative = {rel}");
-
-                //double jNorm = J.FrobeniusNorm();
                 if (!double.IsFinite(jNorm) || jNorm < 1e-12)
                 {
-                    //Debug.Log("[ED] Jacobian is near zero; stopping.");
                     break;
                 }
-
-                //DebugJacobianNullspace(J);
 
                 Vector<double> delta;
 
@@ -1654,6 +1902,7 @@ namespace UC.ED
                 }
 
                 double stepNorm = delta.L2Norm();
+
                 if (!double.IsFinite(stepNorm))
                 {
                     Debug.LogError("[ED] SolveED produced non-finite delta.");
@@ -1662,14 +1911,11 @@ namespace UC.ED
 
                 if (stepNorm < stepTolerance)
                 {
-                    //Debug.Log($"[ED] Converged by step size at iteration {iter}");
                     break;
                 }
 
-                x = x + damping * delta;
+                currentState.Apply(delta, damping);
             }
-
-            ApplyNodeParameters(x);
 #else
     throw new NotImplementedException();
 #endif
@@ -1689,17 +1935,18 @@ namespace UC.ED
                 ResetDeformation();
 
 #if MATH_NET_AVAILABLE
-            var x = PackNodeParameters();
+            if (currentState == null)
+                currentState = new EDState(nodes.Count);
+
             double currentLambda = lambda;
 
             for (int iter = 0; iter < maxIterations; iter++)
             {
-                ApplyNodeParameters(x);
+                var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0, 0);
+                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+
                 double error = f.L2Norm();
-
-                //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
 
                 if (!double.IsFinite(error))
                 {
@@ -1710,19 +1957,19 @@ namespace UC.ED
                 if (error < residualTolerance)
                     break;
 
-                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                     break;
 
                 var JT = J.Transpose();
-                var H = JT * J;     // approximate Hessian
-                var g = JT * f;     // gradient term
+                var H = JT * J;
+                var g = JT * f;
 
                 Vector<double> delta = null;
+                EDState acceptedState = null;
                 bool solved = false;
 
-                // Try current lambda, optionally increasing it if solve or step is bad
                 for (int attempt = 0; attempt < 8; attempt++)
                 {
                     var Hlm = H.Clone();
@@ -1746,17 +1993,29 @@ namespace UC.ED
                     }
 
                     double stepNorm = delta.L2Norm();
+
                     if (!double.IsFinite(stepNorm))
                     {
                         currentLambda *= 10.0;
                         continue;
                     }
 
-                    // Candidate step
-                    var xCandidate = x + delta;
-                    ApplyNodeParameters(xCandidate);
+                    EDState candidateState;
 
-                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, 0, 0);
+                    try
+                    {
+                        candidateState = currentState.CloneAndApply(delta, 1.0);
+                    }
+                    catch
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    var candidateView = new EDStateView(candidateState);
+
+                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+
                     double candidateError = fCandidate.L2Norm();
 
                     if (!double.IsFinite(candidateError))
@@ -1765,10 +2024,9 @@ namespace UC.ED
                         continue;
                     }
 
-                    // Accept only if it improves the residual
                     if (candidateError <= error)
                     {
-                        x = xCandidate;
+                        acceptedState = candidateState;
                         solved = true;
 
                         if (adaptiveLambda)
@@ -1776,16 +2034,14 @@ namespace UC.ED
 
                         if (stepNorm < stepTolerance)
                         {
-                            ApplyNodeParameters(x);
+                            currentState = acceptedState;
                             return;
                         }
 
                         break;
                     }
-                    else
-                    {
-                        currentLambda *= 10.0;
-                    }
+
+                    currentLambda *= 10.0;
                 }
 
                 if (!solved)
@@ -1793,9 +2049,9 @@ namespace UC.ED
                     Debug.LogWarning("[ED] LM could not find an improving step.");
                     break;
                 }
-            }
 
-            ApplyNodeParameters(x);
+                currentState = acceptedState;
+            }
 #else
     throw new NotImplementedException();
 #endif
@@ -1804,7 +2060,7 @@ namespace UC.ED
         public void SolveED_Nav(int maxIterations = 10,
                                 double rotationWeight = 1.0,
                                 double regularizationWeight = 10.0,
-                                double constraintWeight = 100.0,                                
+                                double constraintWeight = 100.0,
                                 double clearanceWeight = 100.0,
                                 double slopeWeight = 100.0,
                                 double lambda = 1e-3,
@@ -1817,42 +2073,57 @@ namespace UC.ED
                 ResetDeformation();
 
 #if MATH_NET_AVAILABLE
-            var x = PackNodeParameters();
+            if (currentState == null)
+            {
+                currentState = new EDState(nodes.Count);
+                ComputeClearance(currentState);
+            }
+
             double currentLambda = lambda;
 
             int iter = 0;
+
             for (iter = 0; iter < maxIterations; iter++)
             {
-                ApplyNodeParameters(x);
-                UpdateClearance();
+                DebugProfiler.DebugMark(timeIteration);
 
-                var f = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+                var stateView = new EDStateView(currentState);
+
+                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+
                 double error = f.L2Norm();
-
-                //Debug.Log($"[ED] Iteration {iter} - Error = {error}");
 
                 if (!double.IsFinite(error))
                 {
                     Debug.LogError($"[ED] Residual became non-finite after {iter} iterations.");
+                    DebugProfiler.DebugMark(timeIteration);
                     return;
                 }
 
                 if (error < residualTolerance)
+                {
+                    DebugProfiler.DebugMark(timeIteration);
                     break;
+                }
 
-                var J = BuildJacobian(out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
+                {
+                    DebugProfiler.DebugMark(timeIteration);
                     break;
+                }
 
                 var JT = J.Transpose();
-                var H = JT * J;     // approximate Hessian
-                var g = JT * f;     // gradient term
+
+                var H = JT * J; // approximate Hessian
+                var g = JT * f; // gradient term
 
                 Vector<double> delta = null;
+                EDState acceptedState = null;
                 bool solved = false;
 
-                // Try current lambda, optionally increasing it if solve or step is bad
+                // Try current lambda, optionally increasing it if solve or step is bad.
                 for (int attempt = 0; attempt < 8; attempt++)
                 {
                     var Hlm = H.Clone();
@@ -1862,11 +2133,14 @@ namespace UC.ED
 
                     try
                     {
+                        DebugProfiler.DebugMark(timeSolve);
                         delta = Hlm.Solve(-g);
+                        DebugProfiler.DebugMark(timeSolve);
                     }
                     catch
                     {
                         delta = null;
+                        DebugProfiler.DebugMark(timeSolve);
                     }
 
                     if (delta == null)
@@ -1876,18 +2150,30 @@ namespace UC.ED
                     }
 
                     double stepNorm = delta.L2Norm();
+
                     if (!double.IsFinite(stepNorm))
                     {
                         currentLambda *= 10.0;
                         continue;
                     }
 
-                    // Candidate step
-                    var xCandidate = x + delta;
-                    ApplyNodeParameters(xCandidate);
-                    UpdateClearance();
+                    EDState candidateState;
 
-                    var fCandidate = EvaluateResidualVector(rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+                    try
+                    {
+                        candidateState = currentState.CloneAndApply(delta, 1.0);
+                        ComputeClearance(candidateState);
+                    }
+                    catch
+                    {
+                        currentLambda *= 10.0;
+                        continue;
+                    }
+
+                    var candidateView = new EDStateView(candidateState);
+
+                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+
                     double candidateError = fCandidate.L2Norm();
 
                     if (!double.IsFinite(candidateError))
@@ -1896,10 +2182,10 @@ namespace UC.ED
                         continue;
                     }
 
-                    // Accept only if it improves the residual
+                    // Accept only if it improves the residual.
                     if (candidateError <= error)
                     {
-                        x = xCandidate;
+                        acceptedState = candidateState;
                         solved = true;
 
                         if (adaptiveLambda)
@@ -1907,30 +2193,37 @@ namespace UC.ED
 
                         if (stepNorm < stepTolerance)
                         {
-                            ApplyNodeParameters(x);
+                            currentState = acceptedState;
+
+                            DebugProfiler.DebugMark(timeIteration);
+
                             Debug.Log($"Ran {iter} iterations...");
+                            LogTimerReport();
+
                             return;
                         }
 
                         break;
                     }
-                    else
-                    {
-                        currentLambda *= 10.0;
-                    }
+
+                    currentLambda *= 10.0;
                 }
 
                 if (!solved)
                 {
                     Debug.LogWarning("[ED] LM could not find an improving step.");
+                    DebugProfiler.DebugMark(timeIteration);
                     break;
                 }
+
+                currentState = acceptedState;
+                ComputeClearance(currentState);
+
+                DebugProfiler.DebugMark(timeIteration);
             }
 
-            ApplyNodeParameters(x);
-            UpdateClearance();
-
             Debug.Log($"Ran {iter} iterations...");
+            LogTimerReport();
 #else
     throw new NotImplementedException();
 #endif
@@ -1983,7 +2276,7 @@ namespace UC.ED
             });
         }
 
-        public void SetNavEDParameters(TopologyStatic navMeshTopology, 
+        public void SetNavEDParameters(TopologyStatic navMeshTopology,
                                        float agentRadius, float maxSlope, float slopeSoftBand, Vector3 upVector,
                                        BindingSelectionMode bindMode, BindingWeightMode weightMode,
                                        int k = 4, // When BindingSelectionMode = closest-K
@@ -1994,7 +2287,7 @@ namespace UC.ED
             this.slopeSoftBand = slopeSoftBand;
             this.upVector = upVector.normalized;
             this.navMeshTopology = navMeshTopology;
-            
+
             for (int i = 0; i < structure.Count; i++)
             {
                 var seg = structure[i];
@@ -2014,22 +2307,21 @@ namespace UC.ED
                 seg.bBind = GetBinding(seg.probeB, bindMode, weightMode, k, power, sigma);
             }
 
-            originalClearance = new();
-            ComputeClearance(false, originalClearance);
+            ComputeClearance(currentState);
+            ComputeClearance(restState);
 
-            LogClearance("Original clearance:", originalClearance, originalClearance);
+            LogClearance("Original clearance:", restState, restState);
         }
 
         public void LogCurrentClearance()
         {
-            List<double> result = new();
-            ComputeClearance(true, result);
-
-            LogClearance("Current clearance:", originalClearance, result);
+            LogClearance("Current clearance:", restState, currentState);
         }
 
-        void LogClearance(string title, List<double> originalClearance, List<double> currentClearance)
+        void LogClearance(string title, EDState originalState, EDState currentState)
         {
+            EDClearanceCache originalClearances = originalState.clearances;
+            EDClearanceCache currentClearances = currentState.clearances;
             const double epsilon = 1e-8;
 
             string sb = $"{title}\n";
@@ -2043,10 +2335,10 @@ namespace UC.ED
             int maxShrinkageIndex = -1;
             int invalidSegments = 0;
 
-            for (int i = 0; i < currentClearance.Count; i++)
+            for (int i = 0; i < structure.Count; i++)
             {
-                double original = originalClearance[i];
-                double current = currentClearance[i];
+                double original = originalClearances.Get(i);
+                double current = currentClearances.Get(i);
 
                 if ((original == double.MaxValue) || (current == double.MaxValue))
                 {
@@ -2075,7 +2367,7 @@ namespace UC.ED
                 sb += $"Segment {i} = {current} (orig = {original}, shrinkage = {shrinkage:P2})\n";
             }
 
-            int validSegments = currentClearance.Count - invalidSegments;
+            int validSegments = structure.Count - invalidSegments;
 
             double shrinkageMean = (validSegments > 0) ? (shrinkageSum / validSegments) : 0.0;
             double shrinkageVariance = (validSegments > 0) ? (shrinkageSqSum / validSegments - shrinkageMean * shrinkageMean) : 0.0;
@@ -2091,45 +2383,50 @@ namespace UC.ED
             Debug.Log(sb);
         }
 
-        void ComputeClearance(bool useCurrentDeformation, List<double> clearanceData)
+        EDClearanceCache ComputeClearance(EDState state)
         {
-            foreach (var seg in structure)
-            {
-                DVector3 p1, p2;
-                if (useCurrentDeformation)
-                {
-                    p1 = DeformVertex(seg.p1, seg.bind1);
-                    p2 = DeformVertex(seg.p2, seg.bind2);
-                }
-                else
-                {
-                    p1 = seg.p1;
-                    p2 = seg.p2;
-                }
+            return state.clearances = ComputeClearance(new EDStateView(state));
+        }
 
-                if (GetClearance(p1, p2, useCurrentDeformation, out var clearance))
+        EDClearanceCache ComputeClearance(EDStateView state)
+        {
+            DebugProfiler.DebugMark(timeUpdateClearance);
+
+            var ret = new EDClearanceCache(structure.Count);
+
+            for (int index = 0; index < structure.Count; index++)
+            {
+                var seg = structure[index];
+                var p1 = DeformVertex(seg.p1, seg.bind1, state);
+                var p2 = DeformVertex(seg.p2, seg.bind2, state);
+
+                if (GetClearance(state, p1, p2, out var clearance))
                 {
-                    clearanceData.Add(clearance);
+                    ret.Set(index, clearance);
                 }
                 else
                 {
                     // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - set it to double.MaxValue to be able to identify it and make a loss of zero in that case
-                    clearanceData.Add(double.MaxValue);
+                    ret.Set(index, double.MaxValue);
                 }
             }
+
+            DebugProfiler.DebugMark(timeUpdateClearance);
+
+            return ret;
         }
 
-        private double EvaluateSingleClearanceResidual(int index, double wClearance)
+        private double EvaluateSingleClearanceResidual(EDStateView state, int index, double wClearance)
         {
-            double original = originalClearance[index];
+            double original = restState.GetClearance(index);
 
             // Always calculates based on current deformation
             var seg = structure[index];
 
-            var p1 = DeformVertex(seg.p1, seg.bind1);
-            var p2 = DeformVertex(seg.p2, seg.bind2);
+            var p1 = DeformVertex(seg.p1, seg.bind1, state);
+            var p2 = DeformVertex(seg.p2, seg.bind2, state);
 
-            if (!GetClearance(p1, p2, true, out var current))
+            if (!GetClearance(state, p1, p2, out var current))
             {
                 // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - set it to double.MaxValue to be able to identify it and make a loss of zero in that case
                 return 0.0;
@@ -2139,7 +2436,7 @@ namespace UC.ED
             return wClearance * loss;
         }
 
-        private double EvaluateSingleSlopeResidual(int segmentIndex, double wSlope)
+        private double EvaluateSingleSlopeResidual(EDStateView state, int segmentIndex, double wSlope)
         {
             // Normalized hinge:
             //   0 at or below maxSlope - softBand
@@ -2158,7 +2455,7 @@ namespace UC.ED
             double denom = Math.Max(softDot - hardDot, 1e-12);
 
             Vector3 upNorm = upVector.normalized;
-            Vector3 segNormal = GetSegmentSlopeNormal(segmentIndex);
+            Vector3 segNormal = GetTransformedSegmentSlopeNormal(state, segmentIndex);
 
             double penalty;
 
@@ -2182,7 +2479,7 @@ namespace UC.ED
 
         private double ComputeClearanceLoss(double original, double current)
         {
-            if ((original == double.MaxValue) || (current == double.MaxValue)) 
+            if ((original == double.MaxValue) || (current == double.MaxValue))
             {
                 // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - return zero loss in that case
                 return 0;
@@ -2193,9 +2490,9 @@ namespace UC.ED
             const double epsilon = 1e-3; // Small value to prevent division by zero and very large losses when original clearance is very small
             const double power = 1.0; // Exponent to control how aggressively we penalize clearance reductions - higher values will focus more on smaller reductions - > 1 works bad, there's probably an issue somewhere
             return Math.Max(0, Math.Pow((original - current) / (original + epsilon), power));
-        }        
+        }
 
-        bool GetClearance(DVector3 p1, DVector3 p2, bool useCurrentDeformation, out double minClearance)
+        bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, out double minClearance)
         {
             minClearance = double.MaxValue;
 
@@ -2205,61 +2502,30 @@ namespace UC.ED
 
             double maxDist = dir.magnitude;
             dir /= maxDist;
-            
-            if (useCurrentDeformation)
+
+            foreach (var edge in navMeshTopology.edges)
             {
-                foreach (var edge in navMeshTopology.edges)
+                if (!edge.isBoundary) continue;
+
+                if (IsConnectorEdge(edge)) continue;
+
+
+                var e1 = DeformVertex(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state);
+                var e2 = DeformVertex(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state);
+
+                // Edge projection interval [minT, maxT] onto p1->p2
+                double t1 = DVector3.Dot(e1 - p1, dir);
+                double t2 = DVector3.Dot(e2 - p1, dir);
+                double minT = Math.Min(t1, t2);
+                double maxT = Math.Max(t1, t2);
+
+                // No overlap with segment [0,maxDist]
+                if ((maxT < 0.0f) || (minT > maxDist)) continue;
+
+                double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
+                if (d < minClearance)
                 {
-                    if (!edge.isBoundary) continue;
-
-                    if (IsConnectorEdge(edge)) continue;
-
-                    // This needs to change to use deformed positions instead of original positions
-                    var e1 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i1);
-                    var e2 = DeformVertexFromCurrentNodeTransforms(edge.vertices.i2);
-
-                    // Edge projection interval [minT, maxT] onto p1->p2
-                    double t1 = DVector3.Dot(e1 - p1, dir);
-                    double t2 = DVector3.Dot(e2 - p1, dir);
-                    double minT = Math.Min(t1, t2);
-                    double maxT = Math.Max(t1, t2);
-
-                    // No overlap with segment [0,maxDist]
-                    if ((maxT < 0.0f) || (minT > maxDist)) continue;
-
-                    double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
-                    if (d < minClearance)
-                    {
-                        minClearance = d;
-                    }
-                }
-            }
-            else
-            {
-                foreach (var edge in navMeshTopology.edges)
-                {
-                    if (!edge.isBoundary) continue;
-
-                    if (IsConnectorEdge(edge)) continue;
-
-                    // This needs to change to use deformed positions instead of original positions
-                    var e1 = navMeshTopology.GetVertexPosition(edge.vertices.i1).ToDVector3();
-                    var e2 = navMeshTopology.GetVertexPosition(edge.vertices.i2).ToDVector3();
-
-                    // Edge projection interval [minT, maxT] onto p1->p2
-                    double t1 = DVector3.Dot(e1 - p1, dir);
-                    double t2 = DVector3.Dot(e2 - p1, dir);
-                    double minT = Math.Min(t1, t2);
-                    double maxT = Math.Max(t1, t2);
-
-                    // No overlap with segment [0,maxDist]
-                    if ((maxT < 0.0f) || (minT > maxDist)) continue;
-
-                    double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
-                    if (d < minClearance)
-                    {
-                        minClearance = d;
-                    }
+                    minClearance = d;
                 }
             }
 
@@ -2279,12 +2545,13 @@ namespace UC.ED
 
         public int GetSegmentCount() => structure.Count;
 
-        public (Vector3, Vector3) GetSegment(int segIndex)
+        public (Vector3, Vector3) GetSegment(int segIndex) => GetTransformedSegment(new EDStateView(currentState), segIndex);
+        private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segIndex)
         {
-            var         seg = structure[segIndex];
+            var seg = structure[segIndex];
 
-            var dp1 = DeformVertex(seg.p1, seg.bind1);
-            var dp2 = DeformVertex(seg.p2, seg.bind2);
+            var dp1 = DeformVertex(seg.p1, seg.bind1, state);
+            var dp2 = DeformVertex(seg.p2, seg.bind2, state);
 
             return (dp1.ToVector3(), dp2.ToVector3());
         }
@@ -2302,13 +2569,15 @@ namespace UC.ED
             return dir;
         }
 
-        public Vector3 GetSegmentSlopeNormal(int segIndex)
+        public Vector3 GetSegmentSlopeNormal(int segIndex) => GetTransformedSegmentSlopeNormal(new EDStateView(currentState), segIndex);
+
+        Vector3 GetTransformedSegmentSlopeNormal(EDStateView state, int segIndex)
         {
             var seg = structure[segIndex];
 
-            var q0 = DeformVertex(seg.center, seg.cBind);
-            var qT = DeformVertex(seg.probeT, seg.tBind);
-            var qB = DeformVertex(seg.probeB, seg.bBind);
+            var q0 = DeformVertex(seg.center, seg.cBind, state);
+            var qT = DeformVertex(seg.probeT, seg.tBind, state);
+            var qB = DeformVertex(seg.probeB, seg.bBind, state);
 
             DVector3 t = qT - q0;
             DVector3 b = qB - q0;
@@ -2322,15 +2591,50 @@ namespace UC.ED
             return n.ToVector3();
         }
 
-        public void UpdateClearance()
-        {
-            currentClearance = new();
-            ComputeClearance(true, currentClearance);
-        }
-
         public double GetClearance(int segIndex)
         {
-            return currentClearance[segIndex];
+            return currentState.GetClearance(segIndex);
+        }
+
+        public void ClearTimers()
+        {
+            timePack = new();
+            timeIteration = new();
+            timeResidualEvaluate = new();
+            timeJacobianBuild = new();
+            timeSolve = new();
+            timeApplyParameters = new();
+            timeUpdateClearance = new();
+            timeJacobianBuildConstraint = new();
+            timeJacobianBuildRotation = new();
+            timeJacobianBuildRegularization = new();
+            timeJacobianBuildSlope = new();
+            timeJacobianBuildClearance = new();
+        }
+
+        public void LogTimerReport()
+        {
+            string sb = $"Time report:\n";
+            sb += $"  Pack parameters: {timePack.accumulatedTimeMS:F6} ms\n";
+            sb += $"  Iteration time: {timeIteration.accumulatedTimeMS:F6} ms\n";
+            sb += $"    Residual evaluation: {timeResidualEvaluate.accumulatedTimeMS:F6} ms\n";
+            sb += $"    Build Jacobian: {timeJacobianBuild.accumulatedTimeMS:F6} ms\n";
+            sb += $"      Constraints: {timeJacobianBuildConstraint.accumulatedTimeMS:F6} ms\n";
+            sb += $"      Rotation: {timeJacobianBuildRotation.accumulatedTimeMS:F6} ms\n";
+            sb += $"      Regularization: {timeJacobianBuildRegularization.accumulatedTimeMS:F6} ms\n";
+            sb += $"      Slope: {timeJacobianBuildSlope.accumulatedTimeMS:F6} ms\n";
+            sb += $"      Clearance: {timeJacobianBuildClearance.accumulatedTimeMS:F6} ms\n";
+            sb += $"    Solve time: {timeSolve.accumulatedTimeMS:F6} ms\n";
+            sb += $"    Apply parameters: {timeApplyParameters.accumulatedTimeMS:F6} ms\n";
+            sb += $"    Clearance calculation: {timeUpdateClearance.accumulatedTimeMS:F6} ms\n";
+            Debug.Log(sb);
+        }
+
+        public Vector3 GetDebugNodePosition(int nodeIndex)
+        {
+            var node = nodes[nodeIndex];
+
+            return (currentState.TransformOffset(nodeIndex, DVector3.zero) + node.restPosition).ToVector3();
         }
     }
 }
