@@ -16,10 +16,12 @@ namespace UC.RPG
             MaxValue = 2
         }
 
+        public delegate bool CanChange(ResourceInstance resource, ChangeData data);
+        public event CanChange          canChange;
         public delegate void OnChange(ResourceInstance resourceInstance, ChangeData changeData);
-        public event OnChange onChange;
+        public event OnChange           onChange;
         public delegate void OnResourceEmpty(ResourceInstance resourceInstance, GameObject changeSource);
-        public event OnResourceEmpty onResourceEmpty;
+        public event OnResourceEmpty    onResourceEmpty;
         public delegate void OnResourceNotEmpty(ResourceInstance resourceInstance, GameObject healSource);
         public event OnResourceNotEmpty onResourceNotEmpty;
 
@@ -54,6 +56,7 @@ namespace UC.RPG
                     resourceInstance.onChange += ResourceInstance_onChange;
                     resourceInstance.onResourceEmpty += ResourceInstance_onResourceEmpty;
                     resourceInstance.onResourceNotEmpty += ResourceInstance_onResourceNotEmpty;
+                    resourceInstance.canChange += ResourceInstance_canChange;
                     _fromInstance = false;
                 }
                 return resourceInstance;
@@ -65,6 +68,7 @@ namespace UC.RPG
                     resourceInstance.onChange -= ResourceInstance_onChange;
                     resourceInstance.onResourceEmpty -= ResourceInstance_onResourceEmpty;
                     resourceInstance.onResourceNotEmpty -= ResourceInstance_onResourceNotEmpty;
+                    resourceInstance.canChange -= ResourceInstance_canChange;
                 }   
 
                 type = value.type;
@@ -72,6 +76,7 @@ namespace UC.RPG
                 resourceInstance.onChange += ResourceInstance_onChange;
                 resourceInstance.onResourceEmpty += ResourceInstance_onResourceEmpty;
                 resourceInstance.onResourceNotEmpty += ResourceInstance_onResourceNotEmpty;
+                resourceInstance.canChange += ResourceInstance_canChange;
                 _fromInstance = true;
             }
         }
@@ -84,19 +89,32 @@ namespace UC.RPG
             if (!_fromInstance) ResetResource();
         }
 
-        private void ResourceInstance_onResourceNotEmpty(ResourceInstance resourceInstance, GameObject healSource)
+        private void ResourceInstance_onResourceNotEmpty(ResourceInstance resource, GameObject healSource)
         {
-            onResourceNotEmpty?.Invoke(resourceInstance, healSource);
+            onResourceNotEmpty?.Invoke(resource, healSource);
         }
 
-        private void ResourceInstance_onResourceEmpty(ResourceInstance resourceInstance, GameObject changeSource)
+        private void ResourceInstance_onResourceEmpty(ResourceInstance resource, GameObject changeSource)
         {
-            onResourceEmpty?.Invoke(resourceInstance, changeSource);
+            onResourceEmpty?.Invoke(resource, changeSource);
         }
 
-        private void ResourceInstance_onChange(ResourceInstance resourceInstance, ChangeData changeData)
+        private void ResourceInstance_onChange(ResourceInstance resource, ChangeData changeData)
         {
-            onChange?.Invoke(resourceInstance, changeData);
+            onChange?.Invoke(resource, changeData);
+        }
+
+        private bool ResourceInstance_canChange(ResourceInstance resource, ChangeData changeData)
+        {
+            if (canChange != null)
+            {
+                foreach (CanChange filter in canChange.GetInvocationList())
+                {
+                    if (!filter(resource, changeData))
+                        return false;
+                }
+            }
+            return true;
         }
 
         void RenderCombatText(float prevValue)
@@ -162,7 +180,7 @@ namespace UC.RPG
 
         public void SetResource(float r)
         {
-            resourceInstance.SetResource(r);
+            instance.SetResource(r);
         }
 
         public void ResetResource(bool combatText = false)

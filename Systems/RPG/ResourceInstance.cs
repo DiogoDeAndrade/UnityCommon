@@ -10,6 +10,8 @@ namespace UC.RPG
         public event OnResourceEmpty onResourceEmpty;
         public delegate void OnResourceNotEmpty(ResourceInstance resource, GameObject healSource);
         public event OnResourceNotEmpty onResourceNotEmpty;
+        public delegate bool CanChange(ResourceInstance resource, ChangeData data);
+        public event CanChange canChange;
 
         private ResourceType    _type;
         private float           _value;
@@ -57,8 +59,25 @@ namespace UC.RPG
             }
         }
 
+        private bool AcceptsChange(ChangeData changeData)
+        {
+            if (canChange == null)
+                return true;
+
+            foreach (CanChange filter in canChange.GetInvocationList())
+            {
+                if (!filter(this, changeData))
+                    return false;
+            }
+
+            return true;
+        }
+
         public bool Change(ChangeData changeData, bool canAddOnEmpty = true)
         {
+            if (!AcceptsChange(changeData))
+                return false;
+
             float prevValue = value;
             bool ret = true;
 
