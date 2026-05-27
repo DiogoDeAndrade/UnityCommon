@@ -58,7 +58,7 @@ namespace UC
         EquipmentRPG            equipment;
         string                  baseText;
         UIImageEffect           uiEffect;
-        Tooltip                 tooltip;
+        Deprecated.Tooltip      tooltip;
         RPGEntity               currentItem;
         int                     currentCount;
         RPGEntity               _entity;
@@ -283,7 +283,7 @@ namespace UC
 
             if (tooltip == null)
             {
-                tooltip = TooltipManager.CreateTooltip();
+                tooltip = Deprecated.TooltipManager.CreateTooltip();
             }
             tooltip?.Set(currentItem);
         }

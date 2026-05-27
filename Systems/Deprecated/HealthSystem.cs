@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace UC
+namespace UC.Deprecated
 {
 
     public class HealthSystem : MonoBehaviour

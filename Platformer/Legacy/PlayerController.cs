@@ -55,7 +55,7 @@ namespace UC.Legacy
         ContactFilter2D groundContactFilter;
         float timeOfFall;
         bool movementEnable = true;
-        HealthSystem healthSystem;
+        Deprecated.HealthSystem healthSystem;
 
         public bool isInvulnerable
         {
@@ -149,7 +149,7 @@ namespace UC.Legacy
             rb = GetComponent<Rigidbody2D>();
             timeScaler = GetComponent<TimeScaler2d>();
             anim = GetComponent<Animator>();
-            healthSystem = GetComponent<HealthSystem>();
+            healthSystem = GetComponent<Deprecated.HealthSystem>();
             healthSystem.onHit += OnHit;
             healthSystem.onDead += OnDead;
 
@@ -341,7 +341,7 @@ namespace UC.Legacy
             }
         }
 
-        private void OnHit(HealthSystem.DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource)
+        private void OnHit(Deprecated.HealthSystem.DamageType damageType, float damage, Vector3 damagePosition, Vector3 hitDirection, GameObject damageSource)
         {
             healthSystem.isInvulnerable = true;
 

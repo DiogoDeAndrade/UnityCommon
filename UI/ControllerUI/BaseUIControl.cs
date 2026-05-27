@@ -61,7 +61,7 @@ namespace UC
         TMP_ColorGradient       normalGradient;
         Material                normalStyle;
         float                   normalSize;
-        Tooltip                 currentTooltip;
+        Deprecated.Tooltip      currentTooltip;
 
         private bool needHighlightColor => (highlighterText != null) || (highlightMode == HighlightMode.ColorSwitch);
         private bool needsHighlighterImage => (highlightMode == HighlightMode.ImageEnable);
@@ -192,10 +192,10 @@ namespace UC
 
             if ((enableTooltip) && (currentTooltip == null))
             {
-                currentTooltip = TooltipManager.CreateTooltip();
+                currentTooltip = Deprecated.TooltipManager.CreateTooltip();
                 if (currentTooltip != null)
                 {
-                    var defaultTooltipText = currentTooltip as UIDefaultTooltip;
+                    var defaultTooltipText = currentTooltip as Deprecated.UIDefaultTooltip;
                     defaultTooltipText?.Set(this);
                 }
             }

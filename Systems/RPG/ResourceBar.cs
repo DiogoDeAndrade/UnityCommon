@@ -74,7 +74,7 @@ namespace UC.RPG
         ResourceInstance    sourceInstance;
         string              textBase;
 
-        void Start()
+        void Awake()
         {
             if (isBar)
             {

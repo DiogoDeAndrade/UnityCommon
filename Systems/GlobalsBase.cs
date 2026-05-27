@@ -22,6 +22,8 @@ namespace UC
         protected SoundDef  _uiSelectSnd;
         [SerializeField]
         protected SoundDef  _uiChangeValueSnd;
+        [SerializeField]
+        protected TextTooltip _textTooltip;
 
 
         public static LayerMask obstacleMask => instanceBase?._obstacleMask ?? ~0;
@@ -32,6 +34,7 @@ namespace UC
         public static SoundDef uiMoveSnd => instanceBase._uiMoveSnd;
         public static SoundDef uiSelectSnd => instanceBase._uiSelectSnd;
         public static SoundDef uiChangeValueSnd => instanceBase._uiChangeValueSnd;
+        public static TextTooltip textTooltip => instanceBase._textTooltip;
 
 
         protected static GlobalsBase _instanceBase = null;

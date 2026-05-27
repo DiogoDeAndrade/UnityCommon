@@ -1,7 +1,7 @@
 using TMPro;
 using UnityEngine;
 
-namespace UC
+namespace UC.Deprecated
 {
 
     public class UIDefaultTooltip : Tooltip
