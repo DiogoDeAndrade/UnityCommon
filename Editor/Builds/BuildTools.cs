@@ -18,7 +18,7 @@ namespace UC
 
         private SerializedObject buildDefsSerializedObject;
 
-        [MenuItem("Unity Common/Build")]
+        [MenuItem("Unity Common/Build", priority = -5)]
         public static void OpenBuildTool()
         {
             BuildTool window = GetWindow<BuildTool>("Build Tool");
