@@ -140,6 +140,23 @@ namespace UC
             ResetToDefault();
         }
 
+        private void Start()
+        {
+            TooltipManager.isTooltipEnabled += TooltipManager_isTooltipEnabled;
+        }
+
+        private void OnDestroy()
+        {
+            TooltipManager.isTooltipEnabled -= TooltipManager_isTooltipEnabled;
+        }
+
+        private bool TooltipManager_isTooltipEnabled()
+        {
+            if (rotateButtonControl.IsPressed()) return false;
+
+            return true;
+        }
+
         void Update()
         {
             bool wantRotate = rotateButtonControl.IsPressed();

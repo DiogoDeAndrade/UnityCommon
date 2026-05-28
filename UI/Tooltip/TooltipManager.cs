@@ -10,6 +10,8 @@ namespace UC
 {
     public class TooltipManager : MonoBehaviour
     {
+        static public event Func<bool> isTooltipEnabled;
+
         [Flags]
         public enum Target
         {
@@ -71,13 +73,30 @@ namespace UC
         private bool has3d => (allowedTargets & Target.Subsystem3D) != 0;
         private bool hasUI => (allowedTargets & Target.SubsystemUI) != 0;
 
-        private ITooltip currentTooltip;
-        private RectTransform currentTooltipObject;
-        private RectTransform rectTransform;
-        private Canvas canvas;
+        private ITooltip        currentTooltip;
+        private RectTransform   currentTooltipObject;
+        private RectTransform   rectTransform;
+        private Canvas          canvas;
 
         private readonly List<TooltipHit> potentialTooltips = new();
         private readonly List<RaycastResult> uiRaycastResults = new();
+
+        static public bool isInteractionEnabled
+        {
+            get
+            {
+                if (isTooltipEnabled == null)
+                    return true;
+
+                foreach (System.Func<bool> callback in isTooltipEnabled.GetInvocationList())
+                {
+                    if (!callback())
+                        return false;
+                }
+
+                return true;
+            }
+        }
 
         private void Awake()
         {
@@ -102,6 +121,11 @@ namespace UC
 
             if (interactionCamera == null)
                 return;
+            if (!isInteractionEnabled)
+            {
+                DestroyTooltip();
+                return;
+            }
 
             if (has2d)
                 Raycast2D();
