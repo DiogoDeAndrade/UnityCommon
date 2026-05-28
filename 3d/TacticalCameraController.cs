@@ -187,6 +187,13 @@ namespace UC
         [Button("Reset To Default")]
         public void ResetToDefault()
         {
+            if (targetBoundsCollider != null)
+            {
+                ResetToPosition(targetBoundsCollider.transform.TransformPoint(targetBoundsCollider.center));
+            }
+        }
+        public void ResetToPosition(Vector3 position)
+        {
             if (targetBoundsCollider == null) return;
             if (cam == null) cam = GetComponent<Camera>();
 
@@ -195,8 +202,7 @@ namespace UC
             float dist = Vector3.Distance(transform.position, currentFocus);
 
             // Desired focus: the target box's center, dropped onto the ground plane.
-            Vector3 boxCenter = targetBoundsCollider.transform.TransformPoint(targetBoundsCollider.center);
-            Vector3 desiredFocus = new Vector3(boxCenter.x, groundPlaneY, boxCenter.z);
+            Vector3 desiredFocus = new Vector3(position.x, groundPlaneY, position.z);
 
             // Same orientation, same distance — just place the rig so the center ray lands
             // on the new focus.

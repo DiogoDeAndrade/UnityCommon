@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -26,14 +27,18 @@ public class PopupText : MonoBehaviour
     Color           startColor;
     float           timer = 0.0f;
     TextMeshPro     text;
+    TextMeshProUGUI textUI;
+    RectTransform   rt;
 
-    void Start()
+    void Awake()
     {
         text = GetComponent<TextMeshPro>();
+        textUI = GetComponent<TextMeshProUGUI>();
+        rt = transform as RectTransform;
 
         startScale = transform.localScale;
-        startPos = transform.localPosition;
-        startColor = text.color;
+        startPos = (text) ? (transform.localPosition) : (rt.anchoredPosition);
+        startColor = (text) ? (text.color) : (textUI.color);
 
         UpdateVisuals();
     }
@@ -56,12 +61,34 @@ public class PopupText : MonoBehaviour
 
         if (colorOverTime != null)
         {
-            if (colorMultiply) text.color = startColor * colorOverTime.Evaluate(t);
-            else text.color = colorOverTime.Evaluate(t);
+            if (colorMultiply)
+            {
+                if (text) text.color = startColor * colorOverTime.Evaluate(t);
+                if (textUI) textUI.color = startColor * colorOverTime.Evaluate(t);
+            }
+            else
+            {
+                if (text) text.color = colorOverTime.Evaluate(t);
+                if (textUI) textUI.color = colorOverTime.Evaluate(t);
+            }
         }
         if (sizeOverTime != null) transform.localScale = startScale * sizeOverTime.Evaluate(t);
 
-        transform.position = startPos + moveDir * moveDelta * ((moveAnimation == null) ? (t) : (moveAnimation.Evaluate(t)));
+        if (text)
+        {
+            transform.localPosition = startPos + moveDir * moveDelta * ((moveAnimation == null) ? (t) : (moveAnimation.Evaluate(t)));
+        }
+        else if (textUI)
+        {
+            var rt = transform as RectTransform;
+            rt.anchoredPosition = startPos + moveDir * moveDelta * ((moveAnimation == null) ? (t) : (moveAnimation.Evaluate(t)));
+        }
+    }
+
+    public void SetText(string s)
+    {
+        if (text) text.text = s;
+        if (textUI) textUI.text = s;
     }
 }
 

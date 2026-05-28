@@ -30,9 +30,19 @@ namespace UC
             return FindFirstObjectWithHypertag<T>(this);
         }
 
+        public T FindFirstInRange<T>(Vector3 position, float radius) where T : Component
+        {
+            return FindFirstObjectInRangeWithHypertag<T>(this, position, radius);
+        }
+
         public List<T> FindAll<T>() where T : Component
         {
             return FindObjectsWithHypertag<T>(this);
+        }
+
+        public List<T> FindAllInRange<T>(Vector3 position, float radius) where T : Component
+        {
+            return FindObjectsInRangeWithHypertag<T>(this, position, radius);
         }
 
         public GameObject FindIn(GameObject baseObject) 
@@ -155,6 +165,72 @@ namespace UC
             var objects = HypertaggedObject.Get(tags);
             foreach (var obj in objects)
             {
+                if (!obj.isActiveAndEnabled) continue;
+                var c = obj.GetComponent<T>();
+                if (c)
+                {
+                    ret.Add(c);
+                }
+            }
+
+            return ret;
+        }
+
+        public static List<T> FindObjectsInRangeWithHypertag<T>(Hypertag tag, Vector3 position, float radius) where T : Component
+        {
+            List<T> ret = new List<T>();
+
+            var objects = HypertaggedObject.Get(tag);
+            foreach (var obj in objects)
+            {
+                float dist = Vector3.Distance(obj.transform.position, position);
+                if (dist > radius)
+                {
+                    continue;
+                }
+                if (!obj.isActiveAndEnabled) continue;
+                var c = obj.GetComponent<T>();
+                if (c)
+                {
+                    ret.Add(c);
+                }
+            }
+
+            return ret;
+        }
+        public static T FindFirstObjectInRangeWithHypertag<T>(Hypertag tag, Vector3 position, float radius) where T : Component
+        {
+            var objects = HypertaggedObject.Get(tag);
+            foreach (var obj in objects)
+            {
+                float dist = Vector3.Distance(obj.transform.position, position);
+                if (dist > radius)
+                {
+                    continue;
+                }
+                if (!obj.isActiveAndEnabled) continue;
+                var c = obj.GetComponent<T>();
+                if (c)
+                {
+                    return c;
+                }
+            }
+
+            return null;
+        }
+
+        public static List<T> FindObjectsInRangeWithHypertag<T>(Hypertag[] tags, Vector3 position, float radius) where T : Component
+        {
+            List<T> ret = new List<T>();
+
+            var objects = HypertaggedObject.Get(tags);
+            foreach (var obj in objects)
+            {
+                float dist = Vector3.Distance(obj.transform.position, position);
+                if (dist > radius)
+                {
+                    continue;
+                }
                 if (!obj.isActiveAndEnabled) continue;
                 var c = obj.GetComponent<T>();
                 if (c)
