@@ -28,6 +28,7 @@ namespace UC
         private float blobOffset = 0.1f;
 
         private Material material;
+        private bool ownsMaterial;
         private int shadowIntensityHash;
 
         void Start()
@@ -39,8 +40,19 @@ namespace UC
 
             if (meshRenderer)
             {
-                material = new Material(meshRenderer.material);
-                meshRenderer.material = material;
+                Material sourceMaterial = meshRenderer.sharedMaterial;
+
+                if (!sourceMaterial)
+                {
+                    Debug.LogWarning($"No material found on {gameObject.name}.");
+                    return;
+                }
+
+                material = new Material(sourceMaterial);
+                material.name = $"{sourceMaterial.name} Copy ({name})";
+                ownsMaterial = true;
+
+                meshRenderer.sharedMaterial = material;
 
                 shadowIntensityHash = Shader.PropertyToID(shadowIntensityName);
 
@@ -51,8 +63,21 @@ namespace UC
             }
         }
 
+        private void OnDestroy()
+        {
+            if (ownsMaterial && material)
+            {
+                material.Delete();
+            }
+
+            material = null;
+            ownsMaterial = false;
+        }
+
         void Update()
         {
+            if (!material) return;
+
             switch (mode)
             {
                 case Mode.MoveTransform:

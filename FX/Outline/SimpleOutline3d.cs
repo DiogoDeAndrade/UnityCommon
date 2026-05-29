@@ -47,6 +47,28 @@ namespace UC
             ToggleOutline(false, null);
         }
 
+        private void OnDestroy()
+        {
+            DestroyOutlineMaterials();
+        }
+
+        private void DestroyOutlineMaterials()
+        {
+            foreach (var kv in rendererOutlineMaterial)
+            {
+                var renderer = kv.Key;
+                var material = kv.Value;
+
+                if (renderer && material)
+                    UnsetMaterial(renderer, material);
+
+                if (material)
+                    material.Delete();
+            }
+
+            rendererOutlineMaterial.Clear();
+        }
+
         private void ToggleOutline(bool enable, Renderer[] renderers)
         {
             if (enable)
@@ -56,7 +78,14 @@ namespace UC
                     if (!rendererOutlineMaterial.ContainsKey(renderer))
                     {
                         // Create material
-                        Material material = new Material(Shader.Find("Unity Common/Effects/Outline (Backface Extrude)"));
+                        var shader = GetOutlineShader();
+                        if (!shader)
+                        {
+                            Debug.LogWarning("Outline shader not found.");
+                            return;
+                        }
+
+                        Material material = new Material(shader);
                         material.SetColor("_OutlineColor", color);
                         material.SetFloat("_OutlineWidth", width);
                         material.SetInt("_DirSource", (int)channel);
@@ -86,20 +115,26 @@ namespace UC
 
         private void SetMaterial(Renderer renderer, Material material)
         {
-            var materials = renderer.materials;
+            var materials = new List<Material>(renderer.sharedMaterials);
+
             foreach (var mat in materials)
             {
-                if (mat == material) return; // Already set
+                if (mat == material)
+                    return; // Already set
             }
 
-            renderer.SetMaterials(new List<Material>(materials) { material });
+            materials.Add(material);
+            renderer.SetSharedMaterials(materials);
         }
 
         private void UnsetMaterial(Renderer renderer, Material material)
         {
             var materials = new List<Material>(renderer.sharedMaterials);
-            materials.Remove(material);
-            renderer.SetMaterials(materials);
+
+            if (materials.Remove(material))
+            {
+                renderer.SetSharedMaterials(materials);
+            }
         }
 
         [Button("Update Materials")]
@@ -119,6 +154,16 @@ namespace UC
             {
                 UpdateMaterials();
             }
+        }
+
+        private static Shader outlineShader;
+
+        private static Shader GetOutlineShader()
+        {
+            if (!outlineShader)
+                outlineShader = Shader.Find("Unity Common/Effects/Outline (Backface Extrude)");
+
+            return outlineShader;
         }
     }
 }

@@ -10,6 +10,9 @@ namespace UC
     {
         public Material material;
 
+        private bool ownsMaterial;
+        private Mesh generatedMesh;
+
         VoxelObject voxelObject;
         MeshFilter meshFilter;
         MeshRenderer meshRenderer;
@@ -19,16 +22,38 @@ namespace UC
             UpdateMesh();
         }
 
-        public void UpdateMesh()
+        private void OnDestroy()
         {
-            if (voxelObject == null)
+            if ((ownsMaterial) && (material))
             {
-                voxelObject = GetComponent<VoxelObject>();
-                meshFilter = GetComponent<MeshFilter>();
-                meshRenderer = GetComponent<MeshRenderer>();
+                material.Delete();
+                material = null;
+                ownsMaterial = false;
             }
 
-            meshFilter.mesh = voxelObject.GetMesh();
+            DestroyGeneratedMesh();
+        }
+
+        private void DestroyGeneratedMesh()
+        {
+            if (!generatedMesh)
+                return;
+
+            if ((meshFilter) && (meshFilter.sharedMesh == generatedMesh))
+                meshFilter.sharedMesh = null;
+
+            generatedMesh.Delete();
+            generatedMesh = null;
+        }
+
+        public void UpdateMesh()
+        {
+            EnsureComponents();
+
+            DestroyGeneratedMesh();
+
+            generatedMesh = voxelObject.GetMesh();
+            meshFilter.sharedMesh = generatedMesh;
 
             if (material == null)
             {
@@ -37,15 +62,23 @@ namespace UC
                 if (material == null)
                 {
                     Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                    if (!shader)
+                    {
+                        Debug.LogWarning("Could not find URP Lit shader.");
+                        return;
+                    }
+
                     material = new Material(shader);
+                    material.name = $"Generated Voxel Material ({name})";
                     material.SetFloat("_Cull", 1.0f);
 
-                    meshRenderer.material = material;
+                    ownsMaterial = true;
+                    meshRenderer.sharedMaterial = material;
                 }
             }
         }
 
-        public void SetVoxelData(VoxelData<byte> voxelData)
+        void EnsureComponents()
         {
             if (voxelObject == null)
             {
@@ -53,6 +86,11 @@ namespace UC
                 meshFilter = GetComponent<MeshFilter>();
                 meshRenderer = GetComponent<MeshRenderer>();
             }
+        }
+
+        public void SetVoxelData(VoxelData<byte> voxelData)
+        {
+            EnsureComponents();
 
             voxelObject.voxelData = voxelData;
 

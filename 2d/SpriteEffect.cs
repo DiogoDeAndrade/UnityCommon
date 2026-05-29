@@ -34,32 +34,66 @@ namespace UC
         private SpriteRenderer          spriteRenderer;
         private SpriteRenderer3D        spriteRenderer3D;
         private Material                material;
+        private Material                sourceMaterial;
+        private bool                    ownsMaterial;
 
 
         private void OnEnable()
         {
             spriteRenderer = GetComponent<SpriteRenderer>();
             spriteRenderer3D = GetComponent<SpriteRenderer3D>();
-            if (spriteRenderer) mpb = new();
+            if ((spriteRenderer) && (mpb == null))
+            {
+                mpb = new();
+            }
 
             if (createMaterialCopy)
             {
-                GenerateMaterialCopy();
+                if (material == null)
+                {
+                    GenerateMaterialCopy();
+                }
             }
             else
             {
-                if (spriteRenderer) material = spriteRenderer.material;
-                else if (spriteRenderer3D) material = spriteRenderer3D.material;
+                if (spriteRenderer) material = spriteRenderer.sharedMaterial;
+                else if (spriteRenderer3D) material = spriteRenderer3D.sharedMaterial;
+
+                ownsMaterial = false;
             }
 
-            // Check if material has the right shader (a bit hard coded)
-            string shaderName = material.shader.name;
-            if (shaderName.IndexOf("Effect", StringComparison.InvariantCultureIgnoreCase) == -1)
+            if (material)
             {
-                Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
+                // Check if material has the right shader (a bit hard coded)
+                string shaderName = material.shader.name;
+                if (shaderName.IndexOf("Effect", StringComparison.InvariantCultureIgnoreCase) == -1)
+                {
+                    Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
+                }
             }
 
             ConfigureMaterial();
+        }
+
+        private void OnDestroy()
+        {
+            DestroyMaterialCopy();
+        }
+
+        private void DestroyMaterialCopy()
+        {
+            if ((ownsMaterial) && (material))
+            {
+                if (spriteRenderer)
+                    spriteRenderer.sharedMaterial = sourceMaterial;
+                else if (spriteRenderer3D)
+                    spriteRenderer3D.sharedMaterial = sourceMaterial;
+
+                material.Delete();
+            }
+
+            material = null;
+            ownsMaterial = false;
         }
 
         public void SetRemap(ColorPalette colorPalette)
@@ -112,27 +146,37 @@ namespace UC
         [Button("Generate Material Copy")]
         void GenerateMaterialCopy()
         {
+            DestroyMaterialCopy();
+
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            spriteRenderer3D = GetComponent<SpriteRenderer3D>();
+
+            sourceMaterial = null;
+
             if (spriteRenderer)
-            {
-                material = spriteRenderer.material = new Material(spriteRenderer.material);
-            }
+                sourceMaterial = spriteRenderer.sharedMaterial;
             else if (spriteRenderer3D)
+                sourceMaterial = spriteRenderer3D.sharedMaterial;
+
+            if (!sourceMaterial)
             {
-                material = spriteRenderer3D.material = new Material(spriteRenderer3D.material);
+                Debug.LogWarning($"No material found on {gameObject.name}");
+                return;
             }
-            else
-            {
-                spriteRenderer = GetComponent<SpriteRenderer>();
-                spriteRenderer3D = GetComponent<SpriteRenderer3D>();
-                if (spriteRenderer) material = spriteRenderer.material = new Material(spriteRenderer.material);
-                if (spriteRenderer3D) material = spriteRenderer3D.material = new Material(spriteRenderer3D.material);
-            }
-            material.name = $"{material.name} Copy ({name})";
+
+            material = new Material(sourceMaterial);
+            material.name = $"{sourceMaterial.name} Copy ({name})";
+            ownsMaterial = true;
 
             if (SpriteEffectConfig.Instance != null)
             {
                 material.shader = SpriteEffectConfig.Instance.GetShader(material.shader);
             }
+
+            if (spriteRenderer)
+                spriteRenderer.sharedMaterial = material;
+            else if (spriteRenderer3D)
+                spriteRenderer3D.sharedMaterial = material;
         }
 
         [Button("Update Material")]

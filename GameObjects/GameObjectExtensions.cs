@@ -112,6 +112,17 @@ namespace UC
             }
         }
 
+        public static void Delete(this Object obj)
+        {
+            if (obj == null)
+                return;
+
+            if (Application.isPlaying)
+                GameObject.Destroy(obj);
+            else
+                GameObject.DestroyImmediate(obj);
+        }
+
         public static GameObject FindObjectInLayer(this GameObject go, int layer)
         {
             var objects = go.FindObjectsInLayer(layer);

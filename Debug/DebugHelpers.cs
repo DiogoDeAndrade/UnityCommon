@@ -10,6 +10,35 @@ namespace UC
 
     public static class DebugHelpers
     {
+        static Material triangleMaterial;
+
+#if UNITY_EDITOR
+        static DebugHelpers()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += Cleanup;
+            EditorApplication.quitting += Cleanup;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+        }
+
+        static void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingEditMode ||
+                state == PlayModeStateChange.ExitingPlayMode)
+            {
+                Cleanup();
+            }
+        }
+
+        static void Cleanup()
+        {
+            if (triangleMaterial != null)
+            {
+                triangleMaterial.Delete();
+                triangleMaterial = null;
+            }
+        }
+#endif
+
         public static void DrawArrow(Vector3 position, Vector3 dir, float length, float arrowHeadLength, float arrowHeadAngle)
         {
             DrawArrow(position, dir, length, arrowHeadLength, arrowHeadAngle, Vector3.up);
@@ -42,7 +71,6 @@ namespace UC
 #endif
         }
 
-        static Material triangleMaterial;
 #if UNITY_EDITOR
         static void SetTriangleMaterial()
         {

@@ -4,22 +4,29 @@ using UnityEngine;
 
 public class DistortionRipple : MonoBehaviour
 {
-    private float           duration;
-    private SpriteRenderer  spriteRenderer;
-    private Material        material;
-    private float           baseStrenght;
-    private float           time;
-    private AnimationCurve  sizeCurve;
-    private AnimationCurve  strengthCurve;
-    private bool            strengthIsSpriteAlpha;
-    private bool            _active = true;
+    private float                   duration;
+    private SpriteRenderer          spriteRenderer;
+    private float                   baseStrenght;
+    private float                   time;
+    private AnimationCurve          sizeCurve;
+    private AnimationCurve          strengthCurve;
+    private bool                    strengthIsSpriteAlpha;
+    private bool                    _active = true;
+    private MaterialPropertyBlock   mpb;
+    
+    private static readonly int StrengthID = Shader.PropertyToID("_Strength");
 
     public bool isActive => _active;
 
     void Start()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
-        material = spriteRenderer.material;
+
+        if (mpb == null)
+        {
+            mpb = new MaterialPropertyBlock();
+        }
+
         UpdateRipple();
     }
 
@@ -43,14 +50,18 @@ public class DistortionRipple : MonoBehaviour
             transform.localScale = GetSize(time);
             if ((strengthCurve != null) && (strengthCurve.length > 0))
             {
-                float s = strengthCurve.Evaluate(time / duration) * baseStrenght;
+                float normalizedTime = duration > 0.0f ? time / duration : 1.0f;
+
+                float s = strengthCurve.Evaluate(normalizedTime) * baseStrenght;
                 if (strengthIsSpriteAlpha)
                 {
                     spriteRenderer.color = spriteRenderer.color.ChangeAlpha(s);
                 }
                 else
                 {
-                    material.SetFloat("_Strength", s);
+                    spriteRenderer.GetPropertyBlock(mpb);
+                    mpb.SetFloat(StrengthID, s);
+                    spriteRenderer.SetPropertyBlock(mpb);
                 }
             }
         }
@@ -65,6 +76,18 @@ public class DistortionRipple : MonoBehaviour
         this.strengthIsSpriteAlpha = strengthIsSpriteAlpha;
         time = 0.0f;
         _active = true;
+
+        if (spriteRenderer)
+        {
+            spriteRenderer.color = spriteRenderer.color.ChangeAlpha(1.0f);
+
+            if (mpb == null)
+                mpb = new MaterialPropertyBlock();
+
+            spriteRenderer.GetPropertyBlock(mpb);
+            mpb.SetFloat(StrengthID, 0.0f);
+            spriteRenderer.SetPropertyBlock(mpb);
+        }
     }
 
     Vector3 GetSize(float t)
@@ -90,10 +113,9 @@ public class DistortionRipple : MonoBehaviour
         {
             newElem = ripplesPool.PopLast();
             newElem.spriteRenderer.sprite = rippleSprite;
-            newElem.spriteRenderer.sprite = rippleSprite;
             newElem.spriteRenderer.sortingLayerID = spriteSortingLayer;
             newElem.spriteRenderer.sortingOrder = spriteOrderInLayer;
-            newElem.spriteRenderer.material = new Material(rippleMaterial);
+            newElem.spriteRenderer.sharedMaterial = rippleMaterial;
             newElem.gameObject.SetActive(true);
         }
         else
@@ -107,9 +129,10 @@ public class DistortionRipple : MonoBehaviour
             sr.sprite = rippleSprite;
             sr.sortingLayerID = spriteSortingLayer;
             sr.sortingOrder = spriteOrderInLayer;
-            sr.material = new Material(rippleMaterial);
+            sr.sharedMaterial = rippleMaterial;
 
             newElem = go.AddComponent<DistortionRipple>();
+            newElem.spriteRenderer = sr;
         }
 
         if (localSpace)

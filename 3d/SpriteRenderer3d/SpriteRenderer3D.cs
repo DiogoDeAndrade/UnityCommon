@@ -16,8 +16,8 @@ namespace UC
         private    Sprite   _sprite;
         [SerializeField]
         private Color       _color = Color.white;
-        [SerializeField] 
-        private    Material _material;
+        [SerializeField, Tooltip("Shared material used by this SpriteRenderer3D. Use material to get an instance, sharedMaterial to access this reference directly.")]
+        private Material _material;
 
         [SerializeField] 
         private    BillboardMode   _billboardMode = BillboardMode.FaceCamera;
@@ -36,20 +36,64 @@ namespace UC
         private    bool                _receiveShadows = true;
         [SerializeField] 
         private LightProbeUsage        _lightProbeUsage = LightProbeUsage.Off; // Note: DrawMesh won't do light probes like a Renderer
-        [SerializeField]
+        [SerializeField, Tooltip("If enabled, creates internal material variants for sorting/keywords. If disabled, the assigned material itself may be modified.")]
         private    bool                 _cacheMaterial = true;
 
         Mesh                    _mesh;
         Sprite                  _meshSprite;
         MaterialPropertyBlock   _mpb;
         MaterialKey.Flags       _currentFlags;
+        private Material        _materialInstance;
+        private bool            _ownsMaterialInstance;
 
         public Sprite sprite { get => _sprite; set { _sprite = value; } }
         public Color color { get => _color; set { _color = value; } }
-        public Material material
+        public Material sharedMaterial
         {
             get => _material;
-            set { _material = value; }
+            set
+            {
+                if (_material == value)
+                    return;
+
+                DestroyMaterialInstance();
+
+                _material = value;
+                ClearMaterialCache();
+            }
+        }
+
+        public Material material
+        {
+            get
+            {
+                if (_material == null)
+                    return null;
+
+                if (!_ownsMaterialInstance)
+                {
+                    _materialInstance = new Material(_material);
+                    _materialInstance.name = $"{_material.name} (Instance)";
+
+                    _material = _materialInstance;
+                    _ownsMaterialInstance = true;
+
+                    ClearMaterialCache();
+                }
+
+                return _materialInstance;
+            }
+
+            set
+            {
+                DestroyMaterialInstance();
+
+                _material = value;
+                _materialInstance = null;
+                _ownsMaterialInstance = false;
+
+                ClearMaterialCache();
+            }
         }
 
         struct MaterialKey
@@ -321,6 +365,46 @@ namespace UC
                 mpb.SetTexture("_EmissionMap", emission);
                 flags |= MaterialKey.Flags.HasEmission;
             }
+        }
+
+        private void OnDestroy()
+        {
+            DestroyMaterialInstance();
+            ClearMaterialCache();
+
+            if (_mesh != null)
+            {
+                _mesh.Delete();
+                _mesh = null;
+                _meshSprite = null;
+            }
+        }
+
+        private void DestroyMaterialInstance()
+        {
+            if (_ownsMaterialInstance && _materialInstance != null)
+            {
+                _materialInstance.Delete();
+            }
+
+            _materialInstance = null;
+            _ownsMaterialInstance = false;
+        }
+
+        private void ClearMaterialCache()
+        {
+            if (_MaterialCache == null)
+                return;
+
+            foreach (var kv in _MaterialCache)
+            {
+                if (kv.Value != null)
+                {
+                    kv.Value.Delete();
+                }
+            }
+
+            _MaterialCache.Clear();
         }
     }
 }

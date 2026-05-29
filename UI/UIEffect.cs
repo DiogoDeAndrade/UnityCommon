@@ -33,14 +33,45 @@ namespace UC
         public bool outlineEnable => (effects & Effects.Outline) != 0;
         public bool isRawImage => GetComponent<RawImage>() != null;
 
-        private Image uiImage;
-        private RawImage rawImage;
-        private Material material;
+        private Image       uiImage;
+        private RawImage    rawImage;
+        private Material    material;
+        private Material    sourceMaterial;
+        private bool        ownsMaterial;
+
         private SecondarySpriteTexture[] otherTextures = new SecondarySpriteTexture[16];
 
-        private void Start()
+        private void OnEnable()
         {
-            SetupMaterials();
+            if (!material)
+            {
+                SetupMaterials();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            DestroyMaterialCopy();
+        }
+
+        private void DestroyMaterialCopy()
+        {
+            if ((ownsMaterial) && (material))
+            {
+                if ((uiImage) && (uiImage.material == material))
+                {
+                    uiImage.material = sourceMaterial;
+                }
+                else if ((rawImage) && (rawImage.material == material))
+                {
+                    rawImage.material = sourceMaterial;
+                }
+
+                material.Delete();
+            }
+
+            material = null;
+            ownsMaterial = false;
         }
 
         public void SetRemap(ColorPalette colorPalette)
@@ -92,18 +123,35 @@ namespace UC
         {
             uiImage = GetComponent<Image>();
             rawImage = GetComponent<RawImage>();
-            material = (uiImage) ? (uiImage.material) : (rawImage.material);
-            material = new Material(material);
-            if (palette)
+
+            Material src = sourceMaterial;
+
+            if (!src)
             {
-                material.name = palette.name + "_Material";
+                if (uiImage)
+                    src = uiImage.material;
+                else if (rawImage)
+                    src = rawImage.material;
             }
-            else
+
+            if (!src)
             {
-                material.name = "Material" + UnityEngine.Random.Range(0, 1000000);
+                Debug.LogWarning($"No source material found on {gameObject.name}");
+                return;
             }
-            if (uiImage) uiImage.material = material;
-            else if (rawImage) rawImage.material = material;
+
+            DestroyMaterialCopy();
+
+            sourceMaterial = src;
+
+            material = new Material(src);
+            material.name = palette ? $"{palette.name}_Material" : $"UIImageEffect Material ({name})";
+            ownsMaterial = true;
+
+            if (uiImage)
+                uiImage.material = material;
+            else if (rawImage)
+                rawImage.material = material;
 
             palette?.RefreshCache();
 

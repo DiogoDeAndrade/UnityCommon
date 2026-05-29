@@ -104,6 +104,21 @@ namespace UC
                 }
                 jellyMesh.RecalculateBounds();
             }
+
+            public void Destroy()
+            {
+                if (jellyMesh)
+                {
+                    jellyMesh.Delete();
+                    jellyMesh = null;
+                }
+
+                if (bakedMesh)
+                {
+                    bakedMesh.Delete();
+                    bakedMesh = null;
+                }
+            }
         }
 
         private List<JellyMeshElem> jellyMeshes;
@@ -214,6 +229,19 @@ namespace UC
                     }
                 }
             }
+        }
+
+        private void OnDestroy()
+        {
+            if (jellyMeshes == null)
+                return;
+
+            foreach (var jellyMesh in jellyMeshes)
+            {
+                jellyMesh.Destroy();
+            }
+
+            jellyMeshes.Clear();
         }
 
         void FixedUpdate()

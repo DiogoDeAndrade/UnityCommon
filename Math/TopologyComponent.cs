@@ -1,4 +1,6 @@
 using NaughtyAttributes;
+using Unity.VisualScripting;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -55,6 +57,38 @@ namespace UC
         }
 
 #if UNITY_EDITOR
+        static private Material gizmoMaterial;
+        [InitializeOnLoadMethod]
+        private static void RegisterEditorCleanup()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload -= CleanupGizmoMaterial;
+            AssemblyReloadEvents.beforeAssemblyReload += CleanupGizmoMaterial;
+
+            EditorApplication.quitting -= CleanupGizmoMaterial;
+            EditorApplication.quitting += CleanupGizmoMaterial;
+
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+        }
+
+        private static void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingEditMode ||
+                state == PlayModeStateChange.ExitingPlayMode)
+            {
+                CleanupGizmoMaterial();
+            }
+        }
+
+        private static void CleanupGizmoMaterial()
+        {
+            if (gizmoMaterial)
+            {
+                gizmoMaterial.Delete();
+                gizmoMaterial = null;
+            }
+        }
+
         private void OnEnable()
         {
             // Subscribe to the Scene view event
@@ -68,8 +102,6 @@ namespace UC
         }
 
         private TopologyStatic.TVertex hoverVertex;
-
-        static private Material gizmoMaterial;
 
         private void OnDrawGizmos()
         {

@@ -2,11 +2,64 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace UC.VoxelizerHelpers
 {
-    class AxisSlice
+    class AxisSlice : IDisposable
     {
+        // This handles materials for the render functions below
+        static Material backfacesWhiteMat;
+        static Material frontfacesBlackMat;
+        static AxisSlice()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += CleanupMaterials;
+            EditorApplication.quitting += CleanupMaterials;
+            EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
+        }
+
+        private static void EditorApplication_playModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingEditMode ||
+                state == PlayModeStateChange.ExitingPlayMode)
+            {
+                CleanupMaterials();
+            }
+        }
+
+        static void CleanupMaterials()
+        {
+            if (frontfacesBlackMat)
+            {
+                frontfacesBlackMat.Delete();
+                frontfacesBlackMat = null;
+            }
+            if (backfacesWhiteMat)
+            {
+                backfacesWhiteMat.Delete();
+                backfacesWhiteMat = null;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (renderTargets != null)
+            {
+                foreach (var rt in renderTargets)
+                {
+                    if (rt)
+                    {
+                        rt.Release();
+                        rt.Delete();
+                    }
+                }
+
+                renderTargets.Clear();
+            }
+        }
+
         public class VolumeDef
         {
             public Bounds bounds;
@@ -74,14 +127,23 @@ namespace UC.VoxelizerHelpers
 
         public void Render()
         {
-            Shader shader = Shader.Find("Unity Common/VoxelizeSlicing/VoxelSliceShader");
-            Material backfacesWhiteMat = new Material(shader);
-            backfacesWhiteMat.SetColor("_Color", Color.white);
-            backfacesWhiteMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Front);
+            ClearRenderTargets();
 
-            Material frontfacesBlackMat = new Material(shader);
-            frontfacesBlackMat.SetColor("_Color", Color.black);
-            frontfacesBlackMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Back);
+            if (backfacesWhiteMat == null)
+            {
+                Shader shader = Shader.Find("Unity Common/VoxelizeSlicing/VoxelSliceShader");
+                backfacesWhiteMat = new Material(shader);
+                backfacesWhiteMat.SetColor("_Color", Color.white);
+                backfacesWhiteMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Front);
+            }
+
+            if (frontfacesBlackMat == null)
+            {
+                Shader shader = Shader.Find("Unity Common/VoxelizeSlicing/VoxelSliceShader");
+                frontfacesBlackMat = new Material(shader);
+                frontfacesBlackMat.SetColor("_Color", Color.black);
+                frontfacesBlackMat.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Back);
+            }
 
             if (volumeDef == null)
             {
@@ -133,68 +195,103 @@ namespace UC.VoxelizerHelpers
             top = cy + snappedH * 0.5f;
 
             RenderTexture rt = null;
+            Texture2D scratch = null;
 
-            var scratch = new Texture2D(rtW, rtH, TextureFormat.RGBA32, false, true);
-            scratch.filterMode = FilterMode.Point;
-            scratch.wrapMode = TextureWrapMode.Clamp;
-
-            _sliceData = new BitVolume(volumeDef.dims.x, volumeDef.dims.y, volumeDef.dims.z);
-
-            for (int i = 0; i < sliceCount; i++)
+            try
             {
-                float sliceStart = zMin + i * voxelSize;
-                float sliceEnd = sliceStart + voxelSize;
 
-                // Camera is placed at (zMin - margin) along d, so slab distances are:
-                float zNear = margin + i * voxelSize;
-                float zFar = (zMax - zMin) + margin + voxelSize * 2f;
+                scratch = new Texture2D(rtW, rtH, TextureFormat.RGBA32, false, true);
+                scratch.filterMode = FilterMode.Point;
+                scratch.wrapMode = TextureWrapMode.Clamp;
 
-                // sanity
-                if (zFar <= zNear + 1e-5f) continue;
+                _sliceData = new BitVolume(volumeDef.dims.x, volumeDef.dims.y, volumeDef.dims.z);
 
-                var projMatrix = Matrix4x4.Ortho(left, right, bottom, top, zNear, zFar);
-
-                if (rt == null)
+                for (int i = 0; i < sliceCount; i++)
                 {
-                    rt = new RenderTexture(rtW, rtH, 32, RenderTextureFormat.ARGB32);
-                    rt.name = "RenderSlice_RT";
-                    rt.filterMode = FilterMode.Point;
-                    rt.wrapMode = TextureWrapMode.Clamp;
-                    rt.useMipMap = false;
-                    rt.autoGenerateMips = false;
-                    rt.Create();
-                }
+                    float sliceStart = zMin + i * voxelSize;
+                    float sliceEnd = sliceStart + voxelSize;
 
-                GraphicsHelper.QuickDraw(rt, viewMatrix, projMatrix,
-                    (cmd) =>
+                    // Camera is placed at (zMin - margin) along d, so slab distances are:
+                    float zNear = margin + i * voxelSize;
+                    float zFar = (zMax - zMin) + margin + voxelSize * 2f;
+
+                    // sanity
+                    if (zFar <= zNear + 1e-5f) continue;
+
+                    var projMatrix = Matrix4x4.Ortho(left, right, bottom, top, zNear, zFar);
+
+                    if (rt == null)
                     {
-                        foreach (var m in renderMeshes)
+                        rt = new RenderTexture(rtW, rtH, 32, RenderTextureFormat.ARGB32);
+                        rt.name = "RenderSlice_RT";
+                        rt.filterMode = FilterMode.Point;
+                        rt.wrapMode = TextureWrapMode.Clamp;
+                        rt.useMipMap = false;
+                        rt.autoGenerateMips = false;
+                        rt.Create();
+                    }
+
+                    GraphicsHelper.QuickDraw(rt, viewMatrix, projMatrix,
+                        (cmd) =>
                         {
-                            var mesh = m.mesh;
-                            var modelMatrix = m.transform;
+                            foreach (var m in renderMeshes)
+                            {
+                                var mesh = m.mesh;
+                                var modelMatrix = m.transform;
 
-                            for (int sm = 0; sm < mesh.subMeshCount; sm++)
-                                cmd.DrawMesh(mesh, modelMatrix, backfacesWhiteMat, sm, 0);
-                        }
+                                for (int sm = 0; sm < mesh.subMeshCount; sm++)
+                                    cmd.DrawMesh(mesh, modelMatrix, backfacesWhiteMat, sm, 0);
+                            }
 
-                        foreach (var m in renderMeshes)
-                        {
-                            var mesh = m.mesh;
-                            var modelMatrix = m.transform;
+                            foreach (var m in renderMeshes)
+                            {
+                                var mesh = m.mesh;
+                                var modelMatrix = m.transform;
 
-                            for (int sm = 0; sm < mesh.subMeshCount; sm++)
-                                cmd.DrawMesh(mesh, modelMatrix, frontfacesBlackMat, sm, 0);
-                        }
-                    },
-                    true, Color.black, true, 1);
+                                for (int sm = 0; sm < mesh.subMeshCount; sm++)
+                                    cmd.DrawMesh(mesh, modelMatrix, frontfacesBlackMat, sm, 0);
+                            }
+                        },
+                        true, Color.black, true, 1);
 
-                ReadSliceIntoBits(rt, scratch, sliceData, direction, i, volumeDef.dims);
+                    ReadSliceIntoBits(rt, scratch, sliceData, direction, i, volumeDef.dims);
 
-                if (renderTargets != null)
-                {
-                    renderTargets.Add(rt);
-                    rt = null; // Force to recreate
+                    if (renderTargets != null)
+                    {
+                        renderTargets.Add(rt);
+                        rt = null; // Force to recreate
+                    }
                 }
+            }
+            finally
+            {
+                if (scratch)
+                {
+                    scratch.Delete();
+                }
+
+                if (rt)
+                {
+                    rt.Release();
+                    rt.Delete();
+                }
+            }
+        }
+
+        private void ClearRenderTargets()
+        {
+            if (renderTargets != null)
+            {
+                foreach (var oldRT in renderTargets)
+                {
+                    if (oldRT)
+                    {
+                        oldRT.Release();
+                        oldRT.Delete();
+                    }
+                }
+
+                renderTargets.Clear();
             }
         }
 

@@ -1,6 +1,8 @@
-using UnityEngine;
 using NaughtyAttributes;
 using System;
+using UC;
+using UnityEngine;
+using UnityEngine.UIElements;
 
 public class MaterialInstance : MonoBehaviour
 {
@@ -12,6 +14,7 @@ public class MaterialInstance : MonoBehaviour
     [SerializeField, ShowIf(nameof(isOverrideShader))] private Shader shader;
 
     protected Material material;
+    protected Material sourceMaterial;
 
     bool isOverrideShader => (overrides & Overrides.Shader) != 0;
 
@@ -24,21 +27,39 @@ public class MaterialInstance : MonoBehaviour
 
     }
 
+    private void OnDestroy()
+    {
+        DestroyMaterialInstance(GetComponent<Renderer>());
+    }
+
+    private void DestroyMaterialInstance(Renderer renderer)
+    {
+        if ((sourceMaterial) && (material))
+        {
+            material.Delete();
+
+            var materials = renderer.sharedMaterials;
+            materials[materialIndex] = sourceMaterial;
+            renderer.sharedMaterials = materials;
+        }
+    }
+
     [Button("Force Init")]
     void Initialize()
     {
         Renderer renderer = GetComponent<Renderer>();
+        DestroyMaterialInstance(renderer);
 
         var materials = renderer.sharedMaterials;
-        material = materials[materialIndex];
+        sourceMaterial = materials[materialIndex];
 
-        material = new Material(material);
+        material = new Material(sourceMaterial);
         material.name = $"Generated Material Instance";
         if (isOverrideShader) material.shader = shader;
         UpdateMaterial();
 
         materials[materialIndex] = material;
 
-        renderer.materials = materials;
+        renderer.sharedMaterials = materials;
     }
 }
