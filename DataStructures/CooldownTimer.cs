@@ -11,6 +11,7 @@ namespace UC
         public float timer;
         
         public bool isDone => (timer <= 0.0f);
+        public bool isRunning => (timer > 0.0f);
 
         public CooldownTimer()
         {
@@ -36,6 +37,11 @@ namespace UC
         public void Start()
         {
             timer = cooldown;
+        }
+
+        public void Stop()
+        {
+            timer = 0.0f;
         }
 
         public bool Update()

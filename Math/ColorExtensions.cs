@@ -212,5 +212,11 @@ namespace UC
         {
             return new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), 1.0f);
         }
+
+        public static Color Normalize(this Color c)
+        {
+            float m = Mathf.Max(c.r, c.g, c.b);
+            return new Color(c.r / m, c.g / m, c.g / m, c.a);
+        }
     };
 }
