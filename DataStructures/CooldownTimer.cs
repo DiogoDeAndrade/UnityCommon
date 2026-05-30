@@ -9,6 +9,8 @@ namespace UC
         public float cooldown;
         [NonSerialized]
         public float timer;
+        
+        public bool isDone => (timer <= 0.0f);
 
         public CooldownTimer()
         {

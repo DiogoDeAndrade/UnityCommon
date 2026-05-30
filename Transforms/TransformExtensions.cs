@@ -55,6 +55,15 @@ namespace UC
         {
             return transform.Tween().Interpolate(transform.localScale, targetScale, time, (currentValue) => transform.localScale = currentValue, name);
         }
+        public static Tweener.BaseInterpolator LocalFlashScale(this Transform transform, Vector3 targetScale, float time, string name = null)
+        {
+            var srcScale = transform.localScale;
+            var dstScale = new Vector3(srcScale.x * targetScale.x, srcScale.y * targetScale.y, srcScale.z * targetScale.z);
+            return transform.Tween().Interpolate(srcScale, dstScale, time * 0.5f, (currentValue) => transform.localScale = currentValue, name).Done(() =>
+            {
+                transform.Tween().Interpolate(dstScale, srcScale, time * 0.5f, (currentValue) => transform.localScale = currentValue, name);
+            });
+        }
 
         public static Tweener.BaseInterpolator Move(this Transform transform, Vector3 moveDelta, float time, string name = null)
         {

@@ -193,7 +193,12 @@ namespace UC.RPG
             if (isOverrideInitialValue)
                 resourceInstance.value = initialValue;
             else
-                resourceInstance.value = type.defaultValue;
+            {
+                if (isOverrideMaxValue)
+                    resourceInstance.value = overrideMaxValue;
+                else
+                    resourceInstance.value = type.defaultValue;
+            }
 
             if (combatText) RenderCombatText(prevValue);
         }

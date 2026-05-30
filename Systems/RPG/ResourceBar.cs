@@ -327,10 +327,18 @@ namespace UC.RPG
                 }
             }
 
-            if ((zeroResourceZeroAlpha) && (GetNormalizedResource() <= 0))
+            if (zeroResourceZeroAlpha)
             {
-                alpha = 0.0f;
-                canvasGroup.alpha = 0.0f;
+                if (GetNormalizedResource() <= 0)
+                {
+                    alpha = 0.0f;
+                    canvasGroup?.FadeOut(0.1f);
+                }
+                else
+                {
+                    alpha = 1.0f;
+                    canvasGroup?.FadeIn(0.1f);
+                }
             }
         }
 

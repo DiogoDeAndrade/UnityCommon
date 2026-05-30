@@ -42,7 +42,7 @@ namespace UC
         [SerializeField] private float maxPanSpeed = 60f;
         [Tooltip("How quickly pan speed ramps from base to max (units/sec^2).")]
         [SerializeField] private float panAcceleration = 40f;
-        [Tooltip("If true, edge panning is disabled while the rotate button is held.")]
+        [Tooltip("If true, EDGE panning is disabled while the rotate button is held. Analog/keyboard panning (panControl) is unaffected and still works during rotation.")]
         [SerializeField] private bool suppressPanWhileRotating = true;
 
         [Header("Rotation")]
@@ -166,11 +166,10 @@ namespace UC
             else
                 rotating = false; // gesture ended; next press re-anchors
 
-            // Pan unless we're rotating AND suppression is enabled.
-            if ((!wantRotate) || (!suppressPanWhileRotating))
-                HandlePan();
-            else
-                currentPanSpeed = 0f; // not panning this frame: reset the ramp
+            // Pan every frame. Edge panning is suppressed while rotating (handled inside
+            // GetEdgeInput); analog/keyboard panning via panControl keeps working so the
+            // player can still slide the camera while holding the rotate button.
+            HandlePan();
 
             HandleZoom();
 
@@ -204,7 +203,7 @@ namespace UC
             // Desired focus: the target box's center, dropped onto the ground plane.
             Vector3 desiredFocus = new Vector3(position.x, groundPlaneY, position.z);
 
-            // Same orientation, same distance — just place the rig so the center ray lands
+            // Same orientation, same distance - just place the rig so the center ray lands
             // on the new focus.
             transform.position = desiredFocus - transform.forward * dist;
 
@@ -248,6 +247,10 @@ namespace UC
         Vector2 GetEdgeInput()
         {
             if (!panBorderEnable) return Vector2.zero;
+
+            // Edge pan fights the cursor motion you're making to rotate, so suppress it
+            // while rotating (analog/keyboard pan via panControl is unaffected).
+            if (rotating && suppressPanWhileRotating) return Vector2.zero;
 
             // When the game view/window loses focus (clicking the Inspector, another app,
             // etc.) the reported cursor position freezes at its last value, which is usually
@@ -324,7 +327,7 @@ namespace UC
             Vector2 offset = mouse - anchorMouse;
 
             // Deadzone gates only the START of the gesture. When the cursor first moves past
-            // it, re-anchor here so rotation begins from zero — the deadzone distance is NOT
+            // it, re-anchor here so rotation begins from zero - the deadzone distance is NOT
             // counted toward the rotation amount (which is what made it feel "stuck ahead").
             if (!rotateEngaged)
             {
@@ -334,8 +337,8 @@ namespace UC
                 offset = Vector2.zero;        // start from zero this frame
             }
 
-            // Resolve which axis/axes are active. If that flips the active axis — Once
-            // releasing into a diagonal, or a single-axis switch — re-anchor so the newly
+            // Resolve which axis/axes are active. If that flips the active axis - Once
+            // releasing into a diagonal, or a single-axis switch - re-anchor so the newly
             // freed axis starts from the current cursor position, instead of snapping in the
             // offset that piled up while it was suppressed. Orientation is preserved.
             LockAxis prevAxis = lockedAxis;
