@@ -2,12 +2,12 @@ using UnityEngine;
 
 namespace UC.RPG
 {
-    public enum ChangeType { Burst, OverTime };
+    public enum ChangeType { Burst, OverTime, Set };
 
     public partial class ChangeData
     {
         public ChangeData() { }
-        public ChangeData(float value) { deltaValue = value; }
+        public ChangeData(float value = 0.0f, ChangeType type = ChangeType.Burst) { deltaValue = value; changeType = type; }
 
         public ChangeType       changeType = ChangeType.Burst;
         public float            deltaValue = 0.0f;

@@ -55,7 +55,7 @@ namespace UC.RPG
                 _maxValue = value;
                 this._value = _maxValue * p;
 
-                onChange?.Invoke(this, new ChangeData { deltaValue = this._value - prevValue });
+                onChange?.Invoke(this, new ChangeData(_value - prevValue, ChangeType.Set));
             }
         }
 
@@ -143,7 +143,7 @@ namespace UC.RPG
             value = r;
             _resourceEmpty = (value <= 0.0f);
 
-            if (notify) onChange?.Invoke(this, new ChangeData { deltaValue = value - prevValue });
+            if (notify) onChange?.Invoke(this, new ChangeData(value - prevValue, ChangeType.Set));
         }
     }
 }
