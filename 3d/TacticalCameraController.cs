@@ -96,6 +96,7 @@ namespace UC
         public BoxCollider boundsCollider { get; set; }
         [Tooltip("Optional. The look-at TARGET (screen-center ground point) is clamped to stay inside this BoxCollider's horizontal footprint. Leave empty to disable.")]
         public BoxCollider targetBoundsCollider { get; set; }
+        [SerializeField] private bool resetOnStart = true;
 
         private Camera cam;
         private float currentPanSpeed;
@@ -137,7 +138,7 @@ namespace UC
             panControl.playerInput = playerInput;
             zoomControl.playerInput = playerInput;
 
-            ResetToDefault();
+            if (resetOnStart) ResetToDefault();
         }
 
         private void Start()

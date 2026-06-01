@@ -8,20 +8,29 @@ namespace UC
     {
         private readonly List<GameObject> prefabs = new();
 
-        private bool    useSelectedObjectAsParent = false;
+        private bool useSelectedObjectAsPrefab = false;
+        private bool useSameParentAsParent = false;
+        private bool useSelectedObjectAsParent = false;
         private Vector3 startPosition = Vector3.zero;
         private Vector3 spacing = Vector3.one;
 
         [Min(1)]
-        private int     countX = 5;
+        private int countX = 5;
         [Min(1)]
-        private int     countY = 1;
+        private int countY = 1;
         [Min(1)]
-        private int     countZ = 5;
+        private int countZ = 5;
 
         private Vector3 radialNoise = Vector3.zero;
 
-        private bool    randomRotationY = false;
+        private bool randomRotationY = false;
+        private float rotationYMin = -180f;
+        private float rotationYMax = 180f;
+
+        private bool randomScale = false;
+        private Vector3 scaleMin = Vector3.one;
+        private Vector3 scaleMax = Vector3.one;
+
         private Transform parent;
 
         [MenuItem("Unity Common/Spawn Objects in Grid", priority = 10)]
@@ -35,11 +44,31 @@ namespace UC
             EditorGUILayout.LabelField("Prefab Grid Generator", EditorStyles.boldLabel);
             EditorGUILayout.Space();
 
-            DrawPrefabList();
+            useSelectedObjectAsPrefab = EditorGUILayout.ToggleLeft("Use Selected Object As Prefab", useSelectedObjectAsPrefab);
 
             EditorGUILayout.Space();
 
-            startPosition = EditorGUILayout.Vector3Field("Start Position", startPosition);
+            if (!useSelectedObjectAsPrefab)
+            {
+                using (new EditorGUI.DisabledScope(useSelectedObjectAsPrefab))
+                {
+                    DrawPrefabList();
+                }
+            }
+            else
+            {
+                useSameParentAsParent = EditorGUILayout.ToggleLeft("Use Selected Object's Parent As Parent", useSameParentAsParent);
+            }
+
+            EditorGUILayout.Space();
+
+            // In selected-object mode the start position is the object's own world position,
+            // so there is nothing to configure here.
+            if (!useSelectedObjectAsPrefab)
+            {
+                startPosition = EditorGUILayout.Vector3Field("Start Position", startPosition);
+            }
+
             spacing = EditorGUILayout.Vector3Field("Spacing", spacing);
 
             EditorGUILayout.Space();
@@ -59,18 +88,50 @@ namespace UC
 
             EditorGUILayout.Space();
 
-            useSelectedObjectAsParent = EditorGUILayout.Toggle("Use Selected Object As Parent", useSelectedObjectAsParent);
-
-            using (new EditorGUI.DisabledScope(useSelectedObjectAsParent))
+            if (!useSelectedObjectAsPrefab)
             {
-                parent = (Transform)EditorGUILayout.ObjectField("Parent", parent, typeof(Transform), true);
+                useSelectedObjectAsParent = EditorGUILayout.ToggleLeft("Use Selected Object As Parent", useSelectedObjectAsParent);
+                using (new EditorGUI.DisabledScope(useSelectedObjectAsParent))
+                {
+                    parent = (Transform)EditorGUILayout.ObjectField("Parent", parent, typeof(Transform), true);
+                }
+            }
+            else
+            {
+                parent = (Transform)EditorGUILayout.ObjectField("Override Parent", parent, typeof(Transform), true);
             }
 
-            randomRotationY = EditorGUILayout.Toggle("Random Rotation Y", randomRotationY);
+            randomRotationY = EditorGUILayout.ToggleLeft("Random Rotation Y", randomRotationY);
+
+            if (randomRotationY)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PrefixLabel("Range");
+                rotationYMin = EditorGUILayout.FloatField(rotationYMin);
+                EditorGUILayout.LabelField("to", GUILayout.Width(20));
+                rotationYMax = EditorGUILayout.FloatField(rotationYMax);
+                EditorGUILayout.EndHorizontal();
+                EditorGUI.indentLevel--;
+            }
+
+            randomScale = EditorGUILayout.ToggleLeft("Random Scale", randomScale);
+
+            if (randomScale)
+            {
+                EditorGUI.indentLevel++;
+                scaleMin = EditorGUILayout.Vector3Field("Min", scaleMin);
+                scaleMax = EditorGUILayout.Vector3Field("Max", scaleMax);
+                EditorGUI.indentLevel--;
+            }
 
             EditorGUILayout.Space();
 
-            using (new EditorGUI.DisabledScope(prefabs.Count == 0))
+            bool canGenerate = useSelectedObjectAsPrefab
+                ? Selection.activeGameObject != null
+                : prefabs.Count > 0;
+
+            using (new EditorGUI.DisabledScope(!canGenerate))
             {
                 if (GUILayout.Button("Generate Grid"))
                 {
@@ -115,47 +176,92 @@ namespace UC
 
         private void GenerateGrid()
         {
-            List<GameObject> validPrefabs = prefabs.FindAll(p => p != null);
+            List<GameObject> validPrefabs;
+            GameObject selectedObject = null;
 
-            if (validPrefabs.Count == 0)
+            if (useSelectedObjectAsPrefab)
             {
-                Debug.LogWarning("No prefabs assigned.");
-                return;
+                selectedObject = Selection.activeGameObject;
+
+                if (selectedObject == null)
+                {
+                    Debug.LogWarning("Use Selected Object As Prefab is enabled, but no object is selected.");
+                    return;
+                }
+
+                validPrefabs = new List<GameObject> { selectedObject };
             }
-
-            if (prefabs.Count == 0)
+            else
             {
-                Debug.LogWarning("No prefabs assigned.");
-                return;
+                validPrefabs = prefabs.FindAll(p => p != null);
+
+                if (validPrefabs.Count == 0)
+                {
+                    Debug.LogWarning("No prefabs assigned.");
+                    return;
+                }
             }
 
             Transform targetParent = null;
 
-            if (useSelectedObjectAsParent)
+            if (useSelectedObjectAsPrefab)
             {
-                GameObject selected = Selection.activeGameObject;
-
-                if (selected != null)
+                if (useSameParentAsParent)
                 {
-                    targetParent = selected.transform;
+                    targetParent = selectedObject.transform.parent;
                 }
                 else
                 {
-                    Debug.LogWarning("Use Selected Object As Parent is enabled, but no object is selected.");
-                    return;
+                    targetParent = parent;
+
+                    if (targetParent == null)
+                    {
+                        GameObject root = new GameObject("Generated Grid");
+                        Undo.RegisterCreatedObjectUndo(root, "Create Grid Parent");
+                        targetParent = root.transform;
+                    }
                 }
             }
             else
             {
-                targetParent = parent;
-
-                if (targetParent == null)
+                if (useSelectedObjectAsParent)
                 {
-                    GameObject root = new GameObject("Generated Grid");
-                    Undo.RegisterCreatedObjectUndo(root, "Create Grid Parent");
-                    targetParent = root.transform;
+                    GameObject selected = Selection.activeGameObject;
+
+                    if (selected != null)
+                    {
+                        targetParent = selected.transform;
+                    }
+                    else
+                    {
+                        Debug.LogWarning("Use Selected Object As Parent is enabled, but no object is selected.");
+                        return;
+                    }
+                }
+                else
+                {
+                    targetParent = parent;
+
+                    if (targetParent == null)
+                    {
+                        GameObject root = new GameObject("Generated Grid");
+                        Undo.RegisterCreatedObjectUndo(root, "Create Grid Parent");
+                        targetParent = root.transform;
+                    }
                 }
             }
+
+            // In selected-object mode the grid origin is the object's current world position
+            // and it already occupies the [0,0,0] slot, so we derive the start from it.
+            Vector3 effectiveStartPosition = useSelectedObjectAsPrefab
+                ? selectedObject.transform.position
+                : startPosition;
+
+            // In selected-object mode the grid axes follow the object's world orientation
+            // so that spacing is applied along its local X/Y/Z rather than world axes.
+            Quaternion effectiveOrientation = useSelectedObjectAsPrefab
+                ? selectedObject.transform.rotation
+                : Quaternion.identity;
 
             Undo.SetCurrentGroupName("Generate Prefab Grid");
             int undoGroup = Undo.GetCurrentGroup();
@@ -166,9 +272,15 @@ namespace UC
                 {
                     for (int z = 0; z < countZ; z++)
                     {
+                        // The selected object already sits at [0,0,0] — skip it.
+                        if (useSelectedObjectAsPrefab && x == 0 && y == 0 && z == 0)
+                        {
+                            continue;
+                        }
+
                         GameObject prefab = validPrefabs[Random.Range(0, validPrefabs.Count)];
 
-                        Vector3 gridPosition = startPosition + new Vector3(
+                        Vector3 gridPosition = effectiveStartPosition + effectiveOrientation * new Vector3(
                             x * spacing.x,
                             y * spacing.y,
                             z * spacing.z);
@@ -179,13 +291,21 @@ namespace UC
 
                         if (randomRotationY)
                         {
-                            rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+                            rotation = Quaternion.Euler(0f, Random.Range(rotationYMin, rotationYMax), 0f);
                         }
 
                         GameObject instance = InstantiatePrefab(prefab, targetParent);
 
                         instance.transform.position = gridPosition + noiseOffset;
                         instance.transform.rotation = rotation;
+
+                        if (randomScale)
+                        {
+                            instance.transform.localScale = new Vector3(
+                                Random.Range(scaleMin.x, scaleMax.x),
+                                Random.Range(scaleMin.y, scaleMax.y),
+                                Random.Range(scaleMin.z, scaleMax.z));
+                        }
 
                         Undo.RegisterCreatedObjectUndo(instance, "Generate Prefab Grid");
                     }
