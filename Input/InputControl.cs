@@ -181,7 +181,7 @@ namespace UC
                     if (action != null) ret = action.WasPressedThisFrame();
                     break;
                 case InputType.AnyInputEvent:
-                    ret = Input.anyKeyDown;
+                    ret = isAnyInputPressed;
                     break;
                 case InputType.None:
                     ret = false;
