@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UC.DoubleMath;
 using System.Text;
-using UnityEditor.Experimental.GraphView;
-
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;

@@ -13,6 +13,7 @@ namespace UC.VoxelizerHelpers
         // This handles materials for the render functions below
         static Material backfacesWhiteMat;
         static Material frontfacesBlackMat;
+#if UNITY_EDITOR
         static AxisSlice()
         {
             AssemblyReloadEvents.beforeAssemblyReload += CleanupMaterials;
@@ -28,6 +29,7 @@ namespace UC.VoxelizerHelpers
                 CleanupMaterials();
             }
         }
+#endif
 
         static void CleanupMaterials()
         {
