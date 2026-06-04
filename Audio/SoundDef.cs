@@ -80,6 +80,17 @@ namespace UC
 
             return ret;
         }
+
+        public AudioSource FadeIn(float time)
+        {
+            var audioSource = Play(1.0f, 1.0f, -float.MaxValue);
+            var targetVolume = audioSource.volume;
+            audioSource.volume = 0.0f;
+            audioSource.FadeTo(targetVolume, time);
+
+            return audioSource;
+        }
+
     }
 
 #if UNITY_EDITOR
