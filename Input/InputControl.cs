@@ -146,10 +146,10 @@ namespace UC
                     if (action != null) ret = action.IsPressed();
                     break;
                 case InputType.AnyInputEvent:
-                    ret = Input.anyKey;
+                    ret = isAnyInputPressed;
                     break;
                 case InputType.MousePosition:
-                    ret = Input.anyKey;
+                    ret = isAnyInputPressed;
                     break;
                 case InputType.None:
                     ret = false; 
