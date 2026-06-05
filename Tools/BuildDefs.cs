@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace UC
 {
@@ -14,6 +15,11 @@ namespace UC
         public bool         buildWeb;
         public bool         createZipFiles = true;
         public bool         uploadToItch = true;
+        [Header("Graphics Settings")]
+        public bool                 overrideGraphicsSettings;
+        public RenderPipelineAsset  windowsRenderPipelineAsset;
+        public RenderPipelineAsset  webGLRenderPipelineAsset;
+
         public List<string> ignoreFilePatterns = new List<string>();
 
         public bool anyBuilds => buildWindows | buildWeb;

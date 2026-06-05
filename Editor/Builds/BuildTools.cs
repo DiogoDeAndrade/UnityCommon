@@ -5,6 +5,8 @@ using System.IO.Compression;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+using System.Text.RegularExpressions;
 
 namespace UC
 {
@@ -14,7 +16,13 @@ namespace UC
         private static readonly string buildDefsPath = "Assets/Settings/BuildDefs.asset";
         private BuildDefs buildDefs;
         private string buildLog = "";
+        private Vector2 buildLogScroll;
         private string butlerPath;
+
+        private bool butlerUploadRunning;
+        private float butlerUploadProgress;
+        private string butlerUploadTitle = "";
+        private string butlerUploadInfo = "";
 
         private SerializedObject buildDefsSerializedObject;
 
@@ -78,6 +86,21 @@ namespace UC
 
                 buildDefs.buildWindows = EditorGUILayout.Toggle("Build for Windows", buildDefs.buildWindows);
                 buildDefs.buildWeb = EditorGUILayout.Toggle("Build for Web", buildDefs.buildWeb);
+
+                GUILayout.Space(5);
+
+                buildDefs.overrideGraphicsSettings = EditorGUILayout.Toggle(new GUIContent("Override Graphics Settings", "Temporarily override the active Render Pipeline Asset during each build."), buildDefs.overrideGraphicsSettings);
+
+                if (buildDefs.overrideGraphicsSettings)
+                {
+                    EditorGUI.indentLevel++;
+
+                    buildDefs.windowsRenderPipelineAsset = (RenderPipelineAsset)EditorGUILayout.ObjectField(new GUIContent("Windows URP Asset", "If null, the current/default render pipeline asset is used."), buildDefs.windowsRenderPipelineAsset, typeof(RenderPipelineAsset), false);
+                    buildDefs.webGLRenderPipelineAsset = (RenderPipelineAsset)EditorGUILayout.ObjectField(new GUIContent("WebGL URP Asset", "If null, the current/default render pipeline asset is used."), buildDefs.webGLRenderPipelineAsset, typeof(RenderPipelineAsset), false);
+
+                    EditorGUI.indentLevel--;
+                }
+
                 if (buildDefs.anyBuilds)
                 {
                     buildDefs.createZipFiles = EditorGUILayout.Toggle("Create Zip Files", buildDefs.createZipFiles);
@@ -124,14 +147,65 @@ namespace UC
 
             if (GUILayout.Button("Build"))
             {
-                buildLog = ""; // Clear log before new build
+                ClearBuildLog();
                 UpdateBuildTimestamp();
                 BuildGame();
             }
 
             GUILayout.Space(10);
+
+            GUILayout.BeginHorizontal();
             GUILayout.Label("Build Log:", EditorStyles.boldLabel);
-            buildLog = EditorGUILayout.TextArea(buildLog, GUILayout.ExpandHeight(true));
+
+            if (GUILayout.Button("Clear", GUILayout.Width(60)))
+            {
+                GUILayout.EndHorizontal();
+                ClearBuildLog();
+                return;
+            }
+
+            GUILayout.EndHorizontal();
+
+            GUIStyle logStyle = new GUIStyle(EditorStyles.textArea)
+            {
+                wordWrap = true,
+                richText = false,
+                alignment = TextAnchor.UpperLeft
+            };
+
+            // Account for vertical scrollbar and padding.
+            float logTextWidth = Mathf.Max(100.0f, position.width - 45.0f);
+
+            // Add extra padding because CalcHeight can underestimate TextArea height slightly,
+            // especially with wrapped lines and IMGUI padding.
+            float logTextHeight = logStyle.CalcHeight(
+                new GUIContent(buildLog),
+                logTextWidth
+            ) + 40.0f;
+
+            // This is the important part:
+            // the scroll view can expand to remaining window space,
+            // while the inner text area has its real content height.
+            buildLogScroll = EditorGUILayout.BeginScrollView(
+                buildLogScroll,
+                false, // alwaysShowHorizontal
+                true,  // alwaysShowVertical
+                GUILayout.ExpandHeight(true),
+                GUILayout.ExpandWidth(true)
+            );
+
+            EditorGUI.BeginDisabledGroup(true);
+
+            EditorGUILayout.TextArea(
+                buildLog,
+                logStyle,
+                GUILayout.Width(logTextWidth),
+                GUILayout.Height(logTextHeight)
+            );
+
+            EditorGUI.EndDisabledGroup();
+
+            EditorGUILayout.EndScrollView();
         }
 
         private void IncrementVersion(int part)
@@ -174,6 +248,39 @@ namespace UC
 
         private void BuildGame()
         {
+            BuildTarget previousBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+            BuildTargetGroup previousBuildTargetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
+
+            try
+            {
+                BuildGameInternal();
+            }
+            finally
+            {
+                RestoreInitialBuildTarget(previousBuildTargetGroup, previousBuildTarget);
+            }
+        }
+
+        private void RestoreInitialBuildTarget(BuildTargetGroup targetGroup, BuildTarget target)
+        {
+            if (EditorUserBuildSettings.activeBuildTarget == target)
+            {
+                Log($"Build target already restored: {target}");
+                return;
+            }
+
+            Log($"Restoring initial build target: {target}");
+
+            bool restored = EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, target);
+
+            if (!restored)
+            {
+                Log($"Failed to restore initial build target: {target}");
+            }
+        }
+
+        private void BuildGameInternal()
+        {
             string productName = Application.productName;
             string buildFolder = "Builds/";
 
@@ -194,7 +301,7 @@ namespace UC
             if (buildDefs.buildWindows)
             {
                 string windowsPath = buildFolder + productName + "_Windows/";
-                BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, windowsPath + productName + ".exe", BuildTarget.StandaloneWindows64, BuildOptions.None);
+                BuildPlayerWithOptionalGraphicsOverride(EditorBuildSettings.scenes, windowsPath + productName + ".exe", BuildTarget.StandaloneWindows64, BuildOptions.None, buildDefs.windowsRenderPipelineAsset );
                 Log("Windows build completed: " + windowsPath);
 
                 DeleteIgnoredStreamingAssets(windowsPath);
@@ -221,7 +328,7 @@ namespace UC
             if (buildDefs.buildWeb)
             {
                 string webPath = buildFolder + productName + "_Web/";
-                BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, webPath, BuildTarget.WebGL, BuildOptions.None);
+                BuildPlayerWithOptionalGraphicsOverride(EditorBuildSettings.scenes, webPath, BuildTarget.WebGL, BuildOptions.None, buildDefs.webGLRenderPipelineAsset);
                 Log("WebGL build completed: " + webPath);
 
                 DeleteIgnoredStreamingAssets(webPath);
@@ -344,8 +451,22 @@ namespace UC
         {
             message = CleanLogOutput(message);
 
+            if (string.IsNullOrWhiteSpace(message))
+                return;
+
             buildLog += message + "\n";
+
+            // Keep log from becoming absurdly huge.
+            const int maxLogLength = 40000;
+            if (buildLog.Length > maxLogLength)
+            {
+                buildLog = buildLog.Substring(buildLog.Length - maxLogLength);
+            }
+
+            buildLogScroll.y = float.MaxValue;
+
             UnityEngine.Debug.Log(message);
+            Repaint();
         }
 
         public static string CleanLogOutput(string input)
@@ -353,20 +474,66 @@ namespace UC
             if (string.IsNullOrEmpty(input))
                 return string.Empty;
 
+            // Remove ANSI terminal escape sequences.
+            input = System.Text.RegularExpressions.Regex.Replace(
+                input,
+                @"\x1B\[[0-?]*[ -/]*[@-~]",
+                ""
+            );
+
+            // Remove Butler/progress-bar mojibake caused by box-drawing chars being decoded badly.
+            input = System.Text.RegularExpressions.Regex.Replace(
+                input,
+                @"Ô[\u0080-\u00FFA-Za-z0-9]+",
+                ""
+            );
+
             StringBuilder cleanedString = new StringBuilder(input.Length);
 
             foreach (char c in input)
             {
-                if (c == '\0' || c == '\r')
-                    continue; // Remove null and carriage return
+                if (c == '\0')
+                    continue;
 
-                if (c >= 32 && c <= 126 || c == '\n' || c == '\t' || c == ' ')
+                // Treat carriage return as newline-ish, because CLI progress bars use it.
+                // But do not let it create thousands of progress lines later.
+                if (c == '\r')
+                {
+                    cleanedString.Append('\n');
+                    continue;
+                }
+
+                if (c == '\n' || c == '\t')
+                {
+                    cleanedString.Append(c);
+                    continue;
+                }
+
+                if (!char.IsControl(c))
                 {
                     cleanedString.Append(c);
                 }
             }
 
-            return cleanedString.ToString();
+            string result = cleanedString.ToString();
+
+            // Collapse excessive blank lines.
+            result = System.Text.RegularExpressions.Regex.Replace(result, @"\n{3,}", "\n\n");
+
+            return result.Trim();
+        }
+
+        private void ClearBuildLog()
+        {
+            buildLog = "";
+            buildLogScroll = Vector2.zero;
+
+            // Clear focus from SelectableLabel/TextArea internal editor state.
+            GUI.FocusControl(null);
+            GUIUtility.keyboardControl = 0;
+            GUIUtility.hotControl = 0;
+
+            Repaint();
         }
 
         private BuildDefs GetOrCreateBuildDefs()
@@ -395,38 +562,298 @@ namespace UC
             AssetDatabase.SaveAssets();
         }
 
-        private void UploadToItch(string zipFilePath, string channel)
+        private void BuildPlayerWithOptionalGraphicsOverride(
+            EditorBuildSettingsScene[] scenes,
+            string locationPathName,
+            BuildTarget buildTarget,
+            BuildOptions buildOptions,
+            RenderPipelineAsset overrideRenderPipelineAsset)
+        {
+            RenderPipelineAsset previousDefaultRenderPipeline = GraphicsSettings.defaultRenderPipeline;
+            RenderPipelineAsset previousQualityRenderPipeline = QualitySettings.renderPipeline;
+
+            BuildTargetGroup buildTargetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
+
+            bool shouldOverride =
+                buildDefs.overrideGraphicsSettings &&
+                overrideRenderPipelineAsset != null;
+
+            try
+            {
+                if (EditorUserBuildSettings.activeBuildTarget != buildTarget)
+                {
+                    Log($"Switching active build target to {buildTarget}...");
+
+                    bool switched = EditorUserBuildSettings.SwitchActiveBuildTarget(
+                        buildTargetGroup,
+                        buildTarget
+                    );
+
+                    if (!switched)
+                    {
+                        Log($"Failed to switch active build target to {buildTarget}. Build aborted.");
+                        return;
+                    }
+                }
+
+                if (shouldOverride)
+                {
+                    GraphicsSettings.defaultRenderPipeline = overrideRenderPipelineAsset;
+                    QualitySettings.renderPipeline = overrideRenderPipelineAsset;
+
+                    Log($"Temporarily set render pipeline for {buildTarget}: {overrideRenderPipelineAsset.name}");
+                }
+                else if (buildDefs.overrideGraphicsSettings)
+                {
+                    Log($"No render pipeline override set for {buildTarget}. Using current/default graphics settings.");
+                }
+
+                BuildPipeline.BuildPlayer(
+                    scenes,
+                    locationPathName,
+                    buildTarget,
+                    buildOptions
+                );
+            }
+            finally
+            {
+                GraphicsSettings.defaultRenderPipeline = previousDefaultRenderPipeline;
+                QualitySettings.renderPipeline = previousQualityRenderPipeline;
+
+                Log($"Restored render pipeline settings after {buildTarget} build.");
+            }
+        }
+
+        private bool UploadToItch(string uploadPath, string channel)
         {
             butlerPath = EditorPrefs.GetString("ButlerPath", "");
+
             if (string.IsNullOrEmpty(butlerPath))
             {
                 butlerPath = EditorUtility.OpenFilePanel("Select Butler Executable", "", "exe");
+
                 if (!string.IsNullOrEmpty(butlerPath))
                 {
                     EditorPrefs.SetString("ButlerPath", butlerPath);
                 }
             }
 
-            if (string.IsNullOrEmpty(butlerPath) || string.IsNullOrEmpty(buildDefs.username))
+            if (string.IsNullOrEmpty(butlerPath) || !File.Exists(butlerPath))
             {
-                Log("Butler path or username not set. Cannot upload to Itch.io.");
-                return;
+                Log("Butler path is not set or does not exist. Cannot upload to Itch.io.");
+                return false;
             }
 
-            string productName = buildDefs.projectName;
-            string command = $"\"{butlerPath}\" push \"{zipFilePath}\" {buildDefs.username}/{productName}:{channel} --userversion {buildDefs.version}";
-            Log("Executing: " + command);
+            if (string.IsNullOrEmpty(buildDefs.username))
+            {
+                Log("Itch.io username is not set. Cannot upload to Itch.io.");
+                return false;
+            }
 
-            Process process = new Process();
-            process.StartInfo.FileName = butlerPath;
-            process.StartInfo.Arguments = $"push \"{zipFilePath}\" {buildDefs.username}/{productName}:{channel} --userversion {buildDefs.version}";
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.CreateNoWindow = true;
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-            Log(output);
+            if (string.IsNullOrEmpty(buildDefs.projectName))
+            {
+                Log("Itch.io project name is not set. Cannot upload to Itch.io.");
+                return false;
+            }
+
+            if (!File.Exists(uploadPath) && !Directory.Exists(uploadPath))
+            {
+                Log("Upload path does not exist: " + uploadPath);
+                return false;
+            }
+
+            string itchTarget = $"{buildDefs.username}/{buildDefs.projectName}:{channel}";
+            string arguments = $"push \"{uploadPath}\" {itchTarget} --userversion {buildDefs.version}";
+
+            Log("Uploading to Itch.io:");
+            Log("  Path: " + uploadPath);
+            Log("  Target: " + itchTarget);
+            Log("  Version: " + buildDefs.version);
+
+            butlerUploadRunning = true;
+            butlerUploadProgress = 0.0f;
+            butlerUploadTitle = $"Uploading {channel} to Itch.io";
+            butlerUploadInfo = itchTarget;
+
+            StringBuilder finalOutput = new StringBuilder();
+            StringBuilder finalError = new StringBuilder();
+
+            try
+            {
+                Process process = new Process();
+                process.StartInfo.FileName = butlerPath;
+                process.StartInfo.Arguments = arguments;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.CreateNoWindow = true;
+
+                // Important: Butler outputs UTF-8 progress characters.
+                process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+                process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
+
+                process.Start();
+
+                System.Threading.Thread stdoutThread = new System.Threading.Thread(() =>
+                {
+                    ReadButlerStream(process.StandardOutput, finalOutput);
+                });
+
+                System.Threading.Thread stderrThread = new System.Threading.Thread(() =>
+                {
+                    ReadButlerStream(process.StandardError, finalError);
+                });
+
+                stdoutThread.Start();
+                stderrThread.Start();
+
+                while (!process.HasExited)
+                {
+                    EditorUtility.DisplayProgressBar(
+                        butlerUploadTitle,
+                        butlerUploadInfo,
+                        Mathf.Clamp01(butlerUploadProgress)
+                    );
+
+                    System.Threading.Thread.Sleep(100);
+                }
+
+                stdoutThread.Join();
+                stderrThread.Join();
+
+                EditorUtility.ClearProgressBar();
+
+                string output = CleanButlerFinalOutput(finalOutput.ToString());
+                string error = CleanButlerFinalOutput(finalError.ToString());
+
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    Log(output);
+                }
+
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    Log("Butler stderr:");
+                    Log(error);
+                }
+
+                if (process.ExitCode == 0)
+                {
+                    Log($"Itch.io upload completed successfully: {itchTarget}");
+                    return true;
+                }
+
+                Log($"Itch.io upload failed. Butler exit code: {process.ExitCode}");
+                return false;
+            }
+            catch (Exception e)
+            {
+                EditorUtility.ClearProgressBar();
+                Log("Itch.io upload failed with exception: " + e.Message);
+                return false;
+            }
+            finally
+            {
+                butlerUploadRunning = false;
+                EditorUtility.ClearProgressBar();
+            }
+        }
+
+        private void ReadButlerStream(StreamReader reader, StringBuilder finalOutput)
+        {
+            char[] buffer = new char[512];
+
+            while (true)
+            {
+                int count = reader.Read(buffer, 0, buffer.Length);
+
+                if (count <= 0)
+                    break;
+
+                string chunk = new string(buffer, 0, count);
+
+                ParseButlerProgress(chunk);
+
+                lock (finalOutput)
+                {
+                    finalOutput.Append(chunk);
+                }
+            }
+        }
+
+        private void ParseButlerProgress(string chunk)
+        {
+            MatchCollection matches = Regex.Matches(chunk, @"(\d+(?:\.\d+)?)%");
+
+            if (matches.Count > 0)
+            {
+                Match last = matches[matches.Count - 1];
+
+                if (float.TryParse(
+                    last.Groups[1].Value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out float percent))
+                {
+                    butlerUploadProgress = Mathf.Clamp01(percent / 100.0f);
+
+                    butlerUploadInfo = $"Uploading... {percent:0.00}%";
+                }
+            }
+
+            if (chunk.IndexOf("finalizing", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                butlerUploadProgress = 1.0f;
+                butlerUploadInfo = "Finalizing build...";
+            }
+            else if (chunk.IndexOf("almost there", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                butlerUploadProgress = 1.0f;
+                butlerUploadInfo = "Almost there...";
+            }
+        }
+
+        private string CleanButlerFinalOutput(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return string.Empty;
+
+            input = CleanLogOutput(input);
+
+            string[] lines = input.Split('\n');
+            StringBuilder result = new StringBuilder();
+
+            foreach (string rawLine in lines)
+            {
+                string line = rawLine.Trim();
+
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                // Drop Butler animated progress lines.
+                if (Regex.IsMatch(line, @"^\d+(\.\d+)?%"))
+                    continue;
+
+                if (Regex.IsMatch(line, @"@\s*\d+(\.\d+)?\s*(KiB|MiB|GiB)/s"))
+                    continue;
+
+                if (line.Contains("left") && Regex.IsMatch(line, @"\d+(\.\d+)?\s*(KiB|MiB|GiB)\s+left"))
+                    continue;
+
+                // Drop Butler progress bar lines.
+                if (Regex.IsMatch(line, @"^[\u2590\u2588\u2591\s]+\u258C\s*\d+(\.\d+)?%"))
+                    continue;
+
+                if (Regex.IsMatch(line, @"^\d+(\.\d+)?%"))
+                    continue;
+
+                if (line.Contains("almost there") || line.Contains("finalizing build"))
+                    continue;
+
+                result.AppendLine(line);
+            }
+
+            return result.ToString().Trim();
         }
     }
 }
