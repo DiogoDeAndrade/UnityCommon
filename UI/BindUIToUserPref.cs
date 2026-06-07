@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-public class StartValueFromUserPref : MonoBehaviour
+public class BindUIToUserPref : MonoBehaviour
 {
     public enum KeyType { Float, Vec4_W, Bool };
 
@@ -14,6 +14,8 @@ public class StartValueFromUserPref : MonoBehaviour
     private float      defaultValue = 1.0f;
     [SerializeField, ShowIf(nameof(isBool))] 
     private bool       defaultValueB = false;
+    [SerializeField]
+    private bool        autoSetValue = false;
 
     Slider slider;
     Toggle toggle;
@@ -51,7 +53,41 @@ public class StartValueFromUserPref : MonoBehaviour
                     break;
             }
         }
-        Destroy(this);
+        if (!autoSetValue)
+        {
+            Destroy(this);
+        }
+    }
+
+    public void OnChangeValue()
+    {
+        if ((slider) || (toggle))
+        {
+            switch (keyType)
+            {
+                case KeyType.Float:
+                    {
+
+                        float v = slider.value;
+                        PlayerPrefsHelpers.SetFloat(userPrefName, v);
+                    }
+                    break;
+                case KeyType.Bool:
+                    {
+                        bool v = toggle.isOn;
+                        PlayerPrefsHelpers.SetBool(userPrefName, v);
+                    }
+                    break;
+                case KeyType.Vec4_W:
+                    {
+                        float v = slider.value;
+                        PlayerPrefsHelpers.SetVector4(userPrefName, new Vector4(0.0f, 0.0f, 0.0f, v));
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 
     [Button("Clear Player Prefs")]

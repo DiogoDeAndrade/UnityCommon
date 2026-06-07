@@ -35,6 +35,11 @@ namespace UC
             PlayerPrefs.SetString(key, $"{value.x};{value.y};{value.z};{value.w}");
         }
 
+        public static void SetFloat(string key,float fValue)
+        {
+            PlayerPrefs.SetFloat(key, fValue);
+        }
+
         public static void SetBool(string key, bool bValue)
         {
             PlayerPrefs.SetString(key, (bValue) ? ("true") : ("false"));
