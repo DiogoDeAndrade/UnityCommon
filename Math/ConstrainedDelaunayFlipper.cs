@@ -145,10 +145,17 @@ namespace UC
                 return adj;
             }
 
-            // 5) main loop — flip edges one-by-one; no batch conflicts
-            for (int pass = 0; pass < maxPasses; pass++)
+            // 5) main loop â€” flip edges one-by-one.
+            // IMPORTANT: adjacency must be rebuilt and the scan restarted after EVERY flip.
+            // Reassigning the dictionary mid-foreach does NOT restart the foreach (it keeps
+            // iterating the stale, pre-flip adjacency), which corrupts the triangle indices.
+            // So instead we rebuild + break out, bounded by a flip budget for termination.
+            int triCount = tris.Count / 3;
+            int flipBudget = Mathf.Max(1, maxPasses) * Mathf.Max(1, triCount) + 16;
+            bool flipped = true;
+            while (flipped && flipBudget-- > 0)
             {
-                bool changed = false;
+                flipped = false;
                 var adj = BuildAdjacency();
 
                 foreach (var kv in adj)
@@ -189,19 +196,13 @@ namespace UC
                     var mid = 0.5f * (vk + vl);
                     if (!IsInsideRegion(mid)) continue;
 
-                    // apply flip immediately and restart this pass (local adj changed)
-                    int o0i0 = tris[o0 + 0], o0i1 = tris[o0 + 1], o0i2 = tris[o0 + 2];
-                    int o1i0 = tris[o1 + 0], o1i1 = tris[o1 + 1], o1i2 = tris[o1 + 2];
-
+                    // apply flip
                     tris[o0 + 0] = k; tris[o0 + 1] = i; tris[o0 + 2] = l;
                     tris[o1 + 0] = l; tris[o1 + 1] = j; tris[o1 + 2] = k;
 
-                    changed = true;
-                    // rebuild adjacency after each successful flip to avoid conflicts
-                    adj = BuildAdjacency();
+                    flipped = true;
+                    break; // restart the scan with fresh adjacency
                 }
-
-                if (!changed) break;
             }
         }
     }

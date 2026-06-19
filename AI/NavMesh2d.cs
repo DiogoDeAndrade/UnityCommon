@@ -1491,7 +1491,7 @@ namespace UC
                     int vj = currentPoly[(i + 1) % currentPoly.Count];
                     Vector2 edgeMid = 0.5f * ((Vector2)vertices[vi] + (Vector2)vertices[vj]);
 
-                    // incremental: from where we entered ‘current’ to this portal
+                    // incremental: from where we entered ï¿½currentï¿½ to this portal
                     float stepCost = Vector2.Distance(fromPos, edgeMid) * Mathf.Max(1e-5f, GetCost(agentType, currentPoly.terrainType));
                     float newCost = costSoFar[current] + stepCost;
 
@@ -1734,7 +1734,7 @@ namespace UC
                     Vector2 v1 = (Vector2)rd.vertices[poly.indices[i]];
                     Vector2 v2 = (Vector2)rd.vertices[poly.indices[(i + 1) % poly.indices.Count]];
 
-                    // solve ray–segment intersection in 2D:
+                    // solve rayï¿½segment intersection in 2D:
                     Vector2 p = new Vector2(currentPoint.x, currentPoint.y);
                     Vector2 r = new Vector2(direction.x, direction.y);
                     Vector2 q = v1;

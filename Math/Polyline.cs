@@ -469,7 +469,11 @@ namespace UC
                 return 0.5f * a;
             }
 
-            static List<Vector2> NormalizeRing(List<Vector3> src, bool wantCCW, float collinearEps = 1e-9f)
+            // collinearEps is now a PERPENDICULAR DISTANCE tolerance in world units (not a raw
+            // cross-product). A cross-product threshold is not scale-independent: at large world
+            // coordinates the float noise on exactly-collinear points dwarfs a tiny eps, so
+            // collinear points were never removed and EarCut sliced zero-area sliver triangles.
+            static List<Vector2> NormalizeRing(List<Vector3> src, bool wantCCW, float collinearEps = 1e-2f)
             {
                 // 1) copy to 2D, drop duplicate last==first and consecutive dups
                 var pts = new List<Vector2>(src.Count);
@@ -494,8 +498,12 @@ namespace UC
                         var c = pts[(i + 1) % pts.Count];
                         var ab = b - a;
                         var bc = c - b;
-                        float cross = ab.x * bc.y - ab.y * bc.x;
-                        if (Mathf.Abs(cross) > collinearEps || NearlyEqual(a, b) || NearlyEqual(b, c))
+                        var ac = c - a;
+                        float cross = ab.x * bc.y - ab.y * bc.x;     // = 2 * area(a,b,c)
+                        float acLen = ac.magnitude;
+                        // perpendicular distance of b from line a-c = |2*area| / |a-c|
+                        float perp = (acLen > 1e-6f) ? Mathf.Abs(cross) / acLen : 0f;
+                        if (perp > collinearEps || NearlyEqual(a, b) || NearlyEqual(b, c))
                             clean.Add(b);
                     }
                     pts = clean;
@@ -523,21 +531,11 @@ namespace UC
 
             static bool RingFullyInside(List<Vector2> inner, List<Vector2> outer)
             {
-                // quick AABB reject
-                Vector2 minI = inner[0], maxI = inner[0];
-                for (int i = 1; i < inner.Count; i++)
-                {
-                    var v = inner[i];
-                    if (v.x < minI.x) minI.x = v.x; if (v.y < minI.y) minI.y = v.y;
-                    if (v.x > maxI.x) maxI.x = v.x; if (v.y > maxI.y) maxI.y = v.y;
-                }
-                // cheap bbox check via point-in-ring on corners
-                if (!PointInRing(outer, minI)) return false;
-                if (!PointInRing(outer, new Vector2(maxI.x, minI.y))) return false;
-                if (!PointInRing(outer, maxI)) return false;
-                if (!PointInRing(outer, new Vector2(minI.x, maxI.y))) return false;
-
-                // strict: every vertex inside
+                // NOTE: an AABB-corner pre-check was removed here. The hole's bounding-box
+                // corners are NOT hole vertices, and on a concave outer boundary they can
+                // fall outside it while the hole itself is fully inside -> the pre-check
+                // false-rejected valid holes, which were then triangulated over (filled).
+                // The per-vertex containment test below is the correct minimal check.
                 for (int i = 0; i < inner.Count; i++)
                     if (!PointInRing(outer, inner[i])) return false;
 
@@ -638,6 +636,28 @@ namespace UC
 
             // Triangulate
             outTriangles = MadWorldNL.EarCut.Tessellate(coords, holeIndices, 2);
+
+            // Drop any degenerate (near-zero-area) triangles. EarCut can still emit slivers
+            // from bridge-vertex duplication or residual collinear runs; they cover no area
+            // and only confuse the downstream Delaunay/merge steps.
+            if (outTriangles != null && outTriangles.Count >= 3)
+            {
+                var filtered = new List<int>(outTriangles.Count);
+                for (int i = 0; i + 2 < outTriangles.Count; i += 3)
+                {
+                    Vector3 a = outVertices[outTriangles[i]];
+                    Vector3 b = outVertices[outTriangles[i + 1]];
+                    Vector3 c = outVertices[outTriangles[i + 2]];
+                    float area2 = Mathf.Abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+                    if (area2 > 1e-2f)
+                    {
+                        filtered.Add(outTriangles[i]);
+                        filtered.Add(outTriangles[i + 1]);
+                        filtered.Add(outTriangles[i + 2]);
+                    }
+                }
+                outTriangles = filtered;
+            }
         }
 
 #if UNITY_EDITOR

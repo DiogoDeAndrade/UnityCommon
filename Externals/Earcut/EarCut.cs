@@ -482,7 +482,11 @@ namespace MadWorldNL
             var p = start;
             do
             {
-                if (p.Z != float.MinValue)
+                // Compute z-order once per node. Z is initialized to float.MinValue (the
+                // "not yet computed" sentinel); ZOrder() only ever returns non-negative
+                // values, so '== float.MinValue' is the correct guard. (Was '!=', which
+                // inverted the condition so z was NEVER computed -> broken hashed ear test.)
+                if (p.Z == float.MinValue)
                     p.Z = ZOrder(p.X, p.Y, minX, minY, invSize);
                 p.PrevZ = p.Prev;
                 p.NextZ = p.Next;
