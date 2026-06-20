@@ -1,5 +1,6 @@
 using NaughtyAttributes;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -36,6 +37,8 @@ namespace UC
         private NavMeshTerrainType2d        defaultTerrainType;
         [SerializeField, Tooltip("Absolute area tolerance squared-units for deciding if a cost loop equals the region outer boundary.")]
         private float                       boundaryAreaTolerance = 1.0f;
+        [SerializeField, Tooltip("Per-frame time budget (ms) for runtime rebuilds; the bake is time-sliced across frames to stay under it. 0 or less bakes synchronously in a single frame. The editor 'Bake NavMesh' button is always synchronous.")]
+        private float                       maxBakeMillisecondsPerFrame = 4.0f;
         bool needSimplificationMaxDistance => simplificationAlgorithm == SimplificationAlgorithm.GreedyVertexDecimation;
 
         public struct PathNode
@@ -395,10 +398,48 @@ namespace UC
         [SerializeField, HideInInspector]
         Vector2                 costRange;
         [SerializeField, HideInInspector]
-        List<RegionData>        regionData;      
+        List<RegionData>        regionData;
 
-        bool hasValidGrid => (grid != null) && (grid.Length == gridSize.x * gridSize.y);
-        bool hasValidRegions => (regionData != null) && (regionData.Count > 0);
+        // Obstacles incorporated by the last bake (serialized so scene-placed obstacles aren't seen as
+        // "new" on load and don't each trigger a redundant rebuild).
+        [SerializeField, HideInInspector]
+        List<NavMeshObstacle2d> bakedObstacles = new();
+
+        // Transient set of obstacle colliders used while baking; cleared afterwards.
+        [NonSerialized] HashSet<Collider2D>     _obstacleColliders;
+        [NonSerialized] bool                    _rebuildRequested;
+        // True while a (possibly time-sliced) bake is in progress. The pipeline builds fresh objects
+        // into the working fields above; queries instead read the snapshot below so they keep serving
+        // the last completed bake until the new one is published (on completion _isBaking clears).
+        [NonSerialized] bool                    _isBaking;
+        [NonSerialized] List<RegionData>        _snapRegionData;
+        [NonSerialized] byte[]                  _snapGrid;
+        [NonSerialized] byte[]                  _snapRegion;
+        [NonSerialized] NavMeshTerrainType2d[]  _snapTerrain;
+        [NonSerialized] Vector2                 _snapCostRange;
+        [NonSerialized] int                     _snapCellSize;
+        [NonSerialized] Vector2Int              _snapGridSize;
+        [NonSerialized] Vector2                 _snapGridOffset;
+
+        // Query/debug views: the snapshot while baking, the working fields otherwise.
+        List<RegionData>        QRegionData => _isBaking ? _snapRegionData : regionData;
+        byte[]                  QGrid       => _isBaking ? _snapGrid : grid;
+        byte[]                  QRegion     => _isBaking ? _snapRegion : region;
+        NavMeshTerrainType2d[]  QTerrain    => _isBaking ? _snapTerrain : terrainType;
+        Vector2                 QCostRange  => _isBaking ? _snapCostRange : costRange;
+        int                     QCellSize   => _isBaking ? _snapCellSize : cellSize;
+        Vector2Int              QGridSize   => _isBaking ? _snapGridSize : gridSize;
+        Vector2                 QGridOffset => _isBaking ? _snapGridOffset : gridOffset;
+
+        /// <summary>True while a (possibly time-sliced) rebuild is in progress. Queries keep working
+        /// against the previous mesh meanwhile; poll this to wait for the freshest result.</summary>
+        public bool IsRebuilding => _isBaking;
+
+        // Active navmesh instances (runtime), so obstacles can notify the ones they affect.
+        static readonly HashSet<NavMesh2d>      s_NavMeshes = new();
+
+        bool hasValidGrid => (QGrid != null) && (QGrid.Length == QGridSize.x * QGridSize.y);
+        bool hasValidRegions => (QRegionData != null) && (QRegionData.Count > 0);
 
         private void Awake()
         {
@@ -411,11 +452,37 @@ namespace UC
             {
                 NavigationMeshes.Add(agentType, this);
             }
+            s_NavMeshes.Add(this);
         }
 
         private void OnDestroy()
         {
             NavigationMeshes.Remove(agentType);
+            s_NavMeshes.Remove(this);
+        }
+
+        private void Start()
+        {
+            // Scene-placed obstacles may send their OnEnable notification before this navmesh registers
+            // in s_NavMeshes (component init order is undefined), so that push can be lost. Reconcile
+            // here (Start runs after every Awake/OnEnable): if the live obstacle set differs from what we
+            // baked with, request a rebuild.
+            if (!ObstaclesMatchBake())
+                RequestRebuild();
+        }
+
+        private void LateUpdate()
+        {
+            // A runtime obstacle change requested a rebuild; do it once here, coalescing same-frame
+            // requests. Never start a new bake while one is already running (the request stays pending).
+            if (_rebuildRequested && !_isBaking)
+            {
+                _rebuildRequested = false;
+                if (maxBakeMillisecondsPerFrame > 0.0f)
+                    StartCoroutine(BakePipeline(new BakeBudget(maxBakeMillisecondsPerFrame)));
+                else
+                    Bake();
+            }
         }
 
         [Button("Clear")]
@@ -426,25 +493,76 @@ namespace UC
             terrainType = null;
             regionData = null;
             _linkAdjacency = null;
+            bakedObstacles?.Clear();
         }
 
         [Button("Bake NavMesh")]
         public void Bake()
         {
-            Clear();
-            cellSize = setCellSize;
-            CreateGridMap();
-            if (agentType != null)
+            // Synchronous bake: drain the pipeline in one call (editor button / direct calls). The
+            // budget is effectively infinite, so the pipeline never yields.
+            RunToEnd(BakePipeline(new BakeBudget(float.MaxValue)));
+        }
+
+        // The full bake pipeline. Run as a coroutine with a finite per-frame budget it time-slices
+        // across frames (the heavy per-cell stages yield by the budget; geometry stages yield between
+        // each). Run via Bake()/RunToEnd it completes synchronously.
+        IEnumerator BakePipeline(BakeBudget budget)
+        {
+            // Capture the current (last completed) state so queries keep working against it while the
+            // pipeline rebuilds the working fields. The pipeline only allocates fresh objects, so these
+            // references stay valid throughout the bake.
+            SnapshotForQueries();
+            _isBaking = true;
+            try
             {
-                GrowMap();
+                Clear();
+                cellSize = setCellSize;
+
+                // Gather the NavMeshObstacle2d colliders to bake in as impassable geometry.
+                bakedObstacles = GatherObstacles();
+                BuildObstacleColliderSet();
+
+                yield return CreateGridMapRoutine(budget);
+                if (agentType != null) yield return GrowMapRoutine(budget);
+                ComputeRegions();   if (budget.Step()) yield return null;
+                yield return ComputeCostRoutine(budget);
+                ExtractContours();  if (budget.Step()) yield return null;
+                Simplify();         if (budget.Step()) yield return null;
+                Polygonize();       if (budget.Step()) yield return null;
+                MergeToConvex();    if (budget.Step()) yield return null;
+                ComputeNeighbors();
+
+                FinalizeBake();
             }
-            ComputeRegions();
-            ComputeCost();
-            ExtractContours();
-            Simplify();
-            Polygonize();
-            MergeToConvex();
-            ComputeNeighbors();
+            finally
+            {
+                _isBaking = false;   // publish: queries now read the freshly built working fields
+                _obstacleColliders = null;
+                _snapRegionData = null;
+                _snapGrid = null;
+                _snapRegion = null;
+                _snapTerrain = null;
+            }
+        }
+
+        void SnapshotForQueries()
+        {
+            _snapRegionData = regionData;
+            _snapGrid = grid;
+            _snapRegion = region;
+            _snapTerrain = terrainType;
+            _snapCostRange = costRange;
+            _snapCellSize = cellSize;
+            _snapGridSize = gridSize;
+            _snapGridOffset = gridOffset;
+        }
+
+        void FinalizeBake()
+        {
+            // Link adjacency may have been (re)built against the snapshot during this bake; drop it so
+            // the next query rebuilds it against the freshly baked regions.
+            _linkAdjacency = null;
 
             // Keep the grid/region/contour data only if a NavMeshDebug2d companion wants to visualize it.
             var debug = GetComponent<NavMeshDebug2d>();
@@ -466,13 +584,54 @@ namespace UC
             // Record the change so Unity knows to save it
             Undo.RecordObject(this, "Rebuild Nav Regions");
             EditorUtility.SetDirty(this);
-            // If you want the scene to show unsaved changes:
-            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
+
+            if (!Application.isPlaying)
+            {
+                // If you want the scene to show unsaved changes:
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            }
 #endif
         }
 
+        // Drains an iterator (and any nested iterators it 'yield return's) to completion, ignoring frame
+        // yields. Lets the same pipeline run either synchronously or time-sliced as a coroutine.
+        static void RunToEnd(IEnumerator routine)
+        {
+            var stack = new Stack<IEnumerator>();
+            stack.Push(routine);
+            while (stack.Count > 0)
+            {
+                var top = stack.Peek();
+                if (top.MoveNext())
+                {
+                    if (top.Current is IEnumerator inner) stack.Push(inner);
+                }
+                else
+                {
+                    stack.Pop();
+                }
+            }
+        }
+
+        // Per-frame time budget for a time-sliced bake. Step() returns true (and restarts the clock)
+        // once the budget for the current frame has been spent.
+        class BakeBudget
+        {
+            readonly float                          budgetMs;
+            readonly System.Diagnostics.Stopwatch   sw;
+
+            public BakeBudget(float ms) { budgetMs = ms; sw = System.Diagnostics.Stopwatch.StartNew(); }
+
+            public bool Step()
+            {
+                if (sw.Elapsed.TotalMilliseconds < budgetMs) return false;
+                sw.Restart();
+                return true;
+            }
+        }
+
         #region CreateGridMap
-        void CreateGridMap()
+        IEnumerator CreateGridMapRoutine(BakeBudget budget)
         {
             ComputeGridSize();
 
@@ -504,8 +663,21 @@ namespace UC
                             }
                         }
                     }
+                    // NavMeshObstacle2d colliders block the cell regardless of layer or static flag.
+                    if (grid[index] == 0 && _obstacleColliders != null)
+                    {
+                        foreach (var c in _obstacleColliders)
+                        {
+                            if (c != null && c.OverlapPoint(boxCenterPos))
+                            {
+                                grid[index] = 1;
+                                break;
+                            }
+                        }
+                    }
                     index++;
                 }
+                if (budget.Step()) yield return null;   // time-slice between rows
             }
         }
 
@@ -527,6 +699,24 @@ namespace UC
                 else
                 {
                     bounds.Encapsulate(collider.bounds);
+                }
+            }
+
+            // Obstacle colliders also define the baked area, regardless of layer / static flag.
+            if (_obstacleColliders != null)
+            {
+                foreach (var c in _obstacleColliders)
+                {
+                    if (c == null) continue;
+                    if (!hasBounds)
+                    {
+                        bounds = c.bounds;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(c.bounds);
+                    }
                 }
             }
 
@@ -562,10 +752,10 @@ namespace UC
         #endregion
 
         #region GrowMap
-        void GrowMap()
+        IEnumerator GrowMapRoutine(BakeBudget budget)
         {
             int radiusInCells = Mathf.CeilToInt(agentType.agentRadius / cellSize);
-            if (radiusInCells <= 0) return;
+            if (radiusInCells <= 0) yield break;
 
             byte[] grownGrid = new byte[grid.Length];
             Array.Copy(grid, grownGrid, grid.Length); // Copy original obstacles
@@ -592,6 +782,7 @@ namespace UC
                         }
                     }
                 }
+                if (budget.Step()) yield return null;   // time-slice between rows
             }
 
             grid = grownGrid;
@@ -669,7 +860,7 @@ namespace UC
         #endregion
 
         #region Cost
-        void ComputeCost()
+        IEnumerator ComputeCostRoutine(BakeBudget budget)
         {
             terrainType = new NavMeshTerrainType2d[gridSize.x * gridSize.y];
             costRange = Vector2.one;
@@ -677,7 +868,7 @@ namespace UC
             var modifiers = new List<NavMeshModifier2d>(FindObjectsByType<NavMeshModifier2d>(FindObjectsSortMode.None));
             modifiers.Sort((m1, m2) => m2.priority.CompareTo(m1.priority));
 
-            int index = 0;            
+            int index = 0;
             for (int y = 0; y < gridSize.y; y++)
             {
                 for (int x = 0; x < gridSize.x; x++)
@@ -699,6 +890,7 @@ namespace UC
                     this.terrainType[index] = tt;
                     index++;
                 }
+                if (budget.Step()) yield return null;   // time-slice between rows
             }
         }
         #endregion
@@ -1293,7 +1485,13 @@ namespace UC
 
         public bool GetPointOnNavMesh(Vector3 point, int regionId, out int polygonId, out Vector3 pt)
         {
-            var rd = regionData[regionId];
+            var regions = QRegionData;
+            if (regions == null || regionId < 0 || regionId >= regions.Count)
+            {
+                polygonId = -1; pt = point; return false;
+            }
+
+            var rd = regions[regionId];
 
             var retPolygon = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
 
@@ -1311,7 +1509,8 @@ namespace UC
             float retDist = float.MaxValue;
             int retRegionId = -1;
 
-            if (regionData == null)
+            var regions = QRegionData;
+            if (regions == null)
             {
                 pt = point;
                 regionId = -1;
@@ -1319,7 +1518,7 @@ namespace UC
                 return false;
             }
 
-            foreach (var rd in regionData)
+            foreach (var rd in regions)
             {
                 var poly = rd.quadtree.FindClosest(point, out float distance, out Vector2 pt2d);
                 if ((poly != null) && (retDist > distance))
@@ -1349,7 +1548,7 @@ namespace UC
             int startRegionId;
             int endRegionId;
 
-            if ((regionId >= 0) && (regionId < regionData.Count))
+            if ((regionId >= 0) && (regionId < QRegionData.Count))
             {
                 if (!GetPointOnNavMesh(start, regionId, out startPolygonId, out startOnNavmesh))
                 {
@@ -1509,7 +1708,8 @@ namespace UC
             _linkAdjacency = new Dictionary<NavNode, List<LinkConnection>>();
             _builtLinksVersion = s_LinksVersion;
 
-            if (regionData == null || regionData.Count == 0) return;
+            var regions = QRegionData;
+            if (regions == null || regions.Count == 0) return;
 
             var links = GetLinkSource();
             for (int li = 0; li < links.Count; li++)
@@ -1585,7 +1785,7 @@ namespace UC
             var costSoFar = new Dictionary<NavNode, float>();
             var entryPoint = new Dictionary<NavNode, Vector2>();
 
-            float minUnitCost = Mathf.Max(1e-5f, costRange.x);
+            float minUnitCost = Mathf.Max(1e-5f, QCostRange.x);
 
             frontier.Enqueue(startNode, 0);
             costSoFar[startNode] = 0;
@@ -1601,7 +1801,7 @@ namespace UC
                 if (current == endNode) { reached = true; break; }
 
                 Vector2 fromPos = entryPoint[current];
-                var rd = regionData[current.region];
+                var rd = QRegionData[current.region];
                 var currentPoly = rd.polygons[current.poly];
                 var vertices = rd.vertices;
                 float unitCost = Mathf.Max(1e-5f, GetCost(agentType, currentPoly.terrainType));
@@ -1690,9 +1890,10 @@ namespace UC
             transitions = null;
             effectiveEnd = end;
 
-            if (regionData == null) return PathState.NoPath;
-            if (startNode.region < 0 || startNode.region >= regionData.Count) return PathState.NoPath;
-            if (endNode.region < 0 || endNode.region >= regionData.Count) return PathState.NoPath;
+            var regions = QRegionData;
+            if (regions == null) return PathState.NoPath;
+            if (startNode.region < 0 || startNode.region >= regions.Count) return PathState.NoPath;
+            if (endNode.region < 0 || endNode.region >= regions.Count) return PathState.NoPath;
 
             EnsureLinkAdjacency();
 
@@ -1881,7 +2082,7 @@ namespace UC
 
         private ConvexPolygon GetPoly(int regionId, int polygonId)
         {
-            return regionData[regionId].polygons[polygonId];
+            return QRegionData[regionId].polygons[polygonId];
         }
 
         public int GetRegion(Vector3 position)
@@ -1905,7 +2106,7 @@ namespace UC
             }
 
             // 2) Prepare traversal state
-            var rd = regionData[regionId];
+            var rd = QRegionData[regionId];
             float traveled = 0f;
             float remaining = maxDist;
             int currentPoly = polygonId;
@@ -1999,20 +2200,96 @@ namespace UC
 
         #endregion
 
+        #region Obstacles
+
+        // Called by NavMeshObstacle2d when it is enabled: rebuild only if this navmesh wasn't already
+        // baked with it (so scene-placed obstacles don't each force a rebuild on load).
+        public static void NotifyObstacleAdded(NavMeshObstacle2d obstacle)
+        {
+            if (obstacle == null) return;
+            foreach (var nm in s_NavMeshes)
+                if (nm.AppliesObstacle(obstacle) && !nm.WasBakedWith(obstacle))
+                    nm.RequestRebuild();
+        }
+
+        // Called when an obstacle is disabled/destroyed: rebuild only if it was part of the last bake.
+        public static void NotifyObstacleRemoved(NavMeshObstacle2d obstacle)
+        {
+            if (obstacle == null) return;
+            foreach (var nm in s_NavMeshes)
+                if (nm.AppliesObstacle(obstacle) && nm.WasBakedWith(obstacle))
+                    nm.RequestRebuild();
+        }
+
+        bool AppliesObstacle(NavMeshObstacle2d obstacle)
+        {
+            var at = obstacle.AgentType;
+            return at == null || Get(at) == this;
+        }
+
+        public bool WasBakedWith(NavMeshObstacle2d obstacle)
+        {
+            return bakedObstacles != null && bakedObstacles.Contains(obstacle);
+        }
+
+        // True when the live, applicable obstacles are exactly the set the last bake used.
+        bool ObstaclesMatchBake()
+        {
+            var current = GatherObstacles();
+            foreach (var o in current)
+                if (!WasBakedWith(o)) return false;
+
+            int liveBaked = 0;
+            if (bakedObstacles != null)
+                foreach (var o in bakedObstacles) if (o != null) liveBaked++;
+
+            return current.Count == liveBaked;
+        }
+
+        public void RequestRebuild()
+        {
+            _rebuildRequested = true;
+        }
+
+        List<NavMeshObstacle2d> GatherObstacles()
+        {
+            var result = new List<NavMeshObstacle2d>();
+            foreach (var o in FindObjectsByType<NavMeshObstacle2d>(FindObjectsSortMode.None))
+            {
+                if (o == null || !o.isActiveAndEnabled) continue;
+                if (!AppliesObstacle(o)) continue;
+                result.Add(o);
+            }
+            return result;
+        }
+
+        void BuildObstacleColliderSet()
+        {
+            _obstacleColliders = new HashSet<Collider2D>();
+            var tmp = new List<Collider2D>();
+            foreach (var o in bakedObstacles)
+            {
+                if (o == null) continue;
+                o.GetColliders(tmp);
+                foreach (var c in tmp) if (c != null) _obstacleColliders.Add(c);
+            }
+        }
+
+        #endregion
 
         #region Debug data access (consumed by NavMeshDebug2d)
 
         internal NavMeshAgentType2d         DebugAgentType => agentType;
-        internal int                        DebugCellSize => cellSize;
-        internal Vector2Int                 DebugGridSize => gridSize;
-        internal byte[]                     DebugGrid => grid;
-        internal byte[]                     DebugRegionMap => region;
-        internal NavMeshTerrainType2d[]     DebugTerrain => terrainType;
-        internal Vector2                    DebugCostRange => costRange;
+        internal int                        DebugCellSize => QCellSize;
+        internal Vector2Int                 DebugGridSize => QGridSize;
+        internal byte[]                     DebugGrid => QGrid;
+        internal byte[]                     DebugRegionMap => QRegion;
+        internal NavMeshTerrainType2d[]     DebugTerrain => QTerrain;
+        internal Vector2                    DebugCostRange => QCostRange;
         internal bool                       DebugHasValidGrid => hasValidGrid;
         internal bool                       DebugHasValidRegions => hasValidRegions;
-        internal IReadOnlyList<RegionData>  DebugRegions => regionData;
-        internal Vector2                    DebugGridToWorld(int x, int y) => GridToWorldCenter(x, y);
+        internal IReadOnlyList<RegionData>  DebugRegions => QRegionData;
+        internal Vector2                    DebugGridToWorld(int x, int y) => new Vector2(x, y) * QCellSize + QGridOffset;
         internal float                      DebugGetCost(NavMeshAgentType2d agentType, NavMeshTerrainType2d terrainType) => GetCost(agentType, terrainType);
         internal ConvexPolygon              DebugGetPoly(int regionId, int polygonId) => GetPoly(regionId, polygonId);
         internal IReadOnlyList<NavMeshLink2d> DebugLinkSource() => GetLinkSource();
