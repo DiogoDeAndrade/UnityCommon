@@ -51,8 +51,10 @@ namespace UC
         private float           tangentScale = 0.3f;
         [SerializeField, ShowIf(nameof(isFollowDirect))]
         private Vector2         followOffset;
-        [SerializeField] 
+        [SerializeField]
         private float           stoppingDistance = 2.0f;
+        [SerializeField, Tooltip("If set, when the target is unreachable (e.g. a closed door) the agent moves to the closest reachable point instead of refusing to move.")]
+        private bool            allowPartialPaths = true;
 
 
         bool isFollowDirect => followMode == PathFollowMode.FollowDirect;
@@ -73,6 +75,25 @@ namespace UC
         private int                         currentPathIndex;
         private Vector2                     velocity;
         private Vector2                     desiredDir;
+
+        // Manual (non-auto-traverse) link state. While traversing, path following is held until
+        // TraversalComplete() is called; _pendingPath is the remainder resumed from the link far side.
+        private bool                        _traversing;
+        private List<NavMesh2d.PathNode>    _pendingPath;
+
+        // The position the caller actually asked for (kept even when only a partial path was found, so
+        // 'targetPosition' can hold the reachable end for replanning while gizmos show the real target).
+        private Vector2                     _requestedTarget;
+
+        public NavMeshLink2d    TraversalLink { get; private set; }
+        public Vector3          TraversalStart { get; private set; }
+        public Vector3          TraversalEnd { get; private set; }
+        public bool             IsTraversing => _traversing;
+
+        // State of the most recent plan: Full when the target was reached, Partial when only the
+        // closest reachable point could be reached (e.g. behind a closed door).
+        public NavMesh2d.PathState LastPathState { get; private set; } = NavMesh2d.PathState.NoPath;
+        public bool             IsPartialPath => LastPathState == NavMesh2d.PathState.Partial;
 
         public void SetMaxSpeed(float maxSpeed)
         {
@@ -147,6 +168,9 @@ namespace UC
 
         private void TickAgent(float dt, bool useRigidbody)
         {
+            // While a manual link traversal is in progress, navigation is held until TraversalComplete().
+            if (_traversing) return;
+
             if (!_isMoving || path == null || currentPathIndex >= path.Count)
             {
                 ForceStop();
@@ -204,6 +228,11 @@ namespace UC
             Vector2 target = lookaheadCenter;
             if (useNavmeshLoS && navMesh != null)
             {
+                // The agent may have walked across an auto-traverse link into another region; keep the
+                // region used for line-of-sight in sync with the current position.
+                int curRegion = navMesh.GetRegion(pos);
+                if (curRegion >= 0) regionId = curRegion;
+
                 if (!navMesh.RaycastVector(pos, (lookaheadCenter - pos).normalized,
                                             Vector2.Distance(pos, lookaheadCenter),
                                             regionId, out Vector3 hit, out int _))
@@ -277,7 +306,7 @@ namespace UC
             if ((goal - pos).sqrMagnitude <= stoppingDistance * stoppingDistance && remaining <= endSlowRadius)
             {
                 ForceStop();
-                onComplete?.Invoke(this);
+                OnReachedGoal();
             }
         }
 
@@ -306,7 +335,7 @@ namespace UC
             if ((goalOffset - pos).sqrMagnitude <= stoppingDistance * stoppingDistance)
             {
                 ForceStop();
-                onComplete?.Invoke(this);
+                OnReachedGoal();
                 return;
             }
 
@@ -489,33 +518,150 @@ namespace UC
             List<NavMesh2d.PathNode>    newPath = null;
             List<int>                   polyIds = null;
 
-            if (!navMesh.GetPointOnNavMesh(transform.position, regionId, out int startPolyId, out Vector3 startPosOnNavmesh))
+            // Resolve start and end without pinning to a single region: the destination may be in
+            // another region reachable through a NavMeshLink2d.
+            if (!navMesh.GetPointOnNavMesh(transform.position, out int startRegion, out int startPolyId, out Vector3 startPosOnNavmesh))
             {
                 return false;
             }
-            if (!navMesh.GetPointOnNavMesh(newTargetPosition, regionId, out int endPolyId, out Vector3 endPosOnNavmesh))
+            if (!navMesh.GetPointOnNavMesh(newTargetPosition, out int endRegion, out int endPolyId, out Vector3 endPosOnNavmesh))
             {
                 return false;
             }
 
-            var result = navMesh.PlanPathOnNavmesh(startPosOnNavmesh, startPolyId, endPosOnNavmesh, endPolyId, regionId, ref polyIds, ref newPath, agentType : agentType);
+            var result = navMesh.PlanPathOnNavmesh(startPosOnNavmesh, startRegion, startPolyId, endPosOnNavmesh, endRegion, endPolyId, ref polyIds, ref newPath, agentType : agentType, agent : this, allowPartial : allowPartialPaths);
+            LastPathState = result;
             if (result == NavMesh2d.PathState.NoPath || newPath.Count < 2)
             {
                 _isMoving = false;
                 return false;
             }
 
-            if (isSmoothPath)
+            regionId = startRegion;
+            _requestedTarget = newTargetPosition;
+            // On a partial path the goal was unreachable, so record the reachable end as the target.
+            // This keeps the dedupe at the top of SetDestination from blocking a later replan toward the
+            // real (still unreachable) target - letting the agent retry once the route opens up.
+            targetPosition = (result == NavMesh2d.PathState.Partial) ? (Vector2)newPath[newPath.Count - 1].pos : newTargetPosition;
+            lastDeltasSampleCount = 0;
+            _traversing = false;
+            _isMoving = true;
+            SetActivePath(newPath);
+            return true;
+        }
+
+        // Sets 'path' to the portion of 'full' up to (and including) the near side of the first
+        // manual-traversal link; any remainder after the link is stashed in _pendingPath and resumed
+        // by TraversalComplete(). Auto-traverse links stay inline and need no special handling.
+        private void SetActivePath(List<NavMesh2d.PathNode> full)
+        {
+            List<NavMesh2d.PathNode> active = full;
+            _pendingPath = null;
+
+            for (int i = 1; i < full.Count; i++)
             {
-                newPath = SmoothPath(newPath);
+                if (full[i].link != null && full[i].manualTraversal)
+                {
+                    active = full.GetRange(0, i + 1);
+                    _pendingPath = full.GetRange(i + 1, full.Count - (i + 1));
+                    break;
+                }
             }
 
-            targetPosition = newTargetPosition;
-            path = newPath;
-            currentPathIndex = 1; // start pursuing the first target (index 1), since [0] is usually the current pos
-            lastDeltasSampleCount = 0;
-            _isMoving = true;
-            return true;
+            // Smoothing rebuilds nodes from positions, so re-apply the near-side link tag afterwards.
+            NavMesh2d.PathNode tail = active[active.Count - 1];
+            if (isSmoothPath && active.Count >= 3)
+            {
+                active = SmoothPath(active);
+                if (tail.link != null)
+                    active[active.Count - 1] = new NavMesh2d.PathNode(active[active.Count - 1].pos, tail.link, tail.manualTraversal);
+            }
+
+            path = active;
+            currentPathIndex = 1; // start pursuing the first target (index 1), since [0] is the current pos
+            ResetStopDetection();
+        }
+
+        // Called when the follower reaches the end of the active path. If that end is the near side of
+        // a manual link, start the traversal handshake; otherwise the destination has been reached.
+        private void OnReachedGoal()
+        {
+            if (path != null && path.Count > 0)
+            {
+                var last = path[path.Count - 1];
+                if (last.link != null && last.manualTraversal)
+                {
+                    BeginManualTraversal(last.link);
+                    return;
+                }
+            }
+            onComplete?.Invoke(this);
+        }
+
+        private void BeginManualTraversal(NavMeshLink2d link)
+        {
+            INavMeshLinkTraversal handler = null;
+            foreach (var t in GetComponents<INavMeshLinkTraversal>())
+            {
+                if (t.CanHandleTraversal(this, link)) { handler = t; break; }
+            }
+
+            Vector3 farSide = (_pendingPath != null && _pendingPath.Count > 0)
+                              ? _pendingPath[0].pos
+                              : (Vector3)transform.position;
+
+            if (handler == null)
+            {
+                Debug.LogWarning($"NavMeshAgent2d '{name}' reached manual link '{link.name}' but no INavMeshLinkTraversal on this GameObject can handle it.");
+                _pendingPath = null;
+                ForceStop();
+                return;
+            }
+
+            _traversing = true;
+            _isMoving = false;
+            velocity = Vector2.zero;
+            if (rb && rb.bodyType == RigidbodyType2D.Dynamic) rb.linearVelocity = Vector2.zero;
+
+            TraversalLink = link;
+            TraversalStart = transform.position;
+            TraversalEnd = farSide;
+
+            handler.BeginTraversal(this, link);
+        }
+
+        /// <summary>
+        /// Signals that a manual link traversal (started via INavMeshLinkTraversal.BeginTraversal) has
+        /// finished and the agent is at the link's far side. Path following then resumes.
+        /// </summary>
+        public void TraversalComplete()
+        {
+            if (!_traversing) return;
+            _traversing = false;
+            TraversalLink = null;
+
+            var remaining = _pendingPath;
+            _pendingPath = null;
+
+            if (remaining != null && remaining.Count > 0)
+            {
+                // Make sure we are exactly at the planned far-side point before continuing.
+                Vector3 farSide = remaining[0].pos;
+                if (rb && rb.bodyType == RigidbodyType2D.Dynamic) rb.position = farSide;
+                else transform.position = farSide;
+                regionId = navMesh.GetRegion(farSide);
+            }
+
+            if (remaining != null && remaining.Count >= 2)
+            {
+                _isMoving = true;
+                SetActivePath(remaining);
+            }
+            else
+            {
+                ForceStop();
+                onComplete?.Invoke(this);
+            }
         }
 
         // Conservative segment legality: walk the segment in short steps over the navmesh.
@@ -703,10 +849,18 @@ namespace UC
             {
                 if (path != null && path.Count > 1)
                 {
-                    Gizmos.color = Color.cyan;
+                    bool partial = IsPartialPath;
+                    Gizmos.color = partial ? new Color(1.0f, 0.5f, 0.0f) : Color.cyan;
                     for (int i = 0; i < path.Count - 1; i++)
                     {
                         Gizmos.DrawLine(path[i].pos, path[i + 1].pos);
+                    }
+
+                    if (partial)
+                    {
+                        // The agent is heading to the closest reachable point; show the gap to the target.
+                        Gizmos.color = Color.red;
+                        Gizmos.DrawLine(path[path.Count - 1].pos, _requestedTarget);
                     }
 
                     if (currentPathIndex < path.Count)
@@ -723,7 +877,14 @@ namespace UC
                 DebugHelpers.DrawArrow(transform.position, velocity.normalized, 10.0f, 5.0f, 45.0f, desiredDir.Perpendicular());
 
                 Gizmos.color = Color.red;
-                Gizmos.DrawSphere(targetPosition, 3.0f);
+                Gizmos.DrawSphere(_requestedTarget, 3.0f);
+            }
+
+            if (_traversing)
+            {
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawLine(TraversalStart, TraversalEnd);
+                Gizmos.DrawWireSphere(TraversalEnd, 3.0f);
             }
         }
     }

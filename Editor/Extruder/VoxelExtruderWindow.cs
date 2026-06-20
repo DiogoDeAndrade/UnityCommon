@@ -34,7 +34,6 @@ namespace UC
         // -- UI state ---------------------------------------------------------
         private Vector2  _scroll;
         private string   _lastStatus = "";
-        private bool     _lastSuccess;
         private GUIStyle _statusStyle;
 
         // ---------------------------------------------------------------------
@@ -253,7 +252,6 @@ namespace UC
         private void RunGenerate()
         {
             _lastStatus  = "";
-            _lastSuccess = false;
 
             if (_sourceTexture == null)
             {
@@ -290,12 +288,10 @@ namespace UC
 
                 AssetDatabase.Refresh();
                 _lastStatus  = $"Assets saved to  {outputDir}/";
-                _lastSuccess = true;
             }
             catch (System.Exception ex)
             {
                 _lastStatus  = $"Error: {ex.Message}";
-                _lastSuccess = false;
                 Debug.LogException(ex);
             }
         }
