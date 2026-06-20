@@ -55,11 +55,33 @@ namespace UC
         private float           stoppingDistance = 2.0f;
         [SerializeField, Tooltip("If set, when the target is unreachable (e.g. a closed door) the agent moves to the closest reachable point instead of refusing to move.")]
         private bool            allowPartialPaths = true;
+        [SerializeField, Tooltip("Steer around other NavMeshAgent2d in real time (local RVO avoidance), without replanning the path. Works in both follow modes.")]
+        private bool            avoidanceEnabled = true;
+        [SerializeField, ShowIf(nameof(needAvoidance)), Tooltip("0..99, lower = higher priority. Higher-priority agents yield less; lower-priority agents do more of the avoiding.")]
+        private int             avoidancePriority = 50;
+        [SerializeField, ShowIf(nameof(needAvoidance)), Tooltip("Avoidance disc radius. 0 = use the agent type's radius.")]
+        private float           avoidanceRadius = 0.0f;
+        [SerializeField, ShowIf(nameof(needAvoidance)), Tooltip("Only neighbours within this distance are considered.")]
+        private float           neighbourDistance = 50.0f;
+        [SerializeField, ShowIf(nameof(needAvoidance)), Tooltip("Seconds ahead to predict collisions.")]
+        private float           avoidanceTimeHorizon = 2.0f;
+        [SerializeField, ShowIf(nameof(needAvoidance)), Tooltip("Max neighbours considered per tick (closest first).")]
+        private int             maxNeighbours = 8;
 
 
         bool isFollowDirect => followMode == PathFollowMode.FollowDirect;
         bool isFollowPursuit => followMode == PathFollowMode.FollowPursuit;
         bool isSmoothPath => smoothPath;
+        bool needAvoidance => avoidanceEnabled;
+
+        // Registry of live agents, scanned for avoidance neighbours.
+        static readonly List<NavMeshAgent2d>    gAgents = new();
+        readonly List<NavMeshAgent2d>           _neighbours = new();
+        const float                             AvoidanceWeight = 2.0f;
+
+        public Vector2  CurrentVelocity => velocity;
+        public int      AvoidancePriority => avoidancePriority;
+        public float    AvoidanceRadius => (avoidanceRadius > 0.0f) ? avoidanceRadius : ((agentType != null) ? agentType.agentRadius : 1.0f);
 
 
         protected NavMesh2d     navMesh;
@@ -101,6 +123,16 @@ namespace UC
         }
 
         public bool isMoving => _isMoving;
+
+        void OnEnable()
+        {
+            if (!gAgents.Contains(this)) gAgents.Add(this);
+        }
+
+        void OnDisable()
+        {
+            gAgents.Remove(this);
+        }
 
         void Start()
         {
@@ -294,7 +326,10 @@ namespace UC
             }
 
             Vector2 desiredVel = desiredDir.normalized * desiredSpeedMag;
+            if (avoidanceEnabled) desiredVel = ComputeAvoidanceVelocity(desiredVel);
             velocity = Vector2.MoveTowards(velocity, desiredVel, acceleration * dt);
+            // Only needed when avoidance perturbed us toward a wall (i.e. there were neighbours).
+            if (avoidanceEnabled && _neighbours.Count > 0) velocity = ClampVelocityToNavmesh(velocity, dt);
 
             if (useRigidbody && rb != null && rb.bodyType == RigidbodyType2D.Dynamic)
                 rb.linearVelocity = velocity;
@@ -309,6 +344,170 @@ namespace UC
                 OnReachedGoal();
             }
         }
+
+        #region Local avoidance (RVO)
+
+        // Picks the achievable velocity closest to 'prefVel' that best avoids imminent collisions with
+        // nearby agents (reciprocal, priority-weighted). Pure local steering - it does not replan.
+        Vector2 ComputeAvoidanceVelocity(Vector2 prefVel)
+        {
+            GatherNeighbours();
+            if (_neighbours.Count == 0) return prefVel;
+
+            Vector2 pos = transform.position;
+            Vector2 selfVel = velocity;
+            float selfR = AvoidanceRadius;
+            float maxSpeed = Mathf.Max(speed, prefVel.magnitude);
+
+            Vector2 bestVel = prefVel;
+            float bestPenalty = AvoidancePenalty(prefVel, prefVel, pos, selfVel, selfR);
+
+            // Evaluate a stop and a ring of sampled velocities across the achievable disc.
+            EvaluateCandidate(Vector2.zero, prefVel, pos, selfVel, selfR, ref bestVel, ref bestPenalty);
+
+            const int angleSamples = 12;
+            const int speedSamples = 3;
+            for (int s = 1; s <= speedSamples; s++)
+            {
+                float spd = maxSpeed * s / speedSamples;
+                for (int a = 0; a < angleSamples; a++)
+                {
+                    float ang = (a / (float)angleSamples) * (2.0f * Mathf.PI);
+                    Vector2 cand = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * spd;
+                    EvaluateCandidate(cand, prefVel, pos, selfVel, selfR, ref bestVel, ref bestPenalty);
+                }
+            }
+            return bestVel;
+        }
+
+        void EvaluateCandidate(Vector2 cand, Vector2 prefVel, Vector2 pos, Vector2 selfVel, float selfR, ref Vector2 bestVel, ref float bestPenalty)
+        {
+            float p = AvoidancePenalty(cand, prefVel, pos, selfVel, selfR);
+            if (p < bestPenalty) { bestPenalty = p; bestVel = cand; }
+        }
+
+        float AvoidancePenalty(Vector2 cand, Vector2 prefVel, Vector2 pos, Vector2 selfVel, float selfR)
+        {
+            float horizon = Mathf.Max(0.01f, avoidanceTimeHorizon);
+            float collision = 0.0f;
+
+            for (int i = 0; i < _neighbours.Count; i++)
+            {
+                var n = _neighbours[i];
+                Vector2 nPos = n.transform.position;
+                Vector2 nVel = n.CurrentVelocity;
+                float R = selfR + n.AvoidanceRadius;
+
+                Vector2 p = pos - nPos;                              // self relative to neighbour
+                float share = ResponsibilityShare(n);               // our portion of the avoidance
+                Vector2 testVel = selfVel + (cand - selfVel) / share;
+                Vector2 relVel = testVel - nVel;
+
+                float ttc = TimeToCollision(p, relVel, R);
+                float c;
+                if (ttc <= 0.0f)
+                {
+                    // Already overlapping: reward velocities that separate us.
+                    float away = (p.sqrMagnitude > 1e-6f) ? Vector2.Dot(relVel, p.normalized) : 0.0f;
+                    c = 2.0f - Mathf.Clamp01(away / Mathf.Max(1e-3f, speed));   // 1..2
+                }
+                else if (ttc < horizon)
+                {
+                    c = (horizon - ttc) / horizon;                              // 0..1
+                }
+                else
+                {
+                    c = 0.0f;
+                }
+                if (c > collision) collision = c;
+            }
+
+            float deviation = (prefVel - cand).magnitude / Mathf.Max(1e-3f, speed);
+            return AvoidanceWeight * collision + deviation;
+        }
+
+        // Our share (0..1) of the mutual avoidance. Equal priority => 0.5; lower priority (higher
+        // number) => larger share, so we do more of the avoiding. Shares of the two agents sum to 1.
+        float ResponsibilityShare(NavMeshAgent2d other)
+        {
+            float self = avoidancePriority + 1.0f;
+            float oth = other.AvoidancePriority + 1.0f;
+            return Mathf.Clamp(self / (self + oth), 0.1f, 1.0f);
+        }
+
+        // Smallest t >= 0 with |p + relVel*t| <= R. 0 if already overlapping, +inf if no collision.
+        static float TimeToCollision(Vector2 p, Vector2 relVel, float R)
+        {
+            float c = Vector2.Dot(p, p) - R * R;
+            if (c <= 0.0f) return 0.0f;
+            float a = Vector2.Dot(relVel, relVel);
+            if (a < 1e-8f) return float.MaxValue;
+            float b = 2.0f * Vector2.Dot(p, relVel);
+            float disc = b * b - 4.0f * a * c;
+            if (disc < 0.0f) return float.MaxValue;
+            float t = (-b - Mathf.Sqrt(disc)) / (2.0f * a);
+            return (t >= 0.0f) ? t : float.MaxValue;
+        }
+
+        void GatherNeighbours()
+        {
+            _neighbours.Clear();
+            Vector2 pos = transform.position;
+            float range2 = neighbourDistance * neighbourDistance;
+
+            // O(n) scan over live agents. A spatial hash would scale better for very large crowds.
+            for (int i = 0; i < gAgents.Count; i++)
+            {
+                var other = gAgents[i];
+                if (other == null || other == this) continue;
+                if (((Vector2)other.transform.position - pos).sqrMagnitude > range2) continue;
+                _neighbours.Add(other);
+            }
+
+            if (_neighbours.Count > maxNeighbours)
+            {
+                _neighbours.Sort((x, y) =>
+                    ((Vector2)x.transform.position - pos).sqrMagnitude.CompareTo(
+                    ((Vector2)y.transform.position - pos).sqrMagnitude));
+                _neighbours.RemoveRange(maxNeighbours, _neighbours.Count - maxNeighbours);
+            }
+        }
+
+        // Stops the velocity at the navmesh boundary so avoidance can't push the agent through a wall.
+        Vector2 ClampVelocityToNavmesh(Vector2 vel, float dt)
+        {
+            if (navMesh == null || dt <= 0.0f) return vel;
+            float mag = vel.magnitude;
+            if (mag < 1e-5f) return vel;
+
+            Vector2 dir = vel / mag;
+            float dist = mag * dt;
+            if (!navMesh.RaycastVector(transform.position, dir, dist, regionId, out Vector3 hit, out int _, out Vector2 normal))
+                return vel;
+
+            // Slide: drop the component of velocity going into the wall, keep the tangent.
+            if (normal.sqrMagnitude > 1e-6f)
+            {
+                Vector2 slid = vel - Vector2.Dot(vel, normal) * normal;
+                float slidMag = slid.magnitude;
+                if (slidMag < 1e-5f) return Vector2.zero;
+
+                // The slide could still run into another boundary (e.g. an inside corner): cap it.
+                Vector2 slidDir = slid / slidMag;
+                if (navMesh.RaycastVector(transform.position, slidDir, slidMag * dt, regionId, out Vector3 hit2, out int _, out Vector2 _))
+                {
+                    float allowedSlide = Mathf.Max(0.0f, Vector2.Distance(transform.position, (Vector2)hit2) - 0.01f);
+                    return slidDir * (allowedSlide / dt);
+                }
+                return slid;
+            }
+
+            // No usable normal: just stop short of the boundary.
+            float allowed = Mathf.Max(0.0f, Vector2.Distance(transform.position, (Vector2)hit) - 0.01f);
+            return dir * (allowed / dt);
+        }
+
+        #endregion
 
         void TickAgentDirect(float dt, bool useRigidbody)
         {
@@ -431,7 +630,10 @@ namespace UC
             }
 
             desiredDir = dir;
-            velocity = desiredDir * speed;
+            Vector2 desiredVel = desiredDir * speed;
+            if (avoidanceEnabled) desiredVel = ComputeAvoidanceVelocity(desiredVel);
+            velocity = desiredVel;
+            if (avoidanceEnabled && _neighbours.Count > 0) velocity = ClampVelocityToNavmesh(velocity, dt);
 
             if (useRigidbody && rb != null && rb.bodyType == RigidbodyType2D.Dynamic)
             {
@@ -885,6 +1087,19 @@ namespace UC
                 Gizmos.color = Color.magenta;
                 Gizmos.DrawLine(TraversalStart, TraversalEnd);
                 Gizmos.DrawWireSphere(TraversalEnd, 3.0f);
+            }
+
+            if (avoidanceEnabled)
+            {
+                // Avoidance disc, and a line to each neighbour being considered.
+                Gizmos.color = new Color(1.0f, 0.5f, 0.0f, 0.6f);
+                Gizmos.DrawWireSphere(transform.position, AvoidanceRadius);
+                if (Application.isPlaying)
+                {
+                    Gizmos.color = new Color(1.0f, 0.5f, 0.0f, 0.3f);
+                    for (int i = 0; i < _neighbours.Count; i++)
+                        if (_neighbours[i] != null) Gizmos.DrawLine(transform.position, _neighbours[i].transform.position);
+                }
             }
         }
     }

@@ -2096,7 +2096,14 @@ namespace UC
         }
 
         public bool RaycastVector(Vector3 start, Vector3 dir, float maxDist, int regionId, out Vector3 endPoint, out int polygonId)
+            => RaycastVector(start, dir, maxDist, regionId, out endPoint, out polygonId, out _);
+
+        // As above, but also returns the unit inward normal of the boundary edge that was hit (points
+        // back toward the agent); zero when nothing was hit.
+        public bool RaycastVector(Vector3 start, Vector3 dir, float maxDist, int regionId, out Vector3 endPoint, out int polygonId, out Vector2 hitNormal)
         {
+            hitNormal = Vector2.zero;
+
             // 1) Normalize and find the starting polygon
             Vector3 direction = dir.normalized;
             if (!GetPointOnNavMesh(start, regionId, out polygonId, out Vector3 currentPoint))
@@ -2121,6 +2128,7 @@ namespace UC
                 float closestT = float.MaxValue;
                 int bestNeighbor = -1;
                 Vector3 hitPos = Vector3.zero;
+                Vector2 bestEdge = Vector2.zero;
 
                 // 3a) test each edge
                 for (int i = 0; i < poly.neighbors.Count; i++)
@@ -2150,6 +2158,7 @@ namespace UC
                             closestT = t;
                             bestNeighbor = neighbor;
                             hitPos = currentPoint + direction * t;
+                            bestEdge = s;
                         }
                     }
                 }
@@ -2175,6 +2184,8 @@ namespace UC
                 {
                     endPoint = hitPos;
                     polygonId = currentPoly;
+                    hitNormal = new Vector2(-bestEdge.y, bestEdge.x).normalized;
+                    if (Vector2.Dot(hitNormal, (Vector2)direction) > 0.0f) hitNormal = -hitNormal;
                     return true;
                 }
 
