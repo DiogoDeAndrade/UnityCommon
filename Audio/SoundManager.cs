@@ -164,7 +164,7 @@ namespace UC
             return newMusicSource;
         }
 
-        private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, bool loop = false, Hypertag tag = null)
+        private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, bool loop = false, Hypertag tag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
         {
             (var audioSource, var hypertaggedObject) = GetSource(tag);
 
@@ -173,8 +173,19 @@ namespace UC
             audioSource.volume = volume;
             audioSource.pitch = pitch;
             audioSource.outputAudioMixerGroup = mixerGroups[(int)type];
+            if (is3d)
+            {
+                audioSource.spatialBlend = 1.0f;
+                audioSource.minDistance = distanceRange.x;
+                audioSource.maxDistance = distanceRange.y;
+                audioSource.transform.position = position;
+            }
+            else
+            {
+                audioSource.spatialBlend = 0.0f;
+            }
 
-            audioSource.Play();
+                audioSource.Play();
 
             if (tag)
             {
@@ -315,10 +326,10 @@ namespace UC
             PlayerPrefs.Save();
         }
 
-        static public AudioSource PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null)
+        static public AudioSource PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
         {
             if (_instance == null) return null;
-            return _instance._PlaySound(type, clip, volume, pitch, false, defaultTag);
+            return _instance._PlaySound(type, clip, volume, pitch, false, defaultTag, is3d, distanceRange, position);
         }
 
 
@@ -332,10 +343,10 @@ namespace UC
                 return _instance._PlayMusic(clip, volume, pitch, (defaultTag == null) ? (_instance.musicTag) : (defaultTag));
         }
 
-        static public AudioSource PlayLoopSound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null)
+        static public AudioSource PlayLoopSound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
         {
             if (_instance == null) return null;
-            return _instance._PlaySound(type, clip, volume, pitch, true, defaultTag);
+            return _instance._PlaySound(type, clip, volume, pitch, true, defaultTag, is3d, distanceRange, position);
         }
 
         static public void PauseAll()

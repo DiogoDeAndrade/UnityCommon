@@ -11,7 +11,7 @@ namespace UC
     public class SoundDef : ScriptableObject
     {
         [Flags]
-        public enum SoundFlags { Interruptable = 1 };
+        public enum SoundFlags { Interruptable = 1, Default3d = 4 };
 
         public AudioClip        clip;
         public SoundType        soundType = SoundType.PrimaryFX;
@@ -25,11 +25,13 @@ namespace UC
         public Vector2          volumeRange = new Vector2(1f, 1f);
         [MinMaxSlider(0.0f, 2.0f)]
         public Vector2          pitchRange = new Vector2(1f, 1f);
+        [ShowIf(nameof(is3d))]        
+        public Vector2          distanceRange = new Vector2(0.0f, 100.0f);
         public Hypertag         defaultTag;
 
         bool isNotMusic => soundType != SoundType.Music;
         bool isVoice => soundType == SoundType.Voice;
-
+        bool is3d => (soundFlags & SoundFlags.Default3d) != 0;
         bool isInterruptable => (soundFlags & SoundFlags.Interruptable) != 0;
 
         public AudioSource Play()
@@ -42,7 +44,7 @@ namespace UC
             return Play(1.0f, 1.0f, crossfadeTime);
         }
 
-        public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f, float crossfadeTime = -float.MaxValue)
+        public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f, float crossfadeTime = -float.MaxValue, Vector3 position = default)
         {
             if (subtitleTrack)
             {
@@ -60,11 +62,11 @@ namespace UC
             {
                 if (loop)
                 {
-                    ret = SoundManager.PlayLoopSound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag);
+                    ret = SoundManager.PlayLoopSound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d, distanceRange, position);
                 }
                 else
                 {
-                    ret = SoundManager.PlaySound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag);
+                    ret = SoundManager.PlaySound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d, distanceRange, position);
                 }
             }
             else
