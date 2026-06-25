@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using UC.DoubleMath;
 using System.Text;
+using System.Threading.Tasks;
+using System.Linq;
+
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
@@ -27,7 +30,7 @@ namespace UC.ED
     class EDClearanceCache
     {
         [SerializeField]
-        private readonly double[] values;
+        private double[] values;
 
         public EDClearanceCache(int count)
         {
@@ -357,7 +360,6 @@ namespace UC.ED
         private EDState currentState;
         [SerializeField]
         private EDState restState;
-        private EDStateView restStateView;
 
            
 #if UC_PROFILER_ENABLE
@@ -490,7 +492,6 @@ namespace UC.ED
 
             currentState = new EDState(nodes.Count);
             restState = new EDState(nodes.Count);
-            restStateView = new EDStateView(restState);
 
             Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}, Edges={deformGraphEdgeCount}");
         }
@@ -1309,113 +1310,6 @@ namespace UC.ED
 
         private int ParamBase(int nodeIndex) => nodeIndex * 12;
 
-        /*private Vector<double> PackNodeParameters()
-        {
-            DebugProfiler.DebugMark(timePack);
-
-            int nodeCount = nodes.Count;
-            Vector<double> x = DenseVector.Create(nodeCount * 12, 0.0);
-
-            for (int i = 0; i < nodeCount; i++)
-            {
-                int baseIdx = ParamBase(i);
-                var m = nodes[i].currentMatrix;
-
-                // 3x3 affine block
-                x[baseIdx + 0] = m.m00;
-                x[baseIdx + 1] = m.m01;
-                x[baseIdx + 2] = m.m02;
-
-                x[baseIdx + 3] = m.m10;
-                x[baseIdx + 4] = m.m11;
-                x[baseIdx + 5] = m.m12;
-
-                x[baseIdx + 6] = m.m20;
-                x[baseIdx + 7] = m.m21;
-                x[baseIdx + 8] = m.m22;
-
-                // translation
-                x[baseIdx + 9] = m.m03;
-                x[baseIdx + 10] = m.m13;
-                x[baseIdx + 11] = m.m23;
-            }
-
-            DebugProfiler.DebugMark(timePack);
-
-            return x;
-        }*/
-
-        /*private void ApplyNodeParameters(Vector<double> x)
-        {
-            DebugProfiler.DebugMark(timeApplyParameters);
-
-            int nodeCount = nodes.Count;
-
-            for (int i = 0; i < nodeCount; i++)
-            {
-                int baseIdx = ParamBase(i);
-
-                var m = DMatrix3x4.identity;
-
-                // 3x3 affine block
-                m.m00 = x[baseIdx + 0];
-                m.m01 = x[baseIdx + 1];
-                m.m02 = x[baseIdx + 2];
-
-                m.m10 = x[baseIdx + 3];
-                m.m11 = x[baseIdx + 4];
-                m.m12 = x[baseIdx + 5];
-
-                m.m20 = x[baseIdx + 6];
-                m.m21 = x[baseIdx + 7];
-                m.m22 = x[baseIdx + 8];
-
-                // trans
-                m.m03 = x[baseIdx + 9];
-                m.m13 = x[baseIdx + 10];
-                m.m23 = x[baseIdx + 11];
-
-                nodes[i].currentMatrix = m;
-            }
-
-            DebugProfiler.DebugMark(timeApplyParameters);
-        }*/
-
-        private Matrix<double> BuildNumericalJacobian(EDState state,
-                                                      double rotationWeight,
-                                                      double regularizationWeight,
-                                                      double constraintWeight,
-                                                      double epsilon = 1e-6)
-        {
-            // Base residual
-            Vector<double> f0 = EvaluateResidualVector(new EDStateView(state), rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
-
-            int residualCount = f0.Count;
-
-            Matrix<double> J = DenseMatrix.Create(residualCount, state.Count, 0.0);
-
-            // Temporary working vector
-            for (int i = 0; i < state.Count; i++)
-            {
-                double scale = Math.Max(1.0, Math.Abs(state.Get(i)));
-                double eps = epsilon * scale;
-
-                // Perturb parameter
-                var modifiedState = new EDStateView(state, i, eps);
-
-                // Evaluate new residual
-                Vector<double> f1 = EvaluateResidualVector(modifiedState, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
-
-                // Compute column i
-                for (int r = 0; r < residualCount; r++)
-                {
-                    J[r, i] = (f1[r] - f0[r]) / eps;
-                }
-            }
-
-            return J;
-        }
-
         private int FillRotationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
         {
             DebugProfiler.DebugMark(timeJacobianBuildRotation);
@@ -1644,10 +1538,37 @@ namespace UC.ED
 
             if (clearanceWeight > 0)
             {
-                for (int i = 0; i < structure.Count; i++)
-                {
-                    row = FillClearanceJacobianBlock(state, J, row, i, wClearance, ref jNorm);
-                }
+                int clearanceStartRow = row;
+
+                double clearanceJNorm = 0.0;
+                object normLock = new object();
+
+                DebugProfiler.DebugMark(timeJacobianBuildClearance);
+
+                Parallel.For(
+                    0,
+                    structure.Count,
+                    () => 0.0,
+                    (i, loopState, localNorm) =>
+                    {
+                        int clearanceRow = clearanceStartRow + i;
+
+                        localNorm += FillClearanceJacobianRow(state, J, clearanceRow, i, wClearance);
+
+                        return localNorm;
+                    },
+                    localNorm =>
+                    {
+                        lock (normLock)
+                        {
+                            clearanceJNorm += localNorm;
+                        }
+                    });
+
+                DebugProfiler.DebugMark(timeJacobianBuildClearance);
+
+                jNorm += clearanceJNorm;
+                row += structure.Count;
             }
 
             if (slopeWeight > 0)
@@ -1665,40 +1586,35 @@ namespace UC.ED
             return J;
         }
 
-        private int FillClearanceJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, ref double jNorm)
+        private double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance)
         {
-            DebugProfiler.DebugMark(timeJacobianBuildClearance);
-
             var baseView = new EDStateView(state);
 
-            // Base residual value for this segment.
             double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance);
 
-            // Optional but useful for hinge-like residuals.
-            // If inactive, the row is zero.
             if (Math.Abs(r0) <= 1e-12)
             {
-                DebugProfiler.DebugMark(timeJacobianBuildClearance);
-                return row + 1;
+                return 0.0;
             }
+
+            double localJNorm = 0.0;
 
             for (int col = 0; col < state.Count; col++)
             {
                 double original = state.Get(col);
-
                 double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
                 var modified = new EDStateView(state, col, eps);
 
                 double r1 = EvaluateSingleClearanceResidual(modified, segmentIndex, wClearance);
 
                 double v = (r1 - r0) / eps;
+
                 J[row, col] = v;
-                jNorm += v * v;
+                localJNorm += v * v;
             }
 
-            DebugProfiler.DebugMark(timeJacobianBuildClearance);
-
-            return row + 1;
+            return localJNorm;
         }
 
         private int FillSlopeJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
@@ -2065,7 +1981,8 @@ namespace UC.ED
                                 double residualTolerance = 1e-5,
                                 double stepTolerance = 1e-6,
                                 bool resetBeforeSolve = true,
-                                bool adaptiveLambda = true)
+                                bool adaptiveLambda = true,
+                                bool choleskyFactorization = false)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -2106,6 +2023,20 @@ namespace UC.ED
 
                 var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
 
+                /*int nonZero = 0;
+                int total = J.RowCount * J.ColumnCount;
+
+                for (int r = 0; r < J.RowCount; r++)
+                {
+                    for (int c = 0; c < J.ColumnCount; c++)
+                    {
+                        if (Math.Abs(J[r, c]) > 1e-12)
+                            nonZero++;
+                    }
+                }
+
+                Debug.Log($"Jacobian density (iteration {iter}): {(100.0 * nonZero / total):F2}% ({nonZero}/{total})");*/
+
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                 {
                     DebugProfiler.DebugMark(timeIteration);
@@ -2124,22 +2055,36 @@ namespace UC.ED
                 // Try current lambda, optionally increasing it if solve or step is bad.
                 for (int attempt = 0; attempt < 8; attempt++)
                 {
-                    var Hlm = H.Clone();
+                    DebugProfiler.DebugMark(timeSolve);
 
-                    for (int i = 0; i < Hlm.RowCount; i++)
-                        Hlm[i, i] += currentLambda;
+                    if (choleskyFactorization)
+                    {
+                        if (!TrySolveCholeskyWithDamping(H, g, currentLambda, out delta, out double usedLambda))
+                        {
+                            currentLambda = usedLambda;
+                            continue;
+                        }
 
-                    try
-                    {
-                        DebugProfiler.DebugMark(timeSolve);
-                        delta = Hlm.Solve(-g);
-                        DebugProfiler.DebugMark(timeSolve);
+                        currentLambda = usedLambda;
                     }
-                    catch
+                    else
                     {
-                        delta = null;
-                        DebugProfiler.DebugMark(timeSolve);
+                        var Hlm = H.Clone();
+
+                        for (int i = 0; i < Hlm.RowCount; i++)
+                            Hlm[i, i] += currentLambda;
+
+                        try
+                        {
+                            delta = Hlm.Solve(-g);
+                        }
+                        catch
+                        {
+                            delta = null;
+                        }
                     }
+
+                    DebugProfiler.DebugMark(timeSolve);
 
                     if (delta == null)
                     {
@@ -2225,6 +2170,36 @@ namespace UC.ED
 #else
     throw new NotImplementedException();
 #endif
+        }
+
+        bool TrySolveCholeskyWithDamping(Matrix<double> H, Vector<double> g, double initialLambda, out Vector<double> delta, out double usedLambda)
+        {
+            delta = null;
+            usedLambda = initialLambda;
+
+            const int maxAttempts = 8;
+            const double lambdaMultiplier = 10.0;
+
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                var Hlm = H.Clone();
+
+                for (int i = 0; i < Hlm.RowCount; i++)
+                    Hlm[i, i] += usedLambda;
+
+                try
+                {
+                    var chol = Hlm.Cholesky();
+                    delta = chol.Solve(-g);
+                    return delta.All(v => double.IsFinite(v));
+                }
+                catch
+                {
+                    usedLambda *= lambdaMultiplier;
+                }
+            }
+
+            return false;
         }
 
         private List<(int a, int b)> CollectUniqueEdges()
@@ -2392,9 +2367,10 @@ namespace UC.ED
 
             var ret = new EDClearanceCache(structure.Count);
 
-            for (int index = 0; index < structure.Count; index++)
+            Parallel.For(0, structure.Count, index =>
             {
                 var seg = structure[index];
+
                 var p1 = DeformVertex(seg.p1, seg.bind1, state);
                 var p2 = DeformVertex(seg.p2, seg.bind2, state);
 
@@ -2404,10 +2380,9 @@ namespace UC.ED
                 }
                 else
                 {
-                    // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - set it to double.MaxValue to be able to identify it and make a loss of zero in that case
                     ret.Set(index, double.MaxValue);
                 }
-            }
+            });
 
             DebugProfiler.DebugMark(timeUpdateClearance);
 
