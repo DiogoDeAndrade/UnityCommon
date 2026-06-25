@@ -5,6 +5,10 @@ using UC.DoubleMath;
 using System.Text;
 using System.Threading.Tasks;
 using System.Linq;
+using MathNet.Numerics;
+using System.IO;
+
+
 
 
 #if MATH_NET_AVAILABLE
@@ -1971,6 +1975,38 @@ namespace UC.ED
 #endif
         }
 
+        static void InitMathNet()
+        {
+            Control.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1);
+
+            bool nativeOk = false;
+
+            try
+            {
+                // Optional: point this to the folder containing the native DLLs.
+                // For testing, an absolute path is fine.
+                Control.NativeProviderPath = Path.GetFullPath(Path.Combine(Application.dataPath, "Plugins/MathNet/OpenBLAS/win-x64"));
+
+                nativeOk = Control.TryUseNativeOpenBLAS();
+
+                if (!nativeOk)
+                    nativeOk = Control.TryUseNativeMKL();
+
+                if (!nativeOk)
+                    Control.UseMultiThreading();
+
+                Debug.Log($"Math.NET native provider active: {nativeOk}");
+                Debug.Log(Control.Describe());
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Math.NET native provider failed: {e.Message}");
+
+                Control.UseMultiThreading();
+                Debug.Log(Control.Describe());
+            }
+        }
+
         public void SolveED_Nav(int maxIterations = 10,
                                 double rotationWeight = 1.0,
                                 double regularizationWeight = 10.0,
@@ -1986,6 +2022,8 @@ namespace UC.ED
         {
             if (resetBeforeSolve)
                 ResetDeformation();
+
+            InitMathNet();
 
 #if MATH_NET_AVAILABLE
             if (currentState == null)
