@@ -5,15 +5,12 @@ using UC.DoubleMath;
 using System.Text;
 using System.Threading.Tasks;
 using System.Linq;
-using MathNet.Numerics;
 using System.IO;
-
-
-
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
+using MathNet.Numerics;
 #endif
 
 #if UC_ENABLE_ED

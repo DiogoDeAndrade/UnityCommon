@@ -58,7 +58,10 @@ namespace UC
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             }
 
-            string exported = ModelExporter.ExportObject(path, root);
+            ExportModelOptions options = new();
+            options.ExportFormat = ExportFormat.Binary;
+
+            string exported = ModelExporter.ExportObject(path, root, options);
             if (string.IsNullOrEmpty(exported))
             {
                 error = $"FBXExporter.Export: the FBX exporter produced no file for '{path}'.";
