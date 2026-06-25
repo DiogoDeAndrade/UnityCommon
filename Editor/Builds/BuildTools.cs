@@ -19,10 +19,10 @@ namespace UC
         private Vector2 buildLogScroll;
         private string butlerPath;
 
-        private bool butlerUploadRunning;
-        private float butlerUploadProgress;
-        private string butlerUploadTitle = "";
-        private string butlerUploadInfo = "";
+        protected   bool butlerUploadRunning;
+        private     float butlerUploadProgress;
+        private     string butlerUploadTitle = "";
+        private     string butlerUploadInfo = "";
 
         private SerializedObject buildDefsSerializedObject;
 
