@@ -41,6 +41,13 @@ namespace UC
         public bool ImportAfterExport = true;
 
         /// <summary>
+        /// Pack referenced textures into the .fbx (binary only) instead of referencing them by path.
+        /// Off by default (textures stay external in the same folder); turn on for a self-contained
+        /// file that always shows textures in other DCC tools.
+        /// </summary>
+        public bool EmbedTextures = false;
+
+        /// <summary>
         /// Exports the hierarchy rooted at <paramref name="root"/> to an FBX at
         /// <paramref name="path"/> (project-relative, e.g. "Assets/Foo/bar.fbx", or absolute).
         /// Returns false with a reason in <paramref name="error"/> on failure.
@@ -60,6 +67,7 @@ namespace UC
 
             ExportModelOptions options = new();
             options.ExportFormat = ExportFormat.Binary;
+            options.EmbedTextures = EmbedTextures;
 
             string exported = ModelExporter.ExportObject(path, root, options);
             if (string.IsNullOrEmpty(exported))
