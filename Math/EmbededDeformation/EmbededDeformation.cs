@@ -356,6 +356,8 @@ namespace UC.ED
         public float maxSlope = 45.0f;
         public float slopeSoftBand = 5.0f;
         public Vector3 upVector = Vector3.up;
+        public double clearanceMinRatio = 0.85;
+        public double segmentMinRatio = 0.85;
 
         [SerializeField]
         private EDState currentState;
@@ -1159,12 +1161,63 @@ namespace UC.ED
         }
 
 #if MATH_NET_AVAILABLE
+        private struct EDResidualLayout
+        {
+            public int rotationRows;
+            public int regularizationRows;
+            public int constraintRows;
+            public int clearanceRows;
+            public int slopeRows;
+            public int orientationRows;
+            public int segmentLengthRows;
+
+            public int totalRows => rotationRows + regularizationRows + constraintRows + clearanceRows + slopeRows + orientationRows + segmentLengthRows;
+        }
+
+        private EDResidualLayout BuildResidualLayout(double clearanceWeight, double slopeWeight, double orientationWeight, double segmentLengthWeight)
+        {
+            int nodeCount = nodes.Count;
+
+            int directedEdgeCount = 0;
+            for (int i = 0; i < nodeCount; i++)
+                directedEdgeCount += nodes[i].neighbors.Count;
+
+            int constraintCount = vertexConstraints.Count;
+            int structureCount = (structure != null) ? structure.Count : 0;
+
+            EDResidualLayout layout = new EDResidualLayout
+            {
+                rotationRows = 6 * nodeCount,
+                regularizationRows = 3 * directedEdgeCount,
+                constraintRows = 3 * constraintCount,
+                clearanceRows = (clearanceWeight > 0.0) ? structureCount : 0,
+                slopeRows = (slopeWeight > 0.0) ? structureCount : 0,
+                orientationRows = (orientationWeight > 0.0) ? 3 * structureCount : 0,
+                segmentLengthRows = (segmentLengthWeight > 0.0) ? structureCount : 0
+            };
+
+            return layout;
+        }
+
+        private static double BuildResidualWeight(double conceptualWeight, int residualRows, bool normalizeResidualGroups)
+        {
+            if ((conceptualWeight <= 0.0) || (residualRows <= 0))
+                return 0.0;
+
+            double denom = normalizeResidualGroups ? residualRows : 1.0;
+
+            return Math.Sqrt(conceptualWeight / denom);
+        }
+
         private Vector<double> EvaluateResidualVector(EDStateView state,
                                                       double rotationWeight,
                                                       double regularizationWeight,
                                                       double constraintWeight,
                                                       double clearanceWeight,
-                                                      double slopeWeight)
+                                                      double slopeWeight,
+                                                      double orientationWeight,
+                                                      double segmentLengthWeight,
+                                                      bool normalizeWeights)
         {
             DebugProfiler.DebugMark(timeResidualEvaluate);
 
@@ -1174,23 +1227,18 @@ namespace UC.ED
                 directedEdgeCount += nodes[i].neighbors.Count;
             int constraintCount = vertexConstraints.Count;
 
-            int residualCount = 6 * nodeCount + 3 * directedEdgeCount + 3 * constraintCount;
-            if (clearanceWeight > 0)
-            {
-                residualCount += 1 * structure.Count;
-            }
-            if (slopeWeight > 0)
-            {
-                residualCount += 1 * structure.Count;
-            }
+            EDResidualLayout layout = BuildResidualLayout(clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight);
+            int residualCount = layout.totalRows;
 
             Vector<double> residual = DenseVector.Create(residualCount, 0.0);
 
-            double wRot = Math.Sqrt(rotationWeight);
-            double wReg = Math.Sqrt(regularizationWeight);
-            double wCon = Math.Sqrt(constraintWeight);
-            double wClearance = Math.Sqrt(clearanceWeight);
-            double wSlope = Math.Sqrt(slopeWeight);
+            double wRot = BuildResidualWeight(rotationWeight, layout.rotationRows, normalizeWeights);
+            double wReg = BuildResidualWeight(regularizationWeight, layout.regularizationRows, normalizeWeights);
+            double wCon = BuildResidualWeight(constraintWeight, layout.constraintRows, normalizeWeights);
+            double wClearance = BuildResidualWeight(clearanceWeight, layout.clearanceRows, normalizeWeights);
+            double wSlope = BuildResidualWeight(slopeWeight, layout.slopeRows, normalizeWeights);
+            double wOrientation = BuildResidualWeight(orientationWeight, layout.orientationRows, normalizeWeights);
+            double wSegmentLength = BuildResidualWeight(segmentLengthWeight, layout.segmentLengthRows, normalizeWeights);
 
             int row = 0;
 
@@ -1304,6 +1352,34 @@ namespace UC.ED
                 }
             }
 
+            if (orientationWeight > 0)
+            {
+                // -------------------------------------------------------------
+                // 6) Orientation constraint
+                //    Tries to preserve orientation of segments from the initial setup
+                // -------------------------------------------------------------
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    DVector3 r = EvaluateSingleOrientationResidual(state, i, wOrientation);
+
+                    residual[row++] = r.x;
+                    residual[row++] = r.y;
+                    residual[row++] = r.z;
+                }
+            }
+
+            if (segmentLengthWeight > 0)
+            {
+                // -------------------------------------------------------------
+                // 7) Structural segment length constraint
+                //    Allow segments to grow, but discourage excessive shrinking.
+                // -------------------------------------------------------------
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    residual[row++] = EvaluateSingleSegmentLengthResidual(state, i, wSegmentLength);
+                }
+            }
+
             DebugProfiler.DebugMark(timeResidualEvaluate);
 
             return residual;
@@ -1322,47 +1398,50 @@ namespace UC.ED
 
             // r0 = X·Y
             J[row, p + 0] = wRot * aY.x;
-            J[row, p + 3] = wRot * aY.y;
-            J[row, p + 6] = wRot * aY.z;
+            J[row, p + 4] = wRot * aY.y;
+            J[row, p + 8] = wRot * aY.z;
+
             J[row, p + 1] = wRot * aX.x;
-            J[row, p + 4] = wRot * aX.y;
-            J[row, p + 7] = wRot * aX.z;
+            J[row, p + 5] = wRot * aX.y;
+            J[row, p + 9] = wRot * aX.z;
             row++;
 
             // r1 = X·Z
             J[row, p + 0] = wRot * aZ.x;
-            J[row, p + 3] = wRot * aZ.y;
-            J[row, p + 6] = wRot * aZ.z;
+            J[row, p + 4] = wRot * aZ.y;
+            J[row, p + 8] = wRot * aZ.z;
+
             J[row, p + 2] = wRot * aX.x;
-            J[row, p + 5] = wRot * aX.y;
-            J[row, p + 8] = wRot * aX.z;
+            J[row, p + 6] = wRot * aX.y;
+            J[row, p + 10] = wRot * aX.z;
             row++;
 
             // r2 = Y·Z
             J[row, p + 1] = wRot * aZ.x;
-            J[row, p + 4] = wRot * aZ.y;
-            J[row, p + 7] = wRot * aZ.z;
+            J[row, p + 5] = wRot * aZ.y;
+            J[row, p + 9] = wRot * aZ.z;
+
             J[row, p + 2] = wRot * aY.x;
-            J[row, p + 5] = wRot * aY.y;
-            J[row, p + 8] = wRot * aY.z;
+            J[row, p + 6] = wRot * aY.y;
+            J[row, p + 10] = wRot * aY.z;
             row++;
 
             // r3 = X·X - 1
             J[row, p + 0] = wRot * 2.0 * aX.x;
-            J[row, p + 3] = wRot * 2.0 * aX.y;
-            J[row, p + 6] = wRot * 2.0 * aX.z;
+            J[row, p + 4] = wRot * 2.0 * aX.y;
+            J[row, p + 8] = wRot * 2.0 * aX.z;
             row++;
 
             // r4 = Y·Y - 1
             J[row, p + 1] = wRot * 2.0 * aY.x;
-            J[row, p + 4] = wRot * 2.0 * aY.y;
-            J[row, p + 7] = wRot * 2.0 * aY.z;
+            J[row, p + 5] = wRot * 2.0 * aY.y;
+            J[row, p + 9] = wRot * 2.0 * aY.z;
             row++;
 
             // r5 = Z·Z - 1
             J[row, p + 2] = wRot * 2.0 * aZ.x;
-            J[row, p + 5] = wRot * 2.0 * aZ.y;
-            J[row, p + 8] = wRot * 2.0 * aZ.z;
+            J[row, p + 6] = wRot * 2.0 * aZ.y;
+            J[row, p + 10] = wRot * 2.0 * aZ.z;
             row++;
 
             double ax2 = aX.x * aX.x + aX.y * aX.y + aX.z * aX.z;
@@ -1476,7 +1555,7 @@ namespace UC.ED
             return row + 3;
         }
 
-        Matrix<double> BuildJacobian(EDState state, out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight)
+        Matrix<double> BuildJacobian(EDState state, out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight, double orientationWeight, double segmentLengthWeight, bool normalizeWeights)
         {
             DebugProfiler.DebugMark(timeJacobianBuild);
 
@@ -1493,24 +1572,19 @@ namespace UC.ED
 
             int constraintCount = vertexConstraints.Count;
 
-            int rowCount = 6 * nodeCount + 3 * directedEdgeCount + 3 * constraintCount;
-            if (clearanceWeight > 0)
-            {
-                rowCount += 1 * structure.Count;
-            }
-            if (slopeWeight > 0)
-            {
-                rowCount += 1 * structure.Count;
-            }
+            EDResidualLayout layout = BuildResidualLayout(clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight);
+            int rowCount = layout.totalRows;
             int colCount = 12 * nodeCount;
 
             var J = DenseMatrix.Create(rowCount, colCount, 0.0);
 
-            double wRot = Math.Sqrt(rotationWeight);
-            double wReg = Math.Sqrt(regularizationWeight);
-            double wCon = Math.Sqrt(constraintWeight);
-            double wClearance = Math.Sqrt(clearanceWeight);
-            double wSlope = Math.Sqrt(slopeWeight);
+            double wRot = BuildResidualWeight(rotationWeight, layout.rotationRows, normalizeWeights);
+            double wReg = BuildResidualWeight(regularizationWeight, layout.regularizationRows, normalizeWeights);
+            double wCon = BuildResidualWeight(constraintWeight, layout.constraintRows, normalizeWeights);
+            double wClearance = BuildResidualWeight(clearanceWeight, layout.clearanceRows, normalizeWeights);
+            double wSlope = BuildResidualWeight(slopeWeight, layout.slopeRows, normalizeWeights);
+            double wOrientation = BuildResidualWeight(orientationWeight, layout.orientationRows, normalizeWeights);
+            double wSegmentLength = BuildResidualWeight(segmentLengthWeight, layout.segmentLengthRows, normalizeWeights);
 
             int row = 0;
 
@@ -1577,6 +1651,22 @@ namespace UC.ED
                 for (int i = 0; i < structure.Count; i++)
                 {
                     row = FillSlopeJacobianBlock(state, J, row, i, wSlope, ref jNorm);
+                }
+            }
+
+            if (orientationWeight > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    row = FillOrientationJacobianBlock(state, J, row, i, wOrientation, ref jNorm);
+                }
+            }
+
+            if (segmentLengthWeight > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    row = FillSegmentLengthJacobianBlock(state, J, row, i, wSegmentLength, ref jNorm);
                 }
             }
 
@@ -1648,6 +1738,61 @@ namespace UC.ED
             }
 
             DebugProfiler.DebugMark(timeJacobianBuildSlope);
+
+            return row + 1;
+        }
+
+        private int FillOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wOrientation, ref double jNorm)
+        {
+            var baseView = new EDStateView(state);
+
+            DVector3 r0 = EvaluateSingleOrientationResidual(baseView, segmentIndex, wOrientation);
+
+            for (int col = 0; col < state.Count; col++)
+            {
+                double original = state.Get(col);
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+                var modifiedState = new EDStateView(state, col, eps);
+
+                DVector3 r1 = EvaluateSingleOrientationResidual(modifiedState, segmentIndex, wOrientation);
+
+                double jx = (r1.x - r0.x) / eps;
+                double jy = (r1.y - r0.y) / eps;
+                double jz = (r1.z - r0.z) / eps;
+
+                J[row + 0, col] = jx;
+                J[row + 1, col] = jy;
+                J[row + 2, col] = jz;
+
+                jNorm += jx * jx + jy * jy + jz * jz;
+            }
+
+            return row + 3;
+        }
+
+        private int FillSegmentLengthJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSegmentLength, ref double jNorm)
+        {
+            var baseView = new EDStateView(state);
+
+            double r0 = EvaluateSingleSegmentLengthResidual(baseView, segmentIndex, wSegmentLength);
+
+            if (Math.Abs(r0) <= 1e-12)
+                return row + 1;
+
+            for (int col = 0; col < state.Count; col++)
+            {
+                double original = state.Get(col);
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+                var modifiedState = new EDStateView(state, col, eps);
+
+                double r1 = EvaluateSingleSegmentLengthResidual(modifiedState, segmentIndex, wSegmentLength);
+                double v = (r1 - r0) / eps;
+
+                J[row, col] = v;
+                jNorm += v * v;
+            }
 
             return row + 1;
         }
@@ -1752,15 +1897,18 @@ namespace UC.ED
                 case 0: return "m00";
                 case 1: return "m01";
                 case 2: return "m02";
-                case 3: return "m10";
-                case 4: return "m11";
-                case 5: return "m12";
-                case 6: return "m20";
-                case 7: return "m21";
-                case 8: return "m22";
-                case 9: return "tx";
-                case 10: return "ty";
+                case 3: return "tx";
+
+                case 4: return "m10";
+                case 5: return "m11";
+                case 6: return "m12";
+                case 7: return "ty";
+
+                case 8: return "m20";
+                case 9: return "m21";
+                case 10: return "m22";
                 case 11: return "tz";
+
                 default: return $"p{localParam}";
             }
         }
@@ -1786,7 +1934,7 @@ namespace UC.ED
             {
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
 
                 double error = f.L2Norm();
 
@@ -1796,7 +1944,7 @@ namespace UC.ED
                     break;
                 }
 
-                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
 
                 if (!double.IsFinite(jNorm) || jNorm < 1e-12)
                 {
@@ -1859,7 +2007,7 @@ namespace UC.ED
             {
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
 
                 double error = f.L2Norm();
 
@@ -1872,7 +2020,7 @@ namespace UC.ED
                 if (error < residualTolerance)
                     break;
 
-                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                     break;
@@ -1929,7 +2077,7 @@ namespace UC.ED
 
                     var candidateView = new EDStateView(candidateState);
 
-                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0);
+                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
 
                     double candidateError = fCandidate.L2Norm();
 
@@ -2010,12 +2158,15 @@ namespace UC.ED
                                 double constraintWeight = 100.0,
                                 double clearanceWeight = 100.0,
                                 double slopeWeight = 100.0,
+                                double orientationWeight = 100.0,
+                                double segmentLengthWeight = 0.0,
                                 double lambda = 1e-3,
                                 double residualTolerance = 1e-5,
                                 double stepTolerance = 1e-6,
                                 bool resetBeforeSolve = true,
                                 bool adaptiveLambda = true,
-                                bool choleskyFactorization = false)
+                                bool choleskyFactorization = false,
+                                bool normalizeWeights = false)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -2039,9 +2190,11 @@ namespace UC.ED
 
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights);
 
                 double error = f.L2Norm();
+
+                LogResidualEnergies(f, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights, iter);
 
                 if (!double.IsFinite(error))
                 {
@@ -2056,7 +2209,7 @@ namespace UC.ED
                     break;
                 }
 
-                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights);
 
                 /*int nonZero = 0;
                 int total = J.RowCount * J.ColumnCount;
@@ -2150,7 +2303,7 @@ namespace UC.ED
 
                     var candidateView = new EDStateView(candidateState);
 
-                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight);
+                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights);
 
                     double candidateError = fCandidate.L2Norm();
 
@@ -2289,12 +2442,16 @@ namespace UC.ED
                                        BindingSelectionMode bindMode, BindingWeightMode weightMode,
                                        int k = 4, // When BindingSelectionMode = closest-K
                                        float power = 2.0f,
-                                       float sigma = 1.0f)
+                                       float sigma = 1.0f,
+                                       double clearanceMinRatio = 0.85,
+                                       double segmentMinRatio = 0.85)
         {
             this.maxSlope = maxSlope;
             this.slopeSoftBand = slopeSoftBand;
             this.upVector = upVector.normalized;
             this.navMeshTopology = navMeshTopology;
+            this.clearanceMinRatio = clearanceMinRatio;
+            this.segmentMinRatio = segmentMinRatio;
 
             for (int i = 0; i < structure.Count; i++)
             {
@@ -2485,19 +2642,68 @@ namespace UC.ED
             return wSlope * penalty;
         }
 
+        private DVector3 EvaluateSingleOrientationResidual(EDStateView state, int segmentIndex, double wOrientation)
+        {
+            Vector3 current = GetTransformedSegmentSlopeNormal(state, segmentIndex);
+
+            if (current.sqrMagnitude < 1e-12f)
+            {
+                // Degenerate local frame: strongly invalid.
+                Vector3 fallback = structure[segmentIndex].normal.ToVector3();
+                if (fallback.sqrMagnitude < 1e-12f)
+                    fallback = upVector.normalized;
+                else
+                    fallback.Normalize();
+
+                return new DVector3(-wOrientation * fallback.x, -wOrientation * fallback.y, -wOrientation * fallback.z);
+            }
+
+            current.Normalize();
+
+            Vector3 target = structure[segmentIndex].normal.ToVector3().SafeNormalized();
+
+            return new DVector3(wOrientation * (current.x - target.x), wOrientation * (current.y - target.y), wOrientation * (current.z - target.z));
+        }
+
+        private double EvaluateSingleSegmentLengthResidual(EDStateView state, int segmentIndex, double wSegmentLength)
+        {
+            var seg = structure[segmentIndex];
+
+            DVector3 p1 = DeformVertex(seg.p1, seg.bind1, state);
+            DVector3 p2 = DeformVertex(seg.p2, seg.bind2, state);
+
+            double originalLength = (seg.p2 - seg.p1).magnitude;
+            if (originalLength < 1e-8)
+                return 0.0;
+
+            double currentLength = (p2 - p1).magnitude;
+
+            double mslr = Math.Clamp(segmentMinRatio, 0.0, 1.0);
+            double minAllowedLength = mslr * originalLength;
+
+            double loss = Math.Max(0.0, minAllowedLength - currentLength) / originalLength;
+            return wSegmentLength * loss;
+        }
+
         private double ComputeClearanceLoss(double original, double current)
         {
             if ((original == double.MaxValue) || (current == double.MaxValue))
-            {
-                // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - return zero loss in that case
-                return 0;
-            }
-            // Simple hinge loss that only penalizes clearance reductions, not increases - dependent on the world scale
-            //return Math.Max(0.0, original - current);
+                return 0.0;
 
-            const double epsilon = 1e-3; // Small value to prevent division by zero and very large losses when original clearance is very small
-            const double power = 1.0; // Exponent to control how aggressively we penalize clearance reductions - higher values will focus more on smaller reductions - > 1 works bad, there's probably an issue somewhere
-            return Math.Max(0, Math.Pow((original - current) / (original + epsilon), power));
+            const double epsilon = 1e-3;
+
+            // Optional world-space slack, useful when original clearance is large.
+            const double absoluteSlack = 0.05;
+
+            double allowedByRatio = original * clearanceMinRatio;
+            double allowedBySlack = Math.Max(0.0, original - absoluteSlack);
+
+            // More permissive of the two.
+            double allowed = Math.Min(allowedByRatio, allowedBySlack);
+
+            double loss = (allowed - current) / (original + epsilon);
+
+            return Math.Max(0.0, loss);
         }
 
         bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, out double minClearance)
@@ -2643,6 +2849,90 @@ namespace UC.ED
             var node = nodes[nodeIndex];
 
             return (currentState.TransformOffset(nodeIndex, DVector3.zero) + node.restPosition).ToVector3();
+        }
+
+        private struct EDResidualEnergy
+        {
+            public string name;
+            public int rows;
+            public double energy;
+            public double rms;
+            public double maxAbs;
+        }
+
+        private EDResidualEnergy MeasureResidualBlock(Vector<double> f, ref int row, int count, string name)
+        {
+            double energy = 0.0;
+            double maxAbs = 0.0;
+
+            for (int i = 0; i < count; i++)
+            {
+                double v = f[row + i];
+                energy += v * v;
+                maxAbs = Math.Max(maxAbs, Math.Abs(v));
+            }
+
+            row += count;
+
+            return new EDResidualEnergy
+            {
+                name = name,
+                rows = count,
+                energy = energy,
+                rms = (count > 0) ? Math.Sqrt(energy / count) : 0.0,
+                maxAbs = maxAbs
+            };
+        }
+
+        protected void LogResidualEnergies(Vector<double> f, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight, double orientationWeight, double segmentLengthWeight, bool normalizeResidualGroups, int iteration)
+        {
+            EDResidualLayout layout = BuildResidualLayout(clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight); 
+
+            int row = 0;
+
+            List<EDResidualEnergy> blocks = new List<EDResidualEnergy>
+            {
+                MeasureResidualBlock(f, ref row, layout.rotationRows, "Rotation"),
+                MeasureResidualBlock(f, ref row, layout.regularizationRows, "Regularization"),
+                MeasureResidualBlock(f, ref row, layout.constraintRows, "Connector"),
+                MeasureResidualBlock(f, ref row, layout.clearanceRows, "Clearance"),
+                MeasureResidualBlock(f, ref row, layout.slopeRows, "Slope"),
+                MeasureResidualBlock(f, ref row, layout.orientationRows, "Orientation"),
+                MeasureResidualBlock(f, ref row, layout.segmentLengthRows, "Seg. Length")
+            };
+
+            double totalEnergy = 0.0;
+            for (int i = 0; i < blocks.Count; i++)
+                totalEnergy += blocks[i].energy;
+
+            StringBuilder sb = new StringBuilder();
+
+            sb.AppendLine($"[ED] Residual energies, iteration {iteration}");
+            sb.AppendLine($"[ED] Normalized groups = {normalizeResidualGroups}");
+            sb.AppendLine($"[ED] Total weighted energy = {totalEnergy:E6}, L2 = {Math.Sqrt(totalEnergy):E6}");
+            sb.AppendLine("[ED] Block breakdown:");
+
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                var b = blocks[i];
+
+                if (b.rows <= 0)
+                    continue;
+
+                double percent = (totalEnergy > 0.0) ? (100.0 * b.energy / totalEnergy) : 0.0;
+
+                sb.AppendLine(
+                    $"  {b.name,-16} rows={b.rows,6} " +
+                    $"energy={b.energy:E6} rms={b.rms:E6} max={b.maxAbs:E6} " +
+                    $"share={percent,6:F2}%");
+            }
+
+            if (row != f.Count)
+            {
+                sb.AppendLine($"[ED] WARNING: residual row accounting mismatch. Used={row}, f.Count={f.Count}");
+            }
+
+            Debug.Log(sb.ToString());
         }
     }
 }
