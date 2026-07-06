@@ -15,7 +15,8 @@ using MathNet.Numerics;
 
 #if UC_ENABLE_ED
 namespace UC.ED
-{  
+{
+    public enum DeformationGraphSource { NavMeshAndStructure, StructureOnly };
     public enum BindingSelectionMode { ClosestOne, NearestK };
     public enum BindingWeightMode { Uniform, InversePower, Gaussian, OriginalED };
     public enum GraphLinkMode { PartitionAdjacency, SharedBindings, DirectionAware };
@@ -320,6 +321,10 @@ namespace UC.ED
         public Matrix4x4 restHandleMatrix;
         public Matrix4x4 currentHandleMatrix;
         public List<int> vertexIndices;
+
+        // Used by StructureOnly constraints.
+        // True for connector handles, false for root/center handles.
+        public bool isTerminal;
     }
 
     [Serializable]
@@ -339,11 +344,27 @@ namespace UC.ED
         public EDVertexBinding  cBind, tBind, bBind;
     }
 
-    public delegate bool HasLOS(Vector3 p1, Vector3 p2);
+    [Serializable]
+    public class WeightConfig
+    {
+        public double rotationWeight;
+        public double regularizationWeight;
+        public double constraintWeight;
+        public double smoothnessWeight;
+        public double clearanceWeight;
+        public double slopeWeight;
+        public double orientationWeight;
+        public double segmentLengthWeight;
+        public bool normalizeWeights;
+    }
 
+    public delegate bool HasLOS(Vector3 p1, Vector3 p2);
+    public delegate bool TryGetSurfaceNormal(Vector3 p, out Vector3 normal);
+    
     [Serializable]
     public class EmbededDeformation
     {
+        public DeformationGraphSource deformationGraphSource;
         public DVector3[] restVertices;
         public int[] triangles;
 
@@ -364,7 +385,43 @@ namespace UC.ED
         [SerializeField]
         private EDState restState;
 
-           
+        private delegate Matrix<double> BuildJacobianDelegate(EDState state, out double jNorm, WeightConfig weights);
+        private delegate Vector<double> EvaluateResidualVectorDelegate(EDStateView state, WeightConfig weights);
+
+        private BuildJacobianDelegate buildJacobian
+        {
+            get
+            {
+                switch (deformationGraphSource)
+                {
+                    case DeformationGraphSource.NavMeshAndStructure:
+                        return BuildJacobianNavMesh;
+                    case DeformationGraphSource.StructureOnly:
+                        return BuildJacobianStructure;
+                    default:
+                        break;
+                }
+                return null;
+            }
+        }
+
+        private EvaluateResidualVectorDelegate evaluateResidualVector
+        {
+            get
+            {
+                switch (deformationGraphSource)
+                {
+                    case DeformationGraphSource.NavMeshAndStructure:
+                        return EvaluateResidualVectorNavMesh;
+                    case DeformationGraphSource.StructureOnly:
+                        return EvaluateResidualVectorStructure;
+                    default:
+                        break;
+                }
+                return null;
+            }
+        }
+
 #if UC_PROFILER_ENABLE
         DebugProfiler timePack;
         DebugProfiler timeIteration;
@@ -380,7 +437,6 @@ namespace UC.ED
         DebugProfiler timeJacobianBuildClearance;
 #endif
 
-
         int deformGraphEdgeCount
         {
             get
@@ -392,8 +448,10 @@ namespace UC.ED
             }
         }
 
-        public void BuildDeformationGraph(TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
+        public void BuildDeformationGraph(DeformationGraphSource deformationGraphSource,
+                                          TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
                                           BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
+                                          Graph2Structure graphStructure, int structureSubdivision = 1, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
                                           int k = 4, // When BindingSelectionMode = closest-K
                                           float maxBindDistance = 2.0f, // When GraphLinKMode = DirectionAware
                                           float minBindAngle = 20.0f, // When GraphLinKMode = DirectionAware
@@ -406,6 +464,33 @@ namespace UC.ED
                 Debug.LogError("BuildDeformationGraph failed: topology is null.");
                 return;
             }
+
+            this.deformationGraphSource = deformationGraphSource;
+
+            switch (deformationGraphSource)
+            {
+                case DeformationGraphSource.NavMeshAndStructure:
+                    BuildDeformationGraphFromNavMesh(topology, minDistance, forcedVertices, forceStructureNodes, bindMode, weightMode, graphLinkMode, graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal, k, maxBindDistance, minBindAngle, hasLOSFunction, power, sigma);
+                    break;
+                case DeformationGraphSource.StructureOnly:
+                    BuildDeformationGraphFromStructure(topology, 
+                                                       bindMode, weightMode,
+                                                       graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal,
+                                                       k, power,sigma);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        public void BuildDeformationGraphFromNavMesh(TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
+                                                     BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
+                                                     Graph2Structure graphStructure, int structureSubdivision = 1, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
+                                                     int k = 4, float maxBindDistance = 2.0f, float minBindAngle = 20.0f,
+                                                     HasLOS hasLOSFunction = null,
+                                                     float power = 2.0f, float sigma = 1.0f)
+        {
+            BuildStructureFromGraph(graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal);
 
             if (minDistance <= 0.0f)
             {
@@ -497,6 +582,84 @@ namespace UC.ED
             restState = new EDState(nodes.Count);
 
             Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}, Edges={deformGraphEdgeCount}");
+        }
+
+        public void BuildDeformationGraphFromStructure(TopologyStatic topology,
+                                               BindingSelectionMode bindMode,
+                                               BindingWeightMode weightMode,
+                                               Graph2Structure graphStructure,
+                                               int structureSubdivision = 1,
+                                               Vector3 structureFallbackUp = default,
+                                               TryGetSurfaceNormal tryGetSurfaceNormal = null,
+                                               int k = 4,
+                                               float power = 2.0f,
+                                               float sigma = 1.0f)
+        {
+            BuildStructureFromGraph(graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal);
+
+            if (topology == null)
+            {
+                Debug.LogError("BuildDeformationGraphFromStructure failed: topology is null.");
+                return;
+            }
+
+            if ((structure == null) || (structure.Count == 0))
+            {
+                Debug.LogError("BuildDeformationGraphFromStructure failed: structure is null or empty.");
+                return;
+            }
+
+            // -----------------------------------------------------------------
+            // 1) Copy source navmesh into ED rest data.
+            //    Even in StructureOnly mode, the mesh still needs to deform.
+            // -----------------------------------------------------------------
+            var v = topology.GetVertexPositions();
+
+            restVertices = new DVector3[v.Count];
+            for (int i = 0; i < v.Count; i++)
+                restVertices[i] = v[i].ToDVector3();
+
+            triangles = topology.GetTriangleIndices().ToArray();
+
+            nodes.Clear();
+            bindings = null;
+            handleConstraints.Clear();
+
+            // -----------------------------------------------------------------
+            // 2) Build ED graph directly from structure segment endpoints.
+            // -----------------------------------------------------------------
+            const float structureNodeMergeDistanceSq = 1e-8f;
+
+            for (int i = 0; i < structure.Count; i++)
+            {
+                var seg = structure[i];
+
+                int idx1 = TryAddSampleVertex(seg.p1, structureNodeMergeDistanceSq);
+                int idx2 = TryAddSampleVertex(seg.p2, structureNodeMergeDistanceSq);
+
+                AddUndirectedNeighbor(idx1, idx2);
+            }
+
+            if (nodes.Count == 0)
+            {
+                Debug.LogError("BuildDeformationGraphFromStructure failed: no nodes were created.");
+                return;
+            }
+
+            // -----------------------------------------------------------------
+            // 3) Bind navmesh vertices to the structure graph.
+            // -----------------------------------------------------------------
+            BuildBindings(topology, bindMode, weightMode, k, power, sigma);
+
+            currentState = new EDState(nodes.Count);
+            restState = new EDState(nodes.Count);
+
+            Debug.Log($"ED structure-only graph built. " +
+                      $"Vertices={topology.vertexCount}, " +
+                      $"Triangles={topology.triangleCount}, " +
+                      $"StructureSegments={structure.Count}, " +
+                      $"Nodes={nodes.Count}, " +
+                      $"Edges={deformGraphEdgeCount}");
         }
 
         private struct DirectionAwareCandidate
@@ -1029,7 +1192,7 @@ namespace UC.ED
             return DeformVertex(v, binding, new EDStateView(currentState));
         }
 
-        public bool SolveTranslationsOnly(double constraintWeight = 1.0, double smoothnessWeight = 0.1, bool resetBeforeSolve = true)
+        public bool SolveTranslationsOnly(WeightConfig weights, bool resetBeforeSolve = true)
         {
             if (resetBeforeSolve) ResetDeformation();
 
@@ -1106,12 +1269,12 @@ namespace UC.ED
                     else
                         w = 1.0 / binding.nodeIndices.Length;
 
-                    A[row, nodeIndex] += constraintWeight * w;
+                    A[row, nodeIndex] += weights.constraintWeight * w;
                 }
 
-                bx[row] = constraintWeight * delta.x;
-                by[row] = constraintWeight * delta.y;
-                bz[row] = constraintWeight * delta.z;
+                bx[row] = weights.constraintWeight * delta.x;
+                by[row] = weights.constraintWeight * delta.y;
+                bz[row] = weights.constraintWeight * delta.z;
             }
 
             // -----------------------------------------------------------------
@@ -1122,8 +1285,8 @@ namespace UC.ED
             {
                 var edge = edges[e];
 
-                A[row, edge.a] += smoothnessWeight;
-                A[row, edge.b] -= smoothnessWeight;
+                A[row, edge.a] += weights.smoothnessWeight;
+                A[row, edge.b] -= weights.smoothnessWeight;
 
                 // rhs stays zero
             }
@@ -1161,6 +1324,14 @@ namespace UC.ED
         }
 
 #if MATH_NET_AVAILABLE
+        private int GetStructureHandlePositionConstraintCount()
+        {
+            if (handleConstraints == null)
+                return 0;
+
+            return handleConstraints.Count;
+        }
+
         private struct EDResidualLayout
         {
             public int rotationRows;
@@ -1174,7 +1345,7 @@ namespace UC.ED
             public int totalRows => rotationRows + regularizationRows + constraintRows + clearanceRows + slopeRows + orientationRows + segmentLengthRows;
         }
 
-        private EDResidualLayout BuildResidualLayout(double clearanceWeight, double slopeWeight, double orientationWeight, double segmentLengthWeight)
+        private EDResidualLayout BuildResidualLayoutCommon(WeightConfig weights, int constraintCount)
         {
             int nodeCount = nodes.Count;
 
@@ -1182,21 +1353,51 @@ namespace UC.ED
             for (int i = 0; i < nodeCount; i++)
                 directedEdgeCount += nodes[i].neighbors.Count;
 
-            int constraintCount = vertexConstraints.Count;
             int structureCount = (structure != null) ? structure.Count : 0;
 
             EDResidualLayout layout = new EDResidualLayout
             {
                 rotationRows = 6 * nodeCount,
                 regularizationRows = 3 * directedEdgeCount,
+
                 constraintRows = 3 * constraintCount,
-                clearanceRows = (clearanceWeight > 0.0) ? structureCount : 0,
-                slopeRows = (slopeWeight > 0.0) ? structureCount : 0,
-                orientationRows = (orientationWeight > 0.0) ? 3 * structureCount : 0,
-                segmentLengthRows = (segmentLengthWeight > 0.0) ? structureCount : 0
+
+                clearanceRows = (weights.clearanceWeight > 0.0) ? structureCount : 0,
+                slopeRows = (weights.slopeWeight > 0.0) ? structureCount : 0,
+                orientationRows = (weights.orientationWeight > 0.0) ? 3 * structureCount : 0,
+                segmentLengthRows = (weights.segmentLengthWeight > 0.0) ? structureCount : 0
             };
 
             return layout;
+        }
+
+        private EDResidualLayout BuildResidualLayoutNavMesh(WeightConfig weights)
+        {
+            int constraintCount = (vertexConstraints != null) ? vertexConstraints.Count : 0;
+
+            return BuildResidualLayoutCommon(weights, constraintCount);
+        }
+
+        private EDResidualLayout BuildResidualLayoutStructure(WeightConfig weights)
+        {
+            int constraintCount = GetStructureHandlePositionConstraintCount();
+
+            return BuildResidualLayoutCommon(weights, constraintCount);
+        }
+
+        private EDResidualLayout BuildResidualLayoutForCurrentGraph(WeightConfig weights)
+        {
+            switch (deformationGraphSource)
+            {
+                case DeformationGraphSource.NavMeshAndStructure:
+                    return BuildResidualLayoutNavMesh(weights);
+
+                case DeformationGraphSource.StructureOnly:
+                    return BuildResidualLayoutStructure(weights);
+
+                default:
+                    return BuildResidualLayoutNavMesh(weights);
+            }
         }
 
         private static double BuildResidualWeight(double conceptualWeight, int residualRows, bool normalizeResidualGroups)
@@ -1209,15 +1410,8 @@ namespace UC.ED
             return Math.Sqrt(conceptualWeight / denom);
         }
 
-        private Vector<double> EvaluateResidualVector(EDStateView state,
-                                                      double rotationWeight,
-                                                      double regularizationWeight,
-                                                      double constraintWeight,
-                                                      double clearanceWeight,
-                                                      double slopeWeight,
-                                                      double orientationWeight,
-                                                      double segmentLengthWeight,
-                                                      bool normalizeWeights)
+        #region NavMesh-based constraints
+        private Vector<double> EvaluateResidualVectorNavMesh(EDStateView state, WeightConfig weights)
         {
             DebugProfiler.DebugMark(timeResidualEvaluate);
 
@@ -1227,18 +1421,18 @@ namespace UC.ED
                 directedEdgeCount += nodes[i].neighbors.Count;
             int constraintCount = vertexConstraints.Count;
 
-            EDResidualLayout layout = BuildResidualLayout(clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight);
+            EDResidualLayout layout = BuildResidualLayoutNavMesh(weights);
             int residualCount = layout.totalRows;
 
             Vector<double> residual = DenseVector.Create(residualCount, 0.0);
 
-            double wRot = BuildResidualWeight(rotationWeight, layout.rotationRows, normalizeWeights);
-            double wReg = BuildResidualWeight(regularizationWeight, layout.regularizationRows, normalizeWeights);
-            double wCon = BuildResidualWeight(constraintWeight, layout.constraintRows, normalizeWeights);
-            double wClearance = BuildResidualWeight(clearanceWeight, layout.clearanceRows, normalizeWeights);
-            double wSlope = BuildResidualWeight(slopeWeight, layout.slopeRows, normalizeWeights);
-            double wOrientation = BuildResidualWeight(orientationWeight, layout.orientationRows, normalizeWeights);
-            double wSegmentLength = BuildResidualWeight(segmentLengthWeight, layout.segmentLengthRows, normalizeWeights);
+            double wRot = BuildResidualWeight(weights.rotationWeight, layout.rotationRows, weights.normalizeWeights);
+            double wReg = BuildResidualWeight(weights.regularizationWeight, layout.regularizationRows, weights.normalizeWeights);
+            double wCon = BuildResidualWeight(weights.constraintWeight, layout.constraintRows, weights.normalizeWeights);
+            double wClearance = BuildResidualWeight(weights.clearanceWeight, layout.clearanceRows, weights.normalizeWeights);
+            double wSlope = BuildResidualWeight(weights.slopeWeight, layout.slopeRows, weights.normalizeWeights);
+            double wOrientation = BuildResidualWeight(weights.orientationWeight, layout.orientationRows, weights.normalizeWeights);
+            double wSegmentLength = BuildResidualWeight(weights.segmentLengthWeight, layout.segmentLengthRows, weights.normalizeWeights);
 
             int row = 0;
 
@@ -1326,7 +1520,7 @@ namespace UC.ED
                 residual[row++] = wCon * r.z;
             }
 
-            if (clearanceWeight > 0)
+            if (wClearance > 0)
             {
                 // -------------------------------------------------------------
                 // 4) Clearance constraints - allow for clearance to grow, but constrained it going smaller
@@ -1341,7 +1535,7 @@ namespace UC.ED
                 }
             }
 
-            if (slopeWeight > 0)
+            if (wSlope > 0)
             {
                 // -------------------------------------------------------------
                 // 5) Slope constraints
@@ -1352,7 +1546,7 @@ namespace UC.ED
                 }
             }
 
-            if (orientationWeight > 0)
+            if (wOrientation > 0)
             {
                 // -------------------------------------------------------------
                 // 6) Orientation constraint
@@ -1368,7 +1562,7 @@ namespace UC.ED
                 }
             }
 
-            if (segmentLengthWeight > 0)
+            if (wSegmentLength > 0)
             {
                 // -------------------------------------------------------------
                 // 7) Structural segment length constraint
@@ -1555,7 +1749,7 @@ namespace UC.ED
             return row + 3;
         }
 
-        Matrix<double> BuildJacobian(EDState state, out double jNorm, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight, double orientationWeight, double segmentLengthWeight, bool normalizeWeights)
+        Matrix<double> BuildJacobianNavMesh(EDState state, out double jNorm, WeightConfig weights)
         {
             DebugProfiler.DebugMark(timeJacobianBuild);
 
@@ -1572,19 +1766,19 @@ namespace UC.ED
 
             int constraintCount = vertexConstraints.Count;
 
-            EDResidualLayout layout = BuildResidualLayout(clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight);
+            EDResidualLayout layout = BuildResidualLayoutNavMesh(weights);
             int rowCount = layout.totalRows;
             int colCount = 12 * nodeCount;
 
             var J = DenseMatrix.Create(rowCount, colCount, 0.0);
 
-            double wRot = BuildResidualWeight(rotationWeight, layout.rotationRows, normalizeWeights);
-            double wReg = BuildResidualWeight(regularizationWeight, layout.regularizationRows, normalizeWeights);
-            double wCon = BuildResidualWeight(constraintWeight, layout.constraintRows, normalizeWeights);
-            double wClearance = BuildResidualWeight(clearanceWeight, layout.clearanceRows, normalizeWeights);
-            double wSlope = BuildResidualWeight(slopeWeight, layout.slopeRows, normalizeWeights);
-            double wOrientation = BuildResidualWeight(orientationWeight, layout.orientationRows, normalizeWeights);
-            double wSegmentLength = BuildResidualWeight(segmentLengthWeight, layout.segmentLengthRows, normalizeWeights);
+            double wRot = BuildResidualWeight(weights.rotationWeight, layout.rotationRows, weights.normalizeWeights);
+            double wReg = BuildResidualWeight(weights.regularizationWeight, layout.regularizationRows, weights.normalizeWeights);
+            double wCon = BuildResidualWeight(weights.constraintWeight, layout.constraintRows, weights.normalizeWeights);
+            double wClearance = BuildResidualWeight(weights.clearanceWeight, layout.clearanceRows, weights.normalizeWeights);
+            double wSlope = BuildResidualWeight(weights.slopeWeight, layout.slopeRows, weights.normalizeWeights);
+            double wOrientation = BuildResidualWeight(weights.orientationWeight, layout.orientationRows, weights.normalizeWeights);
+            double wSegmentLength = BuildResidualWeight(weights.segmentLengthWeight, layout.segmentLengthRows, weights.normalizeWeights);
 
             int row = 0;
 
@@ -1611,7 +1805,7 @@ namespace UC.ED
                 row = FillConstraintJacobianBlock(stateView, J, row, vertexConstraints[c].vertexIndex, wCon, ref jNorm);
             }
 
-            if (clearanceWeight > 0)
+            if (wClearance > 0)
             {
                 int clearanceStartRow = row;
 
@@ -1646,7 +1840,7 @@ namespace UC.ED
                 row += structure.Count;
             }
 
-            if (slopeWeight > 0)
+            if (wSlope > 0)
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
@@ -1654,7 +1848,7 @@ namespace UC.ED
                 }
             }
 
-            if (orientationWeight > 0)
+            if (wOrientation > 0)
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
@@ -1662,7 +1856,7 @@ namespace UC.ED
                 }
             }
 
-            if (segmentLengthWeight > 0)
+            if (wSegmentLength > 0)
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
@@ -1912,12 +2106,353 @@ namespace UC.ED
                 default: return $"p{localParam}";
             }
         }
+
+        #endregion
+
+        #region Structure-based constraints
+
+        private bool TryGetStructureHandlePositionConstraint(EDHandleConstraint hc, out int nodeIndex, out DVector3 targetPosition)
+        {
+            nodeIndex = -1;
+            targetPosition = DVector3.zero;
+
+            if ((nodes == null) || (nodes.Count == 0))
+                return false;
+
+            Vector3 restHandlePosition = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+            Vector3 currentHandlePosition = hc.currentHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+            if (hc.isTerminal)
+            {
+                // Connector handles target terminal structure endpoints.
+                nodeIndex = GetClosestLeafDebugNodeIndex(restHandlePosition);
+            }
+            else
+            {
+                // Center/root handles target the corresponding structure/root node.
+                nodeIndex = GetClosestDebugNodeIndex(restHandlePosition);
+            }
+
+            if ((nodeIndex < 0) || (nodeIndex >= nodes.Count))
+                return false;
+
+            targetPosition = currentHandlePosition.ToDVector3();
+
+            return true;
+        }
+
+        private DVector3 DeformStructureNodePosition(int nodeIndex, EDStateView state)
+        {
+            DVector3 restPosition = nodes[nodeIndex].restPosition;
+
+            // At the node itself, local offset is zero, so only the node translation matters.
+            return restPosition + state.TransformOffset(nodeIndex, DVector3.zero);
+        }
+
+        private int FillStructureNodePositionJacobianBlock(DenseMatrix J, int row, int nodeIndex, double wCon, ref double jNormRunningTotalSq)
+        {
+            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+
+            if ((nodeIndex < 0) || (nodeIndex >= nodes.Count))
+            {
+                DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+                return row + 3;
+            }
+
+            int p = ParamBase(nodeIndex);
+
+            // Residual:
+            // r = nodePosition' - target
+            //
+            // nodePosition' = restPosition + translation
+            //
+            // So the derivative only touches tx, ty, tz.
+            J[row + 0, p + 3] = wCon;   // tx
+            J[row + 1, p + 7] = wCon;   // ty
+            J[row + 2, p + 11] = wCon;  // tz
+
+            jNormRunningTotalSq += 3.0 * wCon * wCon;
+
+            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+
+            return row + 3;
+        }
+
+        private Vector<double> EvaluateResidualVectorStructure(EDStateView state, WeightConfig weights)
+        {
+            DebugProfiler.DebugMark(timeResidualEvaluate);
+
+            int nodeCount = nodes.Count;
+
+            EDResidualLayout layout = BuildResidualLayoutStructure(weights);
+            Vector<double> residual = DenseVector.Create(layout.totalRows, 0.0);
+
+            double wRot = BuildResidualWeight(weights.rotationWeight, layout.rotationRows, weights.normalizeWeights);
+            double wReg = BuildResidualWeight(weights.regularizationWeight, layout.regularizationRows, weights.normalizeWeights);
+            double wCon = BuildResidualWeight(weights.constraintWeight, layout.constraintRows, weights.normalizeWeights);
+            double wClearance = BuildResidualWeight(weights.clearanceWeight, layout.clearanceRows, weights.normalizeWeights);
+            double wSlope = BuildResidualWeight(weights.slopeWeight, layout.slopeRows, weights.normalizeWeights);
+            double wOrientation = BuildResidualWeight(weights.orientationWeight, layout.orientationRows, weights.normalizeWeights);
+            double wSegmentLength = BuildResidualWeight(weights.segmentLengthWeight, layout.segmentLengthRows, weights.normalizeWeights);
+
+            int row = 0;
+
+            // -------------------------------------------------------------
+            // 1) Rotation residuals
+            //    Same as NavMesh path.
+            // -------------------------------------------------------------
+            for (int i = 0; i < nodeCount; i++)
+            {
+                var axisX = state.GetAxisX(i);
+                var axisY = state.GetAxisY(i);
+                var axisZ = state.GetAxisZ(i);
+
+                residual[row++] = wRot * DVector3.Dot(axisX, axisY);
+                residual[row++] = wRot * DVector3.Dot(axisX, axisZ);
+                residual[row++] = wRot * DVector3.Dot(axisY, axisZ);
+
+                residual[row++] = wRot * (DVector3.Dot(axisX, axisX) - 1.0);
+                residual[row++] = wRot * (DVector3.Dot(axisY, axisY) - 1.0);
+                residual[row++] = wRot * (DVector3.Dot(axisZ, axisZ) - 1.0);
+            }
+
+            // -------------------------------------------------------------
+            // 2) Regularization residuals
+            //    Same as NavMesh path.
+            // -------------------------------------------------------------
+            for (int j = 0; j < nodeCount; j++)
+            {
+                EDNode nodeJ = nodes[j];
+                DVector3 gj = nodeJ.restPosition;
+                DVector3 tj = state.GetTranslation(j);
+
+                foreach (int k in nodeJ.neighbors)
+                {
+                    EDNode nodeK = nodes[k];
+                    DVector3 gk = nodeK.restPosition;
+                    DVector3 tk = state.GetTranslation(k);
+
+                    DVector3 diff = gk - gj;
+                    DVector3 rotatedDiff = state.TransformVector(j, diff);
+
+                    DVector3 r = rotatedDiff + gj + tj - (gk + tk);
+
+                    residual[row++] = wReg * r.x;
+                    residual[row++] = wReg * r.y;
+                    residual[row++] = wReg * r.z;
+                }
+            }
+
+            // -------------------------------------------------------------
+            // 3) Terminal position constraints
+            //
+            //    deformed terminal node position - current handle position
+            // -------------------------------------------------------------
+            if (handleConstraints != null)
+            {
+                for (int c = 0; c < handleConstraints.Count; c++)
+                {
+                    EDHandleConstraint hc = handleConstraints[c];
+
+                    if (!TryGetStructureHandlePositionConstraint(hc, out int nodeIndex, out DVector3 targetPosition))
+                    {
+                        row += 3;
+                        continue;
+                    }
+
+                    DVector3 deformedPosition = DeformStructureNodePosition(nodeIndex, state);
+                    DVector3 r = deformedPosition - targetPosition;
+
+                    residual[row++] = wCon * r.x;
+                    residual[row++] = wCon * r.y;
+                    residual[row++] = wCon * r.z;
+                }
+            }
+
+            if (wClearance > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    var originalClearance = restState.clearances.Get(i);
+                    var currentClearance = state.clearances.Get(i);
+
+                    residual[row++] = wClearance * ComputeClearanceLoss(originalClearance, currentClearance);
+                }
+            }
+
+            if (wSlope > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    residual[row++] = EvaluateSingleSlopeResidual(state, i, wSlope);
+                }
+            }
+
+            if (wOrientation > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    DVector3 r = EvaluateSingleOrientationResidual(state, i, wOrientation);
+
+                    residual[row++] = r.x;
+                    residual[row++] = r.y;
+                    residual[row++] = r.z;
+                }
+            }
+
+            if (wSegmentLength > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    residual[row++] = EvaluateSingleSegmentLengthResidual(state, i, wSegmentLength);
+                }
+            }
+
+            DebugProfiler.DebugMark(timeResidualEvaluate);
+
+            return residual;
+        }
+
+        Matrix<double> BuildJacobianStructure(EDState state, out double jNorm, WeightConfig weights)
+        {
+            DebugProfiler.DebugMark(timeJacobianBuild);
+
+            jNorm = 0.0;
+
+            int nodeCount = nodes.Count;
+
+            EDResidualLayout layout = BuildResidualLayoutStructure(weights);
+
+            int rowCount = layout.totalRows;
+            int colCount = 12 * nodeCount;
+
+            var J = DenseMatrix.Create(rowCount, colCount, 0.0);
+
+            double wRot = BuildResidualWeight(weights.rotationWeight, layout.rotationRows, weights.normalizeWeights);
+            double wReg = BuildResidualWeight(weights.regularizationWeight, layout.regularizationRows, weights.normalizeWeights);
+            double wCon = BuildResidualWeight(weights.constraintWeight, layout.constraintRows, weights.normalizeWeights);
+            double wClearance = BuildResidualWeight(weights.clearanceWeight, layout.clearanceRows, weights.normalizeWeights);
+            double wSlope = BuildResidualWeight(weights.slopeWeight, layout.slopeRows, weights.normalizeWeights);
+            double wOrientation = BuildResidualWeight(weights.orientationWeight, layout.orientationRows, weights.normalizeWeights);
+            double wSegmentLength = BuildResidualWeight(weights.segmentLengthWeight, layout.segmentLengthRows, weights.normalizeWeights);
+
+            int row = 0;
+
+            EDStateView stateView = new EDStateView(state);
+
+            // -------------------------------------------------------------
+            // 1) Rotation Jacobian
+            //    Same block as NavMesh path.
+            // -------------------------------------------------------------
+            for (int i = 0; i < nodeCount; i++)
+            {
+                row = FillRotationJacobianBlock(stateView, J, row, i, wRot, ref jNorm);
+            }
+
+            // -------------------------------------------------------------
+            // 2) Regularization Jacobian
+            //    Same block as NavMesh path.
+            // -------------------------------------------------------------
+            for (int j = 0; j < nodeCount; j++)
+            {
+                foreach (int k in nodes[j].neighbors)
+                {
+                    row = FillRegularizationJacobianBlock(stateView, J, row, j, k, wReg, ref jNorm);
+                }
+            }
+
+            // -------------------------------------------------------------
+            // 3) Terminal position Jacobian
+            // -------------------------------------------------------------
+            if (handleConstraints != null)
+            {
+                for (int c = 0; c < handleConstraints.Count; c++)
+                {
+                    EDHandleConstraint hc = handleConstraints[c];
+
+                    if (!TryGetStructureHandlePositionConstraint(hc, out int nodeIndex, out _))
+                    {
+                        row += 3;
+                        continue;
+                    }
+
+                    row = FillStructureNodePositionJacobianBlock(J, row, nodeIndex, wCon, ref jNorm);
+                }
+            }
+
+            if (wClearance > 0)
+            {
+                int clearanceStartRow = row;
+
+                double clearanceJNorm = 0.0;
+                object normLock = new object();
+
+                DebugProfiler.DebugMark(timeJacobianBuildClearance);
+
+                Parallel.For(
+                    0,
+                    structure.Count,
+                    () => 0.0,
+                    (i, loopState, localNorm) =>
+                    {
+                        int clearanceRow = clearanceStartRow + i;
+
+                        localNorm += FillClearanceJacobianRow(state, J, clearanceRow,i, wClearance);
+
+                        return localNorm;
+                    },
+                    localNorm =>
+                    {
+                        lock (normLock)
+                        {
+                            clearanceJNorm += localNorm;
+                        }
+                    });
+
+                DebugProfiler.DebugMark(timeJacobianBuildClearance);
+
+                jNorm += clearanceJNorm;
+                row += structure.Count;
+            }
+
+            if (wSlope > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    row = FillSlopeJacobianBlock(state, J, row, i, wSlope, ref jNorm);
+                }
+            }
+
+            if (wOrientation > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    row = FillOrientationJacobianBlock(state, J, row, i, wOrientation, ref jNorm);
+                }
+            }
+
+            if (wSegmentLength > 0)
+            {
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    row = FillSegmentLengthJacobianBlock(state, J, row, i, wSegmentLength, ref jNorm);
+                }
+            }
+
+            jNorm = Math.Sqrt(jNorm);
+
+            DebugProfiler.DebugMark(timeJacobianBuild);
+
+            return J;
+        }
+
+        #endregion
+
 #endif
 
-        public void SolveED_GN(int maxIterations = 10,
-                               double rotationWeight = 1.0,
-                               double regularizationWeight = 10.0,
-                               double constraintWeight = 100.0,
+        #region Solver
+        public void SolveED_GN(int maxIterations = 10, WeightConfig weights = null,
                                double damping = 1.0,
                                double residualTolerance = 1e-5,
                                double stepTolerance = 1e-6,
@@ -1930,11 +2465,14 @@ namespace UC.ED
             if (currentState == null)
                 currentState = new EDState(nodes.Count);
 
+            var BuildJacobian = buildJacobian;
+            var EvaluateResidualVector = evaluateResidualVector;
+
             for (int iter = 0; iter < maxIterations; iter++)
             {
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
+                var f = EvaluateResidualVector(stateView, weights);
 
                 double error = f.L2Norm();
 
@@ -1944,7 +2482,7 @@ namespace UC.ED
                     break;
                 }
 
-                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
+                var J = BuildJacobian(currentState, out double jNorm, weights);
 
                 if (!double.IsFinite(jNorm) || jNorm < 1e-12)
                 {
@@ -1985,9 +2523,7 @@ namespace UC.ED
         }
 
         public void SolveED_LM(int maxIterations = 10,
-                               double rotationWeight = 1.0,
-                               double regularizationWeight = 10.0,
-                               double constraintWeight = 100.0,
+                               WeightConfig weights = null,
                                double lambda = 1e-3,
                                double residualTolerance = 1e-5,
                                double stepTolerance = 1e-6,
@@ -2003,11 +2539,14 @@ namespace UC.ED
 
             double currentLambda = lambda;
 
+            var BuildJacobian = buildJacobian;
+            var EvaluateResidualVector = evaluateResidualVector;
+
             for (int iter = 0; iter < maxIterations; iter++)
             {
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
+                var f = EvaluateResidualVector(stateView, weights);
 
                 double error = f.L2Norm();
 
@@ -2020,7 +2559,7 @@ namespace UC.ED
                 if (error < residualTolerance)
                     break;
 
-                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
+                var J = BuildJacobian(currentState, out double jNorm, weights);
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                     break;
@@ -2077,7 +2616,7 @@ namespace UC.ED
 
                     var candidateView = new EDStateView(candidateState);
 
-                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, 0.0, 0.0, 0.0, 0.0, false);
+                    var fCandidate = EvaluateResidualVector(candidateView, weights);
 
                     double candidateError = fCandidate.L2Norm();
 
@@ -2153,20 +2692,13 @@ namespace UC.ED
         }
 
         public void SolveED_Nav(int maxIterations = 10,
-                                double rotationWeight = 1.0,
-                                double regularizationWeight = 10.0,
-                                double constraintWeight = 100.0,
-                                double clearanceWeight = 100.0,
-                                double slopeWeight = 100.0,
-                                double orientationWeight = 100.0,
-                                double segmentLengthWeight = 0.0,
+                                WeightConfig weights = null,
                                 double lambda = 1e-3,
                                 double residualTolerance = 1e-5,
                                 double stepTolerance = 1e-6,
                                 bool resetBeforeSolve = true,
                                 bool adaptiveLambda = true,
-                                bool choleskyFactorization = false,
-                                bool normalizeWeights = false)
+                                bool choleskyFactorization = false)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -2181,6 +2713,8 @@ namespace UC.ED
             }
 
             double currentLambda = lambda;
+            var BuildJacobian = buildJacobian;
+            var EvaluateResidualVector = evaluateResidualVector;
 
             int iter = 0;
 
@@ -2190,11 +2724,11 @@ namespace UC.ED
 
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights);
+                var f = EvaluateResidualVector(stateView, weights);
 
                 double error = f.L2Norm();
 
-                LogResidualEnergies(f, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights, iter);
+                LogResidualEnergies(f, weights, iter);
 
                 if (!double.IsFinite(error))
                 {
@@ -2209,7 +2743,7 @@ namespace UC.ED
                     break;
                 }
 
-                var J = BuildJacobian(currentState, out double jNorm, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights);
+                var J = BuildJacobian(currentState, out double jNorm, weights);
 
                 /*int nonZero = 0;
                 int total = J.RowCount * J.ColumnCount;
@@ -2303,7 +2837,7 @@ namespace UC.ED
 
                     var candidateView = new EDStateView(candidateState);
 
-                    var fCandidate = EvaluateResidualVector(candidateView, rotationWeight, regularizationWeight, constraintWeight, clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight, normalizeWeights);
+                    var fCandidate = EvaluateResidualVector(candidateView, weights);
 
                     double candidateError = fCandidate.L2Norm();
 
@@ -2390,6 +2924,8 @@ namespace UC.ED
             return false;
         }
 
+        #endregion
+
         private List<(int a, int b)> CollectUniqueEdges()
         {
             List<(int a, int b)> result = new();
@@ -2416,6 +2952,94 @@ namespace UC.ED
             }
 
             return result;
+        }
+
+        private Vector3 GetSafeStructureUp(Vector3 fallbackUp)
+        {
+            if (fallbackUp.sqrMagnitude > 1e-8f)
+                return fallbackUp.normalized;
+
+            if (upVector.sqrMagnitude > 1e-8f)
+                return upVector.normalized;
+
+            return Vector3.up;
+        }
+
+        private Vector3 GetStructureSegmentNormal(Vector3 p1,
+                                                  Vector3 p2,
+                                                  int fallbackSegmentIndex,
+                                                  Vector3 fallbackUp,
+                                                  TryGetSurfaceNormal tryGetSurfaceNormal)
+        {
+            Vector3 mid = (p1 + p2) * 0.5f;
+
+            if ((tryGetSurfaceNormal != null) &&
+                tryGetSurfaceNormal(mid, out Vector3 normal) &&
+                normal.sqrMagnitude > 1e-8f)
+            {
+                return normal.normalized;
+            }
+
+            // Important: after ClearStructure(), this will usually fail because the
+            // old segment does not exist yet. That is fine; we fall back to up.
+            if ((structure != null) &&
+                (fallbackSegmentIndex >= 0) &&
+                (fallbackSegmentIndex < structure.Count) &&
+                (currentState != null))
+            {
+                normal = GetSegmentSlopeNormal(fallbackSegmentIndex);
+
+                if (normal.sqrMagnitude > 1e-8f)
+                    return normal.normalized;
+            }
+
+            return GetSafeStructureUp(fallbackUp);
+        }
+
+        public void BuildStructureFromGraph(Graph2Structure graphStructure, int structureSubdivision, Vector3 fallbackUp, TryGetSurfaceNormal tryGetSurfaceNormal)
+        {
+            ClearStructure();
+
+            if (graphStructure == null)
+                return;
+
+            int subdivision = Mathf.Max(1, structureSubdivision);
+
+            var structureTrees = graphStructure.GetTrees();
+
+            for (int i = 0; i < structureTrees.Count; i++)
+            {
+                var tree = structureTrees[i];
+
+                for (int j = 0; j < tree.GetSegmentCount(); j++)
+                {
+                    (var n1, var n2) = tree.GetSegmentNodes(j);
+
+                    Vector3 p1 = n1.data.pos;
+                    Vector3 p2 = n2.data.pos;
+
+                    if (subdivision == 1)
+                    {
+                        Vector3 normal = GetStructureSegmentNormal(p1, p2, j, fallbackUp, tryGetSurfaceNormal);
+
+                        AddStructureSegment(p1, p2, normal);
+                    }
+                    else
+                    {
+                        float tInc = 1.0f / subdivision;
+
+                        for (int k = 0; k < subdivision; k++)
+                        {
+                            Vector3 sp1 = Vector3.Lerp(p1, p2, k * tInc);
+                            Vector3 sp2 = Vector3.Lerp(p1, p2, (k + 1) * tInc);
+
+                            Vector3 normal = GetStructureSegmentNormal(sp1, sp2, j, fallbackUp, tryGetSurfaceNormal);
+
+                            AddStructureSegment(sp1, sp2, normal);
+                        }
+                    }
+                }
+            }
         }
 
         public void ClearStructure()
@@ -2851,6 +3475,45 @@ namespace UC.ED
             return (currentState.TransformOffset(nodeIndex, DVector3.zero) + node.restPosition).ToVector3();
         }
 
+        public int GetClosestDebugNodeIndex(Vector3 restPosition)
+        {
+            if ((nodes == null) || (nodes.Count == 0))
+                return -1;
+
+            return GetClosestNodeIndex(restPosition.ToDVector3());
+        }
+
+        public int GetClosestLeafDebugNodeIndex(Vector3 restPosition)
+        {
+            if ((nodes == null) || (nodes.Count == 0))
+                return -1;
+
+            int bestIndex = -1;
+            double bestDistSq = double.MaxValue;
+            DVector3 p = restPosition.ToDVector3();
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                // In StructureOnly, terminal structure endpoints should have one neighbour.
+                if ((nodes[i].neighbors == null) || (nodes[i].neighbors.Count != 1))
+                    continue;
+
+                double dSq = (nodes[i].restPosition - p).sqrMagnitude;
+
+                if (dSq < bestDistSq)
+                {
+                    bestDistSq = dSq;
+                    bestIndex = i;
+                }
+            }
+
+            // Fallback for degenerate/debug cases.
+            if (bestIndex < 0)
+                bestIndex = GetClosestNodeIndex(p);
+
+            return bestIndex;
+        }
+
         private struct EDResidualEnergy
         {
             public string name;
@@ -2884,9 +3547,9 @@ namespace UC.ED
             };
         }
 
-        protected void LogResidualEnergies(Vector<double> f, double rotationWeight, double regularizationWeight, double constraintWeight, double clearanceWeight, double slopeWeight, double orientationWeight, double segmentLengthWeight, bool normalizeResidualGroups, int iteration)
+        protected void LogResidualEnergies(Vector<double> f, WeightConfig weights, int iteration)
         {
-            EDResidualLayout layout = BuildResidualLayout(clearanceWeight, slopeWeight, orientationWeight, segmentLengthWeight); 
+            EDResidualLayout layout = BuildResidualLayoutForCurrentGraph(weights);
 
             int row = 0;
 
@@ -2908,7 +3571,7 @@ namespace UC.ED
             StringBuilder sb = new StringBuilder();
 
             sb.AppendLine($"[ED] Residual energies, iteration {iteration}");
-            sb.AppendLine($"[ED] Normalized groups = {normalizeResidualGroups}");
+            sb.AppendLine($"[ED] Normalized groups = {weights.normalizeWeights}");
             sb.AppendLine($"[ED] Total weighted energy = {totalEnergy:E6}, L2 = {Math.Sqrt(totalEnergy):E6}");
             sb.AppendLine("[ED] Block breakdown:");
 
