@@ -28,5 +28,27 @@ namespace UC
             return image.Tween().Interpolate(image.color, targetColor, time, (value) => { if (image) image.color = value; }, "ImageColor");
         }
 
+        public static Tweener.BaseInterpolator FadeIn(this RawImage image, float time)
+        {
+            return image.FadeTo(1.0f, time);
+        }
+
+        public static Tweener.BaseInterpolator FadeOut(this RawImage image, float time)
+        {
+            return image.FadeTo(0.0f, time);
+        }
+
+        public static Tweener.BaseInterpolator FadeTo(this RawImage image, float targetAlpha, float time)
+        {
+            if (image.color.a == targetAlpha) return null;
+            return image.Tween().Interpolate(image.color.a, targetAlpha, time, (value) => { if (image) image.color = image.color.ChangeAlpha(value); }, "ImageColor");
+        }
+
+        public static Tweener.BaseInterpolator FadeTo(this RawImage image, Color targetColor, float time)
+        {
+            if (image.color == targetColor) return null;
+            return image.Tween().Interpolate(image.color, targetColor, time, (value) => { if (image) image.color = value; }, "ImageColor");
+        }
+
     }
 }
