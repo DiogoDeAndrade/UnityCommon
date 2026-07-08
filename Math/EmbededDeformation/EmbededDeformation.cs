@@ -380,10 +380,14 @@ namespace UC.ED
         public double clearanceMinRatio = 0.85;
         public double segmentMinRatio = 0.85;
 
-        [SerializeField]
+        [SerializeField, HideInInspector]
         private EDState currentState;
-        [SerializeField]
+        [SerializeField, HideInInspector]
         private EDState restState;
+        [SerializeField, HideInInspector]
+        private DeformationField deformationField;
+        [SerializeField, HideInInspector]
+        private List<Mesh>  sourceGeometry;
 
         private delegate Matrix<double> BuildJacobianDelegate(EDState state, out double jNorm, WeightConfig weights);
         private delegate Vector<double> EvaluateResidualVectorDelegate(EDStateView state, WeightConfig weights);
@@ -435,6 +439,7 @@ namespace UC.ED
         DebugProfiler timeJacobianBuildRegularization;
         DebugProfiler timeJacobianBuildSlope;
         DebugProfiler timeJacobianBuildClearance;
+        DebugProfiler timeDeformationFieldGeneration;
 #endif
 
         int deformGraphEdgeCount
@@ -448,6 +453,15 @@ namespace UC.ED
             }
         }
 
+        public void SetSourceGeometry(List<Mesh> meshes, List<Matrix4x4> matrices)
+        {
+            sourceGeometry = new();
+            for (int i = 0; i < meshes.Count; i++)
+            {
+                sourceGeometry.Add(meshes[i].BakeTransform(matrices[i]));
+            }
+        }
+
         public void BuildDeformationGraph(DeformationGraphSource deformationGraphSource,
                                           TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
                                           BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
@@ -457,7 +471,9 @@ namespace UC.ED
                                           float minBindAngle = 20.0f, // When GraphLinKMode = DirectionAware
                                           HasLOS hasLOSFunction = null, // When GraphLinKMode = DirectionAware
                                           float power = 2.0f,
-                                          float sigma = 1.0f) // When BindingSelectionMode = closest-K and BindingWeightMode = InversePower
+                                          float sigma = 1.0f, // When BindingSelectionMode = closest-K and BindingWeightMode = InversePower
+                                          float deformationFieldVoxelSize = 0.05f,  // Voxel resolution: default = 5% of maximum size of encapsulating objects
+                                          int deformationFieldMaxWeights = 4) // How many weights influence the deformation at each cell
         {
             if (topology == null)
             {
@@ -477,6 +493,7 @@ namespace UC.ED
                                                        bindMode, weightMode,
                                                        graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal,
                                                        k, power,sigma);
+                    BuildDeformationField(deformationFieldVoxelSize, deformationFieldMaxWeights);
                     break;
                 default:
                     break;
@@ -3597,6 +3614,145 @@ namespace UC.ED
 
             Debug.Log(sb.ToString());
         }
+
+        void BuildDeformationField(float density = 0.05f, int maxWeights = 4)
+        {
+            timeDeformationFieldGeneration = new();
+
+            timeDeformationFieldGeneration.Mark();
+
+            if ((sourceGeometry == null) || (sourceGeometry.Count == 0))
+            {
+                Debug.LogWarning("BuildDeformationField failed: no source geometry was provided.");
+                deformationField = null;
+
+                timeDeformationFieldGeneration.Mark();
+                return;
+            }
+
+            if ((nodes == null) || (nodes.Count == 0))
+            {
+                Debug.LogWarning("BuildDeformationField failed: no deformation graph nodes exist.");
+                deformationField = null;
+
+                timeDeformationFieldGeneration.Mark();
+                return;
+            }
+
+            // -------------------------------------------------------------
+            // 1) Compute bounds from baked source geometry.
+            //    Important: Bounds is a struct, so do not use bounds.Value.Encapsulate().
+            // -------------------------------------------------------------
+            bool hasBounds = false;
+            Bounds bounds = default;
+
+            for (int i = 0; i < sourceGeometry.Count; i++)
+            {
+                Mesh mesh = sourceGeometry[i];
+                if (mesh == null)
+                    continue;
+
+                if (!hasBounds)
+                {
+                    bounds = mesh.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(mesh.bounds);
+                }
+            }
+
+            if (!hasBounds)
+            {
+                Debug.LogWarning("BuildDeformationField failed: source geometry has no valid meshes.");
+                deformationField = null;
+
+                timeDeformationFieldGeneration.Mark();
+                return;
+            }
+
+            // Make sure deformation graph nodes are inside the field bounds.
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                bounds.Encapsulate(nodes[i].restPosition.ToVector3());
+            }
+
+            float maxSize = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+
+            if (maxSize <= 1e-6f)
+            {
+                Debug.LogWarning("BuildDeformationField failed: source geometry bounds are degenerate.");
+                deformationField = null;
+
+                timeDeformationFieldGeneration.Mark();
+                return;
+            }
+
+            float safeDensity = Mathf.Max(density, 1e-5f);
+            float voxelSize = maxSize * safeDensity;
+
+            int safeMaxWeights = Mathf.Clamp(maxWeights, 1, nodes.Count);
+
+            // -------------------------------------------------------------
+            // 2) Create deformation field.
+            // -------------------------------------------------------------
+            deformationField = new DeformationField(voxelSize, safeMaxWeights);
+
+            // -------------------------------------------------------------
+            // 3) Fill the field using source geometry.
+            //
+            //    sourceGeometry is already baked to world space in SetSourceGeometry(),
+            //    so the voxelizer should receive identity matrices here.
+            // -------------------------------------------------------------
+            List<Matrix4x4> identityMatrices = new();
+
+            for (int i = 0; i < sourceGeometry.Count; i++)
+            {
+                identityMatrices.Add(Matrix4x4.identity);
+            }
+
+            deformationField.FillWithMesh(sourceGeometry, identityMatrices);
+
+            // -------------------------------------------------------------
+            // 4) Add deformation graph nodes as volumetric/geodesic seeds.
+            //
+            //    Add them in ED node order so the deformation field node id
+            //    matches the ED node index.
+            // -------------------------------------------------------------
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                deformationField.AddDeformationNode(nodes[i].restPosition.ToVector3());
+            }
+
+            // -------------------------------------------------------------
+            // 5) Extend the influence field outside occupied cells.
+            //
+            //    The occupied volume gets geodesic distances from AddDeformationNode().
+            //    GrowInfluence() lets nearby empty cells also query valid weights.
+            // -------------------------------------------------------------
+            deformationField.GrowInfluence();
+
+            // -------------------------------------------------------------
+            // 6) Convert distances into normalized weights.
+            // -------------------------------------------------------------
+            deformationField.ComputeWeights(safeMaxWeights);
+
+            timeDeformationFieldGeneration.Mark();
+
+            Debug.Log(
+                $"Deformation field built:\n" +
+                $"  Meshes={sourceGeometry.Count}\n " +
+                $"  Nodes={nodes.Count}\n" +
+                $"  VoxelSize={voxelSize:F4}\n" +
+                $"  MaxWeights={safeMaxWeights}\n" +
+                $"  Bounds={bounds.size}\n" +
+                $"  Grid Size={deformationField.gridSize}\n" +
+                $"  Time={timeDeformationFieldGeneration.accumulatedTimeMS:F6} ms"
+            );
+        }
+
+        public DeformationField GetDeformationField() => deformationField;
     }
 }
 #endif
