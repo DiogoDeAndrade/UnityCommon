@@ -1,5 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -324,6 +326,60 @@ namespace UC
                 Vector3 c2 = p2 + radius * d2;
 
                 Gizmos.DrawLine(c1, c2);
+            }
+        }
+
+        public static void DrawWireGrid(Vector3 minBound, Vector3Int gridSize, Vector3 cellSize)
+        {
+            int xCount = Mathf.Max(0, gridSize.x);
+            int yCount = Mathf.Max(0, gridSize.y);
+            int zCount = Mathf.Max(0, gridSize.z);
+
+            Vector3 maxBound = minBound + Vector3.Scale(new Vector3(xCount, yCount, zCount), cellSize);
+
+            // Lines parallel to X
+            if (xCount > 0)
+            {
+                for (int y = 0; y <= yCount; y++)
+                {
+                    for (int z = 0; z <= zCount; z++)
+                    {
+                        Vector3 start = minBound + new Vector3(0, y * cellSize.y, z * cellSize.z);
+                        Vector3 end = new Vector3(maxBound.x, start.y, start.z);
+
+                        Gizmos.DrawLine(start, end);
+                    }
+                }
+            }
+
+            // Lines parallel to Y
+            if (yCount > 0)
+            {
+                for (int x = 0; x <= xCount; x++)
+                {
+                    for (int z = 0; z <= zCount; z++)
+                    {
+                        Vector3 start = minBound + new Vector3(x * cellSize.x, 0, z * cellSize.z);
+                        Vector3 end = new Vector3(start.x, maxBound.y, start.z);
+
+                        Gizmos.DrawLine(start, end);
+                    }
+                }
+            }
+
+            // Lines parallel to Z
+            if (zCount > 0)
+            {
+                for (int x = 0; x <= xCount; x++)
+                {
+                    for (int y = 0; y <= yCount; y++)
+                    {
+                        Vector3 start = minBound + new Vector3(x * cellSize.x, y * cellSize.y, 0);
+                        Vector3 end = new Vector3(start.x, start.y, maxBound.z);
+
+                        Gizmos.DrawLine(start, end);
+                    }
+                }
             }
         }
     }
