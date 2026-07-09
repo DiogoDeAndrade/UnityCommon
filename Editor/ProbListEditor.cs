@@ -147,4 +147,10 @@ namespace UC
 
     }
 
+    [CustomPropertyDrawer(typeof(AnimationClipProbList))]
+    public class AnimationClipProbListDrawer : ProbListPropertyDrawer<AnimationClip>
+    {
+
+    }
+
 }
