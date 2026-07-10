@@ -6,10 +6,14 @@ using UnityEngine.Playables;
 
 namespace UC
 {
-    [RequireComponent(typeof(Animator))]
     public class PlayableHandler : MonoBehaviour
     {
+        public delegate void OnAnimationComplete(AnimationClip clip);
+        public event OnAnimationComplete onAnimationComplete;
+
         [Header("Startup")]
+        [SerializeField]
+        private Animator        animator;
         [SerializeField]
         private bool            playOnStart = true;
         [SerializeField, ShowIf(nameof(playOnStart))]
@@ -19,19 +23,20 @@ namespace UC
         [SerializeField]
         private bool            removeAnimatorController = true;
 
-        private Animator                animator;
         private PlayableGraph           graph;
         private AnimationMixerPlayable  mixer;
 
         private readonly AnimationClipPlayable[] clipPlayables = new AnimationClipPlayable[2];
 
         private int         activeInput;
-        private Coroutine   transitionCoroutine;
+        private Coroutine   crossFadeCR;
 
         private float           transitionElapsed;
         private float           transitionDuration;
         private AnimationClip   transitionFromClip;
         private AnimationClip   transitionToClip;
+
+        private int     completedCycles;
 
         private bool    fauxLoopEnabled;
         private float   fauxLoopStartNormalized;
@@ -40,8 +45,9 @@ namespace UC
         private int     fauxLoopCompletedLoops;
 
         public AnimationClip currentClip { get; private set; }
+        public bool currentReversed { get; private set; }
 
-        public bool IsTransitioning => transitionCoroutine != null;
+        public bool IsTransitioning => crossFadeCR != null;
 
         public AnimationClip TransitionFromClip => transitionFromClip;
         public AnimationClip TransitionToClip => transitionToClip;
@@ -105,7 +111,8 @@ namespace UC
 
         private void Awake()
         {
-            animator = GetComponent<Animator>();
+            if (animator == null)
+                animator = GetComponent<Animator>();
 
             if (removeAnimatorController)
                 animator.runtimeAnimatorController = null;
@@ -127,6 +134,7 @@ namespace UC
             graph.Evaluate(Time.deltaTime * animationSpeed);
 
             UpdateFauxLoop();
+            UpdateCompletion();
         }
 
         private void BuildGraph()
@@ -150,10 +158,24 @@ namespace UC
 
         public void Play(AnimationClip clip)
         {
+            Play(clip, false, 0f);
+        }
+
+        public void Play(AnimationClip clip, bool reversed, float transitionTime)
+        {
             if (clip == null)
                 return;
 
             EnsureGraph();
+
+            if ((transitionTime > 0f) && (currentClip != null))
+            {
+                StopTransition();
+                NormalizeToStrongestInput();
+
+                crossFadeCR = StartCoroutine(CrossFadeCR(clip, reversed, transitionTime));
+                return;
+            }
 
             StopTransition();
 
@@ -162,7 +184,7 @@ namespace UC
 
             activeInput = 0;
 
-            var playable = CreateClipPlayable(clip);
+            var playable = CreateClipPlayable(clip, reversed);
             clipPlayables[activeInput] = playable;
 
             graph.Connect(playable, 0, mixer, activeInput);
@@ -171,6 +193,8 @@ namespace UC
             mixer.SetInputWeight(1, 0f);
 
             currentClip = clip;
+            currentReversed = reversed;
+            completedCycles = 0;
             fauxLoopCompletedLoops = 0;
         }
 
@@ -190,7 +214,7 @@ namespace UC
             StopTransition();
             NormalizeToStrongestInput();
 
-            transitionCoroutine = StartCoroutine(CrossFadeRoutine(clip, duration));
+            crossFadeCR = StartCoroutine(CrossFadeCR(clip, false, duration));
         }
 
         public void CrossFade(AnimationClip fromClip, AnimationClip toClip, float duration)
@@ -210,6 +234,8 @@ namespace UC
             mixer.SetInputWeight(1, 0f);
 
             currentClip = null;
+            currentReversed = false;
+            completedCycles = 0;
             DisableFauxLoop();
         }
 
@@ -286,6 +312,7 @@ namespace UC
                 return;
 
             fauxLoopCompletedLoops++;
+            onAnimationComplete?.Invoke(currentClip);
 
             if ((fauxLoopMaxLoops >= 0) && (fauxLoopCompletedLoops >= fauxLoopMaxLoops))
             {
@@ -309,14 +336,55 @@ namespace UC
             graph.Evaluate(0f);
         }
 
-        private IEnumerator CrossFadeRoutine(AnimationClip clip, float duration)
+        private void UpdateCompletion()
+        {
+            // Faux loops report their own completions.
+            if (fauxLoopEnabled)
+                return;
+
+            if (IsTransitioning)
+                return;
+
+            if ((currentClip == null) || (currentClip.length <= 0f))
+                return;
+
+            AnimationClipPlayable playable = GetActiveClipPlayable();
+
+            if (!playable.IsValid())
+                return;
+
+            double time = playable.GetTime();
+
+            // Time played since the clip started: reversed clips start at the clip
+            // length and run backwards.
+            double progressed = currentReversed ? (currentClip.length - time) : (time);
+
+            int cycles;
+
+            if (currentClip.isLooping)
+                cycles = (int)(progressed / currentClip.length);
+            else
+                cycles = (progressed >= currentClip.length) ? (1) : (0);
+
+            while (completedCycles < cycles)
+            {
+                completedCycles++;
+                onAnimationComplete?.Invoke(currentClip);
+
+                // The handler might have been stopped/retargeted by an event handler.
+                if ((currentClip == null) || (completedCycles == 0))
+                    break;
+            }
+        }
+
+        private IEnumerator CrossFadeCR(AnimationClip clip, bool reversed, float duration)
         {
             int fromInput = activeInput;
             int toInput = 1 - activeInput;
 
             ClearInput(toInput);
 
-            var playable = CreateClipPlayable(clip);
+            var playable = CreateClipPlayable(clip, reversed);
             clipPlayables[toInput] = playable;
 
             graph.Connect(playable, 0, mixer, toInput);
@@ -349,8 +417,10 @@ namespace UC
 
             activeInput = toInput;
             currentClip = clip;
+            currentReversed = reversed;
+            completedCycles = 0;
 
-            transitionCoroutine = null;
+            crossFadeCR = null;
             transitionElapsed = 0f;
             transitionDuration = 0f;
             transitionFromClip = null;
@@ -359,12 +429,12 @@ namespace UC
             fauxLoopCompletedLoops = 0;
         }
 
-        private AnimationClipPlayable CreateClipPlayable(AnimationClip clip)
+        private AnimationClipPlayable CreateClipPlayable(AnimationClip clip, bool reversed = false)
         {
             var playable = AnimationClipPlayable.Create(graph, clip);
 
-            playable.SetTime(0.0);
-            playable.SetSpeed(1.0);
+            playable.SetTime(reversed ? clip.length : 0.0);
+            playable.SetSpeed(reversed ? -1.0 : 1.0);
 
             playable.SetApplyFootIK(false);
             playable.SetApplyPlayableIK(false);
@@ -403,12 +473,12 @@ namespace UC
 
         private void StopTransition()
         {
-            if (transitionCoroutine == null)
+            if (crossFadeCR == null)
                 return;
 
-            StopCoroutine(transitionCoroutine);
+            StopCoroutine(crossFadeCR);
 
-            transitionCoroutine = null;
+            crossFadeCR = null;
             transitionElapsed = 0f;
             transitionDuration = 0f;
             transitionFromClip = null;

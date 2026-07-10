@@ -490,5 +490,8 @@ namespace UC
     [Serializable]
     public class StringProbList : ProbList<string> { }
 
+    [Serializable]
+    public class AnimationClipProbList : ProbList<AnimationClip> { }
+
 #endif
 }

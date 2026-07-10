@@ -38,6 +38,8 @@ namespace UC.Editor
             if (clip == null)
                 return;
 
+            EditorGUILayout.LabelField("Reversed", handler.currentReversed ? "Yes" : "No");
+
             float normalized = handler.CurrentNormalizedTime;
             double currentTime = handler.CurrentTime;
             float length = clip.length;
