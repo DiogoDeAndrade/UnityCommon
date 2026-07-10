@@ -25,7 +25,56 @@ namespace UC.ED
     public class EDNode
     {
         public DVector3         restPosition;
+        public DVector3         restRight = DVector3.right;
+        public DVector3         restUp = DVector3.up;
+        public DVector3         restForward = DVector3.forward;
         public List<int>        neighbors = new();
+
+        private static DVector3 SafeNormalized(DVector3 v, DVector3 fallback)
+        {
+            if (v.sqrMagnitude < 1e-8f)
+                return fallback.normalized;
+
+            return v.normalized;
+        }
+
+        private static DVector3 PickFallbackUp(DVector3 forward)
+        {
+            forward = SafeNormalized(forward, DVector3.forward);
+
+            DVector3 candidate = DVector3.up;
+
+            if (Math.Abs(DVector3.Dot(candidate, forward)) > 0.95)
+                candidate = DVector3.right;
+
+            return candidate;
+        }
+
+        public void BuildOrthonormalFrame(DVector3 forwardReference, DVector3 upReference)
+        {
+            restForward = SafeNormalized(forwardReference, DVector3.forward);
+
+            if (upReference.sqrMagnitude < 1e-8)
+                upReference = PickFallbackUp(restForward);
+
+            // Project up onto plane perpendicular to forward.
+            restUp = upReference - DVector3.Dot(upReference, restForward) * restForward;
+
+            if (restUp.sqrMagnitude < 1e-8)
+                restUp = PickFallbackUp(restForward) - DVector3.Dot(PickFallbackUp(restForward), restForward) * restForward;
+
+            restUp = SafeNormalized(restUp, PickFallbackUp(restForward));
+
+            restRight = DVector3.Cross(restUp, restForward);
+
+            if (restRight.sqrMagnitude < 1e-8)
+                restRight = DVector3.right;
+
+            restRight.Normalize();
+
+            // Recompute up to guarantee orthogonality.
+            restUp = DVector3.Cross(restForward, restRight).normalized;
+        }
     }
 
     [Serializable]
@@ -385,7 +434,7 @@ namespace UC.ED
         [SerializeField, HideInInspector]
         private EDState restState;
         [SerializeField, HideInInspector]
-        private DeformationField deformationField;
+        private FullDeformationField    deformationField;
         [SerializeField, HideInInspector]
         private List<Mesh>  sourceGeometry;
 
@@ -493,6 +542,7 @@ namespace UC.ED
                                                        bindMode, weightMode,
                                                        graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal,
                                                        k, power,sigma);
+                    BuildNodeRestFrames();
                     BuildDeformationField(deformationFieldVoxelSize, deformationFieldMaxWeights);
                     break;
                 default:
@@ -677,6 +727,64 @@ namespace UC.ED
                       $"StructureSegments={structure.Count}, " +
                       $"Nodes={nodes.Count}, " +
                       $"Edges={deformGraphEdgeCount}");
+        }
+
+        private void BuildNodeRestFrames()
+        {
+            if ((nodes == null) || (nodes.Count == 0))
+                return;
+
+            DVector3 referenceUp = (upVector.sqrMagnitude > 1e-8) ? (upVector.ToDVector3().normalized) : DVector3.up;
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                EDNode      node = nodes[i];
+                DVector3    p = node.restPosition;
+
+                DVector3    forward = DVector3.forward;
+
+                if ((node.neighbors != null) && (node.neighbors.Count > 0))
+                {
+                    if (node.neighbors.Count == 1)
+                    {
+                        // Leaf: point outward from its only neighbour.
+                        DVector3 n = nodes[node.neighbors[0]].restPosition;
+                        forward = p - n;
+                    }
+                    else if (node.neighbors.Count == 2)
+                    {
+                        // Chain node: use local tangent through the node.
+                        DVector3 a = nodes[node.neighbors[0]].restPosition;
+                        DVector3 b = nodes[node.neighbors[1]].restPosition;
+                        forward = b - a;
+                    }
+                    else
+                    {
+                        // Junction: average outgoing directions.
+                        DVector3 sum = DVector3.zero;
+
+                        for (int j = 0; j < node.neighbors.Count; j++)
+                        {
+                            DVector3 q = nodes[node.neighbors[j]].restPosition;
+                            DVector3 d = q - p;
+
+                            if (d.sqrMagnitude > 1e-8)
+                                sum += d.normalized;
+                        }
+
+                        // If directions cancel out, fall back to the first edge.
+                        if (sum.sqrMagnitude < 1e-8)
+                        {
+                            DVector3 q = nodes[node.neighbors[0]].restPosition;
+                            sum = q - p;
+                        }
+
+                        forward = sum;
+                    }
+                }
+
+                node.BuildOrthonormalFrame(forward, referenceUp);
+            }
         }
 
         private struct DirectionAwareCandidate
@@ -1172,6 +1280,20 @@ namespace UC.ED
                 var vertex = restVertices[vId];
                 var binding = bindings[vId];
                 deformed[vId] = DeformVertex(vertex, binding, new EDStateView(currentState)).ToVector3();
+            }
+
+            return deformed;
+        }
+
+        public Vector3[] DeformVerticesFromDeformationField()
+        {
+            Vector3[] deformed = new Vector3[restVertices.Length];
+
+            for (int vId = 0; vId < restVertices.Length; vId++)
+            {
+                var vertex = restVertices[vId];
+
+                deformed[vId] = deformationField.DeformPositionFromNodeFrames(vertex.ToVector3(), GetDebugNodeFrame);
             }
 
             return deformed;
@@ -3492,6 +3614,24 @@ namespace UC.ED
             return (currentState.TransformOffset(nodeIndex, DVector3.zero) + node.restPosition).ToVector3();
         }
 
+        public FullDeformationField.Frame GetDebugNodeFrame(int nodeIndex)
+        {
+            EDStateView state = new EDStateView(currentState);
+            return GetNodeFrame(nodeIndex, state);
+        }
+
+        private FullDeformationField.Frame GetNodeFrame(int nodeIndex, EDStateView state)
+        {
+            EDNode node = nodes[nodeIndex];
+
+            Vector3 position = (node.restPosition + state.TransformOffset(nodeIndex, DVector3.zero)).ToVector3();
+            Vector3 right = state.TransformVector(nodeIndex, node.restRight).ToVector3();
+            Vector3 up = state.TransformVector(nodeIndex, node.restUp).ToVector3();
+            Vector3 forward = state.TransformVector(nodeIndex, node.restForward).ToVector3();
+
+            return new FullDeformationField.Frame(position, right, up, forward);
+        }
+
         public int GetClosestDebugNodeIndex(Vector3 restPosition)
         {
             if ((nodes == null) || (nodes.Count == 0))
@@ -3697,7 +3837,7 @@ namespace UC.ED
             // -------------------------------------------------------------
             // 2) Create deformation field.
             // -------------------------------------------------------------
-            deformationField = new DeformationField(voxelSize, safeMaxWeights);
+            deformationField = new FullDeformationField(voxelSize, safeMaxWeights);
 
             // -------------------------------------------------------------
             // 3) Fill the field using source geometry.
@@ -3722,7 +3862,9 @@ namespace UC.ED
             // -------------------------------------------------------------
             for (int i = 0; i < nodes.Count; i++)
             {
-                deformationField.AddDeformationNode(nodes[i].restPosition.ToVector3());
+                EDNode node = nodes[i];
+
+                deformationField.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3());
             }
 
             // -------------------------------------------------------------
@@ -3752,7 +3894,7 @@ namespace UC.ED
             );
         }
 
-        public DeformationField GetDeformationField() => deformationField;
+        public FullDeformationField GetDeformationField() => deformationField;
     }
 }
 #endif
