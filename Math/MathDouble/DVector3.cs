@@ -85,5 +85,8 @@ namespace UC.DoubleMath
 
         public static DVector3 zero => new DVector3(0.0, 0.0, 0.0);
         public static DVector3 one => new DVector3(1, 1, 1);
+        public static DVector3 right => new DVector3(1, 0, 0);
+        public static DVector3 up => new DVector3(0, 1, 0);
+        public static DVector3 forward => new DVector3(0, 0, 1);
     }
 }

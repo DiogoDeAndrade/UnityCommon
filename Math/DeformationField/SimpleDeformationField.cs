@@ -4,15 +4,15 @@ using System;
 using System.Collections.Generic;
 
 [Serializable]
-public class DeformationField
+public class SimpleDeformationField
 {
     [Serializable]
     public struct DeformationFieldWeights : IEquatable<DeformationFieldWeights>, IOccupancyState
     {
-        public bool filled;
-        public float[] distances;
-        public int[] nodeId;
-        public float[] weights;
+        public bool     filled;
+        public float[]  distances;
+        public int[]    nodeId;
+        public float[]  weights;
 
         public void ClearOccupancy()
         {
@@ -72,10 +72,10 @@ public class DeformationField
         }
     }
 
-    VoxelData<DeformationFieldWeights> voxelData;
-    float                voxelSize;
-    int                  maxWeights;
-    List<Vector3>        deformationNodes = new List<Vector3>();
+    VoxelData<DeformationFieldWeights>  voxelData;
+    float                               voxelSize;
+    int                                 maxWeights;
+    List<Vector3>                       deformationNodes = new List<Vector3>();
 
     public Vector3Int gridSize => voxelData?.gridSize ?? Vector3Int.zero;
     public Vector3 cellSize => Vector3.one * voxelSize;
@@ -388,7 +388,7 @@ public class DeformationField
         return bestIndex;
     }
 
-    public DeformationField(float voxelSize, int maxWeights)
+    public SimpleDeformationField(float voxelSize, int maxWeights)
     {
         this.voxelSize = Mathf.Max(voxelSize, DistanceEpsilon);
         this.maxWeights = Mathf.Max(1, maxWeights);
@@ -634,5 +634,78 @@ public class DeformationField
         EnsureWeights(ref weights);
 
         return weights;
+    }
+
+    public Vector3 DeformPositionFromNodePositions(Vector3 position, List<Vector3> currentNodePositions)
+    {
+        if (currentNodePositions == null)
+            return position;
+
+        DeformationFieldWeights fieldWeights = GetWeights(position);
+
+        Vector3 displacement = Vector3.zero;
+        float weightSum = 0.0f;
+
+        if ((fieldWeights.weights == null) || (fieldWeights.nodeId == null))
+            return position;
+
+        for (int i = 0; i < fieldWeights.weights.Length; i++)
+        {
+            float weight = fieldWeights.weights[i];
+            int nodeIndex = fieldWeights.nodeId[i];
+
+            if (weight <= 0.0f) continue;
+            if (nodeIndex < 0) continue;
+            if (nodeIndex >= deformationNodes.Count) continue;
+            if (nodeIndex >= currentNodePositions.Count) continue;
+
+            Vector3 restNodePosition = deformationNodes[nodeIndex];
+            Vector3 currentNodePosition = currentNodePositions[nodeIndex];
+
+            displacement += weight * (currentNodePosition - restNodePosition);
+            weightSum += weight;
+        }
+
+        if (weightSum <= DistanceEpsilon) return position;
+
+        // Defensive normalization in case the cell has partial/invalid weights.
+        displacement /= weightSum;
+
+        return position + displacement;
+    }
+
+    // Override uses a function instead of a vector with the positions (helpful in some cases)
+    public Vector3 DeformPositionFromNodePositions(Vector3 position, Func<int, Vector3> getCurrentNodePosition)
+    {
+        if (getCurrentNodePosition == null) return position;
+
+        DeformationFieldWeights fieldWeights = GetWeights(position);
+
+        Vector3 displacement = Vector3.zero;
+        float weightSum = 0.0f;
+
+        if ((fieldWeights.weights == null) || (fieldWeights.nodeId == null)) return position;
+
+        for (int i = 0; i < fieldWeights.weights.Length; i++)
+        {
+            float weight = fieldWeights.weights[i];
+            int nodeIndex = fieldWeights.nodeId[i];
+
+            if (weight <= 0.0f) continue;
+            if (nodeIndex < 0) continue;
+            if (nodeIndex >= deformationNodes.Count) continue;
+
+            Vector3 restNodePosition = deformationNodes[nodeIndex];
+            Vector3 currentNodePosition = getCurrentNodePosition(nodeIndex);
+
+            displacement += weight * (currentNodePosition - restNodePosition);
+            weightSum += weight;
+        }
+
+        if (weightSum <= DistanceEpsilon) return position;
+
+        displacement /= weightSum;
+
+        return position + displacement;
     }
 }
