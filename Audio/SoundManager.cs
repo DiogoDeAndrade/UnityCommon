@@ -6,7 +6,7 @@ using UnityEngine.Audio;
 namespace UC
 {
 
-    public enum SoundType { Music = 0, PrimaryFX = 1, SecondaryFX = 2, Background = 3, Voice = 4 };
+    public enum SoundType { Music = 0, PrimaryFX = 1, SecondaryFX = 2, Background = 3, Voice = 4, Movies = 5 };
 
     public class SoundManager : MonoBehaviour
     {
@@ -19,6 +19,7 @@ namespace UC
         [SerializeField] private AudioMixerGroup fx2MixerGroup;
         [SerializeField] private AudioMixerGroup backgroundMixerGroup;
         [SerializeField] private AudioMixerGroup voiceMixerGroup;
+        [SerializeField] private AudioMixerGroup moviesMixerGroup;
         [Header("Default volumes")]
         [SerializeField, Range(0.0f, 1.0f)] private float defaultVolume = 1.0f;
         [SerializeField, Range(0.0f, 1.0f)] private float defaultMusicVolume = 1.0f;
@@ -26,6 +27,7 @@ namespace UC
         [SerializeField, Range(0.0f, 1.0f)] private float defaultFX2Volume = 1.0f;
         [SerializeField, Range(0.0f, 1.0f)] private float defaultBackgroundVolume = 1.0f;
         [SerializeField, Range(0.0f, 1.0f)] private float defaultVoiceVolume = 1.0f;
+        [SerializeField, Range(0.0f, 1.0f)] private float defaultMoviesVolume = 1.0f;
         [SerializeField, Header("Default Music")] private AudioClip  startMusic;
         [SerializeField] private Hypertag   musicTag;
         [SerializeField] private float defaultCrossfadeTime = 1.0f;
@@ -88,13 +90,14 @@ namespace UC
                 }
             }
 
-            mixerGroups = new AudioMixerGroup[5];
+            mixerGroups = new AudioMixerGroup[6];
             mixerGroups[0] = defaultMixerOutput;
             mixerGroups[0] = (musicMixerGroup != null) ? (musicMixerGroup) : (defaultMixerOutput);
             mixerGroups[1] = (fx1MixerGroup != null) ? (fx1MixerGroup) : (defaultMixerOutput);
             mixerGroups[2] = (fx2MixerGroup != null) ? (fx2MixerGroup) : (defaultMixerOutput);
             mixerGroups[3] = (backgroundMixerGroup != null) ? (backgroundMixerGroup) : (defaultMixerOutput);
-            mixerGroups[4] = (voiceMixerGroup != null) ? (voiceMixerGroup) : (defaultMixerOutput);            
+            mixerGroups[4] = (voiceMixerGroup != null) ? (voiceMixerGroup) : (defaultMixerOutput);
+            mixerGroups[5] = (moviesMixerGroup != null) ? (moviesMixerGroup) : (defaultMixerOutput);
         }
 
         private void Start()

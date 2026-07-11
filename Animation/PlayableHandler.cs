@@ -109,6 +109,45 @@ namespace UC
             }
         }
 
+        // Returns the playing clip with the given name, preferring one being transitioned in,
+        // or null if no such clip is playing.
+        public AnimationClip GetPlayingClip(string clipName)
+        {
+            if ((transitionToClip != null) && (transitionToClip.name == clipName))
+                return transitionToClip;
+
+            if ((currentClip != null) && (currentClip.name == clipName))
+                return currentClip;
+
+            return null;
+        }
+
+        // Wrapped normalized time of the given clip, whether it is the active clip or one
+        // being transitioned in/out.
+        public bool TryGetClipNormalizedTime(AnimationClip clip, out float normalizedTime)
+        {
+            normalizedTime = 0f;
+
+            if ((clip == null) || (clip.length <= 0f))
+                return false;
+
+            for (int i = 0; i < clipPlayables.Length; i++)
+            {
+                AnimationClipPlayable playable = clipPlayables[i];
+
+                if (!playable.IsValid())
+                    continue;
+
+                if (playable.GetAnimationClip() != clip)
+                    continue;
+
+                normalizedTime = Mathf.Repeat((float)(playable.GetTime() / clip.length), 1f);
+                return true;
+            }
+
+            return false;
+        }
+
         private void Awake()
         {
             if (animator == null)
