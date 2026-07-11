@@ -381,6 +381,15 @@ namespace UC
             if (_instance == null) return 1.0f;
 
             return _instance._GetVolume(soundType);
-        }        
+        }
+
+        static public string GetMusicName()
+        {
+            if (_instance == null) return null;
+            if (_instance.musicSource == null) return null;
+            if (!_instance.musicSource.isPlaying) return null;
+            if (_instance.musicSource.clip == null) return null;
+            return _instance.musicSource.clip.name;
+        }
     }
 }
