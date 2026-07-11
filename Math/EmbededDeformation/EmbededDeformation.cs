@@ -1293,7 +1293,7 @@ namespace UC.ED
             {
                 var vertex = restVertices[vId];
 
-                deformed[vId] = deformationField.DeformPositionFromNodeFrames(vertex.ToVector3(), GetDebugNodeFrame);
+                deformed[vId] = deformationField.DeformPositionFromNodeFramesTrilinear(vertex.ToVector3(), GetDebugNodeFrame);
             }
 
             return deformed;

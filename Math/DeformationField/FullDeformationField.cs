@@ -878,6 +878,156 @@ public class FullDeformationField
         return m.MultiplyPoint3x4(position);
     }
 
+    // Scratch buffers for the trilinear lookup. The union of influences over
+    // the eight sampled cells holds at most 8 * maxWeights entries before
+    // duplicates are merged. Reused across calls; like the rest of this class,
+    // queries are not thread-safe.
+    List<int>   trilinearNodeIds = new();
+    List<float> trilinearWeights = new();
+
+    // Gathers the trilinearly interpolated node weights at a rest-space
+    // position: w~_i(p) = sum over the eight neighbouring cell centres c of
+    // lambda_c(p) * w_i,c, with w_i,c = 0 when node i is not stored in cell c.
+    // Interpolating the computed weights (rather than the sparse geodesic
+    // distances) keeps absent nodes at zero instead of an unknown distance.
+    void GatherTrilinearWeights(Vector3 position, List<int> nodeIds, List<float> nodeWeights)
+    {
+        trilinearNodeIds ??= new();
+        trilinearWeights ??= new();
+
+        nodeIds.Clear();
+        nodeWeights.Clear();
+
+        if (!HasVoxelData()) return;
+
+        // Continuous coordinates in cell-centre space: cell (x, y, z) samples
+        // the field at its centre, so shift by half a cell.
+        Vector3 local = position - voxelData.minBound;
+        float cx = local.x / voxelData.voxelSize.x - 0.5f;
+        float cy = local.y / voxelData.voxelSize.y - 0.5f;
+        float cz = local.z / voxelData.voxelSize.z - 0.5f;
+
+        int bx = Mathf.FloorToInt(cx);
+        int by = Mathf.FloorToInt(cy);
+        int bz = Mathf.FloorToInt(cz);
+
+        float fx = cx - bx;
+        float fy = cy - by;
+        float fz = cz - bz;
+
+        for (int dz = 0; dz <= 1; dz++)
+        {
+            float lz = (dz == 0) ? (1f - fz) : fz;
+            if (lz <= 0f) continue;
+
+            for (int dy = 0; dy <= 1; dy++)
+            {
+                float ly = (dy == 0) ? (1f - fy) : fy;
+                if (ly <= 0f) continue;
+
+                for (int dx = 0; dx <= 1; dx++)
+                {
+                    float lx = (dx == 0) ? (1f - fx) : fx;
+                    if (lx <= 0f) continue;
+
+                    float lambda = lx * ly * lz;
+
+                    // Clamp at the borders: samples outside the grid collapse
+                    // onto the nearest cell, so the coefficients still sum to 1.
+                    int x = Mathf.Clamp(bx + dx, 0, voxelData.gridSize.x - 1);
+                    int y = Mathf.Clamp(by + dy, 0, voxelData.gridSize.y - 1);
+                    int z = Mathf.Clamp(bz + dz, 0, voxelData.gridSize.z - 1);
+
+                    DeformationFieldWeights element = voxelData.data[IndexOf(x, y, z)];
+                    if ((element.weights == null) || (element.nodeId == null)) continue;
+
+                    for (int i = 0; i < element.nodeId.Length; i++)
+                    {
+                        int nodeIndex = element.nodeId[i];
+                        float weight = element.weights[i];
+
+                        if (nodeIndex < 0) continue;
+                        if (weight <= 0f) continue;
+
+                        int slot = nodeIds.IndexOf(nodeIndex);
+                        if (slot >= 0)
+                        {
+                            nodeWeights[slot] += lambda * weight;
+                        }
+                        else
+                        {
+                            nodeIds.Add(nodeIndex);
+                            nodeWeights.Add(lambda * weight);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, List<Frame> currentNodeFrames)
+    {
+        if (currentNodeFrames == null) return position;
+
+        GatherTrilinearWeights(position, trilinearNodeIds, trilinearWeights);
+
+        Vector3 displacement = Vector3.zero;
+        float weightSum = 0.0f;
+
+        for (int i = 0; i < trilinearNodeIds.Count; i++)
+        {
+            float weight = trilinearWeights[i];
+            int nodeIndex = trilinearNodeIds[i];
+
+            if (weight <= 0.0f) continue;
+            if (nodeIndex >= deformationNodes.Count) continue;
+            if (nodeIndex >= currentNodeFrames.Count) continue;
+
+            Vector3 deformedPosition = NodeDeformMatrix(nodeIndex, currentNodeFrames[nodeIndex]).MultiplyPoint3x4(position);
+
+            displacement += weight * (deformedPosition - position);
+            weightSum += weight;
+        }
+
+        if (weightSum <= DistanceEpsilon) return position;
+
+        // The interpolated weights should already form a partition of unity,
+        // but normalize defensively (partial influences, clamped borders).
+        displacement /= weightSum;
+
+        return position + displacement;
+    }
+
+    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, Func<int, Frame> getCurrentNodeFrame)
+    {
+        if (getCurrentNodeFrame == null) return position;
+
+        GatherTrilinearWeights(position, trilinearNodeIds, trilinearWeights);
+
+        Vector3 displacement = Vector3.zero;
+        float weightSum = 0.0f;
+
+        for (int i = 0; i < trilinearNodeIds.Count; i++)
+        {
+            float weight = trilinearWeights[i];
+            int nodeIndex = trilinearNodeIds[i];
+
+            if (weight <= 0.0f) continue;
+            if (nodeIndex >= deformationNodes.Count) continue;
+
+            Vector3 deformedPosition = NodeDeformMatrix(nodeIndex, getCurrentNodeFrame(nodeIndex)).MultiplyPoint3x4(position);
+
+            displacement += weight * (deformedPosition - position);
+            weightSum += weight;
+        }
+
+        if (weightSum <= DistanceEpsilon) return position;
+
+        displacement /= weightSum;
+
+        return position + displacement;
+    }
+
     public Frame DeformFrame(Frame frame, List<Frame> currentNodeFrames)
     {
         if (currentNodeFrames == null) return frame;
