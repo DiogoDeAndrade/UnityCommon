@@ -128,6 +128,7 @@ public class FullDeformationField
     public Vector3Int gridSize => voxelData?.gridSize ?? Vector3Int.zero;
     public Vector3 cellSize => Vector3.one * voxelSize;
     public Vector3 minBound => voxelData?.minBound ?? Vector3.zero;
+    public int maxInfluencesPerCell => maxWeights;
 
     const float DistanceEpsilon = 1e-5f;
 
@@ -882,8 +883,27 @@ public class FullDeformationField
     // the eight sampled cells holds at most 8 * maxWeights entries before
     // duplicates are merged. Reused across calls; like the rest of this class,
     // queries are not thread-safe.
-    List<int>   trilinearNodeIds = new();
-    List<float> trilinearWeights = new();
+    private readonly List<int> cacheTrilinearNodeIds = new();
+    private readonly List<float> cacheTrilinearWeights = new();
+
+    private void ResolveTrilinearBuffers(ref List<int> nodeIds, ref List<float> nodeWeights)
+    {
+        bool idsMissing = nodeIds == null;
+        bool weightsMissing = nodeWeights == null;
+
+        // Require either both buffers or neither.
+        if (idsMissing != weightsMissing)
+        {
+            throw new ArgumentException("Both trilinear scratch buffers must be provided, or both must be null.");
+        }
+
+        if (idsMissing)
+        {
+            // Shared fallback: allocation-free, but not thread-safe.
+            nodeIds = cacheTrilinearNodeIds;
+            nodeWeights = cacheTrilinearWeights;
+        }
+    }
 
     // Gathers the trilinearly interpolated node weights at a rest-space
     // position: w~_i(p) = sum over the eight neighbouring cell centres c of
@@ -892,8 +912,11 @@ public class FullDeformationField
     // distances) keeps absent nodes at zero instead of an unknown distance.
     void GatherTrilinearWeights(Vector3 position, List<int> nodeIds, List<float> nodeWeights)
     {
-        trilinearNodeIds ??= new();
-        trilinearWeights ??= new();
+        if (nodeIds == null)
+            throw new ArgumentNullException(nameof(nodeIds));
+
+        if (nodeWeights == null)
+            throw new ArgumentNullException(nameof(nodeWeights));
 
         nodeIds.Clear();
         nodeWeights.Clear();
@@ -965,9 +988,11 @@ public class FullDeformationField
         }
     }
 
-    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, List<Frame> currentNodeFrames)
+    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, List<Frame> currentNodeFrames, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
     {
         if (currentNodeFrames == null) return position;
+
+        ResolveTrilinearBuffers(ref trilinearNodeIds, ref trilinearWeights);
 
         GatherTrilinearWeights(position, trilinearNodeIds, trilinearWeights);
 
@@ -998,9 +1023,11 @@ public class FullDeformationField
         return position + displacement;
     }
 
-    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, Func<int, Frame> getCurrentNodeFrame)
+    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, Func<int, Frame> getCurrentNodeFrame, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
     {
         if (getCurrentNodeFrame == null) return position;
+
+        ResolveTrilinearBuffers(ref trilinearNodeIds, ref trilinearWeights);
 
         GatherTrilinearWeights(position, trilinearNodeIds, trilinearWeights);
 

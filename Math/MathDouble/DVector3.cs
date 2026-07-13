@@ -39,6 +39,9 @@ namespace UC.DoubleMath
         public static DVector3 operator -(DVector3 a, DVector3 b)
             => new(a.x - b.x, a.y - b.y, a.z - b.z);
 
+        public static DVector3 operator -(DVector3 v)
+            => new(-v.x, -v.y, -v.z);
+
         public void Normalize()
         {
             double n = magnitude;
