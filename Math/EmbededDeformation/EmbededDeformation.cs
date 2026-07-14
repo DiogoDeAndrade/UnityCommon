@@ -75,6 +75,38 @@ namespace UC.ED
             // Recompute up to guarantee orthogonality.
             restUp = DVector3.Cross(restForward, restRight).normalized;
         }
+
+        public void BuildSurfaceFrame(DVector3 forwardReference, DVector3 surfaceNormal)
+        {
+            const double epsilon = 1e-8;
+
+            // The surface normal is authoritative.
+            restUp = SafeNormalized(surfaceNormal,DVector3.up);
+
+            // Project the graph direction onto the surface.
+            restForward = forwardReference - DVector3.Dot(forwardReference, restUp) * restUp;
+
+            if (restForward.sqrMagnitude < epsilon)
+            {
+                // Pick any stable tangent direction on the surface.
+                DVector3 fallback = (Math.Abs(DVector3.Dot(restUp, DVector3.forward)) < 0.95) ? (DVector3.forward) : (DVector3.right);
+
+                restForward = fallback - DVector3.Dot(fallback, restUp) * restUp;
+            }
+
+            restForward.Normalize();
+
+            // Rotate forward 90 degrees within the tangent plane.
+            restRight = DVector3.Cross(restUp, restForward);
+
+            if (restRight.sqrMagnitude < epsilon)
+                restRight = DVector3.right;
+            else
+                restRight.Normalize();
+
+            // Remove numerical drift while preserving the selected normal.
+            restForward = DVector3.Cross(restRight, restUp).normalized;
+        }
     }
 
     [Serializable]
@@ -391,6 +423,8 @@ namespace UC.ED
         public DVector3         center;
         public DVector3         normal, probeT, probeB;
         public EDVertexBinding  cBind, tBind, bBind;
+        public int              node1 = -1;
+        public int              node2 = -1;
     }
 
     [Serializable]
@@ -425,7 +459,16 @@ namespace UC.ED
         public List<NavEDSegments> structure;
         public float maxSlope = 45.0f;
         public float slopeSoftBand = 5.0f;
-        public Vector3 upVector = Vector3.up;
+        public Vector3 upVector
+        {
+            set
+            {
+                _upVector = value.normalized;
+                _upVectorD = value.ToDVector3().normalized;
+            }
+        }
+        private Vector3 _upVector = Vector3.up;
+        private DVector3 _upVectorD = DVector3.up;
         public double clearanceMinRatio = 0.85;
         public double segmentMinRatio = 0.85;
 
@@ -529,6 +572,11 @@ namespace UC.ED
                 Debug.LogError("BuildDeformationGraph failed: topology is null.");
                 return;
             }
+
+            if (structureFallbackUp.sqrMagnitude > 1e-8f)
+                this.upVector = structureFallbackUp;
+            else
+                this.upVector = Vector3.up;
 
             this.deformationGraphSource = deformationGraphSource;
 
@@ -704,6 +752,9 @@ namespace UC.ED
                 int idx1 = TryAddSampleVertex(seg.p1, structureNodeMergeDistanceSq);
                 int idx2 = TryAddSampleVertex(seg.p2, structureNodeMergeDistanceSq);
 
+                seg.node1 = idx1;
+                seg.node2 = idx2;
+
                 AddUndirectedNeighbor(idx1, idx2);
             }
 
@@ -729,61 +780,157 @@ namespace UC.ED
                       $"Edges={deformGraphEdgeCount}");
         }
 
+        private DVector3[] BuildNodeSurfaceNormals()
+        {
+            DVector3 referenceUp = (_upVector.sqrMagnitude > 1e-8f) ? (_upVector.ToDVector3().normalized) : (DVector3.up);
+
+            DVector3[] sums = new DVector3[nodes.Count];
+
+            double[] weights = new double[nodes.Count];
+
+            for (int i = 0; i < structure.Count; i++)
+            {
+                NavEDSegments segment = structure[i];
+
+                DVector3 normal = segment.normal;
+
+                if (normal.sqrMagnitude < 1e-8) continue;
+
+                normal.Normalize();
+
+                if (DVector3.Dot(normal, referenceUp) < 0.0)
+                    normal = -normal;
+
+                double length = (segment.p2 - segment.p1).magnitude;
+
+                double weight = Math.Max(length, 1e-6);
+
+                if (segment.node1 >= 0)
+                {
+                    sums[segment.node1] += weight * normal;
+                    weights[segment.node1] += weight;
+                }
+
+                if (segment.node2 >= 0)
+                {
+                    sums[segment.node2] += weight * normal;
+                    weights[segment.node2] += weight;
+                }
+            }
+
+            DVector3[] result = new DVector3[nodes.Count];
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                result[i] = ((weights[i] > 0.0) && (sums[i].sqrMagnitude > 1e-8)) ? (sums[i].normalized) : (referenceUp);
+            }
+
+            return result;
+        }
+
+        private DVector3 ComputeNodeForward(int nodeIndex)
+        {
+            const double epsilon = 1e-8;
+
+            if ((nodes == null) || (nodeIndex < 0) || (nodeIndex >= nodes.Count))
+            {
+                return DVector3.forward;
+            }
+
+            EDNode node = nodes[nodeIndex];
+            DVector3 p = node.restPosition;
+
+            if ((node.neighbors == null) || (node.neighbors.Count == 0))
+            {
+                return DVector3.forward;
+            }
+
+            if (node.neighbors.Count == 1)
+            {
+                // Leaf: point outward from its only neighbour.
+                int neighbourIndex = node.neighbors[0];
+
+                DVector3 neighbourPosition = nodes[neighbourIndex].restPosition;
+
+                DVector3 forward = p - neighbourPosition;
+
+                return (forward.sqrMagnitude > epsilon) ? (forward.normalized) : (DVector3.forward);
+            }
+
+            if (node.neighbors.Count == 2)
+            {
+                // Chain node: tangent running through both adjacent nodes.
+                DVector3 a = nodes[node.neighbors[0]].restPosition;
+                DVector3 b = nodes[node.neighbors[1]].restPosition;
+
+                DVector3 forward = b - a;
+
+                if (forward.sqrMagnitude > epsilon) return forward.normalized;
+
+                // Degenerate fallback: use either incident edge.
+                forward = a - p;
+
+                if (forward.sqrMagnitude > epsilon) return forward.normalized;
+
+                forward = b - p;
+
+                return (forward.sqrMagnitude > epsilon) ? (forward.normalized) : (DVector3.forward);
+            }
+
+            // Junction: average the normalized outgoing edge directions.
+            DVector3 sum = DVector3.zero;
+
+            for (int i = 0; i < node.neighbors.Count; i++)
+            {
+                int neighbourIndex = node.neighbors[i];
+
+                DVector3 neighbourPosition = nodes[neighbourIndex].restPosition;
+
+                DVector3 direction = neighbourPosition - p;
+
+                if (direction.sqrMagnitude > epsilon) sum += direction.normalized;
+            }
+
+            if (sum.sqrMagnitude > epsilon)
+                return sum.normalized;
+
+            // Directions cancelled out. Use the longest incident edge as a
+            // more stable fallback than depending on neighbour-list order.
+            DVector3 longestDirection = DVector3.zero;
+            double longestLengthSq = 0.0;
+
+            for (int i = 0; i < node.neighbors.Count; i++)
+            {
+                int neighbourIndex = node.neighbors[i];
+
+                DVector3 direction = nodes[neighbourIndex].restPosition - p;
+
+                double lengthSq = direction.sqrMagnitude;
+
+                if (lengthSq > longestLengthSq)
+                {
+                    longestLengthSq = lengthSq;
+                    longestDirection = direction;
+                }
+            }
+
+            return (longestDirection.sqrMagnitude > epsilon) ? (longestDirection.normalized) : (DVector3.forward);
+        }
+
         private void BuildNodeRestFrames()
         {
             if ((nodes == null) || (nodes.Count == 0))
                 return;
 
-            DVector3 referenceUp = (upVector.sqrMagnitude > 1e-8) ? (upVector.ToDVector3().normalized) : DVector3.up;
+            DVector3[] surfaceNormals = BuildNodeSurfaceNormals();
 
             for (int i = 0; i < nodes.Count; i++)
             {
-                EDNode      node = nodes[i];
-                DVector3    p = node.restPosition;
+                EDNode node = nodes[i];
 
-                DVector3    forward = DVector3.forward;
+                DVector3 forward = ComputeNodeForward(i);
 
-                if ((node.neighbors != null) && (node.neighbors.Count > 0))
-                {
-                    if (node.neighbors.Count == 1)
-                    {
-                        // Leaf: point outward from its only neighbour.
-                        DVector3 n = nodes[node.neighbors[0]].restPosition;
-                        forward = p - n;
-                    }
-                    else if (node.neighbors.Count == 2)
-                    {
-                        // Chain node: use local tangent through the node.
-                        DVector3 a = nodes[node.neighbors[0]].restPosition;
-                        DVector3 b = nodes[node.neighbors[1]].restPosition;
-                        forward = b - a;
-                    }
-                    else
-                    {
-                        // Junction: average outgoing directions.
-                        DVector3 sum = DVector3.zero;
-
-                        for (int j = 0; j < node.neighbors.Count; j++)
-                        {
-                            DVector3 q = nodes[node.neighbors[j]].restPosition;
-                            DVector3 d = q - p;
-
-                            if (d.sqrMagnitude > 1e-8)
-                                sum += d.normalized;
-                        }
-
-                        // If directions cancel out, fall back to the first edge.
-                        if (sum.sqrMagnitude < 1e-8)
-                        {
-                            DVector3 q = nodes[node.neighbors[0]].restPosition;
-                            sum = q - p;
-                        }
-
-                        forward = sum;
-                    }
-                }
-
-                node.BuildOrthonormalFrame(forward, referenceUp);
+                node.BuildSurfaceFrame(forward, surfaceNormals[i]);
             }
         }
 
@@ -1519,9 +1666,33 @@ namespace UC.ED
 
         private EDResidualLayout BuildResidualLayoutStructure(WeightConfig weights)
         {
+            int nodeCount = nodes.Count;
+
+            int directedEdgeCount = 0;
+            for (int i = 0; i < nodeCount; i++)
+                directedEdgeCount += nodes[i].neighbors.Count;
+
+            int structureCount = (structure != null) ? structure.Count : 0;
+
             int constraintCount = GetStructureHandlePositionConstraintCount();
 
-            return BuildResidualLayoutCommon(weights, constraintCount);
+            return new EDResidualLayout
+            {
+                rotationRows = 6 * nodeCount,
+                regularizationRows = 3 * directedEdgeCount,
+                constraintRows = 3 * constraintCount,
+
+                // Still evaluated per structure segment.
+                clearanceRows = (weights.clearanceWeight > 0.0) ? (structureCount) : (0),
+
+                // Evaluated directly from each deformation-node frame.
+                slopeRows = (weights.slopeWeight > 0.0) ? (nodeCount) : (0),
+
+                orientationRows = (weights.orientationWeight > 0.0) ? (3 * nodeCount) : (0),
+
+                // Still evaluated per structure segment.
+                segmentLengthRows = (weights.segmentLengthWeight > 0.0) ? (structureCount) : (0)
+            };
         }
 
         private EDResidualLayout BuildResidualLayoutForCurrentGraph(WeightConfig weights)
@@ -2010,32 +2181,65 @@ namespace UC.ED
             return J;
         }
 
-        private double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance)
+        private double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
         {
             var baseView = new EDStateView(state);
 
-            double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance);
-
-            if (Math.Abs(r0) <= 1e-12)
+            // Serial fallback. In the StructureOnly Jacobian path, this should
+            // already have been supplied by the worker-local scratch object.
+            if ((UseDeformationFieldForClearance) && (nodeFrames == null))
             {
-                return 0.0;
+                nodeFrames = BuildNodeFrames(baseView);
             }
+
+            double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance, nodeFrames, trilinearNodeIds, trilinearWeights);
+
+            if (Math.Abs(r0) <= 1e-12) return 0.0;
 
             double localJNorm = 0.0;
 
+            // This is the loop over each perturbed Jacobian column.
             for (int col = 0; col < state.Count; col++)
             {
-                double original = state.Get(col);
-                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+                double originalParameter = state.Get(col);
 
-                var modified = new EDStateView(state, col, eps);
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(originalParameter));
 
-                double r1 = EvaluateSingleClearanceResidual(modified, segmentIndex, wClearance);
+                var modifiedState = new EDStateView(state, col, eps);
 
-                double v = (r1 - r0) / eps;
+                int perturbedNodeIndex = -1;
+                FullDeformationField.Frame originalFrame = default;
 
-                J[row, col] = v;
-                localJNorm += v * v;
+                if (nodeFrames != null)
+                {
+                    // Twelve consecutive parameters belong to one ED node.
+                    perturbedNodeIndex = col / 12;
+
+                    originalFrame = nodeFrames[perturbedNodeIndex];
+
+                    // Only this node's frame changes for this perturbation.
+                    nodeFrames[perturbedNodeIndex] = GetNodeFrame(perturbedNodeIndex, modifiedState);
+                }
+
+                double r1;
+
+                try
+                {
+                    r1 = EvaluateSingleClearanceResidual(modifiedState, segmentIndex, wClearance, nodeFrames, trilinearNodeIds, trilinearWeights);
+                }
+                finally
+                {
+                    // Restore the base frame before evaluating the next column.
+                    if (perturbedNodeIndex >= 0)
+                    {
+                        nodeFrames[perturbedNodeIndex] = originalFrame;
+                    }
+                }
+
+                double value = (r1 - r0) / eps;
+
+                J[row, col] = value;
+                localJNorm += value * value;
             }
 
             return localJNorm;
@@ -2075,6 +2279,40 @@ namespace UC.ED
             return row + 1;
         }
 
+        private int FillSlopeJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wSlope, ref double jNorm)
+        {
+            DebugProfiler.DebugMark(timeJacobianBuildSlope);
+
+            var baseView = new EDStateView(state);
+
+            // Base residual value for this segment.
+            double r0 = EvaluateSingleNodeSlopeResidualStructure(baseView, nodeIndex, wSlope);
+
+            if (r0 <= 1e-12)
+            {
+                DebugProfiler.DebugMark(timeJacobianBuildSlope);
+                return row + 1;
+            }
+
+            for (int col = 0; col < state.Count; col++)
+            {
+                double original = state.Get(col);
+
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+                var modifiedState = new EDStateView(state, col, eps);
+
+                double r1 = EvaluateSingleNodeSlopeResidualStructure(modifiedState, nodeIndex, wSlope);
+
+                J[row, col] = (r1 - r0) / eps;
+
+                jNorm += J[row, col] * J[row, col];
+            }
+
+            DebugProfiler.DebugMark(timeJacobianBuildSlope);
+
+            return row + 1;
+        }
+
         private int FillOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wOrientation, ref double jNorm)
         {
             var baseView = new EDStateView(state);
@@ -2089,6 +2327,35 @@ namespace UC.ED
                 var modifiedState = new EDStateView(state, col, eps);
 
                 DVector3 r1 = EvaluateSingleOrientationResidual(modifiedState, segmentIndex, wOrientation);
+
+                double jx = (r1.x - r0.x) / eps;
+                double jy = (r1.y - r0.y) / eps;
+                double jz = (r1.z - r0.z) / eps;
+
+                J[row + 0, col] = jx;
+                J[row + 1, col] = jy;
+                J[row + 2, col] = jz;
+
+                jNorm += jx * jx + jy * jy + jz * jz;
+            }
+
+            return row + 3;
+        }
+
+        private int FillOrientationJacobianBlockStrucuture(EDState state, DenseMatrix J, int row, int nodeIndex, double wOrientation, ref double jNorm)
+        {
+            var baseView = new EDStateView(state);
+
+            DVector3 r0 = EvaluateSingleNodeOrientationResidualStructure(baseView, nodeIndex, wOrientation);
+
+            for (int col = 0; col < state.Count; col++)
+            {
+                double original = state.Get(col);
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+                var modifiedState = new EDStateView(state, col, eps);
+
+                DVector3 r1 = EvaluateSingleNodeOrientationResidualStructure(modifiedState, nodeIndex, wOrientation);
 
                 double jx = (r1.x - r0.x) / eps;
                 double jy = (r1.y - r0.y) / eps;
@@ -2422,17 +2689,17 @@ namespace UC.ED
 
             if (wSlope > 0)
             {
-                for (int i = 0; i < structure.Count; i++)
+                for (int i = 0; i < nodes.Count; i++)
                 {
-                    residual[row++] = EvaluateSingleSlopeResidual(state, i, wSlope);
+                    residual[row++] = EvaluateSingleNodeSlopeResidualStructure(state, i, wSlope);
                 }
             }
 
             if (wOrientation > 0)
             {
-                for (int i = 0; i < structure.Count; i++)
+                for (int i = 0; i < nodes.Count; i++)
                 {
-                    DVector3 r = EvaluateSingleOrientationResidual(state, i, wOrientation);
+                    DVector3 r = EvaluateSingleNodeOrientationResidualStructure(state, i, wOrientation);
 
                     residual[row++] = r.x;
                     residual[row++] = r.y;
@@ -2527,27 +2794,41 @@ namespace UC.ED
                 double clearanceJNorm = 0.0;
                 object normLock = new object();
 
+                int scratchCapacity = Mathf.Min(nodes.Count, 8 * deformationField.maxInfluencesPerCell);
+
+                // Construct the base frames once for the entire Jacobian.
+                List<FullDeformationField.Frame> baseNodeFrames = BuildNodeFrames(new EDStateView(state));
+
                 DebugProfiler.DebugMark(timeJacobianBuildClearance);
 
                 Parallel.For(
                     0,
                     structure.Count,
-                    () => 0.0,
-                    (i, loopState, localNorm) =>
+
+                    // Each worker receives its own mutable frame list and
+                    // trilinear scratch buffers.
+                    () => new ClearanceThreadScratch(
+                        scratchCapacity,
+                        baseNodeFrames
+                    ),
+
+                    (segmentIndex, loopState, scratch) =>
                     {
-                        int clearanceRow = clearanceStartRow + i;
+                        int clearanceRow = clearanceStartRow + segmentIndex;
 
-                        localNorm += FillClearanceJacobianRow(state, J, clearanceRow,i, wClearance);
+                        scratch.jacobianNormSq += FillClearanceJacobianRow(state, J, clearanceRow, segmentIndex, wClearance, scratch.nodeFrames, scratch.nodeIds, scratch.nodeWeights);
 
-                        return localNorm;
+                        return scratch;
                     },
-                    localNorm =>
+
+                    scratch =>
                     {
                         lock (normLock)
                         {
-                            clearanceJNorm += localNorm;
+                            clearanceJNorm += scratch.jacobianNormSq;
                         }
-                    });
+                    }
+                );
 
                 DebugProfiler.DebugMark(timeJacobianBuildClearance);
 
@@ -2557,17 +2838,17 @@ namespace UC.ED
 
             if (wSlope > 0)
             {
-                for (int i = 0; i < structure.Count; i++)
+                for (int i = 0; i < nodes.Count; i++)
                 {
-                    row = FillSlopeJacobianBlock(state, J, row, i, wSlope, ref jNorm);
+                    row = FillSlopeJacobianBlockStructure(state, J, row, i, wSlope, ref jNorm);
                 }
             }
 
             if (wOrientation > 0)
             {
-                for (int i = 0; i < structure.Count; i++)
+                for (int i = 0; i < nodes.Count; i++)
                 {
-                    row = FillOrientationJacobianBlock(state, J, row, i, wOrientation, ref jNorm);
+                    row = FillOrientationJacobianBlockStrucuture(state, J, row, i, wOrientation, ref jNorm);
                 }
             }
 
@@ -3026,7 +3307,10 @@ namespace UC.ED
                 DebugProfiler.DebugMark(timeIteration);
             }
 
-            Debug.Log($"Ran {iter} iterations...");
+            var acceptedView = new EDStateView(currentState);
+            var acceptedResidual = EvaluateResidualVector(acceptedView, weights);
+
+            LogResidualEnergies(acceptedResidual, weights, iter);
             LogTimerReport();
 #else
     throw new NotImplementedException();
@@ -3098,8 +3382,8 @@ namespace UC.ED
             if (fallbackUp.sqrMagnitude > 1e-8f)
                 return fallbackUp.normalized;
 
-            if (upVector.sqrMagnitude > 1e-8f)
-                return upVector.normalized;
+            if (_upVector.sqrMagnitude > 1e-8f)
+                return _upVector.normalized;
 
             return Vector3.up;
         }
@@ -3227,8 +3511,9 @@ namespace UC.ED
                 var t = DVector3.ProjectOnPlane(dir, seg.normal).normalized;
                 var b = DVector3.Cross(seg.normal, t).normalized;
 
-                seg.probeT = seg.center + agentRadius * 0.1 * t;
-                seg.probeB = seg.center + agentRadius * 0.1 * b;
+                float probeDistance = agentRadius * 0.5f;
+                seg.probeT = seg.center + probeDistance * t;
+                seg.probeB = seg.center + probeDistance * b;
 
                 seg.cBind = GetBinding(seg.center, bindMode, weightMode, k, power, sigma);
                 seg.tBind = GetBinding(seg.probeT, bindMode, weightMode, k, power, sigma);
@@ -3311,9 +3596,65 @@ namespace UC.ED
             Debug.Log(sb);
         }
 
+        private bool UseDeformationFieldForClearance => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField != null);
+
+        private List<FullDeformationField.Frame> BuildNodeFrames(EDStateView state)
+        {
+            var frames = new List<FullDeformationField.Frame>(nodes.Count);
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                frames.Add(GetNodeFrame(i, state));
+            }
+
+            return frames;
+        }
+
+        private DVector3 DeformClearancePoint(DVector3 restPosition, EDVertexBinding standardBinding, EDStateView state, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights)
+        {
+            if (nodeFrames != null)
+            {
+                Vector3 deformed = deformationField.DeformPositionFromNodeFramesTrilinear(restPosition.ToVector3(), nodeFrames, trilinearNodeIds, trilinearWeights);
+
+                return deformed.ToDVector3();
+            }
+
+            return DeformVertex(restPosition, standardBinding, state);
+        }
+
+        private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights, out double clearance)
+        {
+            (Vector3 p1, Vector3 p2) = GetTransformedSegment(state, segmentIndex, nodeFrames, trilinearNodeIds, trilinearWeights);
+
+            return GetClearance(state, p1.ToDVector3(), p2.ToDVector3(),nodeFrames, trilinearNodeIds, trilinearWeights, out clearance);
+        }
+
         EDClearanceCache ComputeClearance(EDState state)
         {
             return state.clearances = ComputeClearance(new EDStateView(state));
+        }
+
+        private sealed class ClearanceThreadScratch
+        {
+            public readonly List<int> nodeIds;
+            public readonly List<float> nodeWeights;
+            public readonly List<FullDeformationField.Frame> nodeFrames;
+
+            public double jacobianNormSq;
+
+            public ClearanceThreadScratch(int capacity) : this(capacity, null)
+            {
+            }
+
+            public ClearanceThreadScratch(int capacity, List<FullDeformationField.Frame> baseNodeFrames)
+            {
+                nodeIds = new List<int>(capacity);
+                nodeWeights = new List<float>(capacity);
+
+                nodeFrames = (baseNodeFrames != null) ? (new List<FullDeformationField.Frame>(baseNodeFrames)) : (null);
+
+                jacobianNormSq = 0.0;
+            }
         }
 
         EDClearanceCache ComputeClearance(EDStateView state)
@@ -3322,46 +3663,66 @@ namespace UC.ED
 
             var ret = new EDClearanceCache(structure.Count);
 
-            Parallel.For(0, structure.Count, index =>
+            if (UseDeformationFieldForClearance)
             {
-                var seg = structure[index];
+                // Read-only during the parallel loop.
+                List<FullDeformationField.Frame> nodeFrames = BuildNodeFrames(state);
 
-                var p1 = DeformVertex(seg.p1, seg.bind1, state);
-                var p2 = DeformVertex(seg.p2, seg.bind2, state);
+                int scratchCapacity = Mathf.Min(nodes.Count, 8 * deformationField.maxInfluencesPerCell);
 
-                if (GetClearance(state, p1, p2, out var clearance))
+                Parallel.For(
+                    0,
+                    structure.Count,
+                    // One scratch object per worker, not per segment.
+                    () => new ClearanceThreadScratch(scratchCapacity),
+
+                    (index, loopState, scratch) =>
+                    {
+                        bool valid = TryComputeSegmentClearance(state, index, nodeFrames, scratch.nodeIds, scratch.nodeWeights, out double clearance);
+
+                        ret.Set(index, (valid) ? (clearance) : (double.MaxValue));
+
+                        return scratch;
+                    },
+
+                    scratch =>
+                    {
+                        // Nothing to merge or dispose.
+                    }
+                );
+            }
+            else
+            {
+                Parallel.For(0, structure.Count, index =>
                 {
-                    ret.Set(index, clearance);
-                }
-                else
-                {
-                    ret.Set(index, double.MaxValue);
-                }
-            });
+                    bool valid = TryComputeSegmentClearance(state, index, null, null, null, out double clearance);
+
+                    ret.Set(index, (valid) ? (clearance) : (double.MaxValue));
+                });
+            }
 
             DebugProfiler.DebugMark(timeUpdateClearance);
 
             return ret;
         }
 
-        private double EvaluateSingleClearanceResidual(EDStateView state, int index, double wClearance)
+        private double EvaluateSingleClearanceResidual(EDStateView state, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
         {
-            double original = restState.GetClearance(index);
+            double original = restState.GetClearance(segmentIndex);
 
-            // Always calculates based on current deformation
-            var seg = structure[index];
-
-            var p1 = DeformVertex(seg.p1, seg.bind1, state);
-            var p2 = DeformVertex(seg.p2, seg.bind2, state);
-
-            if (!GetClearance(state, p1, p2, out var current))
+            // Fallback for serial callers. The optimized Jacobian path supplies
+            // nodeFrames explicitly, so it does not reach this allocation.
+            if ((UseDeformationFieldForClearance) && (nodeFrames == null))
             {
-                // Can't compute clearance, likely due to the segment being outside the navmesh, a degenerate segment or numerical issues - set it to double.MaxValue to be able to identify it and make a loss of zero in that case
+                nodeFrames = BuildNodeFrames(state);
+            }
+
+            if (!TryComputeSegmentClearance(state, segmentIndex, nodeFrames, trilinearNodeIds, trilinearWeights, out double current))
+            {
                 return 0.0;
             }
 
-            double loss = ComputeClearanceLoss(original, current);
-            return wClearance * loss;
+            return wClearance * ComputeClearanceLoss(original, current);
         }
 
         private double EvaluateSingleSlopeResidual(EDStateView state, int segmentIndex, double wSlope)
@@ -3382,7 +3743,7 @@ namespace UC.ED
 
             double denom = Math.Max(softDot - hardDot, 1e-12);
 
-            Vector3 upNorm = upVector.normalized;
+            Vector3 upNorm = _upVector.normalized;
             Vector3 segNormal = GetTransformedSegmentSlopeNormal(state, segmentIndex);
 
             double penalty;
@@ -3405,6 +3766,30 @@ namespace UC.ED
             return wSlope * penalty;
         }
 
+        private double EvaluateSingleNodeSlopeResidualStructure(EDStateView state, int nodeIndex, double wSlope)
+        {
+            double hardAngle = maxSlope * Math.PI / 180.0;
+
+            double softAngle = Math.Max(0.0, maxSlope - slopeSoftBand) * Math.PI / 180.0;
+
+            double hardDot = Math.Cos(hardAngle);
+            double softDot = Math.Cos(softAngle);
+
+            double denom = Math.Max(softDot - hardDot, 1e-12);
+
+            DVector3 currentUp = GetTransformedNodeUp(state, nodeIndex);
+
+            if (currentUp.sqrMagnitude < 1e-12) return wSlope;
+
+            double dp = Math.Abs(DVector3.Dot(currentUp, _upVectorD));
+
+            dp = Math.Clamp(dp, 0.0, 1.0);
+
+            double penalty = Math.Max(0.0, (softDot - dp) / denom);
+
+            return wSlope * penalty;
+        }
+
         private DVector3 EvaluateSingleOrientationResidual(EDStateView state, int segmentIndex, double wOrientation)
         {
             Vector3 current = GetTransformedSegmentSlopeNormal(state, segmentIndex);
@@ -3414,7 +3799,7 @@ namespace UC.ED
                 // Degenerate local frame: strongly invalid.
                 Vector3 fallback = structure[segmentIndex].normal.ToVector3();
                 if (fallback.sqrMagnitude < 1e-12f)
-                    fallback = upVector.normalized;
+                    fallback = _upVector.normalized;
                 else
                     fallback.Normalize();
 
@@ -3426,6 +3811,27 @@ namespace UC.ED
             Vector3 target = structure[segmentIndex].normal.ToVector3().SafeNormalized();
 
             return new DVector3(wOrientation * (current.x - target.x), wOrientation * (current.y - target.y), wOrientation * (current.z - target.z));
+        }
+
+        private DVector3 EvaluateSingleNodeOrientationResidualStructure(EDStateView state, int nodeIndex, double wOrientation)
+        {
+            DVector3 currentUp = GetTransformedNodeUp(state, nodeIndex);
+
+            DVector3 restUp = nodes[nodeIndex].restUp.normalized;
+
+            if (currentUp.sqrMagnitude < 1e-12f)
+                return -wOrientation * restUp;
+
+            return wOrientation * (currentUp - restUp);
+        }
+
+        private DVector3 GetTransformedNodeUp(EDStateView state, int nodeIndex)
+        {
+            DVector3 transformed = state.TransformVector(nodeIndex, nodes[nodeIndex].restUp);
+
+            if (transformed.sqrMagnitude < 1e-12) return DVector3.zero;
+
+            return transformed.normalized;
         }
 
         private double EvaluateSingleSegmentLengthResidual(EDStateView state, int segmentIndex, double wSegmentLength)
@@ -3469,12 +3875,12 @@ namespace UC.ED
             return Math.Max(0.0, loss);
         }
 
-        bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, out double minClearance)
+        bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights, out double minClearance)
         {
             minClearance = double.MaxValue;
 
-            // Always calculates based on current deformation
             DVector3 dir = p2 - p1;
+
             if (dir.sqrMagnitude < 1e-3) return false;
 
             double maxDist = dir.magnitude;
@@ -3483,30 +3889,25 @@ namespace UC.ED
             foreach (var edge in navMeshTopology.edges)
             {
                 if (!edge.isBoundary) continue;
-
                 if (IsConnectorEdge(edge)) continue;
 
+                DVector3 e1 = DeformClearancePoint(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state, nodeFrames, trilinearNodeIds, trilinearWeights);
+                DVector3 e2 = DeformClearancePoint(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state, nodeFrames, trilinearNodeIds, trilinearWeights);
 
-                var e1 = DeformVertex(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state);
-                var e2 = DeformVertex(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state);
-
-                // Edge projection interval [minT, maxT] onto p1->p2
                 double t1 = DVector3.Dot(e1 - p1, dir);
                 double t2 = DVector3.Dot(e2 - p1, dir);
+
                 double minT = Math.Min(t1, t2);
                 double maxT = Math.Max(t1, t2);
 
-                // No overlap with segment [0,maxDist]
-                if ((maxT < 0.0f) || (minT > maxDist)) continue;
+                if ((maxT < 0.0) || (minT > maxDist)) continue;
 
-                double d = LineHelpers.Distance(p1, p2, e1, e2, out var closestP, out var closestE);
-                if (d < minClearance)
-                {
-                    minClearance = d;
-                }
+                double distance = LineHelpers.Distance(p1, p2, e1, e2, out _, out _);
+
+                if (distance < minClearance) minClearance = distance;
             }
 
-            return (minClearance != double.MaxValue);
+            return minClearance != double.MaxValue;
         }
 
         bool IsConnectorEdge(TopologyStatic.TEdge edge)
@@ -3522,15 +3923,26 @@ namespace UC.ED
 
         public int GetSegmentCount() => structure.Count;
 
-        public (Vector3, Vector3) GetSegment(int segIndex) => GetTransformedSegment(new EDStateView(currentState), segIndex);
-        private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segIndex)
+        public (Vector3, Vector3) GetSegment(int segmentIndex)
         {
-            var seg = structure[segIndex];
+            EDStateView state = new EDStateView(currentState);
 
-            var dp1 = DeformVertex(seg.p1, seg.bind1, state);
-            var dp2 = DeformVertex(seg.p2, seg.bind2, state);
+            List<FullDeformationField.Frame> nodeFrames = (UseDeformationFieldForClearance) ? (BuildNodeFrames(state)) : (null);
 
-            return (dp1.ToVector3(), dp2.ToVector3());
+            // GetSegment is currently called serially by the debug drawing, so null
+            // scratch buffers may safely use FullDeformationField's shared cache.
+            return GetTransformedSegment(state, segmentIndex, nodeFrames, null, null);
+        }
+
+        private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights)
+        {
+            NavEDSegments segment = structure[segmentIndex];
+
+            DVector3 p1 = DeformClearancePoint(segment.p1, segment.bind1, state, nodeFrames, trilinearNodeIds, trilinearWeights);
+
+            DVector3 p2 = DeformClearancePoint(segment.p2, segment.bind2, state, nodeFrames, trilinearNodeIds, trilinearWeights);
+
+            return (p1.ToVector3(), p2.ToVector3());
         }
 
         public Vector3 GetSegmentSlopeDirection(int segIndex)
