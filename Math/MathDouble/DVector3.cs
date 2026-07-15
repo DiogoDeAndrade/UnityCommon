@@ -74,6 +74,16 @@ namespace UC.DoubleMath
         }
 
         public Vector3 ToVector3() {  return new Vector3((float)x, (float)y, (float)z); }
+        public double GetComponent(int axis)
+        {
+            switch (axis)
+            {
+                case 0: return x;
+                case 1: return y;
+                case 2: return z;
+                default: return 0.0;
+            }
+        }
 
         public static DVector3 Cross(DVector3 a, DVector3 b)
         {

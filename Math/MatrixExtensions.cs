@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace UC
@@ -41,6 +42,40 @@ namespace UC
             }
 
             return ret;
+        }
+
+        public static double GetMatrixAxisLength(this Matrix4x4 matrix, int column)
+        {
+            Vector4 axis = matrix.GetColumn(column);
+
+            return Math.Sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+        }
+
+        public static Quaternion ExtractMatrixRotation(this Matrix4x4 matrix)
+        {
+            const float epsilon = 1e-8f;
+
+            Vector3 forward = matrix.GetColumn(2);
+            Vector3 up = matrix.GetColumn(1);
+
+            if (forward.sqrMagnitude < epsilon)
+                forward = Vector3.forward;
+            else
+                forward.Normalize();
+
+            // Remove possible scale/shear contamination and ensure that up is perpendicular to forward.
+            up = Vector3.ProjectOnPlane(up, forward);
+
+            if (up.sqrMagnitude < epsilon)
+            {
+                Vector3 fallback = (Mathf.Abs(Vector3.Dot(forward, Vector3.up)) < 0.95f) ? (Vector3.up) : (Vector3.right);
+
+                up = Vector3.ProjectOnPlane(fallback, forward);
+            }
+
+            up.Normalize();
+
+            return Quaternion.LookRotation(forward, up);
         }
     }
 }

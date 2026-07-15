@@ -409,6 +409,32 @@ namespace UC.ED
     }
 
     [Serializable]
+    public struct EDTerminalConstraint
+    {
+        public int      nodeIndex;
+
+        public DVector3 targetPosition;
+
+        public DVector3 targetRight;
+        public DVector3 targetUp;
+        public DVector3 targetForward;
+
+        // Scale along the terminal frame's right axis.
+        public double   targetScale;
+    }
+
+    [Serializable]
+    public struct EDLinkAngleConstraint
+    {
+        public int centerNode;
+        public int neighborA;
+        public int neighborB;
+
+        public double restCos;
+        public double restSin;
+    }
+
+    [Serializable]
     public struct EDVertexConstraint
     {
         public int      vertexIndex;
@@ -438,6 +464,9 @@ namespace UC.ED
         public double slopeWeight;
         public double orientationWeight;
         public double segmentLengthWeight;
+        public double terminalOrientationWeight;
+        public double terminalScaleWeight;
+        public double linkAngleWeight;
         public bool normalizeWeights;
     }
 
@@ -455,6 +484,8 @@ namespace UC.ED
         public EDVertexBinding[] bindings;
         public List<EDHandleConstraint> handleConstraints = new();
         public List<EDVertexConstraint> vertexConstraints = new();
+        public List<EDTerminalConstraint> terminalConstraints = new();
+        public List<EDLinkAngleConstraint> linkAngleConstraints = new();
         public TopologyStatic navMeshTopology;
         public List<NavEDSegments> structure;
         public float maxSlope = 45.0f;
@@ -591,6 +622,7 @@ namespace UC.ED
                                                        graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal,
                                                        k, power,sigma);
                     BuildNodeRestFrames();
+                    BuildLinkAngleConstraints();
                     BuildDeformationField(deformationFieldVoxelSize, deformationFieldMaxWeights);
                     break;
                 default:
@@ -624,6 +656,8 @@ namespace UC.ED
             nodes.Clear();
             bindings = null;
             handleConstraints.Clear();
+            terminalConstraints.Clear();
+            linkAngleConstraints.Clear();
 
             // -----------------------------------------------------------------
             // 2) Sample graph nodes from navmesh vertices
@@ -739,6 +773,8 @@ namespace UC.ED
             nodes.Clear();
             bindings = null;
             handleConstraints.Clear();
+            terminalConstraints.Clear();
+            linkAngleConstraints.Clear();
 
             // -----------------------------------------------------------------
             // 2) Build ED graph directly from structure segment endpoints.
@@ -1393,23 +1429,145 @@ namespace UC.ED
             handleConstraints = new(handleData);
 
             vertexConstraints.Clear();
+            terminalConstraints.Clear();
 
             foreach (var hc in handleData)
             {
                 Matrix4x4 delta = hc.currentHandleMatrix * hc.restHandleMatrix.inverse;
 
-                foreach (int vId in hc.vertexIndices)
+                if (hc.vertexIndices != null)
                 {
-                    DVector3 restPos = restVertices[vId];
-                    DVector3 targetPos = delta.MultiplyPoint3x4(restPos.ToVector3()).ToDVector3();
-
-                    vertexConstraints.Add(new EDVertexConstraint
+                    foreach (int vId in hc.vertexIndices)
                     {
-                        vertexIndex = vId,
-                        targetPosition = targetPos
-                    });
+                        DVector3 restPos = restVertices[vId];
+                        DVector3 targetPos = delta.MultiplyPoint3x4(restPos.ToVector3()).ToDVector3();
+
+                        vertexConstraints.Add(new EDVertexConstraint
+                        {
+                            vertexIndex = vId,
+                            targetPosition = targetPos
+                        });
+                    }
+                }
+
+                // Orientation and scale are only defined for terminal
+                // structure nodes.
+                if ((!hc.isTerminal) || (deformationGraphSource != DeformationGraphSource.StructureOnly)) continue;
+
+                Vector3 restHandlePosition = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+                int nodeIndex = GetClosestLeafNodeIndex(restHandlePosition);
+
+                if ((nodeIndex < 0) || (nodeIndex >= nodes.Count)) continue;
+
+                EDNode node =nodes[nodeIndex];
+
+                Quaternion restRotation = hc.restHandleMatrix.ExtractMatrixRotation();
+
+                Quaternion currentRotation = hc.currentHandleMatrix.ExtractMatrixRotation();
+
+                Quaternion rotationDelta = currentRotation * Quaternion.Inverse(restRotation);
+
+                DVector3 targetRight = (rotationDelta * node.restRight.ToVector3()).ToDVector3().normalized;
+
+                DVector3 targetUp = (rotationDelta * node.restUp.ToVector3()).ToDVector3().normalized;
+
+                DVector3 targetForward = (rotationDelta * node.restForward.ToVector3()).ToDVector3().normalized;
+
+                // Local X/right is the connector-width axis.
+                double restScale = hc.restHandleMatrix.GetMatrixAxisLength(0);
+
+                double currentScale = hc.currentHandleMatrix.GetMatrixAxisLength(0);
+
+                double targetScale = currentScale / Math.Max(restScale, 1e-8);
+
+                DVector3 targetPosition = hc.currentHandleMatrix.MultiplyPoint3x4(Vector3.zero).ToDVector3();
+
+                terminalConstraints.Add(new EDTerminalConstraint {
+                    nodeIndex = nodeIndex,
+                    targetPosition = targetPosition,
+
+                    targetRight = targetRight,
+                    targetUp = targetUp,
+                    targetForward = targetForward,
+
+                    targetScale = targetScale
+                });
+            }
+
+            /*foreach (EDTerminalConstraint terminal in terminalConstraints)
+            {
+                Debug.Log(
+                    $"Terminal node {terminal.nodeIndex}: " +
+                    $"scale={terminal.targetScale:F3}, " +
+                    $"right={terminal.targetRight}, " +
+                    $"up={terminal.targetUp}, " +
+                    $"forward={terminal.targetForward}"
+                );
+            }*/
+        }
+
+        private void BuildLinkAngleConstraints()
+        {
+            linkAngleConstraints.Clear();
+
+            if ((nodes == null) || (nodes.Count == 0))
+                return;
+
+            const double epsilon = 1e-12;
+
+            for (int centerIndex = 0; centerIndex < nodes.Count; centerIndex++)
+            {
+                EDNode centerNode = nodes[centerIndex];
+
+                if ((centerNode.neighbors == null) || (centerNode.neighbors.Count < 2))
+                    continue;
+
+                DVector3 center = centerNode.restPosition;
+                DVector3 restUp = centerNode.restUp;
+
+                if (restUp.sqrMagnitude < epsilon)
+                    restUp = DVector3.up;
+                else
+                    restUp.Normalize();
+
+                for (int a = 0; a < centerNode.neighbors.Count - 1; a++)
+                {
+                    int neighborA = centerNode.neighbors[a];
+                    DVector3 directionA = nodes[neighborA].restPosition - center;
+
+                    if (directionA.sqrMagnitude < epsilon)
+                        continue;
+
+                    directionA.Normalize();
+
+                    for (int b = a + 1; b < centerNode.neighbors.Count;b++) 
+                    {
+                        int neighborB = centerNode.neighbors[b];
+
+                        DVector3 directionB = nodes[neighborB].restPosition - center;
+
+                        if (directionB.sqrMagnitude < epsilon)
+                            continue;
+
+                        directionB.Normalize();
+
+                        double restCos = Math.Clamp(DVector3.Dot(directionA, directionB), -1.0, 1.0);
+
+                        double restSin = Math.Clamp(DVector3.Dot(restUp, DVector3.Cross(directionA, directionB)), -1.0, 1.0);
+
+                    linkAngleConstraints.Add(new EDLinkAngleConstraint {
+                            centerNode = centerIndex,
+                            neighborA = neighborA,
+                            neighborB = neighborB,
+                            restCos = restCos,
+                            restSin = restSin
+                        });
+                    }
                 }
             }
+
+            Debug.Log($"Built {linkAngleConstraints.Count} structure link-angle constraints.");
         }
 
         public void ResetDeformation()
@@ -1627,8 +1785,11 @@ namespace UC.ED
             public int slopeRows;
             public int orientationRows;
             public int segmentLengthRows;
+            public int terminalOrientationRows;
+            public int terminalScaleRows;
+            public int linkAngleRows;
 
-            public int totalRows => rotationRows + regularizationRows + constraintRows + clearanceRows + slopeRows + orientationRows + segmentLengthRows;
+            public int totalRows => rotationRows + regularizationRows + constraintRows + clearanceRows + slopeRows + orientationRows + segmentLengthRows + terminalOrientationRows + terminalScaleRows + linkAngleRows;
         }
 
         private EDResidualLayout BuildResidualLayoutCommon(WeightConfig weights, int constraintCount)
@@ -1676,22 +1837,20 @@ namespace UC.ED
 
             int constraintCount = GetStructureHandlePositionConstraintCount();
 
+            int terminalCount = (terminalConstraints != null) ? (terminalConstraints.Count) : (0);
+
             return new EDResidualLayout
             {
                 rotationRows = 6 * nodeCount,
                 regularizationRows = 3 * directedEdgeCount,
                 constraintRows = 3 * constraintCount,
-
-                // Still evaluated per structure segment.
                 clearanceRows = (weights.clearanceWeight > 0.0) ? (structureCount) : (0),
-
-                // Evaluated directly from each deformation-node frame.
                 slopeRows = (weights.slopeWeight > 0.0) ? (nodeCount) : (0),
-
                 orientationRows = (weights.orientationWeight > 0.0) ? (3 * nodeCount) : (0),
-
-                // Still evaluated per structure segment.
-                segmentLengthRows = (weights.segmentLengthWeight > 0.0) ? (structureCount) : (0)
+                segmentLengthRows = (weights.segmentLengthWeight > 0.0) ? (structureCount) : (0),
+                terminalOrientationRows = (weights.terminalOrientationWeight > 0.0) ? (3 * terminalCount) : (0),
+                terminalScaleRows = (weights.terminalScaleWeight > 0.0) ? (terminalCount) : (0),
+                linkAngleRows = (weights.linkAngleWeight > 0.0) ? (2 * linkAngleConstraints.Count) : (0),
             };
         }
 
@@ -1891,6 +2050,69 @@ namespace UC.ED
 
         private int ParamBase(int nodeIndex) => nodeIndex * 12;
 
+        private int FillRotationJacobianBlockStructure(EDStateView state, DenseMatrix J, int row, int nodeIndex, double wRot, bool allowRightScale, ref double jNorm)
+        {
+            static int FillFrameDotJacobianRow(DenseMatrix J, int row, int parameterBase, DVector3 transformedA, DVector3 restA, DVector3 transformedB, DVector3 restB, double weight, ref double jNorm)
+            {
+                for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+                {
+                    double a = transformedA.GetComponent(outputAxis);
+                    double b = transformedB.GetComponent(outputAxis);
+
+                    for (int inputAxis = 0; inputAxis < 3; inputAxis++)
+                    {
+                        int col = parameterBase + outputAxis * 4 + inputAxis;
+
+                        double value = weight * (b * restA.GetComponent(inputAxis) + a * restB.GetComponent(inputAxis));
+
+                        J[row, col] = value;
+                        jNorm += value * value;
+                    }
+                }
+
+                return row + 1;
+            }
+            
+            static int FillFrameLengthJacobianRow(DenseMatrix J, int row, int parameterBase, DVector3 transformed, DVector3 rest, double weight, bool enabled, ref double jNorm)
+            {
+                if (!enabled) return row + 1;
+
+                for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+                {
+                    double transformedComponent = transformed.GetComponent(outputAxis);
+
+                    for (int inputAxis = 0; inputAxis < 3; inputAxis++)
+                    {
+                        int col = parameterBase + outputAxis * 4 + inputAxis;
+                        double value = 2.0 * weight * transformedComponent * rest.GetComponent(inputAxis);
+
+                        J[row, col] = value;
+
+                        jNorm += value * value;
+                    }
+                }
+
+                return row + 1;
+            }
+
+            EDNode node = nodes[nodeIndex];
+
+            DVector3 right = state.TransformVector(nodeIndex, node.restRight);
+            DVector3 up = state.TransformVector(nodeIndex, node.restUp);
+            DVector3 forward = state.TransformVector(nodeIndex, node.restForward);
+
+            int parameterBase = ParamBase(nodeIndex);
+
+            row = FillFrameDotJacobianRow(J, row, parameterBase, right, node.restRight, up, node.restUp, wRot, ref jNorm);
+            row = FillFrameDotJacobianRow(J, row, parameterBase, right, node.restRight, forward, node.restForward, wRot, ref jNorm);
+            row = FillFrameDotJacobianRow(J, row, parameterBase, up, node.restUp, forward, node.restForward, wRot, ref jNorm);
+            row = FillFrameLengthJacobianRow(J, row, parameterBase, right, node.restRight, wRot, !allowRightScale, ref jNorm);
+            row = FillFrameLengthJacobianRow(J, row, parameterBase, up, node.restUp, wRot, true, ref jNorm);
+            row = FillFrameLengthJacobianRow(J, row, parameterBase, forward, node.restForward, wRot, true, ref jNorm);
+
+            return row;
+        }
+
         private int FillRotationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
         {
             DebugProfiler.DebugMark(timeJacobianBuildRotation);
@@ -1900,7 +2122,7 @@ namespace UC.ED
             var aY = state.GetAxisY(nodeIndex);
             var aZ = state.GetAxisZ(nodeIndex);
 
-            // r0 = X·Y
+            // r0 = X dot Y
             J[row, p + 0] = wRot * aY.x;
             J[row, p + 4] = wRot * aY.y;
             J[row, p + 8] = wRot * aY.z;
@@ -1910,7 +2132,7 @@ namespace UC.ED
             J[row, p + 9] = wRot * aX.z;
             row++;
 
-            // r1 = X·Z
+            // r1 = X dot Z
             J[row, p + 0] = wRot * aZ.x;
             J[row, p + 4] = wRot * aZ.y;
             J[row, p + 8] = wRot * aZ.z;
@@ -1920,7 +2142,7 @@ namespace UC.ED
             J[row, p + 10] = wRot * aX.z;
             row++;
 
-            // r2 = Y·Z
+            // r2 = Y dot Z
             J[row, p + 1] = wRot * aZ.x;
             J[row, p + 5] = wRot * aZ.y;
             J[row, p + 9] = wRot * aZ.z;
@@ -1930,19 +2152,19 @@ namespace UC.ED
             J[row, p + 10] = wRot * aY.z;
             row++;
 
-            // r3 = X·X - 1
+            // r3 = X dot X - 1
             J[row, p + 0] = wRot * 2.0 * aX.x;
             J[row, p + 4] = wRot * 2.0 * aX.y;
             J[row, p + 8] = wRot * 2.0 * aX.z;
             row++;
 
-            // r4 = Y·Y - 1
+            // r4 = Y dot Y - 1
             J[row, p + 1] = wRot * 2.0 * aY.x;
             J[row, p + 5] = wRot * 2.0 * aY.y;
             J[row, p + 9] = wRot * 2.0 * aY.z;
             row++;
 
-            // r5 = Z·Z - 1
+            // r5 = Z dot Z - 1
             J[row, p + 2] = wRot * 2.0 * aZ.x;
             J[row, p + 6] = wRot * 2.0 * aZ.y;
             J[row, p + 10] = wRot * 2.0 * aZ.z;
@@ -2342,7 +2564,7 @@ namespace UC.ED
             return row + 3;
         }
 
-        private int FillOrientationJacobianBlockStrucuture(EDState state, DenseMatrix J, int row, int nodeIndex, double wOrientation, ref double jNorm)
+        private int FillOrientationJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wOrientation, ref double jNorm)
         {
             var baseView = new EDStateView(state);
 
@@ -2395,6 +2617,168 @@ namespace UC.ED
             }
 
             return row + 1;
+        }
+
+        private int FillSegmentLengthJacobianBlockStructure(EDState state, DenseMatrix J, int row, int segmentIndex, double wSegmentLength, ref double jNorm)
+        {
+            var baseView = new EDStateView(state);
+
+            double r0 = EvaluateSingleSegmentLengthResidualStructure(baseView, segmentIndex, wSegmentLength);
+
+            if (Math.Abs(r0) <= 1e-12)
+                return row + 1;
+
+            for (int col = 0; col < state.Count; col++)
+            {
+                double original = state.Get(col);
+                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+                var modifiedState = new EDStateView(state, col, eps);
+
+                double r1 = EvaluateSingleSegmentLengthResidualStructure(modifiedState, segmentIndex, wSegmentLength);
+                double v = (r1 - r0) / eps;
+
+                J[row, col] = v;
+                jNorm += v * v;
+            }
+
+            return row + 1;
+        }
+
+        private int FillTerminalOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int terminalIndex, double wTerminalOrientation, ref double jNorm)
+        {
+            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
+
+            int nodeIndex = terminal.nodeIndex;
+
+            var baseView = new EDStateView(state);
+
+            DVector3 r0 = EvaluateSingleTerminalOrientationResidual(baseView, terminalIndex, wTerminalOrientation);
+
+            int parameterBase = ParamBase(nodeIndex);
+
+            // Only the linear 3x3 transform affects orientation.
+            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+            {
+                for (int inputAxis = 0; inputAxis < 3; inputAxis++)
+                {
+                    int col = parameterBase + outputAxis * 4 + inputAxis;
+
+                    double original = state.Get(col);
+
+                    // Orientation construction uses Unity float quaternions.
+                    double eps = 1e-5 * Math.Max(1.0, Math.Abs(original));
+
+                    var modified = new EDStateView(state, col, eps);
+
+                    DVector3 r1 = EvaluateSingleTerminalOrientationResidual(modified, terminalIndex, wTerminalOrientation);
+
+                    double jx = (r1.x - r0.x) / eps;
+                    double jy = (r1.y - r0.y) / eps;
+                    double jz = (r1.z - r0.z) / eps;
+
+                    J[row + 0, col] = jx;
+                    J[row + 1, col] = jy;
+                    J[row + 2, col] = jz;
+
+                    jNorm += jx * jx + jy * jy + jz * jz;
+                }
+            }
+
+            return row + 3;
+        }
+
+        private int FillTerminalScaleJacobianBlock(EDStateView state, DenseMatrix J, int row, int terminalIndex, double wTerminalScale, ref double jNorm)
+        {
+            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
+
+            int nodeIndex = terminal.nodeIndex;
+
+            EDNode      node = nodes[nodeIndex];
+            DVector3    restRight = node.restRight;
+            DVector3    currentRight = state.TransformVector(nodeIndex, restRight);
+            double      currentScale = currentRight.magnitude;
+
+            if (currentScale < 1e-12)
+                return row + 1;
+
+            int parameterBase = ParamBase(nodeIndex);
+
+            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+            {
+                double normalizedCurrentComponent = currentRight.GetComponent(outputAxis) / currentScale;
+
+                for (int inputAxis = 0; inputAxis < 3; inputAxis++)
+                {
+                    int col = parameterBase + outputAxis * 4 + inputAxis;
+
+                    double value = wTerminalScale * normalizedCurrentComponent * restRight.GetComponent(inputAxis);
+
+                    J[row, col] = value;
+
+                    jNorm += value * value;
+                }
+            }
+
+            return row + 1;
+        }
+
+        private void FillLinkAngleJacobianColumn(EDState state, DenseMatrix J, int row, int constraintIndex, double wLinkAngle, double baseCosineResidual, double baseSineResidual, int col, ref double jNorm)
+        {
+            double original = state.Get(col);
+
+            double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+            EDStateView modified = new EDStateView(state, col, eps);
+
+            EvaluateSingleLinkAngleResidual(modified, constraintIndex, wLinkAngle, out double modifiedCosineResidual, out double modifiedSineResidual);
+
+            double cosineDerivative = (modifiedCosineResidual - baseCosineResidual) / eps;
+
+            double sineDerivative = (modifiedSineResidual - baseSineResidual) / eps;
+
+            J[row + 0, col] = cosineDerivative;
+            J[row + 1, col] = sineDerivative;
+
+            jNorm += cosineDerivative * cosineDerivative + sineDerivative * sineDerivative;
+        }
+
+        private int FillLinkAngleJacobianBlock(EDState state, DenseMatrix J, int row, int constraintIndex, double wLinkAngle, ref double jNorm)
+        {
+            EDLinkAngleConstraint constraint = linkAngleConstraints[constraintIndex];
+
+            EDStateView baseView = new EDStateView(state);
+
+            EvaluateSingleLinkAngleResidual(baseView, constraintIndex, wLinkAngle, out double baseCosineResidual, out double baseSineResidual);
+
+            // Centre node: orientation and translation both matter.
+            int centerBase = ParamBase(constraint.centerNode);
+
+            for (int localParameter = 0; localParameter < 12; localParameter++)
+            {
+                FillLinkAngleJacobianColumn(state, J, row, constraintIndex, wLinkAngle, baseCosineResidual, baseSineResidual, centerBase + localParameter, ref jNorm);
+            }
+
+            // Neighbour positions depend only on translation.
+            int neighborABase = ParamBase(constraint.neighborA);
+
+            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+            {
+                int col = neighborABase + outputAxis * 4 + 3;
+
+                FillLinkAngleJacobianColumn(state, J, row, constraintIndex, wLinkAngle, baseCosineResidual, baseSineResidual, col, ref jNorm);
+            }
+
+            int neighborBBase = ParamBase(constraint.neighborB);
+
+            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+            {
+                int col = neighborBBase + outputAxis * 4 + 3;
+
+                FillLinkAngleJacobianColumn(state, J, row, constraintIndex, wLinkAngle, baseCosineResidual, baseSineResidual, col, ref jNorm);
+            }
+
+            return row + 2;
         }
 
         public void DebugJacobianNullspace(Matrix<double> J, double singularValueTolerance = 1e-10, int topCount = 20)
@@ -2532,7 +2916,7 @@ namespace UC.ED
             if (hc.isTerminal)
             {
                 // Connector handles target terminal structure endpoints.
-                nodeIndex = GetClosestLeafDebugNodeIndex(restHandlePosition);
+                nodeIndex = GetClosestLeafNodeIndex(restHandlePosition);
             }
             else
             {
@@ -2601,26 +2985,35 @@ namespace UC.ED
             double wSlope = BuildResidualWeight(weights.slopeWeight, layout.slopeRows, weights.normalizeWeights);
             double wOrientation = BuildResidualWeight(weights.orientationWeight, layout.orientationRows, weights.normalizeWeights);
             double wSegmentLength = BuildResidualWeight(weights.segmentLengthWeight, layout.segmentLengthRows, weights.normalizeWeights);
+            double wLinkAngle = BuildResidualWeight(weights.linkAngleWeight, layout.linkAngleRows, weights.normalizeWeights);
+            double wTerminalOrientation = BuildResidualWeight(weights.terminalOrientationWeight, layout.terminalOrientationRows, weights.normalizeWeights);
+            double wTerminalScale = BuildResidualWeight(weights.terminalScaleWeight, layout.terminalScaleRows, weights.normalizeWeights);
 
             int row = 0;
 
             // -------------------------------------------------------------
             // 1) Rotation residuals
-            //    Same as NavMesh path.
+            //    Same as NavMesh path, with the difference that it accepts scaling on terminal nodes
             // -------------------------------------------------------------
             for (int i = 0; i < nodeCount; i++)
             {
-                var axisX = state.GetAxisX(i);
-                var axisY = state.GetAxisY(i);
-                var axisZ = state.GetAxisZ(i);
+                EDNode node = nodes[i];
 
-                residual[row++] = wRot * DVector3.Dot(axisX, axisY);
-                residual[row++] = wRot * DVector3.Dot(axisX, axisZ);
-                residual[row++] = wRot * DVector3.Dot(axisY, axisZ);
+                DVector3 right = state.TransformVector(i, node.restRight);
+                DVector3 up = state.TransformVector(i, node.restUp);
+                DVector3 forward = state.TransformVector(i, node.restForward);
 
-                residual[row++] = wRot * (DVector3.Dot(axisX, axisX) - 1.0);
-                residual[row++] = wRot * (DVector3.Dot(axisY, axisY) - 1.0);
-                residual[row++] = wRot * (DVector3.Dot(axisZ, axisZ) - 1.0);
+                residual[row++] = wRot * DVector3.Dot(right, up);
+                residual[row++] = wRot * DVector3.Dot(right, forward);
+                residual[row++] = wRot * DVector3.Dot(up, forward);
+
+                bool allowRightScale = (wTerminalScale > 0.0) && HasTerminalScaleConstraint(i);
+
+                // This row remains present for consistent row accounting,
+                // but is disabled when scale is controlled by a terminal.
+                residual[row++] = (allowRightScale) ? (0.0) : (wRot * (DVector3.Dot(right, right) - 1.0));
+                residual[row++] = wRot * (DVector3.Dot(up, up) - 1.0);
+                residual[row++] = wRot * (DVector3.Dot(forward, forward) - 1.0);
             }
 
             // -------------------------------------------------------------
@@ -2711,11 +3104,47 @@ namespace UC.ED
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
-                    residual[row++] = EvaluateSingleSegmentLengthResidual(state, i, wSegmentLength);
+                    residual[row++] = EvaluateSingleSegmentLengthResidualStructure(state, i, wSegmentLength);
+                }
+            }
+
+            if (wLinkAngle > 0.0)
+            {
+                for (int i = 0; i < linkAngleConstraints.Count; i++)
+                {
+                    EvaluateSingleLinkAngleResidual(state, i, wLinkAngle, out double cosineResidual, out double sineResidual);
+
+                    residual[row++] = cosineResidual;
+                    residual[row++] = sineResidual;
+                }
+            }
+
+            if (wTerminalOrientation > 0.0)
+            {
+                for (int i = 0; i < terminalConstraints.Count; i++)
+                {
+                    DVector3 r = EvaluateSingleTerminalOrientationResidual(state, i, wTerminalOrientation);
+
+                    residual[row++] = r.x;
+                    residual[row++] = r.y;
+                    residual[row++] = r.z;
+                }
+            }
+
+            if (wTerminalScale > 0.0)
+            {
+                for (int i = 0; i < terminalConstraints.Count; i++)
+                {
+                    residual[row++] = EvaluateSingleTerminalScaleResidual(state, i, wTerminalScale);
                 }
             }
 
             DebugProfiler.DebugMark(timeResidualEvaluate);
+
+            if (row != layout.totalRows)
+            {
+                throw new InvalidOperationException($"Structure residual row count mismatch: used={row}, expected={layout.totalRows}");
+            }
 
             return residual;
         }
@@ -2742,6 +3171,9 @@ namespace UC.ED
             double wSlope = BuildResidualWeight(weights.slopeWeight, layout.slopeRows, weights.normalizeWeights);
             double wOrientation = BuildResidualWeight(weights.orientationWeight, layout.orientationRows, weights.normalizeWeights);
             double wSegmentLength = BuildResidualWeight(weights.segmentLengthWeight, layout.segmentLengthRows, weights.normalizeWeights);
+            double wLinkAngle = BuildResidualWeight(weights.linkAngleWeight, layout.linkAngleRows,weights.normalizeWeights);
+            double wTerminalOrientation = BuildResidualWeight(weights.terminalOrientationWeight, layout.terminalOrientationRows, weights.normalizeWeights);
+            double wTerminalScale = BuildResidualWeight(weights.terminalScaleWeight, layout.terminalScaleRows, weights.normalizeWeights);
 
             int row = 0;
 
@@ -2749,11 +3181,13 @@ namespace UC.ED
 
             // -------------------------------------------------------------
             // 1) Rotation Jacobian
-            //    Same block as NavMesh path.
+            //    Same block as NavMesh path, except for allowing for scaling on terminal nodes
             // -------------------------------------------------------------
             for (int i = 0; i < nodeCount; i++)
             {
-                row = FillRotationJacobianBlock(stateView, J, row, i, wRot, ref jNorm);
+                bool allowRightScale = (wTerminalScale > 0.0) && (HasTerminalScaleConstraint(i));
+
+                row = FillRotationJacobianBlockStructure(stateView, J, row, i, wRot, allowRightScale, ref jNorm);
             }
 
             // -------------------------------------------------------------
@@ -2848,7 +3282,7 @@ namespace UC.ED
             {
                 for (int i = 0; i < nodes.Count; i++)
                 {
-                    row = FillOrientationJacobianBlockStrucuture(state, J, row, i, wOrientation, ref jNorm);
+                    row = FillOrientationJacobianBlockStructure(state, J, row, i, wOrientation, ref jNorm);
                 }
             }
 
@@ -2856,13 +3290,42 @@ namespace UC.ED
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
-                    row = FillSegmentLengthJacobianBlock(state, J, row, i, wSegmentLength, ref jNorm);
+                    row = FillSegmentLengthJacobianBlockStructure(state, J, row, i, wSegmentLength, ref jNorm);
+                }
+            }
+
+            if (wLinkAngle > 0.0)
+            {
+                for (int i = 0; i < linkAngleConstraints.Count; i++)
+                {
+                    row = FillLinkAngleJacobianBlock(state, J, row, i, wLinkAngle, ref jNorm);
+                }
+            }
+
+            if (wTerminalOrientation > 0.0)
+            {
+                for (int i = 0; i < terminalConstraints.Count; i++)
+                {
+                    row = FillTerminalOrientationJacobianBlock(state, J, row, i, wTerminalOrientation, ref jNorm);
+                }
+            }
+
+            if (wTerminalScale > 0.0)
+            {
+                for (int i = 0; i < terminalConstraints.Count; i++)
+                {
+                    row = FillTerminalScaleJacobianBlock(stateView, J, row, i, wTerminalScale, ref jNorm);
                 }
             }
 
             jNorm = Math.Sqrt(jNorm);
 
             DebugProfiler.DebugMark(timeJacobianBuild);
+
+            if (row != layout.totalRows)
+            {
+                throw new InvalidOperationException($"Jacobian row count mismatch: used={row}, expected={layout.totalRows}");
+            }
 
             return J;
         }
@@ -3825,6 +4288,41 @@ namespace UC.ED
             return wOrientation * (currentUp - restUp);
         }
 
+        private void EvaluateSingleLinkAngleResidual(EDStateView state, int constraintIndex, double wLinkAngle, out double cosineResidual, out double sineResidual)
+        {
+            const double epsilon = 1e-12;
+
+            EDLinkAngleConstraint constraint = linkAngleConstraints[constraintIndex];
+            DVector3 center = DeformStructureNodePosition(constraint.centerNode,state);
+            DVector3 positionA = DeformStructureNodePosition(constraint.neighborA, state);
+            DVector3 positionB = DeformStructureNodePosition(constraint.neighborB, state);
+            DVector3 directionA = positionA - center;
+            DVector3 directionB = positionB - center;
+
+            if ((directionA.sqrMagnitude < epsilon) || (directionB.sqrMagnitude < epsilon))
+            {
+                // A collapsed link is strongly invalid.
+                cosineResidual = wLinkAngle * (0.0 - constraint.restCos);
+                sineResidual = wLinkAngle * (0.0 - constraint.restSin);
+
+                return;
+            }
+
+            directionA.Normalize();
+            directionB.Normalize();
+
+            DVector3 currentUp = GetTransformedNodeUp(state, constraint.centerNode);
+
+            if (currentUp.sqrMagnitude < epsilon)
+                currentUp = nodes[constraint.centerNode].restUp.normalized;
+
+            double currentCos = Math.Clamp(DVector3.Dot(directionA, directionB), -1.0, 1.0);
+            double currentSin = Math.Clamp(DVector3.Dot(currentUp, DVector3.Cross(directionA, directionB)), -1.0, 1.0);
+
+            cosineResidual = wLinkAngle * (currentCos - constraint.restCos);
+            sineResidual = wLinkAngle * (currentSin - constraint.restSin);
+        }
+
         private DVector3 GetTransformedNodeUp(EDStateView state, int nodeIndex)
         {
             DVector3 transformed = state.TransformVector(nodeIndex, nodes[nodeIndex].restUp);
@@ -3852,6 +4350,75 @@ namespace UC.ED
 
             double loss = Math.Max(0.0, minAllowedLength - currentLength) / originalLength;
             return wSegmentLength * loss;
+        }
+
+        private double EvaluateSingleSegmentLengthResidualStructure(EDStateView state, int segmentIndex, double wSegmentLength)
+        {
+            NavEDSegments seg = structure[segmentIndex];
+
+            DVector3 p1;
+            DVector3 p2;
+
+            if ((deformationGraphSource == DeformationGraphSource.StructureOnly) &&
+                (seg.node1 >= 0) &&
+                (seg.node2 >= 0))
+            {
+                p1 = DeformStructureNodePosition(seg.node1, state);
+                p2 = DeformStructureNodePosition(seg.node2, state);
+            }
+            else
+            {
+                p1 = DeformVertex(seg.p1, seg.bind1, state);
+                p2 = DeformVertex(seg.p2, seg.bind2, state);
+            }
+
+            double originalLength = (seg.p2 - seg.p1).magnitude;
+
+            if (originalLength < 1e-8)
+                return 0.0;
+
+            double currentLength = (p2 - p1).magnitude;
+
+            double minRatio = Math.Clamp(segmentMinRatio, 0.0, 1.0);
+
+            double minAllowedLength = minRatio * originalLength;
+
+            double shrinkage = Math.Max(0.0, minAllowedLength - currentLength);
+
+            return wSegmentLength * shrinkage / originalLength;
+        }
+
+        private DVector3 EvaluateSingleTerminalOrientationResidual(EDStateView state, int terminalIndex, double wTerminalOrientation)
+        {
+            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
+
+            if (!TryGetNodeRotation(state, terminal.nodeIndex, out Quaternion currentRotation))
+            {
+                return new DVector3(wTerminalOrientation * Math.PI, 0.0, 0.0);
+            }
+
+            Vector3 targetForward = terminal.targetForward.ToVector3().normalized;
+            Vector3 targetUp = terminal.targetUp.ToVector3().normalized;
+
+            Quaternion targetRotation = Quaternion.LookRotation(targetForward, targetUp);
+
+            Quaternion rotationError = Quaternion.Inverse(targetRotation) * currentRotation;
+
+            return wTerminalOrientation * QuaternionRotationVector(rotationError);
+        }
+
+        private double EvaluateSingleTerminalScaleResidual(EDStateView state, int terminalIndex, double wTerminalScale)
+        {
+            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
+
+            EDNode node = nodes[terminal.nodeIndex];
+
+            DVector3 transformedRight = state.TransformVector(terminal.nodeIndex, node.restRight);
+
+            double currentScale = transformedRight.magnitude;
+            double targetScale = Math.Max(terminal.targetScale, 1e-8);
+
+            return wTerminalScale * (currentScale - targetScale);
         }
 
         private double ComputeClearanceLoss(double original, double current)
@@ -3919,6 +4486,103 @@ namespace UC.ED
             }
 
             return false;
+        }
+
+        private bool HasTerminalScaleConstraint(int nodeIndex)
+        {
+            if (terminalConstraints == null)
+                return false;
+
+            for (int i = 0; i < terminalConstraints.Count; i++)
+            {
+                if (terminalConstraints[i].nodeIndex == nodeIndex)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryGetNodeRotation(EDStateView state, int nodeIndex, out Quaternion rotation)
+        {
+            const float epsilon = 1e-8f;
+
+            rotation = Quaternion.identity;
+
+            if ((nodeIndex < 0) || (nodeIndex >= nodes.Count))
+            {
+                return false;
+            }
+
+            EDNode node = nodes[nodeIndex];
+
+            DVector3 right = state.TransformVector(nodeIndex, node.restRight);
+            DVector3 up = state.TransformVector(nodeIndex, node.restUp);
+            DVector3 forward = state.TransformVector(nodeIndex, node.restForward);
+
+            if (forward.sqrMagnitude < epsilon)
+            {
+                if ((right.sqrMagnitude > epsilon) && (up.sqrMagnitude > epsilon))
+                {
+                    forward = DVector3.Cross(right, up);
+                }
+            }
+
+            if (forward.sqrMagnitude < epsilon)
+                return false;
+
+            forward.Normalize();
+
+            // Remove scale and shear from the orientation measurement.
+            up = DVector3.ProjectOnPlane(up, forward);
+
+            if ((up.sqrMagnitude < epsilon) && (right.sqrMagnitude > epsilon))
+            {
+                up = DVector3.Cross(forward, right);
+            }
+
+            if (up.sqrMagnitude < epsilon)
+            {
+                DVector3 fallback = (Math.Abs(DVector3.Dot(forward, DVector3.up)) < 0.95f) ? (DVector3.up) : (DVector3.right);
+
+                up = DVector3.ProjectOnPlane(fallback, forward);
+            }
+
+            if (up.sqrMagnitude < epsilon) return false;
+
+            up.Normalize();
+
+            rotation = Quaternion.LookRotation(forward.ToVector3(), up.ToVector3());
+
+            return true;
+        }
+
+        private static DVector3 QuaternionRotationVector(Quaternion rotation)
+        {
+            Quaternion q = rotation.normalized;
+
+            // Select the shortest quaternion representation.
+            if (q.w < 0.0f)
+            {
+                q = new Quaternion(-q.x, -q.y, -q.z, -q.w);
+            }
+
+            Vector3 vectorPart = new Vector3(q.x, q.y, q.z);
+
+            double sinHalfAngle = vectorPart.magnitude;
+
+            if (sinHalfAngle < 1e-8)
+            {
+                // log(q) ~= 2v close to identity.
+                return new DVector3(2.0 * q.x, 2.0 * q.y, 2.0 * q.z);
+            }
+
+            double angle = 2.0 * Math.Atan2(sinHalfAngle, Math.Clamp(q.w, -1.0f, 1.0f));
+
+            Vector3 axis = vectorPart / (float)sinHalfAngle;
+
+            return angle * axis.ToDVector3();
         }
 
         public int GetSegmentCount() => structure.Count;
@@ -4052,7 +4716,7 @@ namespace UC.ED
             return GetClosestNodeIndex(restPosition.ToDVector3());
         }
 
-        public int GetClosestLeafDebugNodeIndex(Vector3 restPosition)
+        public int GetClosestLeafNodeIndex(Vector3 restPosition)
         {
             if ((nodes == null) || (nodes.Count == 0))
                 return -1;
@@ -4130,7 +4794,10 @@ namespace UC.ED
                 MeasureResidualBlock(f, ref row, layout.clearanceRows, "Clearance"),
                 MeasureResidualBlock(f, ref row, layout.slopeRows, "Slope"),
                 MeasureResidualBlock(f, ref row, layout.orientationRows, "Orientation"),
-                MeasureResidualBlock(f, ref row, layout.segmentLengthRows, "Seg. Length")
+                MeasureResidualBlock(f, ref row, layout.segmentLengthRows, "Seg. Length"),
+                MeasureResidualBlock(f, ref row, layout.linkAngleRows, "Link Angle"),
+                MeasureResidualBlock(f, ref row, layout.terminalOrientationRows, "Terminal Orient."),
+                MeasureResidualBlock(f, ref row, layout.terminalScaleRows, "Terminal Scale"),
             };
 
             double totalEnergy = 0.0;

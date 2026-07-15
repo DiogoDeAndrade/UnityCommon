@@ -317,6 +317,7 @@ namespace UC
                 case SoundType.SecondaryFX: return defaultFX2Volume;
                 case SoundType.Background: return defaultBackgroundVolume;
                 case SoundType.Voice: return defaultVoiceVolume;
+                case SoundType.Movies: return defaultMoviesVolume;
             }
 
             return defaultVolume;
