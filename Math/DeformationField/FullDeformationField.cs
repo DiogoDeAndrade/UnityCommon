@@ -119,10 +119,15 @@ public class FullDeformationField
         }
     }
 
+    [SerializeField, HideInInspector]
     VoxelData<DeformationFieldWeights>  voxelData;
+    [SerializeField, HideInInspector]
     float                               voxelSize;
+    [SerializeField, HideInInspector]
     int                                 maxWeights;
+    [SerializeField, HideInInspector]
     List<Frame>                         deformationNodes = new List<Frame>();
+    [SerializeField, HideInInspector]
     List<Matrix4x4>                     restInverses = new List<Matrix4x4>();
 
     public Vector3Int gridSize => voxelData?.gridSize ?? Vector3Int.zero;

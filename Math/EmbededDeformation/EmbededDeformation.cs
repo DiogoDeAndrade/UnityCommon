@@ -588,7 +588,7 @@ namespace UC.ED
         public void BuildDeformationGraph(DeformationGraphSource deformationGraphSource,
                                           TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
                                           BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
-                                          Graph2Structure graphStructure, int structureSubdivision = 1, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
+                                          Graph2Structure graphStructure, float structureMaxSegmentLength = 0.0f, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
                                           int k = 4, // When BindingSelectionMode = closest-K
                                           float maxBindDistance = 2.0f, // When GraphLinKMode = DirectionAware
                                           float minBindAngle = 20.0f, // When GraphLinKMode = DirectionAware
@@ -614,12 +614,12 @@ namespace UC.ED
             switch (deformationGraphSource)
             {
                 case DeformationGraphSource.NavMeshAndStructure:
-                    BuildDeformationGraphFromNavMesh(topology, minDistance, forcedVertices, forceStructureNodes, bindMode, weightMode, graphLinkMode, graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal, k, maxBindDistance, minBindAngle, hasLOSFunction, power, sigma);
+                    BuildDeformationGraphFromNavMesh(topology, minDistance, forcedVertices, forceStructureNodes, bindMode, weightMode, graphLinkMode, graphStructure, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal, k, maxBindDistance, minBindAngle, hasLOSFunction, power, sigma);
                     break;
                 case DeformationGraphSource.StructureOnly:
                     BuildDeformationGraphFromStructure(topology, 
                                                        bindMode, weightMode,
-                                                       graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal,
+                                                       graphStructure, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal,
                                                        k, power,sigma);
                     BuildNodeRestFrames();
                     BuildLinkAngleConstraints();
@@ -632,12 +632,12 @@ namespace UC.ED
 
         public void BuildDeformationGraphFromNavMesh(TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
                                                      BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
-                                                     Graph2Structure graphStructure, int structureSubdivision = 1, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
+                                                     Graph2Structure graphStructure, float structureMaxSegmentLength = 0.0f, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
                                                      int k = 4, float maxBindDistance = 2.0f, float minBindAngle = 20.0f,
                                                      HasLOS hasLOSFunction = null,
                                                      float power = 2.0f, float sigma = 1.0f)
         {
-            BuildStructureFromGraph(graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal);
+            BuildStructureFromGraph(graphStructure, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal);
 
             if (minDistance <= 0.0f)
             {
@@ -737,14 +737,14 @@ namespace UC.ED
                                                BindingSelectionMode bindMode,
                                                BindingWeightMode weightMode,
                                                Graph2Structure graphStructure,
-                                               int structureSubdivision = 1,
+                                               float structureMaxSegmentLength = 0.0f,
                                                Vector3 structureFallbackUp = default,
                                                TryGetSurfaceNormal tryGetSurfaceNormal = null,
                                                int k = 4,
                                                float power = 2.0f,
                                                float sigma = 1.0f)
         {
-            BuildStructureFromGraph(graphStructure, structureSubdivision, structureFallbackUp, tryGetSurfaceNormal);
+            BuildStructureFromGraph(graphStructure, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal);
 
             if (topology == null)
             {
@@ -3882,14 +3882,12 @@ namespace UC.ED
             return GetSafeStructureUp(fallbackUp);
         }
 
-        public void BuildStructureFromGraph(Graph2Structure graphStructure, int structureSubdivision, Vector3 fallbackUp, TryGetSurfaceNormal tryGetSurfaceNormal)
+        public void BuildStructureFromGraph(Graph2Structure graphStructure, float structureMaxSegmentLength, Vector3 fallbackUp, TryGetSurfaceNormal tryGetSurfaceNormal)
         {
             ClearStructure();
 
             if (graphStructure == null)
                 return;
-
-            int subdivision = Mathf.Max(1, structureSubdivision);
 
             var structureTrees = graphStructure.GetTrees();
 
@@ -3904,24 +3902,29 @@ namespace UC.ED
                     Vector3 p1 = n1.data.pos;
                     Vector3 p2 = n2.data.pos;
 
-                    if (subdivision == 1)
+                    var distance = Vector3.Distance(p1, p2);
+                    if (distance > 1e-3)
                     {
-                        Vector3 normal = GetStructureSegmentNormal(p1, p2, j, fallbackUp, tryGetSurfaceNormal);
-
-                        AddStructureSegment(p1, p2, normal);
-                    }
-                    else
-                    {
-                        float tInc = 1.0f / subdivision;
-
-                        for (int k = 0; k < subdivision; k++)
+                        if (structureMaxSegmentLength <= 1e-3)
                         {
-                            Vector3 sp1 = Vector3.Lerp(p1, p2, k * tInc);
-                            Vector3 sp2 = Vector3.Lerp(p1, p2, (k + 1) * tInc);
+                            Vector3 normal = GetStructureSegmentNormal(p1, p2, j, fallbackUp, tryGetSurfaceNormal);
 
-                            Vector3 normal = GetStructureSegmentNormal(sp1, sp2, j, fallbackUp, tryGetSurfaceNormal);
+                            AddStructureSegment(p1, p2, normal);
+                        }
+                        else
+                        {
+                            int subdivision = Mathf.Max(1, Mathf.CeilToInt(distance / structureMaxSegmentLength));
+                            float tInc = 1.0f / subdivision;
 
-                            AddStructureSegment(sp1, sp2, normal);
+                            for (int k = 0; k < subdivision; k++)
+                            {
+                                Vector3 sp1 = Vector3.Lerp(p1, p2, k * tInc);
+                                Vector3 sp2 = Vector3.Lerp(p1, p2, (k + 1) * tInc);
+
+                                Vector3 normal = GetStructureSegmentNormal(sp1, sp2, j, fallbackUp, tryGetSurfaceNormal);
+
+                                AddStructureSegment(sp1, sp2, normal);
+                            }
                         }
                     }
                 }
