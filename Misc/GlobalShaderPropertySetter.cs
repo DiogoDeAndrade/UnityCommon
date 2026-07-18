@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using NaughtyAttributes;
+using NUnit.Framework.Internal;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -13,7 +15,7 @@ namespace UC
 
     [ExecuteAlways]
     [DisallowMultipleComponent]
-    public sealed class GlobalShaderPropertySetter : MonoBehaviour
+    public sealed class GlobalShaderPropertySetter : Singleton<GlobalShaderPropertySetter>
     {
         public enum GlobalShaderPropertyType
         {
@@ -52,14 +54,16 @@ namespace UC
             [NonSerialized] private string cachedPropertyName;
             [NonSerialized] private int cachedPropertyId;
 
-            bool isFloat => type == GlobalShaderPropertyType.Float;
-            bool isInteger => type == GlobalShaderPropertyType.Integer;
-            bool isColor => type == GlobalShaderPropertyType.Color;
-            bool isVector => type == GlobalShaderPropertyType.Vector;
-            bool isTexture => type == GlobalShaderPropertyType.Texture;
-            bool isRenderTexture => isTexture && useRenderTextureSubElement && (textureValue is RenderTexture);
+            public bool isFloat => type == GlobalShaderPropertyType.Float;
+            public bool isInteger => type == GlobalShaderPropertyType.Integer;
+            public bool isColor => type == GlobalShaderPropertyType.Color;
+            public bool isVector => type == GlobalShaderPropertyType.Vector;
+            public bool isTexture => type == GlobalShaderPropertyType.Texture;
+            public bool isRenderTexture => isTexture && useRenderTextureSubElement && (textureValue is RenderTexture);
 
-            private int PropertyId
+            public string name => propertyName;
+
+            public int PropertyId
             {
                 get
                 {
@@ -75,7 +79,7 @@ namespace UC
 
             public void Apply()
             {
-                if (!enabled || string.IsNullOrWhiteSpace(propertyName))
+                if ((!enabled) || (string.IsNullOrWhiteSpace(propertyName)))
                     return;
 
                 int id = PropertyId;
@@ -126,6 +130,8 @@ namespace UC
 #pragma warning restore 0618
 #endif
             }
+
+            public void SetColor(Color c) { colorValue = c; Apply(); }
         }
 
         [Header("Apply Timing")]
@@ -178,6 +184,21 @@ namespace UC
                 SceneView.RepaintAll();
             }
 #endif
+        }
+
+        public void SetColor(string name, Color color)
+        {
+            int propId = Shader.PropertyToID(name);
+
+            foreach (var prop in properties)
+            {
+                if ((prop.PropertyId == propId) && (prop.isColor))
+                {
+                    prop.SetColor(color);
+
+                    return;
+                }
+            }
         }
     }
 }

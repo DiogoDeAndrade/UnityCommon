@@ -32,14 +32,20 @@ namespace UC
         [SerializeField] private Hypertag   musicTag;
         [SerializeField] private float defaultCrossfadeTime = 1.0f;
 
-        List<AudioSource>       audioSources;
-        List<HypertaggedObject> audioTags;
-        AudioMixerGroup[] mixerGroups;
-        AudioSource musicSource;
+        class AudioElement
+        {
+            public AudioSource          audioSource;
+            public SoundType            audioType;
+            public HypertaggedObject    hypertag;
+        }
+
+        List<AudioElement>      audioSources;
+        AudioMixerGroup[]       mixerGroups;
+        AudioSource             musicSource;
 
         class PauseStruct
         {
-            public List<AudioSource> pausedSources;
+            public List<AudioElement> pausedSources;
         };
 
         List<PauseStruct> pauseStack = new();
@@ -72,21 +78,25 @@ namespace UC
                 Destroy(gameObject);
                 return;
             }
-            
+
             // Find all audio sources
-            audioTags = new();
-            audioSources = new List<AudioSource>(GetComponentsInChildren<AudioSource>());
-            if (audioSources == null)
+            audioSources = new();
+            var existingElements = GetComponentsInChildren<AudioSource>();
+            if ((existingElements != null) && (existingElements.Length > 0))
             {
-                audioSources = new();                
-            }
-            else
-            {
-                foreach (var audioSource in audioSources)
+                foreach (var audioChannel in existingElements)
                 {
-                    var t = audioSource.GetComponent<HypertaggedObject>();
-                    if (t == null) t = audioSource.gameObject.AddComponent<HypertaggedObject>();
-                    audioTags.Add(t);
+                    var e = new AudioElement
+                    { 
+                        audioSource = audioChannel,
+                        audioType = SoundType.PrimaryFX,
+                        hypertag = audioChannel.GetComponent<HypertaggedObject>()
+                    };
+                    if (e.hypertag == null)
+                    {
+                        e.hypertag = e.audioSource.gameObject.AddComponent<HypertaggedObject>();
+                    }
+                    audioSources.Add(e);
                 }
             }
 
@@ -169,33 +179,46 @@ namespace UC
 
         private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, bool loop = false, Hypertag tag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
         {
-            (var audioSource, var hypertaggedObject) = GetSource(tag);
+            var audioSource = GetSource(tag);
 
-            audioSource.clip = clip;
-            audioSource.loop = loop;
-            audioSource.volume = volume;
-            audioSource.pitch = pitch;
-            audioSource.outputAudioMixerGroup = mixerGroups[(int)type];
+            audioSource.audioType = type;
+            audioSource.audioSource.clip = clip;
+            audioSource.audioSource.loop = loop;
+            audioSource.audioSource.volume = volume;
+            audioSource.audioSource.pitch = pitch;
+            audioSource.audioSource.outputAudioMixerGroup = mixerGroups[(int)type];
             if (is3d)
             {
-                audioSource.spatialBlend = 1.0f;
-                audioSource.minDistance = distanceRange.x;
-                audioSource.maxDistance = distanceRange.y;
-                audioSource.transform.position = position;
+                audioSource.audioSource.spatialBlend = 1.0f;
+                audioSource.audioSource.minDistance = distanceRange.x;
+                audioSource.audioSource.maxDistance = distanceRange.y;
+                audioSource.audioSource.transform.position = position;
             }
             else
             {
-                audioSource.spatialBlend = 0.0f;
+                audioSource.audioSource.spatialBlend = 0.0f;
             }
 
-                audioSource.Play();
+                audioSource.audioSource.Play();
 
             if (tag)
             {
 
             }
 
-            return audioSource;
+            return audioSource.audioSource;
+        }
+
+        private void _FadeOutAll(SoundType soundType, float fadeDuration)
+        {
+            foreach (var audioSource in audioSources)
+            {
+                if ((audioSource.audioType == soundType) &&
+                    (audioSource.audioSource.isPlaying))
+                {
+                    audioSource.audioSource.FadeTo(0.0f, fadeDuration).Done(() => audioSource.audioSource.Stop());
+                }
+            }
         }
 
         private void _PauseAll()
@@ -205,10 +228,10 @@ namespace UC
 
             foreach (var source in audioSources)
             {
-                if (source.isPlaying)
+                if (source.audioSource.isPlaying)
                 {
                     p.pausedSources.Add(source);
-                    source.Pause();
+                    source.audioSource.Pause();
                 }
             }
 
@@ -225,53 +248,53 @@ namespace UC
 
                 foreach (var source in p.pausedSources)
                 {
-                    source.UnPause();
+                    source.audioSource.UnPause();
                     audioSources.Add(source);
                 }
             }
         }
 
-        private (AudioSource, HypertaggedObject) GetSource(Hypertag tag)
+        private AudioElement GetSource(Hypertag tag)
         {
             if (audioSources == null)
             {
-                audioSources = new List<AudioSource>();
+                audioSources = new List<AudioElement>();
                 return NewSource(tag);
             }
 
-            for (int i = 0; i < audioSources.Count; i++)
+            foreach (var source in audioSources)
             {
-                var source = audioSources[i];
-                if ((!source.isPlaying) && ((audioTags[i].HasAnyHypertag(tag)) || (tag == null) || (audioTags[i].IsNullHypertag())))
+                if ((!source.audioSource.isPlaying) && ((source.hypertag.HasAnyHypertag(tag)) || (tag == null) || (source.hypertag.IsNullHypertag())))
                 {
-                    audioTags[i].SetHypertag(tag);
-                    return (source, audioTags[i]);
+                    source.hypertag.SetHypertag(tag);
+                    return source;
                 }
             }
 
             return NewSource(tag);
         }
 
-        private (AudioSource, HypertaggedObject) NewSource(Hypertag tag)
+        private AudioElement NewSource(Hypertag tag)
         {
+            AudioElement ret = new();
+
             GameObject go = new GameObject();
             go.name = "Audio Source";
             go.transform.SetParent(transform);
 
-            var audioSource = go.AddComponent<AudioSource>();
-            var ht = go.AddComponent<HypertaggedObject>();
-            ht.SetHypertag(tag);
+            ret.audioSource = go.AddComponent<AudioSource>();
+            ret.hypertag = go.AddComponent<HypertaggedObject>();
+            ret.hypertag.SetHypertag(tag);
 
-            audioSources.Add(audioSource);
-            audioTags.Add(ht);
+            audioSources.Add(ret);
 
-            return (audioSource, ht);
+            return ret;
         }
         private AudioSource _GetSound(Hypertag soundTag)
         {
-            for (int i = 0; i < audioSources.Count; i++)
+            foreach (var e in audioSources) 
             {
-                if ((audioSources[i].isPlaying) && (audioTags[i].HasAnyHypertag(soundTag))) return audioSources[i];
+                if ((e.audioSource.isPlaying) && (e.hypertag.HasAnyHypertag(soundTag))) return e.audioSource;
             }
 
             return null;
@@ -364,6 +387,12 @@ namespace UC
             if (_instance == null) return;
             _instance._UnpauseAll();
         }
+
+        static public void FadeOutAll(SoundType soundType, float fadeDuration)
+        {
+            _instance?._FadeOutAll(soundType, fadeDuration);
+        }
+
 
         static public AudioSource GetSound(Hypertag soundTag)
         {
