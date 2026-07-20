@@ -132,6 +132,7 @@ namespace UC
             }
 
             public void SetColor(Color c) { colorValue = c; Apply(); }
+            public void SetFloat(float v) { floatValue = v; Apply(); }
         }
 
         [Header("Apply Timing")]
@@ -195,6 +196,21 @@ namespace UC
                 if ((prop.PropertyId == propId) && (prop.isColor))
                 {
                     prop.SetColor(color);
+
+                    return;
+                }
+            }
+        }
+
+        public void SetFloat(string name, float v)
+        {
+            int propId = Shader.PropertyToID(name);
+
+            foreach (var prop in properties)
+            {
+                if ((prop.PropertyId == propId) && (prop.isFloat))
+                {
+                    prop.SetFloat(v);
 
                     return;
                 }
