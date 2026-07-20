@@ -153,7 +153,7 @@ namespace UC
             if (animator == null)
                 animator = GetComponent<Animator>();
 
-            if (removeAnimatorController)
+            if ((removeAnimatorController) && (animator))
                 animator.runtimeAnimatorController = null;
 
             BuildGraph();
