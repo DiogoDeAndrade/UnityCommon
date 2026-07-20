@@ -37,9 +37,10 @@ namespace UC
             public AudioSource          audioSource;
             public SoundType            audioType;
             public HypertaggedObject    hypertag;
+            public Transform            linkedObject;
         }
 
-        List<AudioElement>      audioSources;
+        List<AudioElement>      sounds;
         AudioMixerGroup[]       mixerGroups;
         AudioSource             musicSource;
 
@@ -80,7 +81,7 @@ namespace UC
             }
 
             // Find all audio sources
-            audioSources = new();
+            sounds = new();
             var existingElements = GetComponentsInChildren<AudioSource>();
             if ((existingElements != null) && (existingElements.Length > 0))
             {
@@ -96,7 +97,7 @@ namespace UC
                     {
                         e.hypertag = e.audioSource.gameObject.AddComponent<HypertaggedObject>();
                     }
-                    audioSources.Add(e);
+                    sounds.Add(e);
                 }
             }
 
@@ -127,6 +128,22 @@ namespace UC
                 musicSource = _PlayMusic(startMusic, 1.0f, 1.0f, musicTag);
             }
         }
+
+        private void Update()
+        {
+            sounds.RemoveAll((s) => s.audioSource == null);
+            foreach (var snd in sounds)
+            {
+                if (snd.audioSource.isPlaying)
+                {
+                    if (snd.linkedObject)
+                    {
+                        snd.audioSource.transform.position = snd.linkedObject.transform.position;
+                    }
+                }
+            }
+        }
+
         private AudioSource _PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag tag = null)
         {
             return _PlayMusic(clip, volume, pitch, defaultCrossfadeTime, tag);
@@ -177,7 +194,7 @@ namespace UC
             return newMusicSource;
         }
 
-        private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, bool loop = false, Hypertag tag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
+        private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, bool loop = false, Hypertag tag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default, Transform prsObject = null)
         {
             var audioSource = GetSource(tag);
 
@@ -198,8 +215,9 @@ namespace UC
             {
                 audioSource.audioSource.spatialBlend = 0.0f;
             }
+            audioSource.linkedObject = prsObject;
 
-                audioSource.audioSource.Play();
+            audioSource.audioSource.Play();
 
             if (tag)
             {
@@ -211,7 +229,7 @@ namespace UC
 
         private void _FadeOutAll(SoundType soundType, float fadeDuration)
         {
-            foreach (var audioSource in audioSources)
+            foreach (var audioSource in sounds)
             {
                 if ((audioSource.audioType == soundType) &&
                     (audioSource.audioSource.isPlaying))
@@ -226,7 +244,7 @@ namespace UC
             PauseStruct p = new();
             p.pausedSources = new();
 
-            foreach (var source in audioSources)
+            foreach (var source in sounds)
             {
                 if (source.audioSource.isPlaying)
                 {
@@ -235,7 +253,7 @@ namespace UC
                 }
             }
 
-            audioSources.RemoveAll((src) => p.pausedSources.Contains(src));
+            sounds.RemoveAll((src) => p.pausedSources.Contains(src));
 
             pauseStack.Add(p);
         }
@@ -249,20 +267,20 @@ namespace UC
                 foreach (var source in p.pausedSources)
                 {
                     source.audioSource.UnPause();
-                    audioSources.Add(source);
+                    sounds.Add(source);
                 }
             }
         }
 
         private AudioElement GetSource(Hypertag tag)
         {
-            if (audioSources == null)
+            if (sounds == null)
             {
-                audioSources = new List<AudioElement>();
+                sounds = new List<AudioElement>();
                 return NewSource(tag);
             }
 
-            foreach (var source in audioSources)
+            foreach (var source in sounds)
             {
                 if ((!source.audioSource.isPlaying) && ((source.hypertag.HasAnyHypertag(tag)) || (tag == null) || (source.hypertag.IsNullHypertag())))
                 {
@@ -286,13 +304,13 @@ namespace UC
             ret.hypertag = go.AddComponent<HypertaggedObject>();
             ret.hypertag.SetHypertag(tag);
 
-            audioSources.Add(ret);
+            sounds.Add(ret);
 
             return ret;
         }
         private AudioSource _GetSound(Hypertag soundTag)
         {
-            foreach (var e in audioSources) 
+            foreach (var e in sounds) 
             {
                 if ((e.audioSource.isPlaying) && (e.hypertag.HasAnyHypertag(soundTag))) return e.audioSource;
             }
@@ -353,12 +371,17 @@ namespace UC
             PlayerPrefs.Save();
         }
 
-        static public AudioSource PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
+        static public AudioSource PlaySound(SoundType type, AudioClip clip, bool loop = false, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
         {
             if (_instance == null) return null;
-            return _instance._PlaySound(type, clip, volume, pitch, false, defaultTag, is3d, distanceRange, position);
+            return _instance._PlaySound(type, clip, volume, pitch, loop, defaultTag, is3d, distanceRange, position);
         }
 
+        static public AudioSource PlaySoundAndFollow(SoundType type, AudioClip clip, bool loop = false, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null, Vector3 distanceRange = default, Transform prsObject = default)
+        {
+            if (_instance == null) return null;
+            return _instance._PlaySound(type, clip, volume, pitch, loop, defaultTag, true, distanceRange, prsObject.position, prsObject);
+        }
 
         static public AudioSource PlayMusic(AudioClip clip, float volume = 1.0f, float pitch = 1.0f, float crossfadeTime = -float.MaxValue, Hypertag defaultTag = null)
         {
@@ -368,12 +391,6 @@ namespace UC
                 return _instance._PlayMusic(clip, volume, pitch, crossfadeTime, (defaultTag == null) ? (_instance.musicTag) : (defaultTag));
             else
                 return _instance._PlayMusic(clip, volume, pitch, (defaultTag == null) ? (_instance.musicTag) : (defaultTag));
-        }
-
-        static public AudioSource PlayLoopSound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, Hypertag defaultTag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default)
-        {
-            if (_instance == null) return null;
-            return _instance._PlaySound(type, clip, volume, pitch, true, defaultTag, is3d, distanceRange, position);
         }
 
         static public void PauseAll()

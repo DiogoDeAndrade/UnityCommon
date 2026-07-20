@@ -44,7 +44,7 @@ namespace UC
             return Play(1.0f, 1.0f, crossfadeTime);
         }
 
-        public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f, float crossfadeTime = -float.MaxValue, Vector3 position = default)
+        public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f, float crossfadeTime = -float.MaxValue, Vector3 position = default, bool force3d = false, Transform prsObject = null)
         {
             if (subtitleTrack)
             {
@@ -62,15 +62,23 @@ namespace UC
             {
                 if (loop)
                 {
-                    ret = SoundManager.PlayLoopSound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d, distanceRange, position);
+                    if (prsObject)
+                        ret = SoundManager.PlaySoundAndFollow(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, distanceRange, prsObject);
+                    else
+                        ret = SoundManager.PlaySound(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
                 }
                 else
                 {
-                    ret = SoundManager.PlaySound(soundType, clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d, distanceRange, position);
+                    if (prsObject)
+                        ret = SoundManager.PlaySoundAndFollow(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, distanceRange, prsObject);
+                    else
+                        ret = SoundManager.PlaySound(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
                 }
             }
             else
             {
+                Debug.LogWarning("Positional music is not supported...");
+
                 ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), crossfadeTime, defaultTag);
             }
 

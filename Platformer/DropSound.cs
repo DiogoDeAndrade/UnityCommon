@@ -33,7 +33,7 @@ namespace UC
             {
                 if (cooldownTimer <= 0.0f)
                 {
-                    SoundManager.PlaySound(SoundType.PrimaryFX, dropSnd, volumeVariance.Random(), pitchVariance.Random());
+                    SoundManager.PlaySound(SoundType.PrimaryFX, dropSnd, false, volumeVariance.Random(), pitchVariance.Random());
                     if (cooldown > 0.0f) cooldownTimer = cooldown;
                 }
             }
