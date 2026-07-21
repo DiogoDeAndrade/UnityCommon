@@ -45,7 +45,7 @@ namespace UC
                         if (cooldownTimer <= 0.0f)
                         {
                             accumDist = 0.0f;
-                            SoundManager.PlaySound(SoundType.PrimaryFX, climbSnd, volumeVariance.Random(), pitchVariance.Random());
+                            SoundManager.PlaySound(SoundType.PrimaryFX, climbSnd, false, volumeVariance.Random(), pitchVariance.Random());
                             if (stepCooldown > 0) cooldownTimer = stepCooldown;
                         }
                     }

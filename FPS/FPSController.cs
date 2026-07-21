@@ -69,7 +69,7 @@ namespace UC
             if ((stepSound != null) && (currentStepDistance > stepDistance))
             {
                 currentStepDistance -= stepDistance;
-                SoundManager.PlaySound(SoundType.PrimaryFX, stepSound, stepVolume.Random(), stepPitch.Random());
+                SoundManager.PlaySound(SoundType.PrimaryFX, stepSound, false, stepVolume.Random(), stepPitch.Random());
             }
         }
 

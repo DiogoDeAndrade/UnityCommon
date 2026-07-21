@@ -20,7 +20,7 @@ namespace UC
             {
                 if (channel != SoundType.Music)
                 {
-                    SoundManager.PlaySound(channel, sound, volume.Random(), pitch.Random());
+                    SoundManager.PlaySound(channel, sound, false, volume.Random(), pitch.Random());
                 }
                 else
                 {

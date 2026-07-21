@@ -161,7 +161,7 @@ namespace UC
                 {
                     if ((currentDialogue.speaker != null) && (currentDialogue.speaker.characterSnd != null))
                     {
-                        SoundManager.PlaySound(SoundType.PrimaryFX, currentDialogue.speaker.characterSnd, currentDialogue.speaker.characterSndVolume.Random(), currentDialogue.speaker.characterSndPitch.Random());
+                        SoundManager.PlaySound(SoundType.PrimaryFX, currentDialogue.speaker.characterSnd, false, currentDialogue.speaker.characterSndVolume.Random(), currentDialogue.speaker.characterSndPitch.Random());
                     }
 
                     yield return new WaitForSeconds(timePerCharacter);
@@ -269,7 +269,7 @@ namespace UC
 
                 optionCooldownTime = Time.time;
 
-                if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, 1.0f, Random.Range(0.9f, 1.1f));
+                if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, false, 1.0f, Random.Range(0.9f, 1.1f));
             }
             else if (moveVector.y < -0.2f)
             {
@@ -279,7 +279,7 @@ namespace UC
 
                 optionCooldownTime = Time.time;
 
-                if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, 1.0f, Random.Range(0.9f, 1.1f));
+                if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, false, 1.0f, Random.Range(0.9f, 1.1f));
             }
         }
 

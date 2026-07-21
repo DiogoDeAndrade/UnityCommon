@@ -122,7 +122,7 @@ namespace UC
                             onMoveEnd?.Invoke(originalGridPos, endPosGrid, false);
                         });
 
-                        if (moveFailSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveFailSnd, 1.0f, UnityEngine.Random.Range(0.7f, 1.3f));
+                        if (moveFailSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveFailSnd, false, 1.0f, UnityEngine.Random.Range(0.7f, 1.3f));
                     }
 
                     ComputeFacingFromVector(deltaPos);
@@ -146,7 +146,7 @@ namespace UC
             onTurnTo?.Invoke(originalGridPos, endPosGrid);
             onMove?.Invoke(originalGridPos, endPosGrid);
 
-            if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd, 1.0f, UnityEngine.Random.Range(0.7f, 1.3f));
+            if (moveSnd) SoundManager.PlaySound(SoundType.SecondaryFX, moveSnd, false, 1.0f, UnityEngine.Random.Range(0.7f, 1.3f));
 
             return true;
         }
