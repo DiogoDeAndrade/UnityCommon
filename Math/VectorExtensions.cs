@@ -127,7 +127,12 @@ namespace UC
             return new Vector4(v.x, v.y, v.z, 1);
         }
 
-        public static void SafeNormalize(this Vector2 v)
+        public static Vector4 xyzw(this Vector3 v, float w)
+        {
+            return new Vector4(v.x, v.y, v.z, w);
+        }
+
+        public static void SafeNormalize(this ref Vector2 v)
         {
             if (v.sqrMagnitude > 1e-3)
             {
@@ -151,7 +156,7 @@ namespace UC
             }
         }
 
-        public static void SafeNormalize(this Vector3 v)
+        public static void SafeNormalize(this ref Vector3 v)
         {
             if (v.sqrMagnitude > 1e-3)
             {
@@ -174,7 +179,7 @@ namespace UC
             }
         }
 
-        public static void SafeNormalize(this Vector4 v)
+        public static void SafeNormalize(this ref Vector4 v)
         {
             if (v.sqrMagnitude > 1e-3)
             {

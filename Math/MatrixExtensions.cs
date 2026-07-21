@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace UC
@@ -42,6 +43,34 @@ namespace UC
             }
 
             return ret;
+        }
+
+        public static Vector3 TransformNormal(this Matrix4x4 matrix, Vector3 normal)
+        {
+            const float epsilon = 1e-8f;
+            const float epsilonSq = epsilon * epsilon;
+
+            if (normal.sqrMagnitude <= epsilonSq) return normal;
+
+            Vector3 transformedNormal;
+
+            if (Mathf.Abs(matrix.determinant) > epsilon)
+            {
+                transformedNormal = matrix.inverse.transpose.MultiplyVector(normal);
+            }
+            else
+            {
+                // Degenerate fallback. This is not mathematically exact, but avoids
+                // invalid values if an axis has been scaled to approximately zero.
+                transformedNormal = matrix.MultiplyVector(normal);
+            }
+
+            if (transformedNormal.sqrMagnitude <= epsilonSq)
+            {
+                return normal.normalized;
+            }
+
+            return transformedNormal.normalized;
         }
 
         public static double GetMatrixAxisLength(this Matrix4x4 matrix, int column)
