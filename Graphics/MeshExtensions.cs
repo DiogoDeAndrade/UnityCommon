@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace UC
@@ -272,6 +273,18 @@ namespace UC
             }
 
             return bounds;
+        }
+
+        static public int GetTriangleCount(this Mesh mesh)
+        {
+            int count = 0;
+            for (int i = 0; i < mesh.subMeshCount; i++)
+            {
+                var submesh = mesh.GetSubMesh(i);
+                count += submesh.indexCount / 3;
+            }
+
+            return count;
         }
     }
 }

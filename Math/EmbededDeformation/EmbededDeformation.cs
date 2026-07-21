@@ -2403,7 +2403,7 @@ namespace UC.ED
             return J;
         }
 
-        private double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
+        private double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null)
         {
             var baseView = new EDStateView(state);
 
@@ -2414,7 +2414,7 @@ namespace UC.ED
                 nodeFrames = BuildNodeFrames(baseView);
             }
 
-            double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance, nodeFrames, trilinearNodeIds, trilinearWeights);
+            double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance, nodeFrames);
 
             if (Math.Abs(r0) <= 1e-12) return 0.0;
 
@@ -2447,7 +2447,7 @@ namespace UC.ED
 
                 try
                 {
-                    r1 = EvaluateSingleClearanceResidual(modifiedState, segmentIndex, wClearance, nodeFrames, trilinearNodeIds, trilinearWeights);
+                    r1 = EvaluateSingleClearanceResidual(modifiedState, segmentIndex, wClearance, nodeFrames);
                 }
                 finally
                 {
@@ -3250,7 +3250,7 @@ namespace UC.ED
                     {
                         int clearanceRow = clearanceStartRow + segmentIndex;
 
-                        scratch.jacobianNormSq += FillClearanceJacobianRow(state, J, clearanceRow, segmentIndex, wClearance, scratch.nodeFrames, scratch.nodeIds, scratch.nodeWeights);
+                        scratch.jacobianNormSq += FillClearanceJacobianRow(state, J, clearanceRow, segmentIndex, wClearance, scratch.nodeFrames);
 
                         return scratch;
                     },
@@ -4076,11 +4076,11 @@ namespace UC.ED
             return frames;
         }
 
-        private DVector3 DeformClearancePoint(DVector3 restPosition, EDVertexBinding standardBinding, EDStateView state, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights)
+        private DVector3 DeformClearancePoint(DVector3 restPosition, EDVertexBinding standardBinding, EDStateView state, List<FullDeformationField.Frame> nodeFrames)
         {
             if (nodeFrames != null)
             {
-                Vector3 deformed = deformationField.DeformPositionFromNodeFramesTrilinear(restPosition.ToVector3(), nodeFrames, trilinearNodeIds, trilinearWeights);
+                Vector3 deformed = deformationField.DeformPositionFromNodeFramesTrilinear(restPosition.ToVector3(), nodeFrames);
 
                 return deformed.ToDVector3();
             }
@@ -4088,11 +4088,11 @@ namespace UC.ED
             return DeformVertex(restPosition, standardBinding, state);
         }
 
-        private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights, out double clearance)
+        private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, out double clearance)
         {
-            (Vector3 p1, Vector3 p2) = GetTransformedSegment(state, segmentIndex, nodeFrames, trilinearNodeIds, trilinearWeights);
+            (Vector3 p1, Vector3 p2) = GetTransformedSegment(state, segmentIndex, nodeFrames);
 
-            return GetClearance(state, p1.ToDVector3(), p2.ToDVector3(),nodeFrames, trilinearNodeIds, trilinearWeights, out clearance);
+            return GetClearance(state, p1.ToDVector3(), p2.ToDVector3(),nodeFrames, out clearance);
         }
 
         EDClearanceCache ComputeClearance(EDState state)
@@ -4102,8 +4102,6 @@ namespace UC.ED
 
         private sealed class ClearanceThreadScratch
         {
-            public readonly List<int> nodeIds;
-            public readonly List<float> nodeWeights;
             public readonly List<FullDeformationField.Frame> nodeFrames;
 
             public double jacobianNormSq;
@@ -4114,9 +4112,6 @@ namespace UC.ED
 
             public ClearanceThreadScratch(int capacity, List<FullDeformationField.Frame> baseNodeFrames)
             {
-                nodeIds = new List<int>(capacity);
-                nodeWeights = new List<float>(capacity);
-
                 nodeFrames = (baseNodeFrames != null) ? (new List<FullDeformationField.Frame>(baseNodeFrames)) : (null);
 
                 jacobianNormSq = 0.0;
@@ -4144,7 +4139,7 @@ namespace UC.ED
 
                     (index, loopState, scratch) =>
                     {
-                        bool valid = TryComputeSegmentClearance(state, index, nodeFrames, scratch.nodeIds, scratch.nodeWeights, out double clearance);
+                        bool valid = TryComputeSegmentClearance(state, index, nodeFrames, out double clearance);
 
                         ret.Set(index, (valid) ? (clearance) : (double.MaxValue));
 
@@ -4161,7 +4156,7 @@ namespace UC.ED
             {
                 Parallel.For(0, structure.Count, index =>
                 {
-                    bool valid = TryComputeSegmentClearance(state, index, null, null, null, out double clearance);
+                    bool valid = TryComputeSegmentClearance(state, index, null, out double clearance);
 
                     ret.Set(index, (valid) ? (clearance) : (double.MaxValue));
                 });
@@ -4172,7 +4167,7 @@ namespace UC.ED
             return ret;
         }
 
-        private double EvaluateSingleClearanceResidual(EDStateView state, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
+        private double EvaluateSingleClearanceResidual(EDStateView state, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null)
         {
             double original = restState.GetClearance(segmentIndex);
 
@@ -4183,7 +4178,7 @@ namespace UC.ED
                 nodeFrames = BuildNodeFrames(state);
             }
 
-            if (!TryComputeSegmentClearance(state, segmentIndex, nodeFrames, trilinearNodeIds, trilinearWeights, out double current))
+            if (!TryComputeSegmentClearance(state, segmentIndex, nodeFrames, out double current))
             {
                 return 0.0;
             }
@@ -4445,7 +4440,7 @@ namespace UC.ED
             return Math.Max(0.0, loss);
         }
 
-        bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights, out double minClearance)
+        bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, List<FullDeformationField.Frame> nodeFrames, out double minClearance)
         {
             minClearance = double.MaxValue;
 
@@ -4461,8 +4456,8 @@ namespace UC.ED
                 if (!edge.isBoundary) continue;
                 if (IsConnectorEdge(edge)) continue;
 
-                DVector3 e1 = DeformClearancePoint(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state, nodeFrames, trilinearNodeIds, trilinearWeights);
-                DVector3 e2 = DeformClearancePoint(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state, nodeFrames, trilinearNodeIds, trilinearWeights);
+                DVector3 e1 = DeformClearancePoint(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state, nodeFrames);
+                DVector3 e2 = DeformClearancePoint(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state, nodeFrames);
 
                 double t1 = DVector3.Dot(e1 - p1, dir);
                 double t2 = DVector3.Dot(e2 - p1, dir);
@@ -4598,16 +4593,16 @@ namespace UC.ED
 
             // GetSegment is currently called serially by the debug drawing, so null
             // scratch buffers may safely use FullDeformationField's shared cache.
-            return GetTransformedSegment(state, segmentIndex, nodeFrames, null, null);
+            return GetTransformedSegment(state, segmentIndex, nodeFrames);
         }
 
-        private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, List<int> trilinearNodeIds, List<float> trilinearWeights)
+        private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames)
         {
             NavEDSegments segment = structure[segmentIndex];
 
-            DVector3 p1 = DeformClearancePoint(segment.p1, segment.bind1, state, nodeFrames, trilinearNodeIds, trilinearWeights);
+            DVector3 p1 = DeformClearancePoint(segment.p1, segment.bind1, state, nodeFrames);
 
-            DVector3 p2 = DeformClearancePoint(segment.p2, segment.bind2, state, nodeFrames, trilinearNodeIds, trilinearWeights);
+            DVector3 p2 = DeformClearancePoint(segment.p2, segment.bind2, state, nodeFrames);
 
             return (p1.ToVector3(), p2.ToVector3());
         }
@@ -4961,6 +4956,7 @@ namespace UC.ED
             // 6) Convert distances into normalized weights.
             // -------------------------------------------------------------
             deformationField.ComputeWeights(safeMaxWeights);
+            deformationField.BuildTrilinearRegions();
 
             timeDeformationFieldGeneration.Mark();
 
@@ -4977,6 +4973,173 @@ namespace UC.ED
         }
 
         public FullDeformationField GetDeformationField() => deformationField;
+
+        public Mesh DeformMesh(Mesh srcMesh, Matrix4x4 srcMatrix, Matrix4x4 destMatrix, bool rebuildNormals, bool rebuildTangents)
+        {
+            if (srcMesh == null)
+            {
+                Debug.LogError("DeformMesh failed: source mesh is null.");
+
+                return null;
+            }
+
+            if (!srcMesh.isReadable)
+            {
+                Debug.LogError($"DeformMesh failed: mesh '{srcMesh.name}' is not readable. Enable Read/Write in its import settings.");
+
+                return null;
+            }
+
+            if (deformationField == null)
+            {
+                Debug.LogError($"DeformMesh failed for '{srcMesh.name}': the deformation field has not been built.");
+
+                return null;
+            }
+
+            if (currentState == null)
+            {
+                Debug.LogError($"DeformMesh failed for '{srcMesh.name}': there is no current deformation state.");
+
+                return null;
+            }
+
+            Matrix4x4 destInverse = destMatrix.inverse;
+            Matrix4x4 sourceNormalMatrix = srcMatrix.inverse.transpose;
+            Matrix4x4 destinationNormalMatrix = destMatrix.transpose;
+
+            Mesh outputMesh = UnityEngine.Object.Instantiate(srcMesh);
+
+            outputMesh.name = $"{srcMesh.name} (Deformed)";
+
+            Vector3[] sourceVertices = srcMesh.vertices;
+
+            Vector3[] outputVertices = new Vector3[sourceVertices.Length];
+            Vector3[] outputNormals = rebuildNormals ? null : srcMesh.normals;
+            Vector4[] outputTangents = rebuildTangents ? null : srcMesh.tangents;
+
+            bool transformNormals = (!rebuildNormals) && (outputNormals != null) && (outputNormals.Length == sourceVertices.Length);
+            bool transformTangents = (!rebuildTangents) && (outputTangents != null) && (outputTangents.Length == sourceVertices.Length);
+
+            if ((!rebuildNormals) && (!transformNormals))
+            {
+                Debug.LogWarning($"Mesh '{srcMesh.name}' does not contain a valid normal for every vertex. Existing normals cannot be transformed.");
+            }
+
+            if ((!rebuildTangents) && (!transformTangents))
+            {
+                Debug.LogWarning($"Mesh '{srcMesh.name}' does not contain a valid tangent for every vertex. Existing tangents cannot be transformed.");
+            }
+
+            EDStateView state = new EDStateView(currentState);
+
+            List<FullDeformationField.Frame> nodeFrames = BuildNodeFrames(state);
+
+            float sourceToDestinationDeterminant = srcMatrix.determinant * destInverse.determinant;
+
+            for (int i = 0; i < sourceVertices.Length; i++)
+            {
+                Vector3 sourcePosition = srcMatrix.MultiplyPoint3x4(sourceVertices[i]);
+
+                bool hasDeformation = deformationField.TryGetDeformationMatrixTrilinear(sourcePosition, nodeFrames, out Matrix4x4 deformationMatrix);
+
+                Vector3 deformedPosition = (hasDeformation) ? (deformationMatrix.MultiplyPoint3x4(sourcePosition)) : (sourcePosition);
+
+                outputVertices[i] = destInverse.MultiplyPoint3x4(deformedPosition);
+
+                if (transformNormals)
+                {
+                    Vector3 sourceNormal = sourceNormalMatrix.MultiplyVector(outputNormals[i]);
+
+                    Vector3 deformedNormal = (hasDeformation) ? (deformationMatrix.TransformNormal(sourceNormal)) : (sourceNormal.normalized);
+
+                    Vector3 destinationNormal = destinationNormalMatrix.MultiplyVector(deformedNormal);
+
+                    outputNormals[i] = (destinationNormal.sqrMagnitude > 1e-12f) ? (destinationNormal.normalized) : (Vector3.up);
+                }
+
+                if (transformTangents)
+                {
+                    Vector4 sourceTangent4 = outputTangents[i];
+
+                    Vector3 sourceTangent = sourceTangent4.xyz();
+
+                    sourceTangent = srcMatrix.MultiplyVector(sourceTangent);
+
+                    Vector3 deformedTangent = (hasDeformation) ? (deformationMatrix.MultiplyVector(sourceTangent)) : (sourceTangent);
+
+                    Vector3 destinationTangent = (destInverse.MultiplyVector(deformedTangent));
+
+                    if (destinationTangent.sqrMagnitude > 1e-12f) destinationTangent.Normalize();
+
+                    // Tangent.w describes tangent-space handedness. Flip it if the
+                    // complete transformation reverses orientation.
+                    float determinant = sourceToDestinationDeterminant * ((hasDeformation) ? (deformationMatrix.determinant) : (1.0f));
+
+                    float handedness = (determinant < 0.0f) ? (-sourceTangent4.w) : (sourceTangent4.w);
+
+                    outputTangents[i] = destinationTangent.xyzw(handedness);
+                }
+            }
+
+            outputMesh.vertices = outputVertices;
+
+            if (rebuildNormals)
+            {
+                outputMesh.RecalculateNormals();
+            }
+            else if (transformNormals)
+            {
+                outputMesh.normals = outputNormals;
+            }
+
+            if (rebuildTangents)
+            {
+                if (outputMesh.normals.Length != outputMesh.vertexCount)
+                {
+                    Debug.LogWarning($"Mesh '{srcMesh.name}' has no valid normals. Normals will be rebuilt before rebuilding tangents.");
+
+                    outputMesh.RecalculateNormals();
+                }
+
+                if (outputMesh.uv.Length == outputMesh.vertexCount)
+                {
+                    outputMesh.RecalculateTangents();
+                }
+                else
+                {
+                    // The source mesh may not use tangent-space shading.
+                    // Do not retain stale tangents from the cloned mesh.
+                    outputMesh.tangents = Array.Empty<Vector4>();
+                }
+            }
+            else if (transformTangents)
+            {
+                // Re-orthogonalize the transformed tangent against the final normal.
+                // This is especially useful when normals were rebuilt from geometry.
+                Vector3[] finalNormals = outputMesh.normals;
+
+                if ((finalNormals != null) && (finalNormals.Length == outputTangents.Length))
+                {
+                    for (int i = 0; i < outputTangents.Length; i++)
+                    {
+                        Vector3 tangent = outputTangents[i].xyz();
+
+                        tangent = Vector3.ProjectOnPlane(tangent, finalNormals[i]);
+
+                        if (tangent.sqrMagnitude > 1e-12f) tangent.Normalize();
+
+                        outputTangents[i] = tangent.xyzw(outputTangents[i].w);
+                    }
+                }
+
+                outputMesh.tangents = outputTangents;
+            }
+
+            outputMesh.RecalculateBounds();
+
+            return outputMesh;
+        }
     }
 }
 #endif

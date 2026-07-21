@@ -9,10 +9,10 @@ public class FullDeformationField
     [Serializable]
     public struct DeformationFieldWeights : IEquatable<DeformationFieldWeights>, IOccupancyState
     {
-        public bool     filled;
-        public float[]  distances;
-        public int[]    nodeId;
-        public float[]  weights;
+        public bool filled;
+        public float[] distances;
+        public int[] nodeId;
+        public float[] weights;
 
         public void ClearOccupancy()
         {
@@ -25,7 +25,7 @@ public class FullDeformationField
 
             if ((distances == null) || (weights == null) || (nodeId == null))
             {
-                return (other.distances == null) && (other.weights == null) && (other.nodeId == null);
+                return ((other.distances == null) && (other.weights == null) && (other.nodeId == null));
             }
 
             if ((other.distances == null) || (other.weights == null) || (other.nodeId == null)) return false;
@@ -119,6 +119,26 @@ public class FullDeformationField
         }
     }
 
+
+    [Serializable]
+    struct TrilinearRegion
+    {
+        public int influenceStart;
+        public int influenceCount;
+    }
+
+    [Serializable]
+    struct TrilinearInfluence
+    {
+        public int nodeId;
+
+        // Corner order:
+        // lowZ  = (000, 100, 010, 110)
+        // highZ = (001, 101, 011, 111)
+        public Vector4 lowZ;
+        public Vector4 highZ;
+    }
+
     [SerializeField, HideInInspector]
     VoxelData<DeformationFieldWeights>  voxelData;
     [SerializeField, HideInInspector]
@@ -129,6 +149,15 @@ public class FullDeformationField
     List<Frame>                         deformationNodes = new List<Frame>();
     [SerializeField, HideInInspector]
     List<Matrix4x4>                     restInverses = new List<Matrix4x4>();
+
+
+    // Runtime-only cache. It is rebuilt lazily after a Unity domain reload,
+    // or explicitly through BuildTrilinearRegions().
+    [NonSerialized] TrilinearRegion[]       trilinearRegions;
+    [NonSerialized] TrilinearInfluence[]    trilinearInfluences;
+    [NonSerialized] Vector3Int              trilinearRegionGridSize;
+    [NonSerialized] volatile bool           trilinearRegionsDirty = true;
+    [NonSerialized] object                  trilinearBuildLock;
 
     public Vector3Int gridSize => voxelData?.gridSize ?? Vector3Int.zero;
     public Vector3 cellSize => Vector3.one * voxelSize;
@@ -149,8 +178,8 @@ public class FullDeformationField
 
     struct QueueItem
     {
-        public int   voxelIndex;
-        public int   nodeIndex;
+        public int voxelIndex;
+        public int nodeIndex;
         public float distance;
 
         public QueueItem(int voxelIndex, int nodeIndex, float distance)
@@ -256,12 +285,6 @@ public class FullDeformationField
     Vector3 VoxelCenter(int x, int y, int z)
     {
         return voxelData.minBound + new Vector3((x + 0.5f) * voxelData.voxelSize.x, (y + 0.5f) * voxelData.voxelSize.y, (z + 0.5f) * voxelData.voxelSize.z);
-    }
-
-    Vector3 VoxelCenter(int index)
-    {
-        var p = PositionOf(index);
-        return VoxelCenter(p.x, p.y, p.z);
     }
 
     Vector3Int WorldToVoxel(Vector3 position)
@@ -454,6 +477,8 @@ public class FullDeformationField
 
     public void FillWithMesh(List<Mesh> meshes, List<Matrix4x4> transformMatrices)
     {
+        InvalidateTrilinearRegions();
+
         VoxelizerIntersectionCPU.Voxelize(voxelData, meshes, transformMatrices, voxelSize, fillEmpty: true);
 
         for (int i = 0; i < voxelData.data.Length; i++)
@@ -488,6 +513,8 @@ public class FullDeformationField
 
     public int AddDeformationNode(Frame frame)
     {
+        InvalidateTrilinearRegions();
+
         deformationNodes.Add(frame);
         restInverses.Add(ComputeRestInverse(frame));
         int nodeIndex = deformationNodes.Count - 1;
@@ -547,6 +574,8 @@ public class FullDeformationField
     public void GrowInfluence()
     {
         if (!HasVoxelData()) return;
+
+        InvalidateTrilinearRegions();
 
         MinHeap heap = new();
 
@@ -609,6 +638,8 @@ public class FullDeformationField
     public void ComputeWeights(int maxWeights = -1)
     {
         if (!HasVoxelData()) return;
+
+        InvalidateTrilinearRegions();
 
         int weightCount = maxWeights < 0 ? this.maxWeights : maxWeights;
         weightCount = Mathf.Clamp(weightCount, 0, this.maxWeights);
@@ -884,180 +915,340 @@ public class FullDeformationField
         return m.MultiplyPoint3x4(position);
     }
 
-    // Scratch buffers for the trilinear lookup. The union of influences over
-    // the eight sampled cells holds at most 8 * maxWeights entries before
-    // duplicates are merged. Reused across calls; like the rest of this class,
-    // queries are not thread-safe.
-    private readonly List<int> cacheTrilinearNodeIds = new();
-    private readonly List<float> cacheTrilinearWeights = new();
-
-    private void ResolveTrilinearBuffers(ref List<int> nodeIds, ref List<float> nodeWeights)
+    void InvalidateTrilinearRegions()
     {
-        bool idsMissing = nodeIds == null;
-        bool weightsMissing = nodeWeights == null;
+        trilinearRegionsDirty = true;
+        trilinearRegions = null;
+        trilinearInfluences = null;
+        trilinearRegionGridSize = Vector3Int.zero;
+    }
 
-        // Require either both buffers or neither.
-        if (idsMissing != weightsMissing)
+    object GetTrilinearBuildLock()
+    {
+        if (trilinearBuildLock != null)
+            return trilinearBuildLock;
+
+        object newLock = new object();
+        object existing = System.Threading.Interlocked.CompareExchange(
+            ref trilinearBuildLock,
+            newLock,
+            null);
+
+        return existing ?? newLock;
+    }
+
+    bool HasValidTrilinearRegions()
+    {
+        if (trilinearRegionsDirty) return false;
+        if (trilinearRegions == null) return false;
+        if (trilinearInfluences == null) return false;
+
+        if (!HasVoxelData())
         {
-            throw new ArgumentException("Both trilinear scratch buffers must be provided, or both must be null.");
+            return trilinearRegions.Length == 0 &&
+                   trilinearInfluences.Length == 0;
         }
 
-        if (idsMissing)
+        Vector3Int expectedSize = voxelData.gridSize + Vector3Int.one;
+        if (trilinearRegionGridSize != expectedSize) return false;
+
+        long expectedCount =
+            (long)expectedSize.x *
+            expectedSize.y *
+            expectedSize.z;
+
+        return expectedCount <= int.MaxValue &&
+               trilinearRegions.Length == (int)expectedCount;
+    }
+
+    public bool trilinearRegionsBuilt => HasValidTrilinearRegions();
+    public int trilinearRegionCount => trilinearRegions?.Length ?? 0;
+    public int trilinearInfluenceCount => trilinearInfluences?.Length ?? 0;
+
+    static void AddTrilinearCornerWeight(ref TrilinearInfluence influence, int cornerIndex, float weight)
+    {
+        if (cornerIndex < 4)
         {
-            // Shared fallback: allocation-free, but not thread-safe.
-            nodeIds = cacheTrilinearNodeIds;
-            nodeWeights = cacheTrilinearWeights;
+            Vector4 values = influence.lowZ;
+            values[cornerIndex] += weight;
+            influence.lowZ = values;
+        }
+        else
+        {
+            Vector4 values = influence.highZ;
+            values[cornerIndex - 4] += weight;
+            influence.highZ = values;
         }
     }
 
-    // Gathers the trilinearly interpolated node weights at a rest-space
-    // position: w~_i(p) = sum over the eight neighbouring cell centres c of
-    // lambda_c(p) * w_i,c, with w_i,c = 0 when node i is not stored in cell c.
-    // Interpolating the computed weights (rather than the sparse geodesic
-    // distances) keeps absent nodes at zero instead of an unknown distance.
-    void GatherTrilinearWeights(Vector3 position, List<int> nodeIds, List<float> nodeWeights)
+    int TrilinearRegionIndex(int x, int y, int z)
     {
-        if (nodeIds == null)
-            throw new ArgumentNullException(nameof(nodeIds));
+        return x + trilinearRegionGridSize.x * (y + trilinearRegionGridSize.y * z);
+    }
 
-        if (nodeWeights == null)
-            throw new ArgumentNullException(nameof(nodeWeights));
-
-        nodeIds.Clear();
-        nodeWeights.Clear();
-
-        if (!HasVoxelData()) return;
-
-        // Continuous coordinates in cell-centre space: cell (x, y, z) samples
-        // the field at its centre, so shift by half a cell.
-        Vector3 local = position - voxelData.minBound;
-        float cx = local.x / voxelData.voxelSize.x - 0.5f;
-        float cy = local.y / voxelData.voxelSize.y - 0.5f;
-        float cz = local.z / voxelData.voxelSize.z - 0.5f;
-
-        int bx = Mathf.FloorToInt(cx);
-        int by = Mathf.FloorToInt(cy);
-        int bz = Mathf.FloorToInt(cz);
-
-        float fx = cx - bx;
-        float fy = cy - by;
-        float fz = cz - bz;
-
-        for (int dz = 0; dz <= 1; dz++)
+    // Explicit build entry point. This can be called once on the main thread
+    // before launching a parallel deformation pass. Trilinear sampling also
+    // calls EnsureTrilinearRegionsBuilt(), so explicit construction is optional.
+    public void BuildTrilinearRegions()
+    {
+        lock (GetTrilinearBuildLock())
         {
-            float lz = (dz == 0) ? (1f - fz) : fz;
-            if (lz <= 0f) continue;
+            BuildTrilinearRegionsInternal();
+        }
+    }
 
-            for (int dy = 0; dy <= 1; dy++)
+    void EnsureTrilinearRegionsBuilt()
+    {
+        if (HasValidTrilinearRegions())
+            return;
+
+        lock (GetTrilinearBuildLock())
+        {
+            if (!HasValidTrilinearRegions())
             {
-                float ly = (dy == 0) ? (1f - fy) : fy;
-                if (ly <= 0f) continue;
-
-                for (int dx = 0; dx <= 1; dx++)
-                {
-                    float lx = (dx == 0) ? (1f - fx) : fx;
-                    if (lx <= 0f) continue;
-
-                    float lambda = lx * ly * lz;
-
-                    // Clamp at the borders: samples outside the grid collapse
-                    // onto the nearest cell, so the coefficients still sum to 1.
-                    int x = Mathf.Clamp(bx + dx, 0, voxelData.gridSize.x - 1);
-                    int y = Mathf.Clamp(by + dy, 0, voxelData.gridSize.y - 1);
-                    int z = Mathf.Clamp(bz + dz, 0, voxelData.gridSize.z - 1);
-
-                    DeformationFieldWeights element = voxelData.data[IndexOf(x, y, z)];
-                    if ((element.weights == null) || (element.nodeId == null)) continue;
-
-                    for (int i = 0; i < element.nodeId.Length; i++)
-                    {
-                        int nodeIndex = element.nodeId[i];
-                        float weight = element.weights[i];
-
-                        if (nodeIndex < 0) continue;
-                        if (weight <= 0f) continue;
-
-                        int slot = nodeIds.IndexOf(nodeIndex);
-                        if (slot >= 0)
-                        {
-                            nodeWeights[slot] += lambda * weight;
-                        }
-                        else
-                        {
-                            nodeIds.Add(nodeIndex);
-                            nodeWeights.Add(lambda * weight);
-                        }
-                    }
-                }
+                BuildTrilinearRegionsInternal();
             }
         }
     }
 
-    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, List<Frame> currentNodeFrames, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
+    void BuildTrilinearRegionsInternal()
     {
-        if (currentNodeFrames == null) return position;
+        if (!HasVoxelData())
+        {
+            trilinearRegionGridSize = Vector3Int.zero;
+            trilinearRegions = Array.Empty<TrilinearRegion>();
+            trilinearInfluences = Array.Empty<TrilinearInfluence>();
+            trilinearRegionsDirty = false;
+            return;
+        }
 
-        ResolveTrilinearBuffers(ref trilinearNodeIds, ref trilinearWeights);
+        Vector3Int regionSize = voxelData.gridSize + Vector3Int.one;
 
-        GatherTrilinearWeights(position, trilinearNodeIds, trilinearWeights);
+        long regionCountLong = (long)regionSize.x * regionSize.y * regionSize.z;
+
+        if (regionCountLong > int.MaxValue)
+        {
+            throw new InvalidOperationException($"Trilinear region grid is too large: {regionSize}.");
+        }
+
+        TrilinearRegion[] newRegions = new TrilinearRegion[(int)regionCountLong];
+
+        List<TrilinearInfluence> allInfluences = new();
+        List<TrilinearInfluence> regionInfluences = new(Mathf.Max(1, 8 * maxWeights));
+
+        Dictionary<int, int> influenceSlotByNode = new(Mathf.Max(1, 8 * maxWeights));
+
+        int regionIndex = 0;
+
+        // Region coordinate r corresponds to base cell coordinate b = r - 1.
+        // This includes one clamped interpolation region on each low border.
+        for (int rz = 0; rz < regionSize.z; rz++)
+        {
+            int bz = rz - 1;
+
+            for (int ry = 0; ry < regionSize.y; ry++)
+            {
+                int by = ry - 1;
+
+                for (int rx = 0; rx < regionSize.x; rx++, regionIndex++)
+                {
+                    int bx = rx - 1;
+
+                    influenceSlotByNode.Clear();
+                    regionInfluences.Clear();
+
+                    for (int dz = 0; dz <= 1; dz++)
+                    {
+                        int z = Mathf.Clamp(bz + dz, 0, voxelData.gridSize.z - 1);
+
+                        for (int dy = 0; dy <= 1; dy++)
+                        {
+                            int y = Mathf.Clamp(by + dy, 0, voxelData.gridSize.y - 1);
+
+                            for (int dx = 0; dx <= 1; dx++)
+                            {
+                                int x = Mathf.Clamp(bx + dx, 0, voxelData.gridSize.x - 1);
+
+                                int cornerIndex = dx + 2 * dy + 4 * dz;
+
+                                DeformationFieldWeights element = voxelData.data[IndexOf(x, y, z)];
+
+                                if ((element.nodeId == null) || (element.weights == null)) continue;
+
+                                int influenceCount = Mathf.Min(element.nodeId.Length, element.weights.Length);
+
+                                for (int i = 0; i < influenceCount; i++)
+                                {
+                                    int nodeIndex = element.nodeId[i];
+                                    float weight = element.weights[i];
+
+                                    if (nodeIndex < 0) continue;
+                                    if (weight <= 0f) continue;
+
+                                    if (!influenceSlotByNode.TryGetValue(nodeIndex, out int slot))
+                                    {
+                                        slot = regionInfluences.Count;
+                                        influenceSlotByNode.Add(nodeIndex, slot);
+
+                                        regionInfluences.Add(new TrilinearInfluence 
+                                        {
+                                            nodeId = nodeIndex,
+                                            lowZ = Vector4.zero,
+                                            highZ = Vector4.zero,
+                                        });
+                                    }
+
+                                    TrilinearInfluence influence = regionInfluences[slot];
+
+                                    AddTrilinearCornerWeight(ref influence, cornerIndex, weight);
+
+                                    regionInfluences[slot] = influence;
+                                }
+                            }
+                        }
+                    }
+
+                    newRegions[regionIndex] = new TrilinearRegion
+                    {
+                        influenceStart = allInfluences.Count,
+                        influenceCount = regionInfluences.Count,
+                    };
+
+                    allInfluences.AddRange(regionInfluences);
+                }
+            }
+        }
+
+        // Publish complete immutable arrays only after the build has finished.
+        trilinearRegionGridSize = regionSize;
+        trilinearRegions = newRegions;
+        trilinearInfluences = allInfluences.ToArray();
+        trilinearRegionsDirty = false;
+    }
+
+    static float InterpolateTrilinearWeight(TrilinearInfluence influence, float fx, float fy, float fz)
+    {
+        float lowZ = Mathf.Lerp(Mathf.Lerp(influence.lowZ.x, influence.lowZ.y, fx), Mathf.Lerp(influence.lowZ.z, influence.lowZ.w, fx), fy);
+
+        float highZ = Mathf.Lerp(Mathf.Lerp(influence.highZ.x, influence.highZ.y, fx), Mathf.Lerp(influence.highZ.z, influence.highZ.w, fx), fy);
+
+        return Mathf.Lerp(lowZ, highZ, fz);
+    }
+
+    bool TryGetTrilinearRegion(Vector3 position, out TrilinearRegion region, out float fx, out float fy, out float fz)
+    {
+        region = default;
+        fx = fy = fz = 0f;
+
+        if (!HasVoxelData()) return false;
+
+        Vector3 local = position - voxelData.minBound;
+
+        float cx = local.x / voxelData.voxelSize.x - 0.5f;
+        float cy = local.y / voxelData.voxelSize.y - 0.5f;
+        float cz = local.z / voxelData.voxelSize.z - 0.5f;
+
+        int rawBx = Mathf.FloorToInt(cx);
+        int rawBy = Mathf.FloorToInt(cy);
+        int rawBz = Mathf.FloorToInt(cz);
+
+        fx = cx - rawBx;
+        fy = cy - rawBy;
+        fz = cz - rawBz;
+
+        int bx = Mathf.Clamp(rawBx, -1, voxelData.gridSize.x - 1);
+        int by = Mathf.Clamp(rawBy, -1, voxelData.gridSize.y - 1);
+        int bz = Mathf.Clamp(rawBz, -1, voxelData.gridSize.z - 1);
+
+        int rx = bx + 1;
+        int ry = by + 1;
+        int rz = bz + 1;
+
+        region = trilinearRegions[TrilinearRegionIndex(rx, ry, rz)];
+
+        return true;
+    }
+
+    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, List<Frame> currentNodeFrames)
+    {
+        if (currentNodeFrames == null)
+            return position;
+
+        EnsureTrilinearRegionsBuilt();
+
+        if (!TryGetTrilinearRegion(position, out TrilinearRegion region, out float fx, out float fy, out float fz))
+        {
+            return position;
+        }
 
         Vector3 displacement = Vector3.zero;
-        float weightSum = 0.0f;
+        float weightSum = 0f;
 
-        for (int i = 0; i < trilinearNodeIds.Count; i++)
+        int influenceEnd = region.influenceStart + region.influenceCount;
+
+        for (int i = region.influenceStart; i < influenceEnd; i++)
         {
-            float weight = trilinearWeights[i];
-            int nodeIndex = trilinearNodeIds[i];
+            TrilinearInfluence influence = trilinearInfluences[i];
 
-            if (weight <= 0.0f) continue;
+            float weight = InterpolateTrilinearWeight(influence, fx, fy, fz);
+
+            int nodeIndex = influence.nodeId;
+
+            if (weight <= 0f) continue;
+            if (nodeIndex < 0) continue;
             if (nodeIndex >= deformationNodes.Count) continue;
             if (nodeIndex >= currentNodeFrames.Count) continue;
 
             Vector3 deformedPosition = NodeDeformMatrix(nodeIndex, currentNodeFrames[nodeIndex]).MultiplyPoint3x4(position);
 
             displacement += weight * (deformedPosition - position);
+
             weightSum += weight;
         }
 
         if (weightSum <= DistanceEpsilon) return position;
 
-        // The interpolated weights should already form a partition of unity,
-        // but normalize defensively (partial influences, clamped borders).
-        displacement /= weightSum;
-
-        return position + displacement;
+        return position + displacement / weightSum;
     }
 
-    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, Func<int, Frame> getCurrentNodeFrame, List<int> trilinearNodeIds = null, List<float> trilinearWeights = null)
+    public Vector3 DeformPositionFromNodeFramesTrilinear(Vector3 position, Func<int, Frame> getCurrentNodeFrame)
     {
         if (getCurrentNodeFrame == null) return position;
 
-        ResolveTrilinearBuffers(ref trilinearNodeIds, ref trilinearWeights);
+        EnsureTrilinearRegionsBuilt();
 
-        GatherTrilinearWeights(position, trilinearNodeIds, trilinearWeights);
+        if (!TryGetTrilinearRegion(position, out TrilinearRegion region, out float fx, out float fy, out float fz))
+        {
+            return position;
+        }
 
         Vector3 displacement = Vector3.zero;
-        float weightSum = 0.0f;
+        float weightSum = 0f;
 
-        for (int i = 0; i < trilinearNodeIds.Count; i++)
+        int influenceEnd = region.influenceStart + region.influenceCount;
+
+        for (int i = region.influenceStart; i < influenceEnd; i++)
         {
-            float weight = trilinearWeights[i];
-            int nodeIndex = trilinearNodeIds[i];
+            TrilinearInfluence influence = trilinearInfluences[i];
 
-            if (weight <= 0.0f) continue;
+            float weight = InterpolateTrilinearWeight(influence, fx, fy, fz);
+
+            int nodeIndex = influence.nodeId;
+
+            if (weight <= 0f) continue;
+            if (nodeIndex < 0) continue;
             if (nodeIndex >= deformationNodes.Count) continue;
 
             Vector3 deformedPosition = NodeDeformMatrix(nodeIndex, getCurrentNodeFrame(nodeIndex)).MultiplyPoint3x4(position);
 
             displacement += weight * (deformedPosition - position);
+
             weightSum += weight;
         }
 
         if (weightSum <= DistanceEpsilon) return position;
 
-        displacement /= weightSum;
-
-        return position + displacement;
+        return position + displacement / weightSum;
     }
 
     public Frame DeformFrame(Frame frame, List<Frame> currentNodeFrames)
@@ -1110,5 +1301,55 @@ public class FullDeformationField
                          blended.MultiplyVector(frame.right),
                          blended.MultiplyVector(frame.up),
                          blended.MultiplyVector(frame.forward));
+    }
+
+    public bool TryGetDeformationMatrixTrilinear(Vector3 position, List<Frame> currentNodeFrames, out Matrix4x4 deformationMatrix)
+    {
+        deformationMatrix = Matrix4x4.identity;
+
+        if (currentNodeFrames == null) return false;
+
+        EnsureTrilinearRegionsBuilt();
+
+        if (!TryGetTrilinearRegion(position, out TrilinearRegion region, out float fx, out float fy, out float fz))
+        {
+            return false;
+        }
+
+        Matrix4x4 blendedMatrix = Matrix4x4.zero;
+        float weightSum = 0.0f;
+
+        int influenceEnd = region.influenceStart + region.influenceCount;
+
+        for (int i = region.influenceStart; i < influenceEnd; i++)
+        {
+            TrilinearInfluence influence = trilinearInfluences[i];
+
+            float weight = InterpolateTrilinearWeight(influence, fx, fy, fz);
+
+            int nodeIndex = influence.nodeId;
+
+            if (weight <= 0.0f) continue;
+
+            if ((nodeIndex < 0) || (nodeIndex >= deformationNodes.Count) || (nodeIndex >= currentNodeFrames.Count))
+            {
+                continue;
+            }
+
+            Matrix4x4 nodeMatrix = NodeDeformMatrix(nodeIndex, currentNodeFrames[nodeIndex]);
+
+            AccumulateMatrix(ref blendedMatrix, nodeMatrix, weight);
+
+            weightSum += weight;
+        }
+
+        if (weightSum <= DistanceEpsilon)
+            return false;
+
+        for (int i = 0; i < 16; i++) blendedMatrix[i] /= weightSum;
+
+        deformationMatrix = blendedMatrix;
+
+        return true;
     }
 }
