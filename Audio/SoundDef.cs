@@ -65,7 +65,7 @@ namespace UC
                     if (prsObject)
                         ret = SoundManager.PlaySoundAndFollow(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, distanceRange, prsObject);
                     else
-                        ret = SoundManager.PlaySound(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
+                        ret = SoundManager.PlaySound(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
                 }
                 else
                 {
@@ -77,7 +77,10 @@ namespace UC
             }
             else
             {
-                Debug.LogWarning("Positional music is not supported...");
+                if ((force3d) || (prsObject != null))
+                {
+                    Debug.LogWarning("Positional music is not supported...");
+                }
 
                 ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), crossfadeTime, defaultTag);
             }
