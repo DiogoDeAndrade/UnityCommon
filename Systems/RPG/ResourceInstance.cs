@@ -86,7 +86,7 @@ namespace UC.RPG
                 if (_resourceEmpty) ret = false;
                 else
                 {
-                    value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, type.maxValue);
+                    value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, maxValue);
 
                     onChange?.Invoke(this, changeData);
 
@@ -105,7 +105,7 @@ namespace UC.RPG
                 {
                     if (value < type.maxValue)
                     {
-                        value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, type.maxValue);
+                        value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, maxValue);
 
                         onChange?.Invoke(this, changeData);
 
@@ -121,7 +121,7 @@ namespace UC.RPG
                 {
                     if (value < type.maxValue)
                     {
-                        value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, type.maxValue);
+                        value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, maxValue);
 
                         onChange?.Invoke(this, changeData);
                     }

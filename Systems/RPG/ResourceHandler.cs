@@ -187,6 +187,10 @@ namespace UC.RPG
         {
             overrideMode |= OverrideMode.MaxValue;
             overrideMaxValue = m;
+            if (instance != null)
+            {
+                instance.maxValue = m;
+            }
         }
 
         public void ResetResource(bool combatText = false)
