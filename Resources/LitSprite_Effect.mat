@@ -99,6 +99,7 @@ Material:
     - _OutlineWidth: 4
     - _ZWrite: 0
     m_Colors:
+    - White: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1.4980388, g: 1.4980388, b: 1.4980388, a: 1}
     - _DistortAnimSpeed: {r: 2, g: 2.1, b: 0, a: 0}
     - _FlashColor: {r: 0, g: 0, b: 0, a: 0}
