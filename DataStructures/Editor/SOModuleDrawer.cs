@@ -34,6 +34,10 @@ public class SOModuleDrawer : PropertyDrawer
             if (iterator.name == "_enabled" || iterator.name == "enabled")
                 continue;
 
+            // Honour [ShowIf]/[HideIf] - a hidden field contributes no height, otherwise it leaves a gap
+            if (!PropertyUtility.IsVisible(iterator))
+                continue;
+
             height += EditorGUI.GetPropertyHeight(iterator, true) + spacing;
         }
 
@@ -75,10 +79,14 @@ public class SOModuleDrawer : PropertyDrawer
             if ((iterator.name == "_enabled") || (iterator.name == "enabled"))
                 continue;
 
+            // Honour [ShowIf]/[HideIf] - skip hidden fields so they don't leave an empty row
+            if (!PropertyUtility.IsVisible(iterator))
+                continue;
+
             float h = EditorGUI.GetPropertyHeight(iterator, true);
             rowRect.height = h;
 
-            // Non-layout version of NaughtyAttributes’ drawing
+            // Non-layout version of NaughtyAttributesï¿½ drawing
             NaughtyEditorGUI.PropertyField(rowRect, iterator, true);
 
             rowRect.y += h + spacing;

@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -10,6 +11,25 @@ namespace UC
 
     public class SoundManager : MonoBehaviour
     {
+        [Serializable]
+        class SoundsPerCategoryElem
+        {
+            public int      maxSounds;
+            public bool     canHijack;
+            public float    cooldown = 0.0f;
+            [HideInInspector]
+            public float    timeOfLastPlay = -float.MaxValue;
+            [HideInInspector]
+            public int      currentCount;
+        }
+
+        [Serializable]
+        struct MaxPerCategory
+        {
+            public Hypertag                 category;
+            public SoundsPerCategoryElem    parameters;
+        }
+        
         private static SoundManager _instance;
 
         [SerializeField] private bool dontDestroyOnLoad = false;
@@ -31,6 +51,7 @@ namespace UC
         [SerializeField, Header("Default Music")] private AudioClip  startMusic;
         [SerializeField] private Hypertag   musicTag;
         [SerializeField] private float defaultCrossfadeTime = 1.0f;
+        [SerializeField] List<MaxPerCategory> _maxSoundsPerCategory = new();
 
         class AudioElement
         {
@@ -38,11 +59,14 @@ namespace UC
             public SoundType            audioType;
             public HypertaggedObject    hypertag;
             public Transform            linkedObject;
+            public bool                 isPlaying;
         }
 
-        List<AudioElement>      sounds;
-        AudioMixerGroup[]       mixerGroups;
-        AudioSource             musicSource;
+        List<AudioElement>          sounds;
+        AudioMixerGroup[]           mixerGroups;
+        AudioSource                 musicSource;
+
+        Dictionary<Hypertag, SoundsPerCategoryElem>   maxSoundsPerCategory;
 
         class PauseStruct
         {
@@ -127,6 +151,15 @@ namespace UC
             {
                 musicSource = _PlayMusic(startMusic, 1.0f, 1.0f, musicTag);
             }
+
+            if (_maxSoundsPerCategory != null)
+            {
+                maxSoundsPerCategory = new();
+                foreach (var mspc in _maxSoundsPerCategory)
+                {
+                    maxSoundsPerCategory[mspc.category] = mspc.parameters;
+                }
+            }
         }
 
         private void Update()
@@ -139,6 +172,14 @@ namespace UC
                     if (snd.linkedObject)
                     {
                         snd.audioSource.transform.position = snd.linkedObject.transform.position;
+                    }
+                }
+                else
+                {
+                    if (snd.isPlaying)
+                    {
+                        snd.isPlaying = false;
+                        ChangeCount(snd, -1);
                     }
                 }
             }
@@ -197,6 +238,7 @@ namespace UC
         private AudioSource _PlaySound(SoundType type, AudioClip clip, float volume = 1.0f, float pitch = 1.0f, bool loop = false, Hypertag tag = null, bool is3d = false, Vector3 distanceRange = default, Vector3 position = default, Transform prsObject = null)
         {
             var audioSource = GetSource(tag);
+            if (audioSource == null) return null;
 
             audioSource.audioType = type;
             audioSource.audioSource.clip = clip;
@@ -219,10 +261,13 @@ namespace UC
 
             audioSource.audioSource.Play();
 
-            if (tag)
+            if ((tag) && (maxSoundsPerCategory.TryGetValue(tag, out var parameters)))
             {
-
+                parameters.timeOfLastPlay = Time.time;
+                parameters.currentCount++;
             }
+
+            audioSource.isPlaying = true;
 
             return audioSource.audioSource;
         }
@@ -234,8 +279,22 @@ namespace UC
                 if ((audioSource.audioType == soundType) &&
                     (audioSource.audioSource.isPlaying))
                 {
-                    audioSource.audioSource.FadeTo(0.0f, fadeDuration).Done(() => audioSource.audioSource.Stop());
+                    audioSource.audioSource.FadeTo(0.0f, fadeDuration).
+                        Done(() =>
+                            {
+                                audioSource.audioSource.Stop();
+                                ChangeCount(audioSource, -1);
+                            });
                 }
+            }
+        }
+
+        private void ChangeCount(AudioElement audioSource, int delta)
+        {
+            var ht = audioSource.hypertag?.GetHypertag() ?? null;
+            if ((ht) && (maxSoundsPerCategory.TryGetValue(ht, out var parameters)))
+            {
+                parameters.currentCount += delta;
             }
         }
 
@@ -278,6 +337,43 @@ namespace UC
             {
                 sounds = new List<AudioElement>();
                 return NewSource(tag);
+            }
+
+            if ((tag) && (maxSoundsPerCategory.TryGetValue(tag, out var parameters)))
+            {
+                // Check cooldown
+                if (parameters.cooldown > 0.0f)
+                {
+                    float elapsedTime = Time.time - parameters.timeOfLastPlay;
+                    if (elapsedTime < parameters.cooldown) return null;
+                }
+
+                if (parameters.currentCount >= parameters.maxSounds)
+                {
+                    if (parameters.canHijack)
+                    {
+                        AudioElement    ret = null;
+                        float           maxT = -float.MaxValue;
+                        foreach (var source in sounds)
+                        {
+                            if ((source.hypertag.HasHypertag(tag)) && (source.audioSource.isPlaying))
+                            {
+                                if (maxT < source.audioSource.time)
+                                {
+                                    maxT = source.audioSource.time;
+                                    ret = source;
+                                }
+                            }
+                        }
+                        // Need to remove one because the outer part will add it again
+                        parameters.currentCount--;
+                        return ret;
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
             }
 
             foreach (var source in sounds)
@@ -347,6 +443,20 @@ namespace UC
             string key = $"{soundType}Volume";
 
             return PlayerPrefs.GetFloat(key, GetDefaultVolume(soundType));
+        }
+
+        public int _CountInstances(AudioClip clip)
+        {
+            int count = 0;
+            foreach (var snd in sounds)
+            {
+                if ((snd.audioSource.isPlaying) && 
+                    (snd.audioSource.clip == clip))
+                {
+                    count++;
+                }
+            }
+            return count;
         }
 
         float GetDefaultVolume(SoundType soundType)
@@ -437,6 +547,13 @@ namespace UC
             if (!_instance.musicSource.isPlaying) return null;
             if (_instance.musicSource.clip == null) return null;
             return _instance.musicSource.clip.name;
+        }
+
+        static public int CountInstances(AudioClip clip)
+        {
+            if (_instance == null) return 0;
+
+            return _instance._CountInstances(clip);
         }
     }
 }
