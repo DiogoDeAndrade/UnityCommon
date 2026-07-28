@@ -1,4 +1,4 @@
-This is code to implement "Embedded deformation for shape manipulation".
+This is code to implement "Embedded deformation for shape manipulation", with additional variations related to my own work in Navigation-Aware Deformation.
 
 ```bibtex
 @incollection{sumner2007embedded,

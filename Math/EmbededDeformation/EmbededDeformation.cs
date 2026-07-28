@@ -4694,6 +4694,47 @@ namespace UC.ED
             return GetNodeFrame(nodeIndex, state);
         }
 
+        public bool TryGetDebugNodeFrame(int nodeIndex, out FullDeformationField.Frame frame)
+        {
+            frame = default;
+
+            if ((nodes == null) || (currentState == null) || (nodeIndex < 0) || (nodeIndex >= nodes.Count))
+            {
+                return false;
+            }
+
+            frame = GetDebugNodeFrame(nodeIndex);
+
+            return true;
+        }
+
+        public bool TryGetTerminalTargetFrame(int nodeIndex, out FullDeformationField.Frame frame, out float targetScale)
+        {
+            frame = default;
+            targetScale = 1.0f;
+
+            if ((terminalConstraints == null) || (nodes == null) || (nodeIndex < 0) || (nodeIndex >= nodes.Count))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < terminalConstraints.Count; i++)
+            {
+                EDTerminalConstraint terminal = terminalConstraints[i];
+
+                if (terminal.nodeIndex != nodeIndex)
+                    continue;
+
+                frame = new FullDeformationField.Frame(terminal.targetPosition.ToVector3(), terminal.targetRight.ToVector3(), terminal.targetUp.ToVector3(), terminal.targetForward.ToVector3());
+
+                targetScale = (float)terminal.targetScale;
+
+                return true;
+            }
+
+            return false;
+        }
+
         private FullDeformationField.Frame GetNodeFrame(int nodeIndex, EDStateView state)
         {
             EDNode node = nodes[nodeIndex];
