@@ -183,6 +183,16 @@ namespace UC.RPG
             instance.SetResource(r);
         }
 
+        public void SetMaxResource(float m)
+        {
+            overrideMode |= OverrideMode.MaxValue;
+            overrideMaxValue = m;
+            if (instance != null)
+            {
+                instance.maxValue = m;
+            }
+        }
+
         public void ResetResource(bool combatText = false)
         {
             float prevValue = instance.value;

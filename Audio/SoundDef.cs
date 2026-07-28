@@ -10,13 +10,19 @@ namespace UC
     [CreateAssetMenu(fileName = "SoundDef", menuName = "Unity Common/Data/SoundDef")]
     public class SoundDef : ScriptableObject
     {
-        [Flags]
-        public enum SoundFlags { Interruptable = 1, Default3d = 4 };
+        public enum Mode { Single, Multiple };
 
-        public AudioClip        clip;
-        public SoundType        soundType = SoundType.PrimaryFX;
+        [Flags]
+        public enum SoundFlags { Interruptable = 1, Default3d = 4, MaxInstances = 8 };
+
+        public Mode                 mode = Mode.Single;
+        [ShowIf(nameof(isSingle))]
+        public AudioClip            clip;
+        [ShowIf(nameof(isMultiple))]
+        public AudioClipProbList    clips;
+        public SoundType            soundType = SoundType.PrimaryFX;
         [ShowIf(nameof(isNotMusic))]
-        public bool             loop = false;
+        public bool                 loop = false;
         public SoundFlags       soundFlags = 0;
         public SubtitleTrack    subtitleTrack;
         public Speaker          speaker;
@@ -28,11 +34,20 @@ namespace UC
         [ShowIf(nameof(is3d))]        
         public Vector2          distanceRange = new Vector2(0.0f, 100.0f);
         public Hypertag         defaultTag;
+        [SerializeField, Range(0.0f, 1.0f)]
+        protected float         playProbability = 1.0f;
+        [SerializeField, ShowIf(nameof(isMaxInstances))]
+        protected int           maxInstances = 0;
+        [SerializeField, ShowIf(nameof(isMaxInstances))]
+        protected bool          hijackSound = false;  
 
         bool isNotMusic => soundType != SoundType.Music;
         bool isVoice => soundType == SoundType.Voice;
         bool is3d => (soundFlags & SoundFlags.Default3d) != 0;
         bool isInterruptable => (soundFlags & SoundFlags.Interruptable) != 0;
+        bool isMaxInstances => (soundFlags & SoundFlags.MaxInstances) != 0;
+        bool isSingle => mode == Mode.Single;
+        bool isMultiple => mode == Mode.Multiple;
 
         public AudioSource Play()
         {
@@ -46,6 +61,21 @@ namespace UC
 
         public AudioSource Play(float volumeMultiplier = 1.0f, float pitchMultiplier = 1.0f, float crossfadeTime = -float.MaxValue, Vector3 position = default, bool force3d = false, Transform prsObject = null)
         {
+            if (UnityEngine.Random.value > playProbability) return null;
+
+            if (isMultiple)
+            {
+                clip = clips.Get();
+            }
+
+            if (isMaxInstances)
+            {
+                if (SoundManager.CountInstances(clip) >= maxInstances)
+                {
+                    return null;
+                }
+            }
+
             if (subtitleTrack)
             {
                 // If subtitle is playing, and if it is an interruptable sound, interrupt it
@@ -65,7 +95,7 @@ namespace UC
                     if (prsObject)
                         ret = SoundManager.PlaySoundAndFollow(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, distanceRange, prsObject);
                     else
-                        ret = SoundManager.PlaySound(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
+                        ret = SoundManager.PlaySound(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
                 }
                 else
                 {
@@ -77,7 +107,10 @@ namespace UC
             }
             else
             {
-                Debug.LogWarning("Positional music is not supported...");
+                if ((force3d) || (prsObject != null))
+                {
+                    Debug.LogWarning("Positional music is not supported...");
+                }
 
                 ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), crossfadeTime, defaultTag);
             }

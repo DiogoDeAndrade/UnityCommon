@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -277,6 +278,37 @@ namespace UC
             completedCycles = 0;
             DisableFauxLoop();
         }
+
+        public void SetFrame(AnimationClip clip, int frame)
+        {
+            if (clip == null)
+                return;
+
+            int frameCount = Mathf.RoundToInt(clip.length * clip.frameRate) + 1;
+            if ((frame < 0) || (frame >= frameCount))
+            {
+                Debug.LogWarning($"Can't set frame to frame {frame} (animation {clip.name} only has {frameCount} frames)!");
+                return;
+            }
+
+            // The pose has to go through the graph, NOT clip.SampleAnimation: the graph is built in Awake and Update() evaluates it every frame, so a sampled pose would be overwritten on
+            // the very next frame. Playing the clip and freezing it (speed 0) at the frame's time holds the pose for as long as nothing else plays.
+            Play(clip);
+
+            AnimationClipPlayable playable = GetActiveClipPlayable();
+            if (!playable.IsValid())
+                return;
+
+            playable.SetTime(frame / clip.frameRate);
+            playable.SetSpeed(0.0);
+
+            // Nothing was actually played, so don't report a finished cycle - without this, posing on the last frame lands at/after the clip length and fires onAnimationComplete.
+            completedCycles = 1;
+
+            if (graph.IsValid())
+                graph.Evaluate(0f);
+        }
+
 
         public void EnableFauxLoop(float startNormalizedTime, float endNormalizedTime, int loopCount = -1, bool jumpToStart = false)
         {
