@@ -403,6 +403,9 @@ namespace UC.ED
         public Matrix4x4 currentHandleMatrix;
         public List<int> vertexIndices;
 
+        // Width of the handle bar in its rest configuration.
+        public float width;
+
         // Used by StructureOnly constraints.
         // True for connector handles, false for root/center handles.
         public bool isTerminal;
@@ -1768,12 +1771,21 @@ namespace UC.ED
         }
 
 #if MATH_NET_AVAILABLE
-        private int GetStructureHandlePositionConstraintCount()
+        private int GetStructureHandlePositionConstraintPointCount()
         {
             if (handleConstraints == null)
                 return 0;
 
-            return handleConstraints.Count;
+            int pointCount = 0;
+
+            for (int i = 0; i < handleConstraints.Count; i++)
+            {
+                // Root/centre handles constrain one point.
+                // Terminal handles constrain both ends of the handle bar.
+                pointCount += handleConstraints[i].isTerminal ? 2 : 1;
+            }
+
+            return pointCount;
         }
 
         private struct EDResidualLayout
@@ -1835,7 +1847,7 @@ namespace UC.ED
 
             int structureCount = (structure != null) ? structure.Count : 0;
 
-            int constraintCount = GetStructureHandlePositionConstraintCount();
+            int constraintPointCount = GetStructureHandlePositionConstraintPointCount();
 
             int terminalCount = (terminalConstraints != null) ? (terminalConstraints.Count) : (0);
 
@@ -1843,7 +1855,7 @@ namespace UC.ED
             {
                 rotationRows = 6 * nodeCount,
                 regularizationRows = 3 * directedEdgeCount,
-                constraintRows = 3 * constraintCount,
+                constraintRows = 3 * constraintPointCount,
                 clearanceRows = (weights.clearanceWeight > 0.0) ? (structureCount) : (0),
                 slopeRows = (weights.slopeWeight > 0.0) ? (nodeCount) : (0),
                 orientationRows = (weights.orientationWeight > 0.0) ? (3 * nodeCount) : (0),
@@ -2932,6 +2944,66 @@ namespace UC.ED
             return true;
         }
 
+        private bool TryGetStructureHandleNodeIndex(EDHandleConstraint hc, out int nodeIndex)
+        {
+            nodeIndex = -1;
+
+            if ((nodes == null) || (nodes.Count == 0))
+                return false;
+
+            Vector3 restHandlePosition = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+            if (hc.isTerminal)
+            {
+                // Connector handles target terminal structure endpoints.
+                nodeIndex = GetClosestLeafNodeIndex(restHandlePosition);
+            }
+            else
+            {
+                // Centre/root handles target the corresponding structure node.
+                nodeIndex = GetClosestDebugNodeIndex(restHandlePosition);
+            }
+
+            return (nodeIndex >= 0) && (nodeIndex < nodes.Count);
+        }
+
+        private static void GetStructureHandleBarPoints(EDHandleConstraint hc, out DVector3 restLeft, out DVector3 restRight, out DVector3 targetLeft, out DVector3 targetRight)
+        {
+            const float epsilon = 1e-8f;
+
+            Vector3 restCenter = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+            Vector3 targetCenter = hc.currentHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+            Vector3 restAxis = hc.restHandleMatrix.MultiplyVector(Vector3.right);
+
+            Vector3 targetAxis = hc.currentHandleMatrix.MultiplyVector(Vector3.right);
+
+            float restAxisLength = restAxis.magnitude;
+            float targetAxisLength = targetAxis.magnitude;
+
+            Vector3 restDirection = (restAxisLength > epsilon) ? (restAxis / restAxisLength) : Vector3.right;
+
+            Vector3 targetDirection = (targetAxisLength > epsilon) ? (targetAxis / targetAxisLength) : (restDirection);
+
+            float halfRestWidth = 0.5f * Mathf.Abs(hc.width);
+
+            // The current transform's X scale relative to the rest transform
+            // determines the requested terminal width scale.
+            float targetScale = targetAxisLength / Mathf.Max(restAxisLength, epsilon);
+
+            float halfTargetWidth = halfRestWidth * targetScale;
+
+            restLeft = (restCenter - restDirection * halfRestWidth).ToDVector3();
+
+            restRight = (restCenter + restDirection * halfRestWidth).ToDVector3();
+
+            targetLeft = (targetCenter - targetDirection * halfTargetWidth).ToDVector3();
+
+            targetRight = (targetCenter + targetDirection * halfTargetWidth).ToDVector3();
+        }
+
+
         private DVector3 DeformStructureNodePosition(int nodeIndex, EDStateView state)
         {
             DVector3 restPosition = nodes[nodeIndex].restPosition;
@@ -2963,6 +3035,52 @@ namespace UC.ED
             J[row + 2, p + 11] = wCon;  // tz
 
             jNormRunningTotalSq += 3.0 * wCon * wCon;
+
+            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+
+            return row + 3;
+        }
+
+        private int FillNodePositionJacobianBlockStructure(DenseMatrix J, int row, int nodeIndex, DVector3 restPoint, double wCon, ref double jNormRunningTotalSq)
+        {
+            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+
+            if ((nodeIndex < 0) || (nodeIndex >= nodes.Count))
+            {
+                DebugProfiler.DebugMark(timeJacobianBuildConstraint);
+
+                return row + 3;
+            }
+
+            int p = ParamBase(nodeIndex);
+
+            DVector3 localOffset = restPoint - nodes[nodeIndex].restPosition;
+
+            double ux = localOffset.x;
+            double uy = localOffset.y;
+            double uz = localOffset.z;
+
+            // X residual.
+            J[row + 0, p + 0] = wCon * ux;
+            J[row + 0, p + 1] = wCon * uy;
+            J[row + 0, p + 2] = wCon * uz;
+            J[row + 0, p + 3] = wCon;
+
+            // Y residual.
+            J[row + 1, p + 4] = wCon * ux;
+            J[row + 1, p + 5] = wCon * uy;
+            J[row + 1, p + 6] = wCon * uz;
+            J[row + 1, p + 7] = wCon;
+
+            // Z residual.
+            J[row + 2, p + 8] = wCon * ux;
+            J[row + 2, p + 9] = wCon * uy;
+            J[row + 2, p + 10] = wCon * uz;
+            J[row + 2, p + 11] = wCon;
+
+            double offsetLengthSq = ux * ux + uy * uy + uz * uz;
+
+            jNormRunningTotalSq += 3.0 * wCon * wCon * (offsetLengthSq + 1.0);
 
             DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
@@ -3007,7 +3125,7 @@ namespace UC.ED
                 residual[row++] = wRot * DVector3.Dot(right, forward);
                 residual[row++] = wRot * DVector3.Dot(up, forward);
 
-                bool allowRightScale = (wTerminalScale > 0.0) && HasTerminalScaleConstraint(i);
+                bool allowRightScale = HasTerminalScaleConstraint(i);
 
                 // This row remains present for consistent row accounting,
                 // but is disabled when scale is controlled by a terminal.
@@ -3054,18 +3172,47 @@ namespace UC.ED
                 {
                     EDHandleConstraint hc = handleConstraints[c];
 
-                    if (!TryGetStructureHandlePositionConstraint(hc, out int nodeIndex, out DVector3 targetPosition))
+                    int handleRowCount = hc.isTerminal ? 6 : 3;
+
+                    if (!TryGetStructureHandleNodeIndex(hc, out int nodeIndex))
                     {
-                        row += 3;
+                        row += handleRowCount;
                         continue;
                     }
 
-                    DVector3 deformedPosition = DeformStructureNodePosition(nodeIndex, state);
-                    DVector3 r = deformedPosition - targetPosition;
+                    EDNode node = nodes[nodeIndex];
 
-                    residual[row++] = wCon * r.x;
-                    residual[row++] = wCon * r.y;
-                    residual[row++] = wCon * r.z;
+                    if (hc.isTerminal)
+                    {
+                        GetStructureHandleBarPoints(hc, out DVector3 restLeft, out DVector3 restRight, out DVector3 targetLeft, out DVector3 targetRight);
+
+                        DVector3 deformedLeft = state.DeformVertex(nodeIndex, restLeft, node.restPosition);
+                        DVector3 deformedRight = state.DeformVertex(nodeIndex, restRight, node.restPosition);
+                        DVector3 leftError = deformedLeft - targetLeft;
+                        DVector3 rightError = deformedRight - targetRight;
+
+                        residual[row++] = wCon * leftError.x;
+                        residual[row++] = wCon * leftError.y;
+                        residual[row++] = wCon * leftError.z;
+
+                        residual[row++] = wCon * rightError.x;
+                        residual[row++] = wCon * rightError.y;
+                        residual[row++] = wCon * rightError.z;
+                    }
+                    else
+                    {
+                        DVector3 restPosition = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero).ToDVector3();
+
+                        DVector3 targetPosition = hc.currentHandleMatrix.MultiplyPoint3x4(Vector3.zero).ToDVector3();
+
+                        DVector3 deformedPosition = state.DeformVertex(nodeIndex, restPosition, node.restPosition);
+
+                        DVector3 error = deformedPosition - targetPosition;
+
+                        residual[row++] = wCon * error.x;
+                        residual[row++] = wCon * error.y;
+                        residual[row++] = wCon * error.z;
+                    }
                 }
             }
 
@@ -3185,7 +3332,7 @@ namespace UC.ED
             // -------------------------------------------------------------
             for (int i = 0; i < nodeCount; i++)
             {
-                bool allowRightScale = (wTerminalScale > 0.0) && (HasTerminalScaleConstraint(i));
+                bool allowRightScale = (HasTerminalScaleConstraint(i));
 
                 row = FillRotationJacobianBlockStructure(stateView, J, row, i, wRot, allowRightScale, ref jNorm);
             }
@@ -3205,19 +3352,35 @@ namespace UC.ED
             // -------------------------------------------------------------
             // 3) Terminal position Jacobian
             // -------------------------------------------------------------
+            // -------------------------------------------------------------
+            // 3) Structure handle position Jacobian
+            // -------------------------------------------------------------
             if (handleConstraints != null)
             {
                 for (int c = 0; c < handleConstraints.Count; c++)
                 {
                     EDHandleConstraint hc = handleConstraints[c];
 
-                    if (!TryGetStructureHandlePositionConstraint(hc, out int nodeIndex, out _))
+                    int handleRowCount = hc.isTerminal ? 6 : 3;
+
+                    if (!TryGetStructureHandleNodeIndex(hc, out int nodeIndex))
                     {
-                        row += 3;
+                        row += handleRowCount;
                         continue;
                     }
 
-                    row = FillStructureNodePositionJacobianBlock(J, row, nodeIndex, wCon, ref jNorm);
+                    if (hc.isTerminal)
+                    {
+                        GetStructureHandleBarPoints(hc, out DVector3 restLeft, out DVector3 restRight, out _, out _);
+
+                        row = FillNodePositionJacobianBlockStructure(J, row, nodeIndex, restLeft, wCon, ref jNorm);
+                        row = FillNodePositionJacobianBlockStructure(J, row, nodeIndex, restRight, wCon, ref jNorm);
+                    }
+                    else
+                    {
+                        DVector3 restPosition = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero).ToDVector3();
+                        row = FillNodePositionJacobianBlockStructure(J, row, nodeIndex, restPosition, wCon, ref jNorm);
+                    }
                 }
             }
 
