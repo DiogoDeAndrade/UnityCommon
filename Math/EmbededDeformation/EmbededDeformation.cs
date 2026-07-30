@@ -309,6 +309,21 @@ namespace UC.ED
         }
 
         public EDClearanceCache clearances => (_clearances == null) ? (parentState.clearances) : (_clearances);
+
+        /// <summary>
+        /// Cached clearance for a segment, or double.MaxValue when none was computed. Mirrors
+        /// EDState.GetClearance - see there for why the cache reference alone is not a validity
+        /// test.
+        /// </summary>
+        public double GetClearance(int index)
+        {
+            var cache = clearances;
+
+            if ((cache == null) || (index < 0) || (index >= cache.count))
+                return double.MaxValue;
+
+            return cache.Get(index);
+        }
         public double Get(int index) => (index == (perturbedIndex)) ? (parentState.Get(index) + perturbation) : (parentState.Get(index));
 
         public DVector3 DeformVertex(int nodeIndex, DVector3 p, DVector3 restPos)
@@ -519,8 +534,12 @@ namespace UC.ED
         /// per-segment bindings and probes, and the slope/clearance limits. GenerateED only calls
         /// it in NavED mode, so the navigation-aware features are simply unavailable in the
         /// TranslationOnly and plain ED modes and callers must not assume otherwise.
+        ///
+        /// Tests the edge data rather than the reference: TopologyStatic is [Serializable], so a
+        /// topology that was null when the scene was written comes back as a live object with a
+        /// null edge list, and a reference test would wrongly report it as configured.
         /// </summary>
-        public bool isNavConfigured => (navMeshTopology != null);
+        public bool isNavConfigured => (navMeshTopology != null) && (navMeshTopology.edgeCount > 0);
         public List<NavEDSegments> structure;
         public float maxSlope = 45.0f;
         public float slopeSoftBand = 5.0f;
@@ -2065,8 +2084,8 @@ namespace UC.ED
                 // -------------------------------------------------------------
                 for (int i = 0; i < structure.Count; i++)
                 {
-                    var originalClearance = restState.clearances.Get(i);
-                    var currentClearance = state.clearances.Get(i);
+                    var originalClearance = restState.GetClearance(i);
+                    var currentClearance = state.GetClearance(i);
 
                     residual[row++] = wClearance * ComputeClearanceLoss(originalClearance, currentClearance);
                 }
@@ -3265,8 +3284,8 @@ namespace UC.ED
             {
                 for (int i = 0; i < structure.Count; i++)
                 {
-                    var originalClearance = restState.clearances.Get(i);
-                    var currentClearance = state.clearances.Get(i);
+                    var originalClearance = restState.GetClearance(i);
+                    var currentClearance = state.GetClearance(i);
 
                     residual[row++] = wClearance * ComputeClearanceLoss(originalClearance, currentClearance);
                 }
