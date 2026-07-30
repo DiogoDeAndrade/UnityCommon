@@ -237,7 +237,21 @@ namespace UC.ED
             return clone;
         }
 
-        public double GetClearance(int index) => clearances.Get(index);
+        /// <summary>
+        /// Cached clearance for a segment, or double.MaxValue when none was computed - the same
+        /// "no clearance" marker ComputeClearance stores for segments it cannot measure.
+        ///
+        /// The cache is absent entirely in every mode that does not run SetNavEDParameters, and
+        /// because EDClearanceCache is [Serializable] Unity resurrects it after a domain reload as
+        /// a live object wrapping a null array, so a plain null test is not sufficient.
+        /// </summary>
+        public double GetClearance(int index)
+        {
+            if ((clearances == null) || (index < 0) || (index >= clearances.count))
+                return double.MaxValue;
+
+            return clearances.Get(index);
+        }
 
         public DVector3 TransformOffset(int nodeIndex, DVector3 localOffset)
         {
@@ -499,6 +513,14 @@ namespace UC.ED
         public List<EDTerminalConstraint> terminalConstraints = new();
         public List<EDLinkAngleConstraint> linkAngleConstraints = new();
         public TopologyStatic navMeshTopology;
+
+        /// <summary>
+        /// Whether SetNavEDParameters has run, which is what supplies the navmesh topology, the
+        /// per-segment bindings and probes, and the slope/clearance limits. GenerateED only calls
+        /// it in NavED mode, so the navigation-aware features are simply unavailable in the
+        /// TranslationOnly and plain ED modes and callers must not assume otherwise.
+        /// </summary>
+        public bool isNavConfigured => (navMeshTopology != null);
         public List<NavEDSegments> structure;
         public float maxSlope = 45.0f;
         public float slopeSoftBand = 5.0f;
@@ -4308,6 +4330,16 @@ namespace UC.ED
 
         private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, out double clearance)
         {
+            // Single gate for "can this segment's clearance be measured at all". GetClearance
+            // walks navMeshTopology.edges, and that topology only exists once SetNavEDParameters
+            // has run. Both callers - the cache builder and the clearance residual - already treat
+            // false as "no clearance available", so this needs no special handling downstream.
+            if (!isNavConfigured)
+            {
+                clearance = double.MaxValue;
+                return false;
+            }
+
             (Vector3 p1, Vector3 p2) = GetTransformedSegment(state, segmentIndex, nodeFrames);
 
             return GetClearance(state, p1.ToDVector3(), p2.ToDVector3(),nodeFrames, out clearance);
@@ -4336,7 +4368,22 @@ namespace UC.ED
         {
             DebugProfiler.DebugMark(timeUpdateClearance);
 
-            var ret = new EDClearanceCache(structure.Count);
+            var ret = new EDClearanceCache((structure != null) ? (structure.Count) : (0));
+
+            // Clearance is a navigation-aware measurement, and everything it needs - the navmesh
+            // topology to measure against and the per-segment bindings to deform through - is
+            // supplied by SetNavEDParameters, which only NavED mode calls. In the other modes
+            // there is nothing to measure, so every segment reports the existing "no clearance"
+            // marker instead of doing the work and dereferencing a null topology.
+            if (!isNavConfigured)
+            {
+                for (int i = 0; i < ret.count; i++)
+                    ret.Set(i, double.MaxValue);
+
+                DebugProfiler.DebugMark(timeUpdateClearance);
+
+                return ret;
+            }
 
             if (UseDeformationFieldForClearance)
             {
