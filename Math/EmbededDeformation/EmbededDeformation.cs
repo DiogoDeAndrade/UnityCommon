@@ -4815,6 +4815,12 @@ namespace UC.ED
         {
             NavEDSegments segment = structure[segmentIndex];
 
+            // Without SetNavEDParameters the endpoint bindings are null, so there is nothing to
+            // deform the segment through and it is still at its rest position. The deformation
+            // field path ignores the bindings entirely, so it is left alone.
+            if ((nodeFrames == null) && (!IsSegmentBound(segment)))
+                return (segment.p1.ToVector3(), segment.p2.ToVector3());
+
             DVector3 p1 = DeformClearancePoint(segment.p1, segment.bind1, state, nodeFrames);
 
             DVector3 p2 = DeformClearancePoint(segment.p2, segment.bind2, state, nodeFrames);
@@ -4838,12 +4844,18 @@ namespace UC.ED
         public Vector3 GetSegmentSlopeNormal(int segIndex) => GetTransformedSegmentSlopeNormal(new EDStateView(currentState), segIndex);
 
         /// <summary>
-        /// True once SetNavEDParameters has attached the centre and probe bindings a segment needs
-        /// before anything can be evaluated on it.
+        /// True once SetNavEDParameters has attached the endpoint, centre and probe bindings a
+        /// segment needs before anything can be evaluated on it. All five are attached together,
+        /// so this is all-or-nothing per structure.
+        ///
+        /// BuildStructureFromGraph produces segments with none of them, and only NavED mode ever
+        /// runs SetNavEDParameters, so unbound segments are the normal case in the other modes.
         /// </summary>
         private static bool IsSegmentBound(NavEDSegments seg)
         {
             return (seg != null) &&
+                   (seg.bind1.nodeIndices != null) &&
+                   (seg.bind2.nodeIndices != null) &&
                    (seg.cBind.nodeIndices != null) &&
                    (seg.tBind.nodeIndices != null) &&
                    (seg.bBind.nodeIndices != null);
