@@ -477,7 +477,7 @@ namespace UC.ED
     public delegate bool TryGetSurfaceNormal(Vector3 p, out Vector3 normal);
     
     [Serializable]
-    public class EmbededDeformation
+    public partial class EmbededDeformation
     {
         public DeformationGraphSource deformationGraphSource;
         public DVector3[] restVertices;
@@ -1881,6 +1881,31 @@ namespace UC.ED
             }
         }
 
+        /// <summary>
+        /// Emits the residual row layout into an active golden dump. The row counts per block are
+        /// the thing most likely to shift silently during the term refactor, so they are recorded
+        /// before any iteration runs.
+        /// </summary>
+        private void TraceResidualLayout(WeightConfig weights)
+        {
+            if (EDDiagnostics.activeTrace == null) return;
+
+            EDResidualLayout layout = BuildResidualLayoutForCurrentGraph(weights);
+
+            EDDiagnostics.Trace("[layout]");
+            EDDiagnostics.Trace($"rotation {layout.rotationRows}");
+            EDDiagnostics.Trace($"regularization {layout.regularizationRows}");
+            EDDiagnostics.Trace($"constraint {layout.constraintRows}");
+            EDDiagnostics.Trace($"clearance {layout.clearanceRows}");
+            EDDiagnostics.Trace($"slope {layout.slopeRows}");
+            EDDiagnostics.Trace($"orientation {layout.orientationRows}");
+            EDDiagnostics.Trace($"segmentLength {layout.segmentLengthRows}");
+            EDDiagnostics.Trace($"terminalOrientation {layout.terminalOrientationRows}");
+            EDDiagnostics.Trace($"terminalScale {layout.terminalScaleRows}");
+            EDDiagnostics.Trace($"linkAngle {layout.linkAngleRows}");
+            EDDiagnostics.Trace($"total {layout.totalRows}");
+        }
+
         private static double BuildResidualWeight(double conceptualWeight, int residualRows, bool normalizeResidualGroups)
         {
             if ((conceptualWeight <= 0.0) || (residualRows <= 0))
@@ -2353,34 +2378,23 @@ namespace UC.ED
             {
                 int clearanceStartRow = row;
 
-                double clearanceJNorm = 0.0;
-                object normLock = new object();
+                // One slot per segment, summed serially below. Accumulating the worker-local
+                // partials in completion order made jNorm vary run-to-run in the low bits,
+                // which is enough to stop a diagnostic dump from reproducing.
+                double[] clearanceJNorm = new double[structure.Count];
 
                 DebugProfiler.DebugMark(timeJacobianBuildClearance);
 
-                Parallel.For(
-                    0,
-                    structure.Count,
-                    () => 0.0,
-                    (i, loopState, localNorm) =>
-                    {
-                        int clearanceRow = clearanceStartRow + i;
-
-                        localNorm += FillClearanceJacobianRow(state, J, clearanceRow, i, wClearance);
-
-                        return localNorm;
-                    },
-                    localNorm =>
-                    {
-                        lock (normLock)
-                        {
-                            clearanceJNorm += localNorm;
-                        }
-                    });
+                Parallel.For(0, structure.Count, EDDiagnostics.parallelOptions, i =>
+                {
+                    clearanceJNorm[i] = FillClearanceJacobianRow(state, J, clearanceStartRow + i, i, wClearance);
+                });
 
                 DebugProfiler.DebugMark(timeJacobianBuildClearance);
 
-                jNorm += clearanceJNorm;
+                for (int i = 0; i < clearanceJNorm.Length; i++)
+                    jNorm += clearanceJNorm[i];
+
                 row += structure.Count;
             }
 
@@ -3388,8 +3402,9 @@ namespace UC.ED
             {
                 int clearanceStartRow = row;
 
-                double clearanceJNorm = 0.0;
-                object normLock = new object();
+                // One slot per segment, summed serially below - see the matching comment
+                // in BuildJacobianNavMesh.
+                double[] clearanceJNorm = new double[structure.Count];
 
                 int scratchCapacity = Mathf.Min(nodes.Count, 8 * deformationField.maxInfluencesPerCell);
 
@@ -3401,6 +3416,7 @@ namespace UC.ED
                 Parallel.For(
                     0,
                     structure.Count,
+                    EDDiagnostics.parallelOptions,
 
                     // Each worker receives its own mutable frame list and
                     // trilinear scratch buffers.
@@ -3413,23 +3429,22 @@ namespace UC.ED
                     {
                         int clearanceRow = clearanceStartRow + segmentIndex;
 
-                        scratch.jacobianNormSq += FillClearanceJacobianRow(state, J, clearanceRow, segmentIndex, wClearance, scratch.nodeFrames);
+                        clearanceJNorm[segmentIndex] = FillClearanceJacobianRow(state, J, clearanceRow, segmentIndex, wClearance, scratch.nodeFrames);
 
                         return scratch;
                     },
 
                     scratch =>
                     {
-                        lock (normLock)
-                        {
-                            clearanceJNorm += scratch.jacobianNormSq;
-                        }
+                        // Nothing to merge - the norms are accumulated per segment above.
                     }
                 );
 
                 DebugProfiler.DebugMark(timeJacobianBuildClearance);
 
-                jNorm += clearanceJNorm;
+                for (int i = 0; i < clearanceJNorm.Length; i++)
+                    jNorm += clearanceJNorm[i];
+
                 row += structure.Count;
             }
 
@@ -3514,6 +3529,8 @@ namespace UC.ED
             var BuildJacobian = buildJacobian;
             var EvaluateResidualVector = evaluateResidualVector;
 
+            TraceResidualLayout(weights);
+
             for (int iter = 0; iter < maxIterations; iter++)
             {
                 var stateView = new EDStateView(currentState);
@@ -3522,6 +3539,8 @@ namespace UC.ED
 
                 double error = f.L2Norm();
 
+                EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
+
                 // Already solved / close enough
                 if (!double.IsFinite(error) || error < residualTolerance)
                 {
@@ -3529,6 +3548,8 @@ namespace UC.ED
                 }
 
                 var J = BuildJacobian(currentState, out double jNorm, weights);
+
+                EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
                 if (!double.IsFinite(jNorm) || jNorm < 1e-12)
                 {
@@ -3588,6 +3609,8 @@ namespace UC.ED
             var BuildJacobian = buildJacobian;
             var EvaluateResidualVector = evaluateResidualVector;
 
+            TraceResidualLayout(weights);
+
             for (int iter = 0; iter < maxIterations; iter++)
             {
                 var stateView = new EDStateView(currentState);
@@ -3595,6 +3618,8 @@ namespace UC.ED
                 var f = EvaluateResidualVector(stateView, weights);
 
                 double error = f.L2Norm();
+
+                EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
                 if (!double.IsFinite(error))
                 {
@@ -3606,6 +3631,8 @@ namespace UC.ED
                     break;
 
                 var J = BuildJacobian(currentState, out double jNorm, weights);
+
+                EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                     break;
@@ -3707,6 +3734,14 @@ namespace UC.ED
 
         static void InitMathNet()
         {
+            if (EDDiagnostics.verificationMode)
+            {
+                EDDiagnostics.ApplyMathNetProviders();
+
+                Debug.Log("[ED] Verification mode: Math.NET managed provider, single thread.");
+                return;
+            }
+
             Control.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1);
 
             bool nativeOk = false;
@@ -3762,6 +3797,8 @@ namespace UC.ED
             var BuildJacobian = buildJacobian;
             var EvaluateResidualVector = evaluateResidualVector;
 
+            TraceResidualLayout(weights);
+
             int iter = 0;
 
             for (iter = 0; iter < maxIterations; iter++)
@@ -3775,6 +3812,8 @@ namespace UC.ED
                 double error = f.L2Norm();
 
                 LogResidualEnergies(f, weights, iter);
+
+                EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
                 if (!double.IsFinite(error))
                 {
@@ -3790,6 +3829,8 @@ namespace UC.ED
                 }
 
                 var J = BuildJacobian(currentState, out double jNorm, weights);
+
+                EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
                 /*int nonZero = 0;
                 int total = J.RowCount * J.ColumnCount;
@@ -3896,6 +3937,8 @@ namespace UC.ED
                     // Accept only if it improves the residual.
                     if (candidateError <= error)
                     {
+                        EDDiagnostics.Trace($"[iter {iter}] accepted attempt {attempt} lambda {EDDiagnostics.F(currentLambda)} step {EDDiagnostics.F(stepNorm)} candidateError {EDDiagnostics.F(candidateError)}");
+
                         acceptedState = candidateState;
                         solved = true;
 
@@ -4267,8 +4310,6 @@ namespace UC.ED
         {
             public readonly List<FullDeformationField.Frame> nodeFrames;
 
-            public double jacobianNormSq;
-
             public ClearanceThreadScratch(int capacity) : this(capacity, null)
             {
             }
@@ -4276,8 +4317,6 @@ namespace UC.ED
             public ClearanceThreadScratch(int capacity, List<FullDeformationField.Frame> baseNodeFrames)
             {
                 nodeFrames = (baseNodeFrames != null) ? (new List<FullDeformationField.Frame>(baseNodeFrames)) : (null);
-
-                jacobianNormSq = 0.0;
             }
         }
 
@@ -4297,6 +4336,7 @@ namespace UC.ED
                 Parallel.For(
                     0,
                     structure.Count,
+                    EDDiagnostics.parallelOptions,
                     // One scratch object per worker, not per segment.
                     () => new ClearanceThreadScratch(scratchCapacity),
 
@@ -4317,7 +4357,7 @@ namespace UC.ED
             }
             else
             {
-                Parallel.For(0, structure.Count, index =>
+                Parallel.For(0, structure.Count, EDDiagnostics.parallelOptions, index =>
                 {
                     bool valid = TryComputeSegmentClearance(state, index, null, out double clearance);
 
