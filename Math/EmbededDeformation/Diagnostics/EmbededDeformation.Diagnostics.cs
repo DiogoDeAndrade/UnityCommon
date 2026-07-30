@@ -58,13 +58,15 @@ namespace UC.ED
 
             w.WriteLine("[clearance]");
 
-            if ((currentState.clearances == null) || (structure == null))
+            int clearanceCount = (currentState.clearances != null) ? (currentState.clearances.count) : (0);
+
+            if (clearanceCount == 0)
             {
                 w.WriteLine("none");
                 return;
             }
 
-            for (int i = 0; i < structure.Count; i++)
+            for (int i = 0; i < clearanceCount; i++)
                 w.WriteLine($"seg {i} {EDDiagnostics.F(currentState.clearances.Get(i))}");
         }
 
@@ -84,7 +86,7 @@ namespace UC.ED
 
                 // Neighbour order is an artefact of insertion, not part of the numerical
                 // contract - sorting keeps the dump stable if a builder ever reorders them.
-                var neighbours = new List<int>(n.neighbors);
+                var neighbours = (n.neighbors != null) ? (new List<int>(n.neighbors)) : (new List<int>());
                 neighbours.Sort();
 
                 w.WriteLine($"node {i} pos {EDDiagnostics.F(n.restPosition)} right {EDDiagnostics.F(n.restRight)} up {EDDiagnostics.F(n.restUp)} fwd {EDDiagnostics.F(n.restForward)} nbr {EDDiagnostics.F(neighbours)}");
@@ -128,7 +130,9 @@ namespace UC.ED
                 w.WriteLine($"seg {i} bind1 {FormatBinding(s.bind1)} bind2 {FormatBinding(s.bind2)}");
                 w.WriteLine($"seg {i} cBind {FormatBinding(s.cBind)} tBind {FormatBinding(s.tBind)} bBind {FormatBinding(s.bBind)}");
 
-                if ((restState != null) && (restState.clearances != null))
+                // Only NavED builds populate the rest clearances, so this section is absent for
+                // the other modes rather than zero-filled.
+                if ((restState != null) && (restState.clearances != null) && (i < restState.clearances.count))
                     w.WriteLine($"seg {i} restClearance {EDDiagnostics.F(restState.clearances.Get(i))}");
             }
         }

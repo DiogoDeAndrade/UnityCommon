@@ -120,6 +120,15 @@ namespace UC.ED
             values = new double[count];
         }
 
+        /// <summary>
+        /// Number of cached segments, zero when nothing has been computed yet.
+        ///
+        /// Testing the cache reference against null is not enough: Unity cannot serialize null
+        /// for a [Serializable] class, so after a scene load or domain reload a cache that was
+        /// never populated comes back as a live object wrapping a null array.
+        /// </summary>
+        public int count => (values != null) ? (values.Length) : (0);
+
         public EDClearanceCache Clone()
         {
             var clone = new EDClearanceCache(values.Length);
