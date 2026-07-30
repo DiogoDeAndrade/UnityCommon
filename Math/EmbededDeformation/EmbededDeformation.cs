@@ -4081,8 +4081,11 @@ namespace UC.ED
                 return normal.normalized;
             }
 
-            // Important: after ClearStructure(), this will usually fail because the
-            // old segment does not exist yet. That is fine; we fall back to up.
+            // Note that this cannot actually contribute during construction: every segment in
+            // `structure` right now was added by the loop below, and its probe bindings are not
+            // attached until SetNavEDParameters runs much later. GetSegmentSlopeNormal therefore
+            // returns zero here and we fall through to the up vector. Kept because the branch is
+            // meaningful if this is ever called on an already-bound structure.
             if ((structure != null) &&
                 (fallbackSegmentIndex >= 0) &&
                 (fallbackSegmentIndex < structure.Count) &&
@@ -4834,9 +4837,27 @@ namespace UC.ED
 
         public Vector3 GetSegmentSlopeNormal(int segIndex) => GetTransformedSegmentSlopeNormal(new EDStateView(currentState), segIndex);
 
+        /// <summary>
+        /// True once SetNavEDParameters has attached the centre and probe bindings a segment needs
+        /// before anything can be evaluated on it.
+        /// </summary>
+        private static bool IsSegmentBound(NavEDSegments seg)
+        {
+            return (seg != null) &&
+                   (seg.cBind.nodeIndices != null) &&
+                   (seg.tBind.nodeIndices != null) &&
+                   (seg.bBind.nodeIndices != null);
+        }
+
         Vector3 GetTransformedSegmentSlopeNormal(EDStateView state, int segIndex)
         {
             var seg = structure[segIndex];
+
+            // The probe bindings are only built by SetNavEDParameters, so they are still null
+            // while BuildStructureFromGraph is running, and in every mode that never calls it.
+            // An unbound segment simply has no slope normal to report.
+            if (!IsSegmentBound(seg))
+                return Vector3.zero;
 
             var q0 = DeformVertex(seg.center, seg.cBind, state);
             var qT = DeformVertex(seg.probeT, seg.tBind, state);
