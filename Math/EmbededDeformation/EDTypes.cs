@@ -110,7 +110,7 @@ namespace UC.ED
     }
 
     [Serializable]
-    class EDClearanceCache
+    public class EDClearanceCache
     {
         [SerializeField]
         private double[] values;
@@ -145,7 +145,10 @@ namespace UC.ED
     }
 
     [Serializable]
-    class EDState
+    // Public because the energy terms are written against them: a term evaluates a residual from a
+    // state and fills Jacobian rows from it, so these are part of the extension surface rather than
+    // an implementation detail of the solver.
+    public class EDState
     {
         [SerializeField]
         private double[]        parameters; // 12 * nodeCount
@@ -281,7 +284,7 @@ namespace UC.ED
     }
 
     [Serializable]
-    readonly struct EDStateView
+    public readonly struct EDStateView
     {
         [SerializeField]
         private readonly EDState            parentState;
