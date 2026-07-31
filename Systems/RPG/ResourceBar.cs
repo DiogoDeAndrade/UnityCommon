@@ -170,14 +170,27 @@ namespace UC.RPG
                 changeTimer += Time.deltaTime;
             }
 
+            RefreshText();
+
+            RunFade();
+
+            prevT = currentT;
+        }
+
+        void RefreshText()
+        {
             if (textDisplay)
             {
                 var currentResource = GetResourceCount();
                 var txt = textBase;
 
+                // SetTarget can land before Awake (two scene objects, undefined order), so the default
+                // is repeated here rather than trusting textBase to have been filled in already
+                if (string.IsNullOrEmpty(txt)) txt = "{0}/{1}";
+
                 if ((currentResource <= 0) && (!string.IsNullOrEmpty(textOnEmpty))) txt = textOnEmpty;
 
-                textDisplay.text = string.Format(txt, GetResourceCount(), GetMaxResourceCount());
+                textDisplay.text = string.Format(txt, currentResource, GetMaxResourceCount());
             }
 
             if (header)
@@ -194,10 +207,6 @@ namespace UC.RPG
                     header.color = sourceInstance.type.displayTextColor;
                 }
             }
-
-            RunFade();
-
-            prevT = currentT;
         }
 
         private void LateUpdate()
@@ -344,16 +353,34 @@ namespace UC.RPG
 
         public void SetTarget(ResourceHandler source)
         {
+            // The other source is cleared rather than left behind: GetNormalizedResource picks the
+            // handler first, so a leftover one would quietly win over the instance set here
+            sourceInstance = null;
             sourceResource = source;
 
-            UpdateGfx();
+            SnapToSource();
         }
 
         public void SetTarget(ResourceInstance source)
         {
+            sourceResource = null;
             sourceInstance = source;
 
+            SnapToSource();
+        }
+
+        // A bar that has just been pointed at something has no history to show, so it jumps to the new
+        // value instead of leaving it to Update. Without this, currentT still held whatever the last
+        // target left behind - zero, for a bar created and targeted in the same breath - and the bar
+        // rendered empty until the next Update, then eased up to the real value under FeedbackLoop or
+        // ConstantSpeed. That gap is the flicker.
+        void SnapToSource()
+        {
+            if (isBar) prevT = currentT = GetNormalizedResource();
+            else if (displayMode == DisplayMode.DiscreteItems) prevT = currentT = GetResourceCount();
+
             UpdateGfx();
+            RefreshText();
         }
     }
 }
