@@ -1172,7 +1172,9 @@ namespace UC.ED
             return deformed;
         }
 
-        private DVector3 DeformVertex(DVector3 v, EDVertexBinding binding, EDStateView state)
+        // Internal because the navmesh constraint term deforms its constrained vertices exactly the
+        // way the legacy constraint block does.
+        internal DVector3 DeformVertex(DVector3 v, EDVertexBinding binding, EDStateView state)
         {
             DVector3 result = DVector3.zero;
 

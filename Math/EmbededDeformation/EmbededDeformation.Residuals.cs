@@ -19,7 +19,8 @@ namespace UC.ED
     public partial class EmbededDeformation
     {
 #if MATH_NET_AVAILABLE
-        private int GetStructureHandlePositionConstraintPointCount()
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int GetStructureHandlePositionConstraintPointCount()
         {
             if (handleConstraints == null)
                 return 0;
@@ -532,7 +533,8 @@ namespace UC.ED
             return row;
         }
 
-        private int FillConstraintJacobianBlock(EDStateView state, Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int FillConstraintJacobianBlock(EDStateView state, Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
         {
             DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
@@ -1225,7 +1227,8 @@ namespace UC.ED
             return true;
         }
 
-        private bool TryGetStructureHandleNodeIndex(EDHandleConstraint hc, out int nodeIndex)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal bool TryGetStructureHandleNodeIndex(EDHandleConstraint hc, out int nodeIndex)
         {
             nodeIndex = -1;
 
@@ -1248,7 +1251,8 @@ namespace UC.ED
             return (nodeIndex >= 0) && (nodeIndex < nodes.Count);
         }
 
-        private static void GetStructureHandleBarPoints(EDHandleConstraint hc, out DVector3 restLeft, out DVector3 restRight, out DVector3 targetLeft, out DVector3 targetRight)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal static void GetStructureHandleBarPoints(EDHandleConstraint hc, out DVector3 restLeft, out DVector3 restRight, out DVector3 targetLeft, out DVector3 targetRight)
         {
             const float epsilon = 1e-8f;
 
@@ -1322,7 +1326,8 @@ namespace UC.ED
             return row + 3;
         }
 
-        private int FillNodePositionJacobianBlockStructure(DenseMatrix J, int row, int nodeIndex, DVector3 restPoint, double wCon, ref double jNormRunningTotalSq)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int FillNodePositionJacobianBlockStructure(DenseMatrix J, int row, int nodeIndex, DVector3 restPoint, double wCon, ref double jNormRunningTotalSq)
         {
             DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
