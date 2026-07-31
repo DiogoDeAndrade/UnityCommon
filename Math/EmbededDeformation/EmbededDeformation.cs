@@ -1208,6 +1208,8 @@ namespace UC.ED
         {
             if (resetBeforeSolve) ResetDeformation();
 
+            InitMathNet();
+
 #if MATH_NET_AVAILABLE
             if ((nodes == null) || (nodes.Count == 0))
             {

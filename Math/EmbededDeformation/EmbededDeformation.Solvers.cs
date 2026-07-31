@@ -28,6 +28,8 @@ namespace UC.ED
             if (resetBeforeSolve)
                 ResetDeformation();
 
+            InitMathNet();
+
 #if MATH_NET_AVAILABLE
             if (currentState == null)
                 currentState = new EDState(nodes.Count);
@@ -105,6 +107,8 @@ namespace UC.ED
         {
             if (resetBeforeSolve)
                 ResetDeformation();
+
+            InitMathNet();
 
 #if MATH_NET_AVAILABLE
             if (currentState == null)
@@ -238,45 +242,11 @@ namespace UC.ED
 #endif
         }
 
-        static void InitMathNet()
-        {
-            if (EDDiagnostics.verificationMode)
-            {
-                EDDiagnostics.ApplyMathNetProviders();
-
-                Debug.Log("[ED] Verification mode: Math.NET managed provider, single thread.");
-                return;
-            }
-
-            Control.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1);
-
-            bool nativeOk = false;
-
-            try
-            {
-                // Optional: point this to the folder containing the native DLLs.
-                // For testing, an absolute path is fine.
-                Control.NativeProviderPath = Path.GetFullPath(Path.Combine(Application.dataPath, "Plugins/MathNet/OpenBLAS/win-x64"));
-
-                nativeOk = Control.TryUseNativeOpenBLAS();
-
-                if (!nativeOk)
-                    nativeOk = Control.TryUseNativeMKL();
-
-                if (!nativeOk)
-                    Control.UseMultiThreading();
-
-                Debug.Log($"Math.NET native provider active: {nativeOk}");
-                Debug.Log(Control.Describe());
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"Math.NET native provider failed: {e.Message}");
-
-                Control.UseMultiThreading();
-                Debug.Log(Control.Describe());
-            }
-        }
+        // The configuration itself lives on EDDiagnostics, because verification mode is what decides
+        // it and because these providers are process-global: whoever sets them last wins for the
+        // rest of the session. Kept as a named call at the top of each solver so it is visible that
+        // a solve configures its own environment rather than trusting what it finds.
+        static void InitMathNet() => EDDiagnostics.ApplyMathNetProviders();
 
         public void SolveED_Nav(int maxIterations = 10,
                                 WeightConfig weights = null,

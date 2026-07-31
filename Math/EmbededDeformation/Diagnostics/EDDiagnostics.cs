@@ -38,6 +38,21 @@ namespace UC.ED
         public static bool verificationMode => _verificationMode;
 
         /// <summary>
+        /// Whether a normal (non-verification) solve may use the native Math.NET providers.
+        ///
+        /// Off, because turning them on is what makes a solve on this map piece take minutes
+        /// instead of seconds. It was previously reached only from the navigation solver, so it
+        /// looked like configuration order mattered - a Gauss-Newton run was fast in a fresh session
+        /// and slow once a navigation solve had switched the providers under it. Both are the same
+        /// fault seen from different directions.
+        ///
+        /// Left as a flag rather than deleted because the intent - native BLAS for large solves - is
+        /// reasonable, and this is a small dense problem where the setup and threading cost swamps
+        /// any gain. Worth revisiting with a measurement rather than by flipping it back.
+        /// </summary>
+        public static bool allowNativeProviders = false;
+
+        /// <summary>
         /// Passed to every Parallel.For in the solver. Collapses to a single worker while
         /// verifying, so any accidental order dependence shows up as a difference rather than
         /// as intermittent noise.
@@ -58,26 +73,100 @@ namespace UC.ED
             ApplyMathNetProviders();
         }
 
-        /// <summary>
-        /// Forces Math.NET into its only bit-reproducible configuration. Called when verification
-        /// starts, and again by the solver's own init so a solve cannot switch back to a native
-        /// provider halfway through a capture.
-        /// </summary>
-        public static void ApplyMathNetProviders()
-        {
-#if MATH_NET_AVAILABLE
-            // The native providers multi-thread internally, so the low bits of a linear solve
-            // depend on machine load. Managed on a single thread is the same every run.
-            Control.UseManaged();
-            Control.UseSingleThread();
-#endif
-        }
-
         public static void EndVerification()
         {
             _verificationMode = false;
             activeTrace = null;
+
+            // Put the providers back. Without this the managed single-threaded configuration
+            // outlived the capture that asked for it and every later solve in the session ran under
+            // it, which is a process-global setting changing because of something that already
+            // finished.
+            ApplyMathNetProviders();
         }
+
+        /// <summary>
+        /// Sets the Math.NET providers this session wants, and is the only thing that does.
+        ///
+        /// These are process-global and survive anything short of a domain reload, so a solve that
+        /// does not set them runs under whatever the previous one left behind - which made the cost
+        /// and the low bits of a solve depend on which configuration had been run before it in the
+        /// same editor session. Every solver entry point calls this, so none of them inherit.
+        ///
+        /// It reads verificationMode rather than taking an argument, so there is no way to ask for
+        /// a capture and a non-reproducible provider at the same time.
+        /// </summary>
+        public static void ApplyMathNetProviders()
+        {
+#if MATH_NET_AVAILABLE
+            if (_verificationMode)
+            {
+                // The native providers multi-thread internally, so the low bits of a linear solve
+                // depend on machine load. Managed on a single thread is the same every run.
+                Control.UseManaged();
+                Control.UseSingleThread();
+
+                LogProviderChange();
+                return;
+            }
+
+            if (!allowNativeProviders)
+            {
+                // Managed and multi-threaded: what Math.NET initialises itself to, and what a solve
+                // in a fresh editor session used to get. Deliberately not touching
+                // MaxDegreeOfParallelism either, so this is exactly the default rather than an
+                // approximation of it.
+                Control.UseManaged();
+                Control.UseMultiThreading();
+
+                LogProviderChange();
+                return;
+            }
+
+            Control.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1);
+
+            try
+            {
+                Control.NativeProviderPath = Path.GetFullPath(Path.Combine(Application.dataPath, "Plugins/MathNet/OpenBLAS/win-x64"));
+
+                bool nativeOk = Control.TryUseNativeOpenBLAS();
+
+                if (!nativeOk)
+                    nativeOk = Control.TryUseNativeMKL();
+
+                if (!nativeOk)
+                    Control.UseMultiThreading();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Math.NET native provider failed: {e.Message}");
+
+                Control.UseMultiThreading();
+            }
+
+            LogProviderChange();
+#endif
+        }
+
+#if MATH_NET_AVAILABLE
+        private static string lastDescribedProviders;
+
+        /// <summary>
+        /// Logs the provider configuration, but only when it actually changes. This used to be
+        /// printed on every navigation solve and by nothing else, which is the reason a solve
+        /// silently inheriting another configuration's providers was invisible.
+        /// </summary>
+        private static void LogProviderChange()
+        {
+            string description = Control.Describe();
+
+            if (description == lastDescribedProviders) return;
+
+            lastDescribedProviders = description;
+
+            Debug.Log($"[ED] Math.NET providers now: {description}");
+        }
+#endif
 
         public static void Trace(string line)
         {
