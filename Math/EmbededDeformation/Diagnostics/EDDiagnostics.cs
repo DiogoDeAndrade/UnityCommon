@@ -146,35 +146,64 @@ namespace UC.ED
             string section = "(none)";
             int shared = Math.Min(golden.Length, current.Length);
 
+            // Reported per section rather than stopping at the first difference. Which sections
+            // moved is the diagnostic that matters: a change confined to [config] means settings
+            // were reorganised, while one in [graph] or [final] means behaviour changed.
+            var sectionsSeen = new List<string>();
+            var firstInSection = new Dictionary<string, string>();
+            var countInSection = new Dictionary<string, int>();
+
             for (int i = 0; i < shared; i++)
             {
-                if (golden[i].StartsWith("[")) section = golden[i];
+                if (golden[i].StartsWith("["))
+                    section = golden[i];
 
                 if (golden[i] == current[i]) continue;
 
-                var sb = new StringBuilder();
-                sb.AppendLine($"DIVERGENCE in section {section}, line {i + 1}:");
-                sb.AppendLine($"  golden : {Elide(golden[i])}");
-                sb.AppendLine($"  current: {Elide(current[i])}");
+                if (!countInSection.ContainsKey(section))
+                {
+                    sectionsSeen.Add(section);
+                    countInSection[section] = 0;
 
-                long ulps = MaxUlpDistance(golden[i], current[i]);
-                if (ulps >= 0)
-                    sb.AppendLine($"  max ulp distance across numeric tokens: {ulps}");
-                else
-                    sb.AppendLine("  lines differ structurally (token count or non-numeric content)");
+                    var detail = new StringBuilder();
+                    detail.AppendLine($"  line {i + 1}");
+                    detail.AppendLine($"    golden : {Elide(golden[i])}");
+                    detail.AppendLine($"    current: {Elide(current[i])}");
 
-                report = sb.ToString();
-                return false;
+                    long ulps = MaxUlpDistance(golden[i], current[i]);
+                    if (ulps >= 0)
+                        detail.AppendLine($"    max ulp distance across numeric tokens: {ulps}");
+                    else
+                        detail.AppendLine("    lines differ structurally (token count or non-numeric content)");
+
+                    firstInSection[section] = detail.ToString();
+                }
+
+                countInSection[section]++;
             }
 
-            if (golden.Length != current.Length)
+            bool lengthDiffers = (golden.Length != current.Length);
+
+            if ((sectionsSeen.Count == 0) && (!lengthDiffers))
             {
-                report = $"DIVERGENCE: line count differs after section {section} - golden has {golden.Length}, current has {current.Length}.";
-                return false;
+                report = $"Identical: {golden.Length} lines match exactly.";
+                return true;
             }
 
-            report = $"Identical: {golden.Length} lines match exactly.";
-            return true;
+            var sb2 = new StringBuilder();
+            sb2.AppendLine($"Diverging sections: {string.Join(", ", sectionsSeen)}");
+
+            if (lengthDiffers)
+                sb2.AppendLine($"Line count differs - golden has {golden.Length}, current has {current.Length}.");
+
+            foreach (var s in sectionsSeen)
+            {
+                sb2.AppendLine($"{s}  ({countInSection[s]} differing line(s)), first:");
+                sb2.Append(firstInSection[s]);
+            }
+
+            report = sb2.ToString();
+            return false;
         }
 
         private static string Elide(string s, int max = 200)
