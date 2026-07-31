@@ -166,6 +166,10 @@ namespace UC.ED
 
             this.deformationGraphSource = deformationGraphSource;
 
+            // Discard any field from a previous build; only the structure branch produces one.
+            // Note this is not sufficient on its own - see usesDeformationField.
+            deformationField = null;
+
             switch (deformationGraphSource)
             {
                 case DeformationGraphSource.NavMeshAndStructure:
@@ -1135,30 +1139,35 @@ namespace UC.ED
             ComputeClearance(currentState);
         }
 
-        public Vector3[] DeformVerticesFromCurrentNodeTransforms()
+        /// <summary>
+        /// Deforms the navmesh vertices the way this graph actually deforms things: through the
+        /// volumetric field when there is one, and through the node bindings otherwise.
+        ///
+        /// There used to be two of these, drawn side by side to compare the field against the
+        /// binding blend while the field was being developed. Now that the field is the deformation
+        /// in structure mode, showing the binding blend alongside it only invited reading a
+        /// discrepancy as an error.
+        ///
+        /// The binding path keeps using the precomputed per-vertex bindings rather than going
+        /// through EDBindingDeformer, which would rebind every vertex from scratch for an identical
+        /// answer.
+        /// </summary>
+        public Vector3[] DeformVertices()
         {
             Vector3[] deformed = new Vector3[restVertices.Length];
 
-            for (int vId = 0; vId < restVertices.Length; vId++)
+            if (usesDeformationField)
             {
-                var vertex = restVertices[vId];
-                var binding = bindings[vId];
-                deformed[vId] = DeformVertex(vertex, binding, new EDStateView(currentState)).ToVector3();
+                for (int vId = 0; vId < restVertices.Length; vId++)
+                    deformed[vId] = deformationField.DeformPositionFromNodeFramesTrilinear(restVertices[vId].ToVector3(), GetDebugNodeFrame);
+
+                return deformed;
             }
 
-            return deformed;
-        }
-
-        public Vector3[] DeformVerticesFromDeformationField()
-        {
-            Vector3[] deformed = new Vector3[restVertices.Length];
+            var state = new EDStateView(currentState);
 
             for (int vId = 0; vId < restVertices.Length; vId++)
-            {
-                var vertex = restVertices[vId];
-
-                deformed[vId] = deformationField.DeformPositionFromNodeFramesTrilinear(vertex.ToVector3(), GetDebugNodeFrame);
-            }
+                deformed[vId] = DeformVertex(restVertices[vId], bindings[vId], state).ToVector3();
 
             return deformed;
         }
@@ -1573,7 +1582,20 @@ namespace UC.ED
             Debug.Log(sb);
         }
 
-        private bool UseDeformationFieldForClearance => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField != null);
+        /// <summary>
+        /// Whether the volumetric field is what deforms things for this graph. Only the structure
+        /// builder produces one.
+        ///
+        /// The graph source is tested as well as the reference, and the graph source is the part
+        /// that matters: FullDeformationField is [Serializable] and lives on a [SerializeField]
+        /// member, so a field that was null when Unity serialized the component comes back as a
+        /// live but empty object. Clearing it on rebuild is not enough, because serialization
+        /// happens again afterwards. A null check alone silently routes navmesh graphs through an
+        /// empty field.
+        /// </summary>
+        private bool usesDeformationField => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField != null);
+
+        private bool UseDeformationFieldForClearance => usesDeformationField;
 
         private List<FullDeformationField.Frame> BuildNodeFrames(EDStateView state)
         {

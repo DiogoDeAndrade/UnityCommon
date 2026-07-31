@@ -52,7 +52,8 @@ namespace UC.ED
             if (currentState == null)
                 return null;
 
-            if (deformationField != null)
+            // Deliberately not a plain null check on the field - see usesDeformationField.
+            if (usesDeformationField)
                 return new FieldDeformer(this);
 
             return new BindingDeformer(this);
