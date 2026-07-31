@@ -1864,6 +1864,17 @@ namespace UC.ED
 
             int structureCount = (structure != null) ? structure.Count : 0;
 
+            // The navigation-aware energies all evaluate against data that only SetNavEDParameters
+            // supplies - the navmesh topology and the per-segment bindings and probes. Without it
+            // they have nothing to measure, so they contribute no rows at all.
+            //
+            // Gating here rather than at each evaluator keeps the layout, the residual and the
+            // Jacobian in agreement automatically, since all three derive their block sizes from
+            // this. Note the weights themselves cannot be trusted as a proxy: GenerateED hides the
+            // nav weight fields outside NavED mode but still passes their serialized values, so
+            // they are routinely non-zero in a plain ED solve.
+            bool nav = isNavConfigured;
+
             EDResidualLayout layout = new EDResidualLayout
             {
                 rotationRows = 6 * nodeCount,
@@ -1871,10 +1882,10 @@ namespace UC.ED
 
                 constraintRows = 3 * constraintCount,
 
-                clearanceRows = (weights.clearanceWeight > 0.0) ? structureCount : 0,
-                slopeRows = (weights.slopeWeight > 0.0) ? structureCount : 0,
-                orientationRows = (weights.orientationWeight > 0.0) ? 3 * structureCount : 0,
-                segmentLengthRows = (weights.segmentLengthWeight > 0.0) ? structureCount : 0
+                clearanceRows = ((nav) && (weights.clearanceWeight > 0.0)) ? structureCount : 0,
+                slopeRows = ((nav) && (weights.slopeWeight > 0.0)) ? structureCount : 0,
+                orientationRows = ((nav) && (weights.orientationWeight > 0.0)) ? 3 * structureCount : 0,
+                segmentLengthRows = ((nav) && (weights.segmentLengthWeight > 0.0)) ? structureCount : 0
             };
 
             return layout;
@@ -1901,15 +1912,19 @@ namespace UC.ED
 
             int terminalCount = (terminalConstraints != null) ? (terminalConstraints.Count) : (0);
 
+            // See BuildResidualLayoutCommon for why the nav energies are gated on configuration
+            // rather than on their weights alone.
+            bool nav = isNavConfigured;
+
             return new EDResidualLayout
             {
                 rotationRows = 6 * nodeCount,
                 regularizationRows = 3 * directedEdgeCount,
                 constraintRows = 3 * constraintPointCount,
-                clearanceRows = (weights.clearanceWeight > 0.0) ? (structureCount) : (0),
-                slopeRows = (weights.slopeWeight > 0.0) ? (nodeCount) : (0),
-                orientationRows = (weights.orientationWeight > 0.0) ? (3 * nodeCount) : (0),
-                segmentLengthRows = (weights.segmentLengthWeight > 0.0) ? (structureCount) : (0),
+                clearanceRows = ((nav) && (weights.clearanceWeight > 0.0)) ? (structureCount) : (0),
+                slopeRows = ((nav) && (weights.slopeWeight > 0.0)) ? (nodeCount) : (0),
+                orientationRows = ((nav) && (weights.orientationWeight > 0.0)) ? (3 * nodeCount) : (0),
+                segmentLengthRows = ((nav) && (weights.segmentLengthWeight > 0.0)) ? (structureCount) : (0),
                 terminalOrientationRows = (weights.terminalOrientationWeight > 0.0) ? (3 * terminalCount) : (0),
                 terminalScaleRows = (weights.terminalScaleWeight > 0.0) ? (terminalCount) : (0),
                 linkAngleRows = (weights.linkAngleWeight > 0.0) ? (2 * linkAngleConstraints.Count) : (0),
