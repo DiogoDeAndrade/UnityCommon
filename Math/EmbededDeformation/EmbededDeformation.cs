@@ -2041,7 +2041,9 @@ namespace UC.ED
             return false;
         }
 
-        private bool HasTerminalScaleConstraint(int nodeIndex)
+        // Internal because the structure rotation term needs the same answer the legacy rotation
+        // block does about which nodes have their right-axis scale dictated by a terminal.
+        internal bool HasTerminalScaleConstraint(int nodeIndex)
         {
             if (terminalConstraints == null)
                 return false;

@@ -45,6 +45,13 @@ namespace UC.ED
 
             var report = new StringBuilder();
 
+            // Normalisation divides every weight by its block's row count, so if the two paths
+            // disagree about it every migrated term reports DIFFERS for a reason that has nothing
+            // to do with the migration. Say so up front rather than letting it read as a
+            // regression - config 7 is the one that turns this on.
+            if (model.normalizesWeights != weights.normalizeWeights)
+                report.AppendLine($"WEIGHT MISMATCH: the model normalizes weights = {model.normalizesWeights}, the solve = {weights.normalizeWeights}. Every block below will differ until these agree.");
+
             report.AppendLine($"legacy rows {legacyResidual.Count}, term rows {termResidual.Count}");
             report.AppendLine($"legacy jNorm {EDDiagnostics.F(legacyJNorm)}, term jNorm {EDDiagnostics.F(termJNorm)}");
 

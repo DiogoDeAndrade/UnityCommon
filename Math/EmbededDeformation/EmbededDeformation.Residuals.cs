@@ -350,7 +350,8 @@ namespace UC.ED
 
         private int ParamBase(int nodeIndex) => nodeIndex * 12;
 
-        private int FillRotationJacobianBlockStructure(EDStateView state, DenseMatrix J, int row, int nodeIndex, double wRot, bool allowRightScale, ref double jNorm)
+        // Widened as terms adopt it - see FillRotationJacobianBlock below.
+        internal int FillRotationJacobianBlockStructure(EDStateView state, DenseMatrix J, int row, int nodeIndex, double wRot, bool allowRightScale, ref double jNorm)
         {
             static int FillFrameDotJacobianRow(DenseMatrix J, int row, int parameterBase, DVector3 transformedA, DVector3 restA, DVector3 transformedB, DVector3 restB, double weight, ref double jNorm)
             {
@@ -483,7 +484,8 @@ namespace UC.ED
             return row;
         }
 
-        private int FillRegularizationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
+        // Widened as terms adopt it - see FillRotationJacobianBlock above.
+        internal int FillRegularizationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
         {
             DebugProfiler.DebugMark(timeJacobianBuildRegularization);
 
