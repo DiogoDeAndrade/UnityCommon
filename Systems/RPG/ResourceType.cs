@@ -1,4 +1,5 @@
 using NaughtyAttributes;
+using System;
 using UnityEngine;
 
 namespace UC.RPG
@@ -21,5 +22,12 @@ namespace UC.RPG
         public Color ctPositiveColor = Color.white;
         [ShowIf(nameof(useCombatText))]
         public Color ctNegativeColor = Color.white;
+    }
+
+    [Serializable]
+    public struct ResourceCost
+    {
+        public ResourceType type;
+        public float        cost;
     }
 }

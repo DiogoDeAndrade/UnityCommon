@@ -50,11 +50,11 @@ namespace UC
             timer = 0.0f;
         }
 
-        public bool Update()
+        public bool Update(float elapsedTime = 0.0f)
         {
             if (timer > 0)
             {
-                timer -= Time.deltaTime;
+                timer -= (elapsedTime > 0.0f) ? (elapsedTime) : (Time.deltaTime);
 
                 if (timer <= 0.0f) return true;
             }
