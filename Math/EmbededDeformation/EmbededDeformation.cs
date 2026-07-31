@@ -737,6 +737,10 @@ namespace UC.ED
                 return;
             }
 
+            // Remembered so that points which are not navmesh vertices - the source geometry passed
+            // to DeformMesh, for instance - can be bound the same way later on.
+            RememberBindingSettings(bindMode, weightMode, k, power, sigma);
+
             int vertexCount = topology.vertexCount;
             int nodeCount = nodes.Count;
             bindings = new EDVertexBinding[vertexCount];
@@ -2590,13 +2594,6 @@ namespace UC.ED
                 return null;
             }
 
-            if (deformationField == null)
-            {
-                Debug.LogError($"DeformMesh failed for '{srcMesh.name}': the deformation field has not been built.");
-
-                return null;
-            }
-
             if (currentState == null)
             {
                 Debug.LogError($"DeformMesh failed for '{srcMesh.name}': there is no current deformation state.");
@@ -2631,9 +2628,17 @@ namespace UC.ED
                 Debug.LogWarning($"Mesh '{srcMesh.name}' does not contain a valid tangent for every vertex. Existing tangents cannot be transformed.");
             }
 
-            EDStateView state = new EDStateView(currentState);
+            // Whichever deformation the graph implies - the volumetric field for a structure graph,
+            // a blend of the bound node transforms for a navmesh one. Previously this went straight
+            // to the field, so output geometry could not be generated at all without one.
+            EDDeformer deformer = CreateDeformer();
 
-            List<FullDeformationField.Frame> nodeFrames = BuildNodeFrames(state);
+            if (deformer == null)
+            {
+                Debug.LogError($"DeformMesh failed for '{srcMesh.name}': the deformation graph has not been built.");
+
+                return null;
+            }
 
             float sourceToDestinationDeterminant = srcMatrix.determinant * destInverse.determinant;
 
@@ -2641,7 +2646,7 @@ namespace UC.ED
             {
                 Vector3 sourcePosition = srcMatrix.MultiplyPoint3x4(sourceVertices[i]);
 
-                bool hasDeformation = deformationField.TryGetDeformationMatrixTrilinear(sourcePosition, nodeFrames, out Matrix4x4 deformationMatrix);
+                bool hasDeformation = deformer.TryGetDeformationMatrix(sourcePosition, out Matrix4x4 deformationMatrix);
 
                 Vector3 deformedPosition = (hasDeformation) ? (deformationMatrix.MultiplyPoint3x4(sourcePosition)) : (sourcePosition);
 
