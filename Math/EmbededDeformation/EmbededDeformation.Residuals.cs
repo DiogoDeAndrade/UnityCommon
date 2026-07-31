@@ -413,7 +413,9 @@ namespace UC.ED
             return row;
         }
 
-        private int FillRotationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
+        // Widened as terms adopt it. A migrated term calls the very same filler the legacy path
+        // does, so the two agree by construction rather than by careful re-derivation.
+        internal int FillRotationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
         {
             DebugProfiler.DebugMark(timeJacobianBuildRotation);
 

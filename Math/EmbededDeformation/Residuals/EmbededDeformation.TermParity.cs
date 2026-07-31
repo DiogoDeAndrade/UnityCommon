@@ -48,11 +48,18 @@ namespace UC.ED
             report.AppendLine($"legacy rows {legacyResidual.Count}, term rows {termResidual.Count}");
             report.AppendLine($"legacy jNorm {EDDiagnostics.F(legacyJNorm)}, term jNorm {EDDiagnostics.F(termJNorm)}");
 
-            if (legacyResidual.Count != termResidual.Count)
+            // Partial migration is the normal state here, so the term list is compared as a prefix
+            // of the legacy rows rather than requiring the two to be the same length. That only
+            // holds while terms are migrated top-down in the legacy block order, which is why the
+            // order is not negotiable.
+            if (termResidual.Count > legacyResidual.Count)
             {
-                report.AppendLine("Row counts differ, so the blocks cannot be compared. Migrate terms in the legacy block order.");
+                report.AppendLine("The term list produces more rows than the legacy path. Check the row counts of the migrated terms.");
                 return report.ToString();
             }
+
+            if (termResidual.Count < legacyResidual.Count)
+                report.AppendLine($"Partial migration: comparing the first {termResidual.Count} rows; {legacyResidual.Count - termResidual.Count} legacy rows are not yet covered.");
 
             var layout = modelInstance.DescribeLayout();
 
