@@ -61,7 +61,8 @@ namespace UC.ED
         [SerializeField, HideInInspector]
         private EDState currentState;
         [SerializeField, HideInInspector]
-        private EDState restState;
+        // Widened as terms adopt it - the clearance term measures against the rest clearances.
+        internal EDState restState;
         [SerializeField, HideInInspector]
         private FullDeformationField    deformationField;
         [SerializeField, HideInInspector]
@@ -1599,9 +1600,9 @@ namespace UC.ED
         /// </summary>
         private bool usesDeformationField => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField != null);
 
-        private bool UseDeformationFieldForClearance => usesDeformationField;
+        internal bool UseDeformationFieldForClearance => usesDeformationField;
 
-        private List<FullDeformationField.Frame> BuildNodeFrames(EDStateView state)
+        internal List<FullDeformationField.Frame> BuildNodeFrames(EDStateView state)
         {
             var frames = new List<FullDeformationField.Frame>(nodes.Count);
 
@@ -1978,7 +1979,7 @@ namespace UC.ED
             return wTerminalScale * (currentScale - targetScale);
         }
 
-        private double ComputeClearanceLoss(double original, double current)
+        internal double ComputeClearanceLoss(double original, double current)
         {
             if ((original == double.MaxValue) || (current == double.MaxValue))
                 return 0.0;

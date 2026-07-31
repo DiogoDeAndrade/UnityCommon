@@ -698,7 +698,8 @@ namespace UC.ED
             return J;
         }
 
-        private double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null)
         {
             var baseView = new EDStateView(state);
 

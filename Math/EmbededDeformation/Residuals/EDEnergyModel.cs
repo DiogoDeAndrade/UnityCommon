@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 #if MATH_NET_AVAILABLE
@@ -123,13 +124,51 @@ namespace UC.ED
                 {
                     if (termInstances[i].rowCount == 0) continue;
 
-                    termInstances[i].FillJacobian(state, jacobian, offset, ref jNormSq);
+                    if (termInstances[i].supportsParallelRows)
+                        FillJacobianRowsInParallel(termInstances[i], state, jacobian, offset, ref jNormSq);
+                    else
+                        termInstances[i].FillJacobian(state, jacobian, offset, ref jNormSq);
+
                     offset += termInstances[i].rowCount;
                 }
 
                 jNorm = System.Math.Sqrt(jNormSq);
 
                 return jacobian;
+            }
+
+            /// <summary>
+            /// Fills a term's rows across workers, each with its own scratch.
+            ///
+            /// The norms are collected into one slot per row and summed serially afterwards, in row
+            /// order. Adding them as the workers finished instead made the total vary in the low
+            /// bits run to run, because double addition is not associative and completion order is
+            /// not fixed. It only feeds an early-out, but it was enough to stop a diagnostic dump
+            /// reproducing, which is the one thing this whole exercise depends on.
+            /// </summary>
+            private static void FillJacobianRowsInParallel(EDResidualTerm.Instance term, EDState state, DenseMatrix jacobian, int rowOffset, ref double jNormSq)
+            {
+                double[] rowNorms = new double[term.rowCount];
+
+                Parallel.For(
+                    0,
+                    term.rowCount,
+                    EDDiagnostics.parallelOptions,
+
+                    () => term.CreateRowScratch(state),
+
+                    (localIndex, loopState, scratch) =>
+                    {
+                        rowNorms[localIndex] = term.FillJacobianRow(state, jacobian, rowOffset, localIndex, scratch);
+
+                        return scratch;
+                    },
+
+                    scratch => { }
+                );
+
+                for (int i = 0; i < rowNorms.Length; i++)
+                    jNormSq += rowNorms[i];
             }
         }
 #endif
