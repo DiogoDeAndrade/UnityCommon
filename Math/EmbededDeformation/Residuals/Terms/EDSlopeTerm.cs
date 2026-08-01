@@ -20,14 +20,35 @@ namespace UC.ED
     /// finite differences, but one row at a time rather than in parallel, matching the block it
     /// replaces.
     ///
-    /// The limit and the soft band still come from the deformation rather than from this term. They
-    /// are supplied by SetNavEDParameters today, and moving them here cannot be checked with the
-    /// parity tool - see the note on ApplyRuntimeParameters in EDResidualTerm.
+    /// The limit and the soft band belong to the term, and are pushed onto the deformation before a
+    /// solve. They used to arrive through SetNavEDParameters from a field on the component, which
+    /// meant an experiment's slope constraint was not part of the energy that expressed it.
     /// </summary>
     [Serializable]
     public abstract class EDSlopeTerm : EDResidualTerm
     {
+        [SerializeField, Min(0.0f), Tooltip("Ground steeper than this is penalised.")]
+        private float maxSlope = 45.0f;
+
+        [SerializeField, Min(0.0f), Tooltip("How far below the limit the penalty starts rising, so the constraint has a soft edge rather than a cliff.")]
+        private float softBand = 5.0f;
+
         public override string name => "slope";
+
+        /// <summary>
+        /// The limit lives on the term that enforces it rather than on the component, so an
+        /// experiment's slope constraint travels with the energy that expresses it.
+        ///
+        /// Both slope forms read the same two values off the deformation, so if a model ever carried
+        /// both of them with different limits the last one applied would win. That is not a
+        /// configuration worth supporting - a piece has one notion of what is too steep - but it is
+        /// worth knowing that this pushes rather than owns.
+        /// </summary>
+        public override void ApplyRuntimeParameters(EmbededDeformation deformation)
+        {
+            deformation.maxSlope = maxSlope;
+            deformation.slopeSoftBand = softBand;
+        }
 
 #if MATH_NET_AVAILABLE
         public abstract class SlopeInstance : Instance

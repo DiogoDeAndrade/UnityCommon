@@ -1449,21 +1449,23 @@ namespace UC.ED
             });
         }
 
+        /// <summary>
+        /// Supplies the navigation data the nav-aware energies measure against.
+        ///
+        /// The limits those energies enforce no longer come through here - each term pushes its own
+        /// in ApplyRuntimeParameters, so a limit travels with the energy that reads it. What remains
+        /// is data rather than configuration: the topology, the agent radius, the up vector and the
+        /// per-segment bindings, none of which belongs to any single energy.
+        /// </summary>
         public void SetNavEDParameters(TopologyStatic navMeshTopology,
-                                       float agentRadius, float maxSlope, float slopeSoftBand, Vector3 upVector,
+                                       float agentRadius, Vector3 upVector,
                                        BindingSelectionMode bindMode, BindingWeightMode weightMode,
                                        int k = 4, // When BindingSelectionMode = closest-K
                                        float power = 2.0f,
-                                       float sigma = 1.0f,
-                                       double clearanceMinRatio = 0.85,
-                                       double segmentMinRatio = 0.85)
+                                       float sigma = 1.0f)
         {
-            this.maxSlope = maxSlope;
-            this.slopeSoftBand = slopeSoftBand;
             this.upVector = upVector.normalized;
             this.navMeshTopology = navMeshTopology;
-            this.clearanceMinRatio = clearanceMinRatio;
-            this.segmentMinRatio = segmentMinRatio;
 
             for (int i = 0; i < structure.Count; i++)
             {

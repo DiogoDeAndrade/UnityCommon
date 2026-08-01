@@ -29,7 +29,15 @@ namespace UC.ED
     [Serializable]
     public abstract class EDSegmentLengthTerm : EDResidualTerm
     {
+        [SerializeField, Min(0.0f), Tooltip("A segment may shrink to this fraction of its rest length before the term objects.")]
+        private float minRatio = 0.85f;
+
         public override string name => "segmentLength";
+
+        public override void ApplyRuntimeParameters(EmbededDeformation deformation)
+        {
+            deformation.segmentMinRatio = minRatio;
+        }
 
 #if MATH_NET_AVAILABLE
         public abstract class SegmentLengthInstance : Instance

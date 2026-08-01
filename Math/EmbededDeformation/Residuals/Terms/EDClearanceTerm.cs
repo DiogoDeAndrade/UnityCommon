@@ -36,7 +36,15 @@ namespace UC.ED
     [PolymorphicName("Clearance")]
     public class EDClearanceTerm : EDResidualTerm
     {
+        [SerializeField, Min(0.0f), Tooltip("Clearance may shrink to this fraction of its rest value before the term objects.")]
+        private float minRatio = 0.85f;
+
         public override string name => "clearance";
+
+        public override void ApplyRuntimeParameters(EmbededDeformation deformation)
+        {
+            deformation.clearanceMinRatio = minRatio;
+        }
 
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)

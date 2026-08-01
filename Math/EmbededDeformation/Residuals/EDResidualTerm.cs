@@ -40,11 +40,15 @@ namespace UC.ED
         /// Pushes any limits this term needs onto the deformation before a solve - the slope term's
         /// maximum angle, for instance. Called once per solve, not per evaluation.
         ///
-        /// **The parity tool cannot check what this writes.** It mutates state that both the term
-        /// and the legacy path read, so a term pushing the wrong limit moves both sides equally and
-        /// the comparison still reports EXACT while the golden breaks. Terms therefore keep reading
-        /// these limits from the deformation for now; moving ownership here is a separate step to be
-        /// verified against the baselines, not against parity.
+        /// This writes to state the deformation holds rather than owning it outright, so two terms
+        /// pushing the same limit means the last one applied wins. That is not a configuration worth
+        /// supporting - a piece has one notion of what counts as too steep - but it is the reason
+        /// these are pushes rather than reads.
+        ///
+        /// It is also, historically, why the limits moved here only after the legacy path was gone:
+        /// while both paths read the same mutated state, a term pushing a wrong value moved both
+        /// sides equally and the parity check reported EXACT regardless. The baselines catch it; the
+        /// parity tool never could.
         ///
         /// It also runs for every term regardless of row count, so a term contributing no rows can
         /// still change the solve. That is why the energy models list only the terms their
