@@ -26,6 +26,11 @@ namespace UC.ED
         public List<EDNode> nodes = new();
         public EDVertexBinding[] bindings;
         public List<EDHandleConstraint> handleConstraints = new();
+
+        // Which navmesh edges span an opening, and so must not be measured against for clearance.
+        // Supplied by the caller rather than derived from handleConstraints - see EDClearanceOpening.
+        [SerializeField, HideInInspector]
+        private List<EDClearanceOpening> clearanceOpenings = new();
         public List<EDVertexConstraint> vertexConstraints = new();
         public List<EDTerminalConstraint> terminalConstraints = new();
         public List<EDLinkAngleConstraint> linkAngleConstraints = new();
@@ -180,6 +185,7 @@ namespace UC.ED
             nodes.Clear();
             bindings = null;
             handleConstraints.Clear();
+            clearanceOpenings.Clear();
             terminalConstraints.Clear();
             linkAngleConstraints.Clear();
 
@@ -297,6 +303,7 @@ namespace UC.ED
             nodes.Clear();
             bindings = null;
             handleConstraints.Clear();
+            clearanceOpenings.Clear();
             terminalConstraints.Clear();
             linkAngleConstraints.Clear();
 
@@ -950,6 +957,16 @@ namespace UC.ED
             }
 
             EnsureNoIsolatedNodes();
+        }
+
+        /// <summary>
+        /// Declares which vertex groups span openings, for clearance measurement. Independent of the
+        /// handle constraints on purpose: what a piece is pinned by and where a piece opens are
+        /// different questions that happen to have the same answer today.
+        /// </summary>
+        public void SetClearanceOpenings(List<EDClearanceOpening> openings)
+        {
+            clearanceOpenings = (openings != null) ? (new List<EDClearanceOpening>(openings)) : (new List<EDClearanceOpening>());
         }
 
         public void UpdateConstraints(List<EDHandleConstraint> handleData)
@@ -1990,7 +2007,7 @@ namespace UC.ED
             foreach (var edge in navMeshTopology.edges)
             {
                 if (!edge.isBoundary) continue;
-                if (IsConnectorEdge(edge)) continue;
+                if (IsOpeningEdge(edge)) continue;
 
                 DVector3 e1 = DeformClearancePoint(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state, nodeFrames);
                 DVector3 e2 = DeformClearancePoint(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state, nodeFrames);
@@ -2011,12 +2028,21 @@ namespace UC.ED
             return minClearance != double.MaxValue;
         }
 
-        bool IsConnectorEdge(TopologyStatic.TEdge edge)
+        /// <summary>
+        /// Whether this edge spans an opening, and so should be ignored when measuring clearance.
+        /// </summary>
+        bool IsOpeningEdge(TopologyStatic.TEdge edge)
         {
-            foreach (var h in handleConstraints)
+            if (clearanceOpenings == null) return false;
+
+            foreach (var opening in clearanceOpenings)
             {
-                if ((h.vertexIndices.Contains(edge.vertices.i1)) &&
-                    (h.vertexIndices.Contains(edge.vertices.i2))) return true;
+                if (opening?.vertexIndices == null) continue;
+
+                // Both endpoints in the same opening. Two endpoints in different openings are not
+                // an edge across either of them.
+                if ((opening.vertexIndices.Contains(edge.vertices.i1)) &&
+                    (opening.vertexIndices.Contains(edge.vertices.i2))) return true;
             }
 
             return false;

@@ -471,6 +471,25 @@ namespace UC.ED
         public int              node2 = -1;
     }
 
+    /// <summary>
+    /// A group of navmesh vertices spanning an opening in the piece - a doorway rather than a wall.
+    ///
+    /// Clearance is measured against boundary edges, and an edge across an opening is not something
+    /// an agent is obstructed by, so it must not be measured against. An edge counts as spanning an
+    /// opening when *both* its endpoints belong to the *same* group; endpoints in two different
+    /// openings do not make the edge between them one.
+    ///
+    /// Supplied explicitly rather than inferred from the handle constraints. The two happened to
+    /// coincide - a connector is both where a piece is pinned and where it opens - but they are
+    /// different statements, and reading one off the other meant a change to how handles bind
+    /// silently changed what clearance measured.
+    /// </summary>
+    [Serializable]
+    public class EDClearanceOpening
+    {
+        public List<int> vertexIndices = new();
+    }
+
     public delegate bool HasLOS(Vector3 p1, Vector3 p2);
     public delegate bool TryGetSurfaceNormal(Vector3 p, out Vector3 normal);
     
