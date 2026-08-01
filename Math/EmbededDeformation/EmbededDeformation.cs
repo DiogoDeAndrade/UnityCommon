@@ -1890,7 +1890,7 @@ namespace UC.ED
             return transformed.normalized;
         }
 
-        private double EvaluateSingleSegmentLengthResidual(EDStateView state, int segmentIndex, double wSegmentLength)
+        internal double EvaluateSingleSegmentLengthResidual(EDStateView state, int segmentIndex, double wSegmentLength)
         {
             var seg = structure[segmentIndex];
 
@@ -1910,7 +1910,7 @@ namespace UC.ED
             return wSegmentLength * loss;
         }
 
-        private double EvaluateSingleSegmentLengthResidualStructure(EDStateView state, int segmentIndex, double wSegmentLength)
+        internal double EvaluateSingleSegmentLengthResidualStructure(EDStateView state, int segmentIndex, double wSegmentLength)
         {
             NavEDSegments seg = structure[segmentIndex];
 
