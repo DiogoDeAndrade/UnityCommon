@@ -317,20 +317,6 @@ namespace UC.ED
 
                 EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
-                /*int nonZero = 0;
-                int total = J.RowCount * J.ColumnCount;
-
-                for (int r = 0; r < J.RowCount; r++)
-                {
-                    for (int c = 0; c < J.ColumnCount; c++)
-                    {
-                        if (Math.Abs(J[r, c]) > 1e-12)
-                            nonZero++;
-                    }
-                }
-
-                Debug.Log($"Jacobian density (iteration {iter}): {(100.0 * nonZero / total):F2}% ({nonZero}/{total})");*/
-
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                 {
                     DebugProfiler.DebugMark(timeIteration);

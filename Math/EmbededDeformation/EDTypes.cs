@@ -50,32 +50,6 @@ namespace UC.ED
             return candidate;
         }
 
-        public void BuildOrthonormalFrame(DVector3 forwardReference, DVector3 upReference)
-        {
-            restForward = SafeNormalized(forwardReference, DVector3.forward);
-
-            if (upReference.sqrMagnitude < 1e-8)
-                upReference = PickFallbackUp(restForward);
-
-            // Project up onto plane perpendicular to forward.
-            restUp = upReference - DVector3.Dot(upReference, restForward) * restForward;
-
-            if (restUp.sqrMagnitude < 1e-8)
-                restUp = PickFallbackUp(restForward) - DVector3.Dot(PickFallbackUp(restForward), restForward) * restForward;
-
-            restUp = SafeNormalized(restUp, PickFallbackUp(restForward));
-
-            restRight = DVector3.Cross(restUp, restForward);
-
-            if (restRight.sqrMagnitude < 1e-8)
-                restRight = DVector3.right;
-
-            restRight.Normalize();
-
-            // Recompute up to guarantee orthogonality.
-            restUp = DVector3.Cross(restForward, restRight).normalized;
-        }
-
         public void BuildSurfaceFrame(DVector3 forwardReference, DVector3 surfaceNormal)
         {
             const double epsilon = 1e-8;
