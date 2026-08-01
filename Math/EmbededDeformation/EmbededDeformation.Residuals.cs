@@ -832,7 +832,8 @@ namespace UC.ED
             return row + 1;
         }
 
-        private int FillOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wOrientation, ref double jNorm)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int FillOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wOrientation, ref double jNorm)
         {
             var baseView = new EDStateView(state);
 
@@ -861,7 +862,7 @@ namespace UC.ED
             return row + 3;
         }
 
-        private int FillOrientationJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wOrientation, ref double jNorm)
+        internal int FillOrientationJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wOrientation, ref double jNorm)
         {
             var baseView = new EDStateView(state);
 

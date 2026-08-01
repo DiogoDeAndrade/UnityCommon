@@ -1811,7 +1811,7 @@ namespace UC.ED
             return wSlope * penalty;
         }
 
-        private DVector3 EvaluateSingleOrientationResidual(EDStateView state, int segmentIndex, double wOrientation)
+        internal DVector3 EvaluateSingleOrientationResidual(EDStateView state, int segmentIndex, double wOrientation)
         {
             Vector3 current = GetTransformedSegmentSlopeNormal(state, segmentIndex);
 
@@ -1834,7 +1834,7 @@ namespace UC.ED
             return new DVector3(wOrientation * (current.x - target.x), wOrientation * (current.y - target.y), wOrientation * (current.z - target.z));
         }
 
-        private DVector3 EvaluateSingleNodeOrientationResidualStructure(EDStateView state, int nodeIndex, double wOrientation)
+        internal DVector3 EvaluateSingleNodeOrientationResidualStructure(EDStateView state, int nodeIndex, double wOrientation)
         {
             DVector3 currentUp = GetTransformedNodeUp(state, nodeIndex);
 
