@@ -944,7 +944,8 @@ namespace UC.ED
             return row + 1;
         }
 
-        private int FillTerminalOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int terminalIndex, double wTerminalOrientation, ref double jNorm)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int FillTerminalOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int terminalIndex, double wTerminalOrientation, ref double jNorm)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
 
@@ -987,7 +988,7 @@ namespace UC.ED
             return row + 3;
         }
 
-        private int FillTerminalScaleJacobianBlock(EDStateView state, DenseMatrix J, int row, int terminalIndex, double wTerminalScale, ref double jNorm)
+        internal int FillTerminalScaleJacobianBlock(EDStateView state, DenseMatrix J, int row, int terminalIndex, double wTerminalScale, ref double jNorm)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
 

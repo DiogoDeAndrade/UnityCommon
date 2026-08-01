@@ -1946,7 +1946,7 @@ namespace UC.ED
             return wSegmentLength * shrinkage / originalLength;
         }
 
-        private DVector3 EvaluateSingleTerminalOrientationResidual(EDStateView state, int terminalIndex, double wTerminalOrientation)
+        internal DVector3 EvaluateSingleTerminalOrientationResidual(EDStateView state, int terminalIndex, double wTerminalOrientation)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
 
@@ -1965,7 +1965,7 @@ namespace UC.ED
             return wTerminalOrientation * QuaternionRotationVector(rotationError);
         }
 
-        private double EvaluateSingleTerminalScaleResidual(EDStateView state, int terminalIndex, double wTerminalScale)
+        internal double EvaluateSingleTerminalScaleResidual(EDStateView state, int terminalIndex, double wTerminalScale)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
 
