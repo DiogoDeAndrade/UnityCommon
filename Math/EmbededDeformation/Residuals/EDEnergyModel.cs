@@ -97,6 +97,39 @@ namespace UC.ED
                 return described;
             }
 
+            /// <summary>
+            /// Rows occupied by the term with this name, or zero when the model does not carry it.
+            /// Resolve first - before that every count is zero.
+            /// </summary>
+            public int GetRowCount(string termName)
+            {
+                for (int i = 0; i < termInstances.Count; i++)
+                {
+                    if (termInstances[i].term.name == termName)
+                        return termInstances[i].rowCount;
+                }
+
+                return 0;
+            }
+
+            /// <summary>
+            /// The unweighted weight a term was given, or zero when absent. This is the number as
+            /// authored, not the sqrt(weight / rows) the least-squares rows are scaled by, and it
+            /// exists for the translation-only solver: that solver does not use the term machinery
+            /// at all, but it does need the same constraint weight the full problem uses, or the
+            /// baseline it provides is not comparable.
+            /// </summary>
+            public double GetConceptualWeight(string termName)
+            {
+                for (int i = 0; i < termInstances.Count; i++)
+                {
+                    if (termInstances[i].term.name == termName)
+                        return termInstances[i].term.conceptualWeight;
+                }
+
+                return 0.0;
+            }
+
             public Vector<double> EvaluateResidual(EDStateView state)
             {
                 var residual = DenseVector.Create(totalRows, 0.0);

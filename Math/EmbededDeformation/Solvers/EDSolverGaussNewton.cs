@@ -33,12 +33,12 @@ namespace UC.ED
             {
             }
 
-            public override void Solve(WeightConfig weights, int iterations, bool resetBeforeSolve)
+            public override void Solve(EDEnergyModel.Instance energy, int iterations, bool resetBeforeSolve)
             {
                 var def = (EDSolverGaussNewton)solver;
 
                 deformation.SolveED_GN(iterations,
-                                       weights,
+                                       energy,
                                        def.stepDamping,
                                        def.residualTolerance,
                                        def.stepTolerance,

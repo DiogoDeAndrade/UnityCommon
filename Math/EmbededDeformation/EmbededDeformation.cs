@@ -1207,11 +1207,21 @@ namespace UC.ED
             return DeformVertex(v, binding, new EDStateView(currentState));
         }
 
-        public bool SolveTranslationsOnly(WeightConfig weights, bool resetBeforeSolve = true)
+        /// <summary>
+        /// A translation-only baseline: no rotations, no term machinery, one dense least-squares
+        /// system of constrained vertices against a smoothness prior.
+        ///
+        /// It takes the energy model anyway, for the constraint weight alone. That weight has to be
+        /// the same number the full problem uses or the baseline is not comparable, and the model is
+        /// where that number now lives - so it is read rather than duplicated onto this solver.
+        /// </summary>
+        public bool SolveTranslationsOnly(EDEnergyModel.Instance energy, double smoothnessWeight, bool resetBeforeSolve = true)
         {
             if (resetBeforeSolve) ResetDeformation();
 
             InitMathNet();
+
+            double constraintWeight = (energy != null) ? (energy.GetConceptualWeight("constraint")) : (0.0);
 
 #if MATH_NET_AVAILABLE
             if ((nodes == null) || (nodes.Count == 0))
@@ -1286,12 +1296,12 @@ namespace UC.ED
                     else
                         w = 1.0 / binding.nodeIndices.Length;
 
-                    A[row, nodeIndex] += weights.constraintWeight * w;
+                    A[row, nodeIndex] += constraintWeight * w;
                 }
 
-                bx[row] = weights.constraintWeight * delta.x;
-                by[row] = weights.constraintWeight * delta.y;
-                bz[row] = weights.constraintWeight * delta.z;
+                bx[row] = constraintWeight * delta.x;
+                by[row] = constraintWeight * delta.y;
+                bz[row] = constraintWeight * delta.z;
             }
 
             // -----------------------------------------------------------------
@@ -1302,8 +1312,8 @@ namespace UC.ED
             {
                 var edge = edges[e];
 
-                A[row, edge.a] += weights.smoothnessWeight;
-                A[row, edge.b] -= weights.smoothnessWeight;
+                A[row, edge.a] += smoothnessWeight;
+                A[row, edge.b] -= smoothnessWeight;
 
                 // rhs stays zero
             }
@@ -2411,25 +2421,21 @@ namespace UC.ED
             };
         }
 
-        protected void LogResidualEnergies(Vector<double> f, WeightConfig weights, int iteration)
+        protected void LogResidualEnergies(Vector<double> f, EDEnergyModel.Instance energy, int iteration)
         {
-            EDResidualLayout layout = BuildResidualLayoutForCurrentGraph(weights);
+            if (energy == null) return;
+
+            // Reads the layout off the term list rather than a parallel list of block names that had
+            // to be kept in step by hand - which is what let three energies go missing from the
+            // navmesh layout unnoticed. A term that is not in the model cannot be missing from here.
+            var layout = energy.DescribeLayout();
 
             int row = 0;
 
-            List<EDResidualEnergy> blocks = new List<EDResidualEnergy>
-            {
-                MeasureResidualBlock(f, ref row, layout.rotationRows, "Rotation"),
-                MeasureResidualBlock(f, ref row, layout.regularizationRows, "Regularization"),
-                MeasureResidualBlock(f, ref row, layout.constraintRows, "Connector"),
-                MeasureResidualBlock(f, ref row, layout.clearanceRows, "Clearance"),
-                MeasureResidualBlock(f, ref row, layout.slopeRows, "Slope"),
-                MeasureResidualBlock(f, ref row, layout.orientationRows, "Orientation"),
-                MeasureResidualBlock(f, ref row, layout.segmentLengthRows, "Seg. Length"),
-                MeasureResidualBlock(f, ref row, layout.linkAngleRows, "Link Angle"),
-                MeasureResidualBlock(f, ref row, layout.terminalOrientationRows, "Terminal Orient."),
-                MeasureResidualBlock(f, ref row, layout.terminalScaleRows, "Terminal Scale"),
-            };
+            List<EDResidualEnergy> blocks = new List<EDResidualEnergy>();
+
+            for (int i = 0; i < layout.Count; i++)
+                blocks.Add(MeasureResidualBlock(f, ref row, layout[i].rows, layout[i].name));
 
             double totalEnergy = 0.0;
             for (int i = 0; i < blocks.Count; i++)
@@ -2438,7 +2444,7 @@ namespace UC.ED
             StringBuilder sb = new StringBuilder();
 
             sb.AppendLine($"[ED] Residual energies, iteration {iteration}");
-            sb.AppendLine($"[ED] Normalized groups = {weights.normalizeWeights}");
+            sb.AppendLine($"[ED] Normalized groups = {energy.model.normalizesWeights}");
             sb.AppendLine($"[ED] Total weighted energy = {totalEnergy:E6}, L2 = {Math.Sqrt(totalEnergy):E6}");
             sb.AppendLine("[ED] Block breakdown:");
 

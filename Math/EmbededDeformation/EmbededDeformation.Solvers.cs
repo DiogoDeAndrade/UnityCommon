@@ -19,7 +19,7 @@ namespace UC.ED
     public partial class EmbededDeformation
     {
         #region Solver
-        public void SolveED_GN(int maxIterations = 10, WeightConfig weights = null,
+        public void SolveED_GN(int maxIterations, EDEnergyModel.Instance energy,
                                double damping = 1.0,
                                double residualTolerance = 1e-5,
                                double stepTolerance = 1e-6,
@@ -34,16 +34,19 @@ namespace UC.ED
             if (currentState == null)
                 currentState = new EDState(nodes.Count);
 
-            var BuildJacobian = buildJacobian;
-            var EvaluateResidualVector = evaluateResidualVector;
+            // Row counts and weights are resolved once here rather than rebuilt inside every
+            // residual evaluation, as the layout builder used to be. They are a function of the
+            // graph and the weights, neither of which changes during a solve.
+            energy.ApplyRuntimeParameters();
+            energy.Resolve();
 
-            TraceResidualLayout(weights);
+            TraceResidualLayout(energy);
 
             for (int iter = 0; iter < maxIterations; iter++)
             {
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, weights);
+                var f = energy.EvaluateResidual(stateView);
 
                 double error = f.L2Norm();
 
@@ -55,7 +58,7 @@ namespace UC.ED
                     break;
                 }
 
-                var J = BuildJacobian(currentState, out double jNorm, weights);
+                var J = energy.BuildJacobian(currentState, out double jNorm);
 
                 EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
@@ -97,8 +100,8 @@ namespace UC.ED
 #endif
         }
 
-        public void SolveED_LM(int maxIterations = 10,
-                               WeightConfig weights = null,
+        public void SolveED_LM(int maxIterations,
+                               EDEnergyModel.Instance energy,
                                double lambda = 1e-3,
                                double residualTolerance = 1e-5,
                                double stepTolerance = 1e-6,
@@ -116,16 +119,19 @@ namespace UC.ED
 
             double currentLambda = lambda;
 
-            var BuildJacobian = buildJacobian;
-            var EvaluateResidualVector = evaluateResidualVector;
+            // Row counts and weights are resolved once here rather than rebuilt inside every
+            // residual evaluation, as the layout builder used to be. They are a function of the
+            // graph and the weights, neither of which changes during a solve.
+            energy.ApplyRuntimeParameters();
+            energy.Resolve();
 
-            TraceResidualLayout(weights);
+            TraceResidualLayout(energy);
 
             for (int iter = 0; iter < maxIterations; iter++)
             {
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, weights);
+                var f = energy.EvaluateResidual(stateView);
 
                 double error = f.L2Norm();
 
@@ -140,7 +146,7 @@ namespace UC.ED
                 if (error < residualTolerance)
                     break;
 
-                var J = BuildJacobian(currentState, out double jNorm, weights);
+                var J = energy.BuildJacobian(currentState, out double jNorm);
 
                 EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
@@ -199,7 +205,7 @@ namespace UC.ED
 
                     var candidateView = new EDStateView(candidateState);
 
-                    var fCandidate = EvaluateResidualVector(candidateView, weights);
+                    var fCandidate = energy.EvaluateResidual(candidateView);
 
                     double candidateError = fCandidate.L2Norm();
 
@@ -248,8 +254,8 @@ namespace UC.ED
         // a solve configures its own environment rather than trusting what it finds.
         static void InitMathNet() => EDDiagnostics.ApplyMathNetProviders();
 
-        public void SolveED_Nav(int maxIterations = 10,
-                                WeightConfig weights = null,
+        public void SolveED_Nav(int maxIterations,
+                                EDEnergyModel.Instance energy,
                                 double lambda = 1e-3,
                                 double residualTolerance = 1e-5,
                                 double stepTolerance = 1e-6,
@@ -270,10 +276,13 @@ namespace UC.ED
             }
 
             double currentLambda = lambda;
-            var BuildJacobian = buildJacobian;
-            var EvaluateResidualVector = evaluateResidualVector;
+            // Row counts and weights are resolved once here rather than rebuilt inside every
+            // residual evaluation, as the layout builder used to be. They are a function of the
+            // graph and the weights, neither of which changes during a solve.
+            energy.ApplyRuntimeParameters();
+            energy.Resolve();
 
-            TraceResidualLayout(weights);
+            TraceResidualLayout(energy);
 
             int iter = 0;
 
@@ -283,11 +292,11 @@ namespace UC.ED
 
                 var stateView = new EDStateView(currentState);
 
-                var f = EvaluateResidualVector(stateView, weights);
+                var f = energy.EvaluateResidual(stateView);
 
                 double error = f.L2Norm();
 
-                LogResidualEnergies(f, weights, iter);
+                LogResidualEnergies(f, energy, iter);
 
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
@@ -304,7 +313,7 @@ namespace UC.ED
                     break;
                 }
 
-                var J = BuildJacobian(currentState, out double jNorm, weights);
+                var J = energy.BuildJacobian(currentState, out double jNorm);
 
                 EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
@@ -400,7 +409,7 @@ namespace UC.ED
 
                     var candidateView = new EDStateView(candidateState);
 
-                    var fCandidate = EvaluateResidualVector(candidateView, weights);
+                    var fCandidate = energy.EvaluateResidual(candidateView);
 
                     double candidateError = fCandidate.L2Norm();
 
@@ -453,9 +462,9 @@ namespace UC.ED
             }
 
             var acceptedView = new EDStateView(currentState);
-            var acceptedResidual = EvaluateResidualVector(acceptedView, weights);
+            var acceptedResidual = energy.EvaluateResidual(acceptedView);
 
-            LogResidualEnergies(acceptedResidual, weights, iter);
+            LogResidualEnergies(acceptedResidual, energy, iter);
             LogTimerReport();
 #else
     throw new NotImplementedException();

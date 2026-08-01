@@ -46,10 +46,14 @@ namespace UC.ED
             }
 
             /// <summary>
-            /// Runs the solve. Iteration count and reset are passed per call rather than read from
-            /// the asset, because single-stepping and a full solve share the same solver.
+            /// Runs the solve against an energy model. Iteration count and reset are passed per call
+            /// rather than read from the asset, because single-stepping and a full solve share the
+            /// same solver.
+            ///
+            /// The energy says what is being minimised and the solver says how, which is the whole
+            /// point of keeping them in separate assets - any solver can be pointed at any energy.
             /// </summary>
-            public abstract void Solve(WeightConfig weights, int iterations, bool resetBeforeSolve);
+            public abstract void Solve(EDEnergyModel.Instance energy, int iterations, bool resetBeforeSolve);
         }
     }
 }

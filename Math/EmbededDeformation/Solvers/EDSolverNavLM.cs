@@ -34,12 +34,12 @@ namespace UC.ED
             {
             }
 
-            public override void Solve(WeightConfig weights, int iterations, bool resetBeforeSolve)
+            public override void Solve(EDEnergyModel.Instance energy, int iterations, bool resetBeforeSolve)
             {
                 var def = (EDSolverNavLM)solver;
 
                 deformation.SolveED_Nav(iterations,
-                                        weights,
+                                        energy,
                                         def.initialLambda,
                                         def.residualTolerance,
                                         def.stepTolerance,

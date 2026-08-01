@@ -150,24 +150,39 @@ namespace UC.ED
         /// the thing most likely to shift silently during the term refactor, so they are recorded
         /// before any iteration runs.
         /// </summary>
-        private void TraceResidualLayout(WeightConfig weights)
+        /// <summary>
+        /// Emits the residual row layout into an active golden dump. The row counts per block are
+        /// the thing most likely to shift silently during the term refactor, so they are recorded
+        /// before any iteration runs.
+        ///
+        /// The counts now come from the term list, but the section keeps the shape the layout struct
+        /// gave it: every block named, in the struct's order, zeros included. That is deliberately
+        /// not the order the terms are evaluated in - link angle is emitted before the terminal
+        /// blocks - and it is preserved only so this change can be checked against the existing
+        /// baselines byte for byte. Once the legacy path is deleted this should emit the terms in
+        /// their real order and the baselines should be re-captured.
+        /// </summary>
+        private void TraceResidualLayout(EDEnergyModel.Instance energy)
         {
             if (EDDiagnostics.activeTrace == null) return;
-
-            EDResidualLayout layout = BuildResidualLayoutForCurrentGraph(weights);
+            if (energy == null) return;
 
             EDDiagnostics.Trace("[layout]");
-            EDDiagnostics.Trace($"rotation {layout.rotationRows}");
-            EDDiagnostics.Trace($"regularization {layout.regularizationRows}");
-            EDDiagnostics.Trace($"constraint {layout.constraintRows}");
-            EDDiagnostics.Trace($"clearance {layout.clearanceRows}");
-            EDDiagnostics.Trace($"slope {layout.slopeRows}");
-            EDDiagnostics.Trace($"orientation {layout.orientationRows}");
-            EDDiagnostics.Trace($"segmentLength {layout.segmentLengthRows}");
-            EDDiagnostics.Trace($"terminalOrientation {layout.terminalOrientationRows}");
-            EDDiagnostics.Trace($"terminalScale {layout.terminalScaleRows}");
-            EDDiagnostics.Trace($"linkAngle {layout.linkAngleRows}");
-            EDDiagnostics.Trace($"total {layout.totalRows}");
+
+            int total = 0;
+
+            foreach (string blockName in new[] { "rotation", "regularization", "constraint", "clearance",
+                                                 "slope", "orientation", "segmentLength",
+                                                 "terminalOrientation", "terminalScale", "linkAngle" })
+            {
+                int rows = energy.GetRowCount(blockName);
+
+                EDDiagnostics.Trace($"{blockName} {rows}");
+
+                total += rows;
+            }
+
+            EDDiagnostics.Trace($"total {total}");
         }
 
         private static double BuildResidualWeight(double conceptualWeight, int residualRows, bool normalizeResidualGroups)

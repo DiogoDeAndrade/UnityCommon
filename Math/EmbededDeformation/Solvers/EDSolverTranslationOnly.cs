@@ -29,13 +29,13 @@ namespace UC.ED
             {
             }
 
-            public override void Solve(WeightConfig weights, int iterations, bool resetBeforeSolve)
+            public override void Solve(EDEnergyModel.Instance energy, int iterations, bool resetBeforeSolve)
             {
-                // The smoothness weight belongs to this solver, so it is applied here rather than
-                // being carried in from the caller's weight configuration.
-                weights.smoothnessWeight = ((EDSolverTranslationOnly)solver).smoothness;
-
-                deformation.SolveTranslationsOnly(weights, resetBeforeSolve);
+                // The smoothness weight belongs to this solver, so it is passed rather than looked
+                // for in the energy - no term expresses it, because no other solver has one.
+                deformation.SolveTranslationsOnly(energy,
+                                                  ((EDSolverTranslationOnly)solver).smoothness,
+                                                  resetBeforeSolve);
             }
         }
     }
