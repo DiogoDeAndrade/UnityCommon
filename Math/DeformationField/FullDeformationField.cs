@@ -151,8 +151,7 @@ public class FullDeformationField
     List<Matrix4x4>                     restInverses = new List<Matrix4x4>();
 
 
-    // Runtime-only cache. It is rebuilt lazily after a Unity domain reload,
-    // or explicitly through BuildTrilinearRegions().
+    // Runtime-only cache. It is rebuilt lazily after a Unity domain reload, or explicitly through BuildTrilinearRegions().
     [NonSerialized] TrilinearRegion[]       trilinearRegions;
     [NonSerialized] TrilinearInfluence[]    trilinearInfluences;
     [NonSerialized] Vector3Int              trilinearRegionGridSize;
