@@ -2018,7 +2018,16 @@ namespace UC.ED
                 double minT = Math.Min(t1, t2);
                 double maxT = Math.Max(t1, t2);
 
-                if ((maxT < 0.0) || (minT > maxDist)) continue;
+                // Skip edges too far along the segment's own axis to beat the best distance found so
+                // far. The margin is what makes this sound: the measurement below is segment to
+                // segment, so a wall just off the end of this segment is a real candidate, and
+                // culling on overlap alone threw it away. That cost nothing at rest, where the
+                // walls run alongside the structure and always overlap it, and produced a clearance
+                // several times too large once a segment had rotated near a corner.
+                //
+                // minClearance starts at double.MaxValue, so the first pass culls nothing and the
+                // bound tightens as better candidates appear.
+                if ((maxT < -minClearance) || (minT > maxDist + minClearance)) continue;
 
                 double distance = LineHelpers.Distance(p1, p2, e1, e2, out _, out _);
 
