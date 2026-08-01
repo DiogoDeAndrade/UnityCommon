@@ -1746,7 +1746,7 @@ namespace UC.ED
             return wClearance * ComputeClearanceLoss(original, current);
         }
 
-        private double EvaluateSingleSlopeResidual(EDStateView state, int segmentIndex, double wSlope)
+        internal double EvaluateSingleSlopeResidual(EDStateView state, int segmentIndex, double wSlope)
         {
             // Normalized hinge:
             //   0 at or below maxSlope - softBand
@@ -1787,7 +1787,7 @@ namespace UC.ED
             return wSlope * penalty;
         }
 
-        private double EvaluateSingleNodeSlopeResidualStructure(EDStateView state, int nodeIndex, double wSlope)
+        internal double EvaluateSingleNodeSlopeResidualStructure(EDStateView state, int nodeIndex, double wSlope)
         {
             double hardAngle = maxSlope * Math.PI / 180.0;
 

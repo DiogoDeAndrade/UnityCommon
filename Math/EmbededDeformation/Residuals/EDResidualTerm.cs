@@ -39,6 +39,16 @@ namespace UC.ED
         /// <summary>
         /// Pushes any limits this term needs onto the deformation before a solve - the slope term's
         /// maximum angle, for instance. Called once per solve, not per evaluation.
+        ///
+        /// **The parity tool cannot check what this writes.** It mutates state that both the term
+        /// and the legacy path read, so a term pushing the wrong limit moves both sides equally and
+        /// the comparison still reports EXACT while the golden breaks. Terms therefore keep reading
+        /// these limits from the deformation for now; moving ownership here is a separate step to be
+        /// verified against the baselines, not against parity.
+        ///
+        /// It also runs for every term regardless of row count, so a term contributing no rows can
+        /// still change the solve. That is why the energy models list only the terms their
+        /// configuration actually uses, rather than carrying disabled ones at zero weight.
         /// </summary>
         public virtual void ApplyRuntimeParameters(EmbededDeformation deformation) { }
 

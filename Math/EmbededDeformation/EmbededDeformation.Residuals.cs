@@ -763,7 +763,8 @@ namespace UC.ED
             return localJNorm;
         }
 
-        private int FillSlopeJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int FillSlopeJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
         {
             DebugProfiler.DebugMark(timeJacobianBuildSlope);
 
@@ -797,7 +798,7 @@ namespace UC.ED
             return row + 1;
         }
 
-        private int FillSlopeJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wSlope, ref double jNorm)
+        internal int FillSlopeJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wSlope, ref double jNorm)
         {
             DebugProfiler.DebugMark(timeJacobianBuildSlope);
 
