@@ -497,23 +497,6 @@ namespace UC.ED
         public int              node2 = -1;
     }
 
-    [Serializable]
-    public class WeightConfig
-    {
-        public double rotationWeight;
-        public double regularizationWeight;
-        public double constraintWeight;
-        public double smoothnessWeight;
-        public double clearanceWeight;
-        public double slopeWeight;
-        public double orientationWeight;
-        public double segmentLengthWeight;
-        public double terminalOrientationWeight;
-        public double terminalScaleWeight;
-        public double linkAngleWeight;
-        public bool normalizeWeights;
-    }
-
     public delegate bool HasLOS(Vector3 p1, Vector3 p2);
     public delegate bool TryGetSurfaceNormal(Vector3 p, out Vector3 normal);
     

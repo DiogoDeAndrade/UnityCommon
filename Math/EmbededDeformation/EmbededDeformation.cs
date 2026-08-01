@@ -68,42 +68,6 @@ namespace UC.ED
         [SerializeField, HideInInspector]
         private List<Mesh>  sourceGeometry;
 
-        private delegate Matrix<double> BuildJacobianDelegate(EDState state, out double jNorm, WeightConfig weights);
-        private delegate Vector<double> EvaluateResidualVectorDelegate(EDStateView state, WeightConfig weights);
-
-        private BuildJacobianDelegate buildJacobian
-        {
-            get
-            {
-                switch (deformationGraphSource)
-                {
-                    case DeformationGraphSource.NavMeshAndStructure:
-                        return BuildJacobianNavMesh;
-                    case DeformationGraphSource.StructureOnly:
-                        return BuildJacobianStructure;
-                    default:
-                        break;
-                }
-                return null;
-            }
-        }
-
-        private EvaluateResidualVectorDelegate evaluateResidualVector
-        {
-            get
-            {
-                switch (deformationGraphSource)
-                {
-                    case DeformationGraphSource.NavMeshAndStructure:
-                        return EvaluateResidualVectorNavMesh;
-                    case DeformationGraphSource.StructureOnly:
-                        return EvaluateResidualVectorStructure;
-                    default:
-                        break;
-                }
-                return null;
-            }
-        }
 
 #if UC_PROFILER_ENABLE
         DebugProfiler timePack;

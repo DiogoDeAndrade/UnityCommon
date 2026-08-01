@@ -229,70 +229,129 @@ namespace UC.ED
                 return false;
             }
 
-            string[] golden = File.ReadAllLines(goldenPath);
-            string[] current = File.ReadAllLines(currentPath);
+            var golden = SplitSections(File.ReadAllLines(goldenPath));
+            var current = SplitSections(File.ReadAllLines(currentPath));
 
-            string section = "(none)";
-            int shared = Math.Min(golden.Length, current.Length);
+            // Compared section by section rather than by line number across the whole file. A
+            // section that legitimately changes length - the layout section gained and lost lines
+            // when the energy model replaced the hardcoded block list - would otherwise shift every
+            // later line by the difference and report the entire rest of the dump as diverging,
+            // which is worse than useless: it hides whether anything real moved underneath.
+            var sb = new StringBuilder();
 
-            // Reported per section rather than stopping at the first difference. Which sections
-            // moved is the diagnostic that matters: a change confined to [config] means settings
-            // were reorganised, while one in [graph] or [final] means behaviour changed.
-            var sectionsSeen = new List<string>();
-            var firstInSection = new Dictionary<string, string>();
-            var countInSection = new Dictionary<string, int>();
+            var sectionNames = new List<string>(golden.Keys);
 
-            for (int i = 0; i < shared; i++)
+            foreach (var name in current.Keys)
             {
-                if (golden[i].StartsWith("["))
-                    section = golden[i];
-
-                if (golden[i] == current[i]) continue;
-
-                if (!countInSection.ContainsKey(section))
-                {
-                    sectionsSeen.Add(section);
-                    countInSection[section] = 0;
-
-                    var detail = new StringBuilder();
-                    detail.AppendLine($"  line {i + 1}");
-                    detail.AppendLine($"    golden : {Elide(golden[i])}");
-                    detail.AppendLine($"    current: {Elide(current[i])}");
-
-                    long ulps = MaxUlpDistance(golden[i], current[i]);
-                    if (ulps >= 0)
-                        detail.AppendLine($"    max ulp distance across numeric tokens: {ulps}");
-                    else
-                        detail.AppendLine("    lines differ structurally (token count or non-numeric content)");
-
-                    firstInSection[section] = detail.ToString();
-                }
-
-                countInSection[section]++;
+                if (!golden.ContainsKey(name))
+                    sectionNames.Add(name);
             }
 
-            bool lengthDiffers = (golden.Length != current.Length);
+            var diverging = new List<string>();
 
-            if ((sectionsSeen.Count == 0) && (!lengthDiffers))
+            foreach (var name in sectionNames)
             {
-                report = $"Identical: {golden.Length} lines match exactly.";
+                bool inGolden = golden.TryGetValue(name, out var goldenLines);
+                bool inCurrent = current.TryGetValue(name, out var currentLines);
+
+                if (!inGolden)
+                {
+                    diverging.Add(name);
+                    sb.AppendLine($"{name}  section is new - not in the golden");
+                    continue;
+                }
+
+                if (!inCurrent)
+                {
+                    diverging.Add(name);
+                    sb.AppendLine($"{name}  section is missing from the current dump");
+                    continue;
+                }
+
+                int shared = Math.Min(goldenLines.Count, currentLines.Count);
+                int differing = 0;
+                string firstDetail = null;
+
+                for (int i = 0; i < shared; i++)
+                {
+                    if (goldenLines[i] == currentLines[i]) continue;
+
+                    if (firstDetail == null)
+                    {
+                        var detail = new StringBuilder();
+                        detail.AppendLine($"  line {i + 1} of the section");
+                        detail.AppendLine($"    golden : {Elide(goldenLines[i])}");
+                        detail.AppendLine($"    current: {Elide(currentLines[i])}");
+
+                        long ulps = MaxUlpDistance(goldenLines[i], currentLines[i]);
+                        if (ulps >= 0)
+                            detail.AppendLine($"    max ulp distance across numeric tokens: {ulps}");
+                        else
+                            detail.AppendLine("    lines differ structurally (token count or non-numeric content)");
+
+                        firstDetail = detail.ToString();
+                    }
+
+                    differing++;
+                }
+
+                bool lengthDiffers = (goldenLines.Count != currentLines.Count);
+
+                if ((differing == 0) && (!lengthDiffers)) continue;
+
+                diverging.Add(name);
+
+                sb.AppendLine($"{name}  ({differing} differing line(s)" +
+                              ((lengthDiffers) ? ($", golden has {goldenLines.Count} lines, current has {currentLines.Count}") : ("")) + ")");
+
+                if (firstDetail != null)
+                    sb.Append(firstDetail);
+            }
+
+            if (diverging.Count == 0)
+            {
+                report = $"Identical: {sectionNames.Count} sections match exactly.";
                 return true;
             }
 
-            var sb2 = new StringBuilder();
-            sb2.AppendLine($"Diverging sections: {string.Join(", ", sectionsSeen)}");
+            var summary = new StringBuilder();
 
-            if (lengthDiffers)
-                sb2.AppendLine($"Line count differs - golden has {golden.Length}, current has {current.Length}.");
+            summary.AppendLine($"Diverging sections: {string.Join(", ", diverging)}");
+            summary.Append(sb);
 
-            foreach (var s in sectionsSeen)
+            report = summary.ToString();
+            return false;
+        }
+
+        /// <summary>
+        /// Groups a dump into its bracketed sections, keeping each section's lines in order. Section
+        /// headers repeat - there is one [iter N] per iteration - so the header itself is the key and
+        /// a repeated one appends rather than replaces.
+        /// </summary>
+        private static Dictionary<string, List<string>> SplitSections(string[] lines)
+        {
+            var sections = new Dictionary<string, List<string>>();
+            var order = new List<string>();
+
+            string section = "(preamble)";
+
+            foreach (var line in lines)
             {
-                sb2.AppendLine($"{s}  ({countInSection[s]} differing line(s)), first:");
-                sb2.Append(firstInSection[s]);
+                if (line.StartsWith("["))
+                    section = line;
+
+                if (!sections.ContainsKey(section))
+                {
+                    sections[section] = new List<string>();
+                    order.Add(section);
+                }
+
+                sections[section].Add(line);
             }
 
-            report = sb2.ToString();
-            return false;
+            // Dictionary iteration order is insertion order here in practice, but the comparison
+            // walks an explicit list built from Keys, so nothing depends on that.
+            return sections;
         }
 
         private static string Elide(string s, int max = 200)
