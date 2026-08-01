@@ -1042,7 +1042,8 @@ namespace UC.ED
             jNorm += cosineDerivative * cosineDerivative + sineDerivative * sineDerivative;
         }
 
-        private int FillLinkAngleJacobianBlock(EDState state, DenseMatrix J, int row, int constraintIndex, double wLinkAngle, ref double jNorm)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int FillLinkAngleJacobianBlock(EDState state, DenseMatrix J, int row, int constraintIndex, double wLinkAngle, ref double jNorm)
         {
             EDLinkAngleConstraint constraint = linkAngleConstraints[constraintIndex];
 

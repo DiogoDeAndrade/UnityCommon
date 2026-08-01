@@ -1846,7 +1846,7 @@ namespace UC.ED
             return wOrientation * (currentUp - restUp);
         }
 
-        private void EvaluateSingleLinkAngleResidual(EDStateView state, int constraintIndex, double wLinkAngle, out double cosineResidual, out double sineResidual)
+        internal void EvaluateSingleLinkAngleResidual(EDStateView state, int constraintIndex, double wLinkAngle, out double cosineResidual, out double sineResidual)
         {
             const double epsilon = 1e-12;
 
