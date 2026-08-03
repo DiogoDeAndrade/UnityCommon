@@ -75,18 +75,27 @@ namespace UC.ED
 
 
 #if UC_PROFILER_ENABLE
-        DebugProfiler timePack;
-        DebugProfiler timeIteration;
-        DebugProfiler timeResidualEvaluate;
-        DebugProfiler timeJacobianBuild;
-        DebugProfiler timeSolve;
-        DebugProfiler timeApplyParameters;
-        DebugProfiler timeUpdateClearance;
-        DebugProfiler timeJacobianBuildConstraint;
-        DebugProfiler timeJacobianBuildRotation;
-        DebugProfiler timeJacobianBuildRegularization;
-        DebugProfiler timeJacobianBuildSlope;
-        DebugProfiler timeJacobianBuildClearance;
+        // The per-term breakdown lives on the terms themselves rather than as a fixed list here.
+        // A hardcoded list only described the blocks that existed when it was written - it never
+        // gained orientation, segment length, link angle or the terminal terms - and it could not
+        // describe a configuration that does not use one of them. Whatever the model carries gets
+        // measured; nothing else appears.
+        internal DebugProfiler timeIteration;
+        internal DebugProfiler timeResidualEvaluate;
+        internal DebugProfiler timeJacobianBuild;
+        internal DebugProfiler timeSolve;
+        internal DebugProfiler timeUpdateClearance;
+
+        // Marked by the caller that generates output geometry - the subdivision and simplification
+        // are mesh operations it owns, not the deformation's. Reported here so a run is described by
+        // one report rather than by a report plus a scattering of separate log lines.
+        public DebugProfiler timeOutputSubdivide;
+        public DebugProfiler timeOutputDeform;
+        public DebugProfiler timeOutputSimplify;
+
+        // Solver iterations actually run, so the report can divide by it. Comparing solvers on
+        // totals alone is misleading when they run different numbers of iterations.
+        private int solveIterations;
         DebugProfiler timeDeformationFieldGeneration;
 #endif
 
@@ -1306,9 +1315,13 @@ namespace UC.ED
 
             try
             {
+                DebugProfiler.DebugMark(timeSolve);
+
                 tx = A.Solve(bx);
                 ty = A.Solve(by);
                 tz = A.Solve(bz);
+
+                DebugProfiler.DebugMark(timeSolve);
             }
             catch (Exception ex)
             {
@@ -1670,7 +1683,6 @@ namespace UC.ED
             {
                 for (int i = 0; i < ret.count; i++)
                     ret.Set(i, double.MaxValue);
-
                 DebugProfiler.DebugMark(timeUpdateClearance);
 
                 return ret;
@@ -1714,7 +1726,6 @@ namespace UC.ED
                     ret.Set(index, (valid) ? (clearance) : (double.MaxValue));
                 });
             }
-
             DebugProfiler.DebugMark(timeUpdateClearance);
 
             return ret;
@@ -2240,36 +2251,97 @@ namespace UC.ED
 
         public void ClearTimers()
         {
-            timePack = new();
             timeIteration = new();
             timeResidualEvaluate = new();
             timeJacobianBuild = new();
             timeSolve = new();
-            timeApplyParameters = new();
             timeUpdateClearance = new();
-            timeJacobianBuildConstraint = new();
-            timeJacobianBuildRotation = new();
-            timeJacobianBuildRegularization = new();
-            timeJacobianBuildSlope = new();
-            timeJacobianBuildClearance = new();
+
+            timeOutputSubdivide = new();
+            timeOutputDeform = new();
+            timeOutputSimplify = new();
+
+            solveIterations = 0;
         }
 
-        public void LogTimerReport()
+        /// <summary>
+        /// Counted by each solver as it completes an iteration, so the report can express costs per
+        /// iteration as well as in total.
+        /// </summary>
+        internal void CountSolveIteration()
         {
-            string sb = $"Time report:\n";
-            sb += $"  Pack parameters: {timePack.accumulatedTimeMS:F6} ms\n";
-            sb += $"  Iteration time: {timeIteration.accumulatedTimeMS:F6} ms\n";
-            sb += $"    Residual evaluation: {timeResidualEvaluate.accumulatedTimeMS:F6} ms\n";
-            sb += $"    Build Jacobian: {timeJacobianBuild.accumulatedTimeMS:F6} ms\n";
-            sb += $"      Constraints: {timeJacobianBuildConstraint.accumulatedTimeMS:F6} ms\n";
-            sb += $"      Rotation: {timeJacobianBuildRotation.accumulatedTimeMS:F6} ms\n";
-            sb += $"      Regularization: {timeJacobianBuildRegularization.accumulatedTimeMS:F6} ms\n";
-            sb += $"      Slope: {timeJacobianBuildSlope.accumulatedTimeMS:F6} ms\n";
-            sb += $"      Clearance: {timeJacobianBuildClearance.accumulatedTimeMS:F6} ms\n";
-            sb += $"    Solve time: {timeSolve.accumulatedTimeMS:F6} ms\n";
-            sb += $"    Apply parameters: {timeApplyParameters.accumulatedTimeMS:F6} ms\n";
-            sb += $"    Clearance calculation: {timeUpdateClearance.accumulatedTimeMS:F6} ms\n";
-            Debug.Log(sb);
+            solveIterations++;
+        }
+
+        /// <summary>
+        /// One report describing a whole run: the solve, its breakdown per energy, and the output
+        /// geometry.
+        ///
+        /// Totals and per-iteration averages both, because the two answer different questions and
+        /// only one of them is comparable across solvers. A solver that converges in three
+        /// iterations and one that grinds through ten are not usefully compared on total time; what
+        /// costs what *per iteration* is the part that transfers.
+        ///
+        /// The per-term timers are passed in rather than read from an energy model, so the breakdown
+        /// lists exactly the terms this run used, in the order they were evaluated, and so this
+        /// signature names no Math.NET type - the model's Instance only exists when Math.NET does.
+        /// A solver that uses no terms at all - the translation-only baseline - reports no
+        /// breakdown.
+        /// </summary>
+        public void LogTimerReport(string label, IReadOnlyList<(string name, DebugProfiler timer)> termTimers = null)
+        {
+            var sb = new StringBuilder();
+
+            int iterations = Math.Max(1, solveIterations);
+
+            void Row(string name, DebugProfiler timer, int indent, bool perIteration = true)
+            {
+                if (timer == null) return;
+
+                double total = timer.accumulatedTimeMS;
+
+                string line = new string(' ', indent) + name.PadRight(30 - indent) + $"{total,10:F3} ms";
+
+                // Per-iteration only where it means something. The output stages run once per solve,
+                // not once per iteration, so dividing them by the iteration count would invite
+                // exactly the comparison the average exists to prevent.
+                if ((perIteration) && (solveIterations > 0))
+                    line += $"   ({total / iterations,8:F3} ms/iter)";
+
+                sb.AppendLine(line);
+            }
+
+            double solveTotal = ((timeIteration != null) ? (timeIteration.accumulatedTimeMS) : (0.0));
+            double outputTotal = ((timeOutputSubdivide != null) ? (timeOutputSubdivide.accumulatedTimeMS) : (0.0))
+                               + ((timeOutputDeform != null) ? (timeOutputDeform.accumulatedTimeMS) : (0.0))
+                               + ((timeOutputSimplify != null) ? (timeOutputSimplify.accumulatedTimeMS) : (0.0));
+
+            sb.AppendLine($"Time report - {label}, {solveIterations} iteration(s)");
+
+            Row("Solve", timeIteration, 2);
+            Row("Residual evaluation", timeResidualEvaluate, 4);
+            Row("Build Jacobian", timeJacobianBuild, 4);
+
+            if (termTimers != null)
+            {
+                foreach (var t in termTimers)
+                    Row(t.name, t.timer, 6);
+            }
+
+            Row("Linear solve", timeSolve, 4);
+            Row("Clearance update", timeUpdateClearance, 4);
+
+            if (outputTotal > 0.0)
+            {
+                sb.AppendLine($"  {"Output".PadRight(28)}{outputTotal,10:F3} ms");
+                Row("Subdivision", timeOutputSubdivide, 4, false);
+                Row("Mesh deformation", timeOutputDeform, 4, false);
+                Row("Simplification", timeOutputSimplify, 4, false);
+            }
+
+            sb.AppendLine($"  {"Total".PadRight(28)}{solveTotal + outputTotal,10:F3} ms");
+
+            Debug.Log(sb.ToString());
         }
 
         public Vector3 GetDebugNodePosition(int nodeIndex)

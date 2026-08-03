@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UC;
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
@@ -76,6 +77,17 @@ namespace UC.ED
             /// least-squares problem weighted rather than merely scaled.
             /// </summary>
             public double residualWeight { get; protected set; }
+
+            /// <summary>
+            /// What this term costs to differentiate, accumulated over a solve. Per term rather than
+            /// from a fixed list on the deformation, so the breakdown describes whichever energies a
+            /// configuration actually uses and cannot fall out of step when one is added.
+            ///
+            /// The Jacobian rather than the residual, because that is where the cost is: a term with
+            /// no analytic derivative perturbs every parameter and re-evaluates, which is thousands
+            /// of times the work of evaluating the residual once.
+            /// </summary>
+            public DebugProfiler jacobianTimer { get; private set; } = new DebugProfiler();
 
             protected Instance(EDResidualTerm term, EmbededDeformation deformation)
             {

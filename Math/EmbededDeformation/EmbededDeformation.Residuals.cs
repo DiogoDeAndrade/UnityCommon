@@ -134,7 +134,6 @@ namespace UC.ED
         // does, so the two agree by construction rather than by careful re-derivation.
         internal int FillRotationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
         {
-            DebugProfiler.DebugMark(timeJacobianBuildRotation);
 
             int p = ParamBase(nodeIndex);
             var aX = state.GetAxisX(nodeIndex);
@@ -195,7 +194,6 @@ namespace UC.ED
 
             jNormRunningTotalSq += 6.0 * wRot * wRot * (ax2 + ay2 + az2);
 
-            DebugProfiler.DebugMark(timeJacobianBuildRotation);
 
             return row;
         }
@@ -203,7 +201,6 @@ namespace UC.ED
         // Widened as terms adopt it - see FillRotationJacobianBlock above.
         internal int FillRegularizationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
         {
-            DebugProfiler.DebugMark(timeJacobianBuildRegularization);
 
             int pj = ParamBase(nodeJ);
             int pk = ParamBase(nodeK);
@@ -243,7 +240,6 @@ namespace UC.ED
             double d2 = dx * dx + dy * dy + dz * dz;
             jNormRunningTotalSq += 3.0 * wReg * wReg * (d2 + 2.0);
 
-            DebugProfiler.DebugMark(timeJacobianBuildRegularization);
 
             return row;
         }
@@ -251,7 +247,6 @@ namespace UC.ED
         // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillConstraintJacobianBlock(EDStateView state, Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
         {
-            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
             DVector3 v = restVertices[vertexIndex];
             EDVertexBinding binding = bindings[vertexIndex];
@@ -297,7 +292,6 @@ namespace UC.ED
                 jNormRunningTotalSq += 3.0 * s * s * (u2 + 1.0);
             }
 
-            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
             return row + 3;
         }
@@ -370,7 +364,6 @@ namespace UC.ED
         // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillSlopeJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
         {
-            DebugProfiler.DebugMark(timeJacobianBuildSlope);
 
             var baseView = new EDStateView(state);
 
@@ -379,7 +372,6 @@ namespace UC.ED
 
             if (r0 <= 1e-12)
             {
-                DebugProfiler.DebugMark(timeJacobianBuildSlope);
                 return row + 1;
             }
 
@@ -397,14 +389,12 @@ namespace UC.ED
                 jNorm += J[row, col] * J[row, col];
             }
 
-            DebugProfiler.DebugMark(timeJacobianBuildSlope);
 
             return row + 1;
         }
 
         internal int FillSlopeJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wSlope, ref double jNorm)
         {
-            DebugProfiler.DebugMark(timeJacobianBuildSlope);
 
             var baseView = new EDStateView(state);
 
@@ -413,7 +403,6 @@ namespace UC.ED
 
             if (r0 <= 1e-12)
             {
-                DebugProfiler.DebugMark(timeJacobianBuildSlope);
                 return row + 1;
             }
 
@@ -431,7 +420,6 @@ namespace UC.ED
                 jNorm += J[row, col] * J[row, col];
             }
 
-            DebugProfiler.DebugMark(timeJacobianBuildSlope);
 
             return row + 1;
         }
@@ -736,11 +724,9 @@ namespace UC.ED
         // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillNodePositionJacobianBlockStructure(DenseMatrix J, int row, int nodeIndex, DVector3 restPoint, double wCon, ref double jNormRunningTotalSq)
         {
-            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
             if ((nodeIndex < 0) || (nodeIndex >= nodes.Count))
             {
-                DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
                 return row + 3;
             }
@@ -775,7 +761,6 @@ namespace UC.ED
 
             jNormRunningTotalSq += 3.0 * wCon * wCon * (offsetLengthSq + 1.0);
 
-            DebugProfiler.DebugMark(timeJacobianBuildConstraint);
 
             return row + 3;
         }

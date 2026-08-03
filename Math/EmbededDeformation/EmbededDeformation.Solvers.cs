@@ -42,8 +42,12 @@ namespace UC.ED
 
             TraceResidualLayout(energy);
 
+            DebugProfiler.DebugMark(timeIteration);
+
             for (int iter = 0; iter < maxIterations; iter++)
             {
+                CountSolveIteration();
+
                 var stateView = new EDStateView(currentState);
 
                 var f = energy.EvaluateResidual(stateView);
@@ -71,8 +75,12 @@ namespace UC.ED
 
                 try
                 {
+                    DebugProfiler.DebugMark(timeSolve);
+
                     var qr = J.QR();
                     delta = qr.Solve(-f);
+
+                    DebugProfiler.DebugMark(timeSolve);
                 }
                 catch (Exception ex)
                 {
@@ -95,6 +103,8 @@ namespace UC.ED
 
                 currentState.Apply(delta, damping);
             }
+
+            DebugProfiler.DebugMark(timeIteration);
 #else
     throw new NotImplementedException();
 #endif
@@ -127,8 +137,12 @@ namespace UC.ED
 
             TraceResidualLayout(energy);
 
+            DebugProfiler.DebugMark(timeIteration);
+
             for (int iter = 0; iter < maxIterations; iter++)
             {
+                CountSolveIteration();
+
                 var stateView = new EDStateView(currentState);
 
                 var f = energy.EvaluateResidual(stateView);
@@ -170,7 +184,11 @@ namespace UC.ED
 
                     try
                     {
+                        DebugProfiler.DebugMark(timeSolve);
+
                         delta = Hlm.Solve(-g);
+
+                        DebugProfiler.DebugMark(timeSolve);
                     }
                     catch
                     {
@@ -226,6 +244,9 @@ namespace UC.ED
                         if (stepNorm < stepTolerance)
                         {
                             currentState = acceptedState;
+
+                            DebugProfiler.DebugMark(timeIteration);
+
                             return;
                         }
 
@@ -243,6 +264,8 @@ namespace UC.ED
 
                 currentState = acceptedState;
             }
+
+            DebugProfiler.DebugMark(timeIteration);
 #else
     throw new NotImplementedException();
 #endif
@@ -286,9 +309,11 @@ namespace UC.ED
 
             int iter = 0;
 
+            DebugProfiler.DebugMark(timeIteration);
+
             for (iter = 0; iter < maxIterations; iter++)
             {
-                DebugProfiler.DebugMark(timeIteration);
+                CountSolveIteration();
 
                 var stateView = new EDStateView(currentState);
 
@@ -303,13 +328,11 @@ namespace UC.ED
                 if (!double.IsFinite(error))
                 {
                     Debug.LogError($"[ED] Residual became non-finite after {iter} iterations.");
-                    DebugProfiler.DebugMark(timeIteration);
                     return;
                 }
 
                 if (error < residualTolerance)
                 {
-                    DebugProfiler.DebugMark(timeIteration);
                     break;
                 }
 
@@ -319,7 +342,6 @@ namespace UC.ED
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                 {
-                    DebugProfiler.DebugMark(timeIteration);
                     break;
                 }
 
@@ -423,7 +445,6 @@ namespace UC.ED
                             DebugProfiler.DebugMark(timeIteration);
 
                             Debug.Log($"Ran {iter} iterations...");
-                            LogTimerReport();
 
                             return;
                         }
@@ -437,21 +458,19 @@ namespace UC.ED
                 if (!solved)
                 {
                     Debug.LogWarning("[ED] LM could not find an improving step.");
-                    DebugProfiler.DebugMark(timeIteration);
                     break;
                 }
 
                 currentState = acceptedState;
                 ComputeClearance(currentState);
-
-                DebugProfiler.DebugMark(timeIteration);
             }
+
+            DebugProfiler.DebugMark(timeIteration);
 
             var acceptedView = new EDStateView(currentState);
             var acceptedResidual = energy.EvaluateResidual(acceptedView);
 
             LogResidualEnergies(acceptedResidual, energy, iter);
-            LogTimerReport();
 #else
     throw new NotImplementedException();
 #endif

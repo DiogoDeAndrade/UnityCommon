@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using UC;
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
@@ -26,7 +27,7 @@ namespace UC.ED
         protected List<EDResidualTerm> terms = new List<EDResidualTerm>();
 
         [SerializeField, Tooltip("Divide each term's weight by its row count, so a term's influence does not grow with the size of the graph.")]
-        protected bool normalizeWeights = false;
+        protected bool normalizeWeights = true;
 
         public IReadOnlyList<EDResidualTerm> termList => terms;
         public bool normalizesWeights => normalizeWeights;
@@ -130,8 +131,28 @@ namespace UC.ED
                 return 0.0;
             }
 
+            /// <summary>
+            /// Per-term Jacobian timers, for the timing report - terms with no rows omitted, since a
+            /// term that did no work has nothing to say about what work costs.
+            /// </summary>
+            public IReadOnlyList<(string name, DebugProfiler timer)> DescribeTermTimers()
+            {
+                var described = new List<(string, DebugProfiler)>();
+
+                for (int i = 0; i < termInstances.Count; i++)
+                {
+                    if (termInstances[i].rowCount == 0) continue;
+
+                    described.Add((termInstances[i].term.name, termInstances[i].jacobianTimer));
+                }
+
+                return described;
+            }
+
             public Vector<double> EvaluateResidual(EDStateView state)
             {
+                DebugProfiler.DebugMark(deformation.timeResidualEvaluate);
+
                 var residual = DenseVector.Create(totalRows, 0.0);
 
                 int offset = 0;
@@ -143,11 +164,15 @@ namespace UC.ED
                     offset += termInstances[i].rowCount;
                 }
 
+                DebugProfiler.DebugMark(deformation.timeResidualEvaluate);
+
                 return residual;
             }
 
             public Matrix<double> BuildJacobian(EDState state, out double jNorm)
             {
+                DebugProfiler.DebugMark(deformation.timeJacobianBuild);
+
                 double jNormSq = 0.0;
 
                 var jacobian = DenseMatrix.Create(totalRows, 12 * deformation.nodes.Count, 0.0);
@@ -157,15 +182,21 @@ namespace UC.ED
                 {
                     if (termInstances[i].rowCount == 0) continue;
 
+                    DebugProfiler.DebugMark(termInstances[i].jacobianTimer);
+
                     if (termInstances[i].supportsParallelRows)
                         FillJacobianRowsInParallel(termInstances[i], state, jacobian, offset, ref jNormSq);
                     else
                         termInstances[i].FillJacobian(state, jacobian, offset, ref jNormSq);
 
+                    DebugProfiler.DebugMark(termInstances[i].jacobianTimer);
+
                     offset += termInstances[i].rowCount;
                 }
 
                 jNorm = System.Math.Sqrt(jNormSq);
+
+                DebugProfiler.DebugMark(deformation.timeJacobianBuild);
 
                 return jacobian;
             }
