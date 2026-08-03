@@ -1883,27 +1883,15 @@ namespace UC.ED
             return transformed.normalized;
         }
 
+        /// <summary>
+        /// How far a segment has been crushed below a fraction of its rest length, weighted. Zero
+        /// when it is longer than the floor - stretching is not a problem.
+        ///
+        /// Both graph sources use this. The endpoints come from the deformed nodes when the graph
+        /// came from the structure and the segment knows them, since there the nodes *are* the
+        /// structure, and from the vertex bindings otherwise.
+        /// </summary>
         internal double EvaluateSingleSegmentLengthResidual(EDStateView state, int segmentIndex, double wSegmentLength)
-        {
-            var seg = structure[segmentIndex];
-
-            DVector3 p1 = DeformVertex(seg.p1, seg.bind1, state);
-            DVector3 p2 = DeformVertex(seg.p2, seg.bind2, state);
-
-            double originalLength = (seg.p2 - seg.p1).magnitude;
-            if (originalLength < 1e-8)
-                return 0.0;
-
-            double currentLength = (p2 - p1).magnitude;
-
-            double mslr = Math.Clamp(segmentMinRatio, 0.0, 1.0);
-            double minAllowedLength = mslr * originalLength;
-
-            double loss = Math.Max(0.0, minAllowedLength - currentLength) / originalLength;
-            return wSegmentLength * loss;
-        }
-
-        internal double EvaluateSingleSegmentLengthResidualStructure(EDStateView state, int segmentIndex, double wSegmentLength)
         {
             NavEDSegments seg = structure[segmentIndex];
 
