@@ -53,6 +53,22 @@ namespace UC.ED
         public static bool allowNativeProviders = false;
 
         /// <summary>
+        /// Whether to cap Math.NET's own parallelism at one below the core count when the native
+        /// providers are on.
+        ///
+        /// Separate from allowNativeProviders because the two were changed together and blamed
+        /// together, and they are different things: one selects a native BLAS, the other tells the
+        /// managed layer how many threads to use. A native BLAS spawns its own pool, so setting both
+        /// oversubscribes - which is a candidate explanation for the slowdown that has nothing to do
+        /// with the BLAS being native.
+        ///
+        /// Flip these two independently to find out which mattered. The timing report says where the
+        /// cost went: a native BLAS problem shows up in Linear solve, an oversubscription problem
+        /// shows up across everything that parallelises.
+        /// </summary>
+        public static bool capParallelismWithNativeProviders = true;
+
+        /// <summary>
         /// Passed to every Parallel.For in the solver. Collapses to a single worker while
         /// verifying, so any accidental order dependence shows up as a difference rather than
         /// as intermittent noise.
@@ -123,7 +139,8 @@ namespace UC.ED
                 return;
             }
 
-            Control.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1);
+            if (capParallelismWithNativeProviders)
+                Control.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1);
 
             try
             {
