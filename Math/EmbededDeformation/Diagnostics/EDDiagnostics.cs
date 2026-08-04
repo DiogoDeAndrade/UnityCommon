@@ -126,6 +126,10 @@ namespace UC.ED
                 Control.UseManaged();
                 Control.UseSingleThread();
 
+                // Cleared on the way past, so switching back to native afterwards warns again rather
+                // than staying quiet because it already warned once this session.
+                warnedAboutNativeProviders = false;
+
                 LogProviderChange();
                 return;
             }
@@ -145,6 +149,8 @@ namespace UC.ED
                 // verification mode.
                 Control.MaxDegreeOfParallelism = PristineMaxDegreeOfParallelism();
 
+                warnedAboutNativeProviders = false;
+
                 LogProviderChange();
                 return;
             }
@@ -153,11 +159,16 @@ namespace UC.ED
             // that ran earlier in this session left the process single-threaded.
             Control.MaxDegreeOfParallelism = PristineMaxDegreeOfParallelism();
 
+            // Hoisted out of the try so the warning below can tell "native is on" from "native was
+            // asked for and did not load". They need opposite warnings and look identical from the
+            // outside, which is the whole reason this says anything at all.
+            bool nativeOk = false;
+
             try
             {
                 Control.NativeProviderPath = Path.GetFullPath(Path.Combine(Application.dataPath, "Plugins/MathNet/OpenBLAS/win-x64"));
 
-                bool nativeOk = Control.TryUseNativeOpenBLAS();
+                nativeOk = Control.TryUseNativeOpenBLAS();
 
                 if (!nativeOk)
                     nativeOk = Control.TryUseNativeMKL();
@@ -171,6 +182,8 @@ namespace UC.ED
 
                 Control.UseMultiThreading();
             }
+
+            WarnAboutNativeProviders(nativeOk);
 
             LogProviderChange();
 #endif
@@ -194,6 +207,46 @@ namespace UC.ED
                 pristineParallelism = Control.MaxDegreeOfParallelism;
 
             return pristineParallelism;
+        }
+
+        private static bool warnedAboutNativeProviders;
+
+        /// <summary>
+        /// Says something the first time a solve asks for the native providers, because both
+        /// outcomes are things the person who asked needs to know and neither announces itself.
+        ///
+        /// Loaded: the measurement says this run will not finish in any reasonable time, and a frozen
+        /// editor gives no clue why - the timing report that would explain it only prints at the end,
+        /// which is precisely what never arrives. Better to say so before the wait than after it.
+        ///
+        /// Not loaded: the code falls back to managed and the solve is fast, which is indistinguishable
+        /// from native being fine. That is the more dangerous of the two, because it reads as a result.
+        ///
+        /// Warned once per switch rather than once per solve - every solver entry point calls
+        /// ApplyMathNetProviders, so warning unconditionally would bury the console. Switching away
+        /// and back arms it again.
+        /// </summary>
+        private static void WarnAboutNativeProviders(bool loaded)
+        {
+            if (warnedAboutNativeProviders) return;
+
+            warnedAboutNativeProviders = true;
+
+            if (loaded)
+            {
+                Debug.LogWarning(
+                    "[ED] Native Math.NET providers are ON. Measured on config 2: managed takes 8 seconds, " +
+                    "native was abandoned unfinished at 3 and 4 minutes, with and without the managed " +
+                    "parallelism cap. If the editor appears to hang during a solve, this is why. " +
+                    "See EDDiagnostics.allowNativeProviders.");
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "[ED] Native Math.NET providers were requested but did not load, so this solve is running " +
+                    "managed. Check Assets/Plugins/MathNet/OpenBLAS/win-x64. Said out loud because a silent " +
+                    "fallback is fast, and therefore looks like native BLAS working rather than not running.");
+            }
         }
 
         /// <summary>
