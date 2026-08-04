@@ -17,6 +17,22 @@ using MathNet.Numerics;
 namespace UC.ED
 {
     public enum DeformationGraphSource { NavMeshAndStructure, StructureOnly };
+
+    /// <summary>
+    /// Which mesh the deformation is built over: the one its nodes are sampled from, its vertices
+    /// bound to, and its indices used by the vertex constraints.
+    ///
+    /// Separate from DeformationGraphSource because they answer different questions. That one asks
+    /// where the graph's *shape* comes from - sampled, or taken from the skeleton. This asks which
+    /// geometry the whole construction sits on, and the sampling strategy is the same either way:
+    /// pick vertices a minimum distance apart, bind the rest to them, link by adjacency.
+    ///
+    /// SourceGeometry exists for a baseline faithful to the original embedded deformation, which
+    /// samples the object being deformed. Everything here samples a navigation mesh instead - a
+    /// proxy for that object - and points on the real geometry can then sit several node spacings
+    /// from the nearest node, which is extrapolation rather than deformation.
+    /// </summary>
+    public enum EDTopologySource { NavMesh, SourceGeometry };
     public enum BindingSelectionMode { ClosestOne, NearestK };
     public enum BindingWeightMode { Uniform, InversePower, Gaussian, OriginalED };
     public enum GraphLinkMode { PartitionAdjacency, SharedBindings, DirectionAware };

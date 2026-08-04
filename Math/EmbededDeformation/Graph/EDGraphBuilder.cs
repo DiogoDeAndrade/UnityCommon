@@ -23,6 +23,16 @@ namespace UC.ED
 
         public abstract DeformationGraphSource graphSource { get; }
 
+        /// <summary>
+        /// Which mesh this builder wants to be handed. The owner resolves it and passes the matching
+        /// topology to Build, so the graph, the bindings and the vertex constraints cannot end up
+        /// disagreeing about which geometry they are on - which they would, silently, if each
+        /// resolved it separately.
+        ///
+        /// The navmesh by default, because that is what every builder here has always been given.
+        /// </summary>
+        public virtual EDTopologySource topologySource => EDTopologySource.NavMesh;
+
         // Surfaced for the diagnostic dump so a golden file records how its graph was built,
         // whichever builder produced it. Overridden where the builder actually has the setting.
         public abstract EDBindingConfig binding { get; }
