@@ -32,10 +32,10 @@ namespace UC.ED
     /// through it, and it is the state a node has to pass through to invert.
     /// </summary>
     [Serializable]
-    [PolymorphicName("Determinant (orientation)")]
+    [PolymorphicName("Determinant")]
     public class EDDeterminantTerm : EDResidualTerm
     {
-        [SerializeField, Min(0.0f), Tooltip("The smallest determinant a node's linear part may have before the term objects. 1 is undeformed; 0 is collapsed onto a plane; below 0 is inside out. A floor above zero also keeps a node away from the collapsed state it would have to cross to get there.")]
+        [SerializeField, Min(0.0f), Tooltip("The smallest determinant a node's linear part may have before the term objects, measured relative to the scaling that node is allowed. 1 is undeformed; 0 is collapsed onto a plane; below 0 is inside out. This is a margin, not a scale limit - lower it toward 0.1 to leave scaling almost entirely to the rotation and terminal-scale terms, raise it to keep nodes further from degeneracy.")]
         private float minDeterminant = 0.5f;
 
         public override string name => "determinant";
@@ -55,6 +55,18 @@ namespace UC.ED
             }
 
             protected override int ComputeRowCount() => deformation.nodes.Count;
+
+            /// <summary>
+            /// The scaling this node is entitled to, which the determinant is measured against.
+            ///
+            /// One everywhere by default: the determinant is compared to the floor directly. It
+            /// exists because forbidding inversion and permitting scale pull against each other -
+            /// a smooth penalty can only see the determinant's magnitude, so any floor high enough
+            /// to be a useful margin is also low enough to argue with a node that is *supposed* to
+            /// shrink. Dividing by the sanctioned scale first separates the two: intended shrinkage
+            /// moves the reference rather than eating the margin.
+            /// </summary>
+            protected virtual double ReferenceScale(int nodeIndex) => 1.0;
 
             /// <summary>
             /// The determinant of a node's linear part, as the scalar triple product of its axes.
@@ -79,7 +91,7 @@ namespace UC.ED
 
                 for (int i = 0; i < deformation.nodes.Count; i++)
                 {
-                    double shortfall = floor - Determinant(state, i);
+                    double shortfall = floor - (Determinant(state, i) / ReferenceScale(i));
 
                     residual[row++] = (shortfall > 0.0) ? (w * shortfall) : (0.0);
                 }
@@ -96,20 +108,25 @@ namespace UC.ED
 
                 for (int i = 0; i < deformation.nodes.Count; i++, row++)
                 {
+                    double scale = ReferenceScale(i);
+
                     // Rows above the floor are left alone. The Jacobian is allocated zero-filled, so
                     // not writing is the same as writing zeros, and it is what the rotation term's
                     // disabled length rows already do.
-                    if (Determinant(stateView, i) >= floor) continue;
+                    if ((Determinant(stateView, i) / scale) >= floor) continue;
 
                     DVector3 axisX = stateView.GetAxisX(i);
                     DVector3 axisY = stateView.GetAxisY(i);
                     DVector3 axisZ = stateView.GetAxisZ(i);
 
                     // d(det)/d(column) is the cross product of the other two columns, in cyclic
-                    // order. The residual is (floor - det), so its derivative is the negation.
+                    // order. The residual is (floor - det/scale), so its derivative is the negation
+                    // divided by the scale - which is constant per node, so it folds into the weight.
                     DVector3 dX = DVector3.Cross(axisY, axisZ);
                     DVector3 dY = DVector3.Cross(axisZ, axisX);
                     DVector3 dZ = DVector3.Cross(axisX, axisY);
+
+                    double ws = w / scale;
 
                     int parameterBase = i * 12;
 
@@ -119,9 +136,9 @@ namespace UC.ED
                         // base + r*4 + c - the 4 being the stride of a 3x4 row, translation included.
                         int rowBase = parameterBase + outputAxis * 4;
 
-                        double vx = -w * dX.GetComponent(outputAxis);
-                        double vy = -w * dY.GetComponent(outputAxis);
-                        double vz = -w * dZ.GetComponent(outputAxis);
+                        double vx = -ws * dX.GetComponent(outputAxis);
+                        double vy = -ws * dY.GetComponent(outputAxis);
+                        double vz = -ws * dZ.GetComponent(outputAxis);
 
                         jacobian[row, rowBase + 0] = vx;
                         jacobian[row, rowBase + 1] = vy;
