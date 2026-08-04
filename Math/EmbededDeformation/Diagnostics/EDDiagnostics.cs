@@ -46,27 +46,28 @@ namespace UC.ED
         /// and slow once a navigation solve had switched the providers under it. Both are the same
         /// fault seen from different directions.
         ///
-        /// Left as a flag rather than deleted because the intent - native BLAS for large solves - is
-        /// reasonable, and this is a small dense problem where the setup and threading cost swamps
-        /// any gain. Worth revisiting with a measurement rather than by flipping it back.
+        /// **Measured, 2026-08-04, config 2 on the test piece.** Managed: 8 seconds. Native with the
+        /// managed parallelism capped: abandoned at 3 minutes, unfinished. Native with the cap
+        /// removed: abandoned at 4 minutes, unfinished. So the cap was not the cause - taking it away
+        /// changes nothing - and the cost is in the native provider itself. At least 22x worse, with
+        /// no upper bound because neither native run was allowed to finish.
+        ///
+        /// What that does not settle: whether OpenBLAS is computing slowly or whether its own thread
+        /// pool is fighting the solver's parallel loops. Both fit the numbers, and separating them
+        /// needs a run with OPENBLAS_NUM_THREADS=1. Nor does it separate OpenBLAS from *these*
+        /// binaries - libopenblas.dll in Assets/Plugins is dated 2015 against a 5.0.0 provider, a
+        /// pairing nothing validates. Neither question is worth answering to keep a solve that is
+        /// already fast.
+        ///
+        /// So: off, and staying off. Kept as a flag rather than deleted because "did you try native
+        /// BLAS" is a question this work should be able to answer, and this is the answer.
+        ///
+        /// A companion flag capped Math.NET's managed parallelism whenever the native providers were
+        /// on. It existed only to be the other half of the comparison above, so it went when the
+        /// comparison did - along with the editor window that drove the two. The native path no
+        /// longer touches the thread count at all, which is the configuration the measurement calls C.
         /// </summary>
         public static bool allowNativeProviders = false;
-
-        /// <summary>
-        /// Whether to cap Math.NET's own parallelism at one below the core count when the native
-        /// providers are on.
-        ///
-        /// Separate from allowNativeProviders because the two were changed together and blamed
-        /// together, and they are different things: one selects a native BLAS, the other tells the
-        /// managed layer how many threads to use. A native BLAS spawns its own pool, so setting both
-        /// oversubscribes - which is a candidate explanation for the slowdown that has nothing to do
-        /// with the BLAS being native.
-        ///
-        /// Flip these two independently to find out which mattered. The timing report says where the
-        /// cost went: a native BLAS problem shows up in Linear solve, an oversubscription problem
-        /// shows up across everything that parallelises.
-        /// </summary>
-        public static bool capParallelismWithNativeProviders = true;
 
         /// <summary>
         /// Passed to every Parallel.For in the solver. Collapses to a single worker while
@@ -115,6 +116,9 @@ namespace UC.ED
         public static void ApplyMathNetProviders()
         {
 #if MATH_NET_AVAILABLE
+            // Before any branch, because every one of them writes it.
+            PristineMaxDegreeOfParallelism();
+
             if (_verificationMode)
             {
                 // The native providers multi-thread internally, so the low bits of a linear solve
@@ -129,18 +133,25 @@ namespace UC.ED
             if (!allowNativeProviders)
             {
                 // Managed and multi-threaded: what Math.NET initialises itself to, and what a solve
-                // in a fresh editor session used to get. Deliberately not touching
-                // MaxDegreeOfParallelism either, so this is exactly the default rather than an
-                // approximation of it.
+                // in a fresh editor session used to get.
                 Control.UseManaged();
                 Control.UseMultiThreading();
+
+                // Restored to the value this session started with rather than left alone. Leaving it
+                // alone is the same as the default only until the first golden capture: verification
+                // mode sets the thread count to one, and the setting is process-global, so every
+                // later solve in the session would inherit it from a capture that already finished.
+                // That is the exact fault this file exists to stop, and it applied to the file's own
+                // verification mode.
+                Control.MaxDegreeOfParallelism = PristineMaxDegreeOfParallelism();
 
                 LogProviderChange();
                 return;
             }
 
-            if (capParallelismWithNativeProviders)
-                Control.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1);
+            // Restored rather than left alone, for the same reason as the managed branch: a capture
+            // that ran earlier in this session left the process single-threaded.
+            Control.MaxDegreeOfParallelism = PristineMaxDegreeOfParallelism();
 
             try
             {
@@ -168,6 +179,23 @@ namespace UC.ED
 #if MATH_NET_AVAILABLE
         private static string lastDescribedProviders;
 
+        private static int pristineParallelism = -1;
+
+        /// <summary>
+        /// Math.NET's own thread count, as it stood before anything here touched it.
+        ///
+        /// Read once and remembered, so "put it back" means the session's real starting point rather
+        /// than a guess at what Math.NET would have chosen. Every branch of ApplyMathNetProviders
+        /// writes MaxDegreeOfParallelism, so this has to be sampled before the first of them runs.
+        /// </summary>
+        private static int PristineMaxDegreeOfParallelism()
+        {
+            if (pristineParallelism < 0)
+                pristineParallelism = Control.MaxDegreeOfParallelism;
+
+            return pristineParallelism;
+        }
+
         /// <summary>
         /// Logs the provider configuration, but only when it actually changes. This used to be
         /// printed on every navigation solve and by nothing else, which is the reason a solve
@@ -175,7 +203,7 @@ namespace UC.ED
         /// </summary>
         private static void LogProviderChange()
         {
-            string description = Control.Describe();
+            string description = DescribeProviders();
 
             if (description == lastDescribedProviders) return;
 
@@ -184,6 +212,23 @@ namespace UC.ED
             Debug.Log($"[ED] Math.NET providers now: {description}");
         }
 #endif
+
+        /// <summary>
+        /// The provider configuration currently in force, thread count included.
+        ///
+        /// The thread count is part of it because Control.Describe() does not mention it, so two runs
+        /// that differ only in how many threads the managed layer may use describe identically - and
+        /// telling those two apart is the whole point of the measurement the two flags above exist
+        /// for. It also means flipping the cap prints a line rather than being deduplicated away.
+        /// </summary>
+        public static string DescribeProviders()
+        {
+#if MATH_NET_AVAILABLE
+            return $"{Control.Describe()}, MaxDegreeOfParallelism = {Control.MaxDegreeOfParallelism}";
+#else
+            return "Math.NET not available";
+#endif
+        }
 
         public static void Trace(string line)
         {

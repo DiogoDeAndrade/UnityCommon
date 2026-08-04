@@ -2318,6 +2318,12 @@ namespace UC.ED
 
             sb.AppendLine($"Time report - {label}, {solveIterations} iteration(s)");
 
+            // Named in the report rather than left to a console line printed only when it changes,
+            // so three runs measuring three provider configurations cannot be told apart by which
+            // order they were read in. A timing number without the configuration it was taken under
+            // is not a measurement.
+            sb.AppendLine($"  under {EDDiagnostics.DescribeProviders()}");
+
             Row("Solve", timeIteration, 2);
             Row("Residual evaluation", timeResidualEvaluate, 4);
             Row("Build Jacobian", timeJacobianBuild, 4);
