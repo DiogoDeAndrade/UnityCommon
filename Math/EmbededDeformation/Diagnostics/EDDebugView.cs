@@ -4,6 +4,88 @@ using UnityEngine;
 namespace UC.ED
 {
     /// <summary>
+    /// The nodes influencing one point, and by how much, independent of how that was worked out.
+    ///
+    /// Both factories drop entries that carry no influence - a zero weight, or the -1 node the field
+    /// pads its cells with. So a count of zero means the point genuinely has nothing acting on it,
+    /// which is a distinct answer from "there is no deformation here" and needs to be, since a vertex
+    /// with no valid binding is one of the things these tools exist to catch.
+    /// </summary>
+    public readonly struct EDInfluences
+    {
+        public readonly int[]   nodeIndices;
+        public readonly float[] weights;
+
+        private EDInfluences(int[] nodeIndices, float[] weights)
+        {
+            this.nodeIndices = nodeIndices;
+            this.weights = weights;
+        }
+
+        public int count => (nodeIndices != null) ? (nodeIndices.Length) : (0);
+
+        public static EDInfluences FromField(FullDeformationField.DeformationFieldWeights source)
+        {
+            if (source.weights == null) return default;
+
+            int kept = 0;
+
+            for (int i = 0; i < source.weights.Length; i++)
+            {
+                if ((source.weights[i] > 0.0f) && (source.nodeId[i] >= 0))
+                    kept++;
+            }
+
+            var indices = new int[kept];
+            var values = new float[kept];
+
+            int at = 0;
+
+            for (int i = 0; i < source.weights.Length; i++)
+            {
+                if ((source.weights[i] <= 0.0f) || (source.nodeId[i] < 0)) continue;
+
+                indices[at] = source.nodeId[i];
+                values[at] = source.weights[i];
+
+                at++;
+            }
+
+            return new EDInfluences(indices, values);
+        }
+
+        public static EDInfluences FromBinding(EDVertexBinding source)
+        {
+            if (source.nodeIndices == null) return default;
+
+            int kept = 0;
+
+            for (int i = 0; i < source.nodeIndices.Length; i++)
+            {
+                if ((source.weights[i] > 0.0) && (source.nodeIndices[i] >= 0))
+                    kept++;
+            }
+
+            var indices = new int[kept];
+            var values = new float[kept];
+
+            int at = 0;
+
+            for (int i = 0; i < source.nodeIndices.Length; i++)
+            {
+                if ((source.weights[i] <= 0.0) || (source.nodeIndices[i] < 0)) continue;
+
+                indices[at] = source.nodeIndices[i];
+                values[at] = (float)source.weights[i];
+
+                at++;
+            }
+
+            return new EDInfluences(indices, values);
+        }
+    }
+
+    /// <summary>
     /// A read-only window onto a solved deformation, for the scene-view tools that visualise one.
     ///
     /// It exists so those tools do not need the component that happens to own the deformation. They
@@ -60,7 +142,52 @@ namespace UC.ED
         }
 
         /// <summary>
-        /// Which nodes influence a point in space, and by how much.
+        /// Which mechanism carries points here: the volumetric field, or the node bindings.
+        ///
+        /// Worth reporting rather than hiding. The two are different deformations, not two
+        /// approximations of one, so a tool that showed a field answer for a binding-mode solve
+        /// would be showing something the run never computed.
+        /// </summary>
+        public bool usesDeformationField => (deformation != null) && (deformation.UsesDeformationFieldForDebug);
+
+        /// <summary>
+        /// Which nodes influence a point in space, and by how much, whichever mechanism is active.
+        ///
+        /// Field mode reads the field's cell weights; binding mode binds the point on demand with the
+        /// settings the graph was built under. Both answer the same question, which is why callers
+        /// get one method - before this existed, every scene-view tool worked only on the two
+        /// structure configurations and silently drew nothing for the other five.
+        /// </summary>
+        public bool TryGetInfluences(Vector3 position, out EDInfluences influences)
+        {
+            influences = default;
+
+            if (deformation == null) return false;
+
+            FullDeformationField field = GetField();
+
+            if (field != null)
+            {
+                var weights = field.GetWeights(position);
+
+                influences = EDInfluences.FromField(weights);
+
+                return true;
+            }
+
+            var binding = deformation.BindPoint(position);
+
+            if ((binding.nodeIndices == null) || (binding.nodeIndices.Length == 0))
+                return false;
+
+            influences = EDInfluences.FromBinding(binding);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Which nodes influence a point in space, and by how much, through the field specifically.
+        /// Prefer TryGetInfluences unless the field is the subject.
         /// </summary>
         public bool TryGetFieldWeights(Vector3 position, out FullDeformationField.DeformationFieldWeights weights)
         {
@@ -76,20 +203,34 @@ namespace UC.ED
         }
 
         /// <summary>
-        /// Where the field carries a point. Trilinear sampling is what the field deforms geometry
-        /// with; the nearest-cell variant is offered because seeing the difference between them is
-        /// the point of one of these tools.
+        /// Where the deformation carries a point.
+        ///
+        /// Trilinear sampling is what the field deforms geometry with; the nearest-cell variant is
+        /// offered because seeing the difference between them is the point of one of these tools. It
+        /// means nothing in binding mode, where there are no cells to sample, and is ignored there.
         /// </summary>
         public bool TryGetDeformedPosition(Vector3 position, out Vector3 deformedPosition, bool trilinear = false)
         {
             deformedPosition = position;
 
+            if (deformation == null) return false;
+
             FullDeformationField field = GetField();
 
-            if (field == null) return false;
+            if (field != null)
+            {
+                deformedPosition = (trilinear) ? (field.DeformPositionFromNodeFramesTrilinear(position, GetNodeFrame))
+                                               : (field.DeformPositionFromNodeFrames(position, GetNodeFrame));
 
-            deformedPosition = (trilinear) ? (field.DeformPositionFromNodeFramesTrilinear(position, GetNodeFrame))
-                                           : (field.DeformPositionFromNodeFrames(position, GetNodeFrame));
+                return true;
+            }
+
+            // The same blend the mesh output uses, so what this reports and what the geometry does
+            // cannot disagree.
+            if (!deformation.TryGetDebugBindingMatrix(position, out Matrix4x4 matrix))
+                return false;
+
+            deformedPosition = matrix.MultiplyPoint3x4(position);
 
             return true;
         }
@@ -102,18 +243,38 @@ namespace UC.ED
         {
             deformedPosition = position;
 
+            if (deformation == null) return false;
+
             FullDeformationField field = GetField();
 
-            if (field == null) return false;
+            if (field != null)
+            {
+                deformedPosition = field.DeformPositionFromSingleNodeFrame(position, nodeIndex, GetNodeFrame);
 
-            deformedPosition = field.DeformPositionFromSingleNodeFrame(position, nodeIndex, GetNodeFrame);
+                return true;
+            }
+
+            deformedPosition = deformation.DeformDebugPointBySingleNode(position, nodeIndex);
 
             return true;
         }
 
+        /// <summary>
+        /// The field, but only when this deformation actually maps points through it.
+        ///
+        /// Guarded on the graph source rather than on the reference. FullDeformationField is
+        /// [Serializable] on a [SerializeField] member, so in navmesh mode it comes back from
+        /// serialization as a live but empty object - a plain null check hands every navmesh graph an
+        /// empty field and it answers, confidently, with nothing in it. Routing every field access
+        /// here means no caller can make that mistake individually.
+        /// </summary>
         private FullDeformationField GetField()
         {
-            return (deformation != null) ? (deformation.GetDeformationField()) : (null);
+            if (deformation == null) return null;
+
+            if (!deformation.UsesDeformationFieldForDebug) return null;
+
+            return deformation.GetDeformationField();
         }
 
         private FullDeformationField.Frame GetNodeFrame(int nodeIndex)
