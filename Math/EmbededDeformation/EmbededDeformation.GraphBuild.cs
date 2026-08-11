@@ -89,6 +89,22 @@ namespace UC.ED
 
         internal List<Mesh> GetSourceGeometry() => sourceGeometry;
 
+        // Deliberately not serialized. It is build input, read once while the field is being made
+        // and meaningless afterwards, so a stale copy surviving a domain reload could only mislead.
+        private List<EDConnectorSeed> connectorSeeds;
+
+        /// <summary>
+        /// Where this piece's connectors are and how wide they are, set by the owner before the
+        /// build. Only the structure builder reads them, to seed the deformation field along each
+        /// connector's bar rather than at a single point.
+        /// </summary>
+        public void SetConnectorSeeds(List<EDConnectorSeed> seeds)
+        {
+            connectorSeeds = (seeds != null) ? (new List<EDConnectorSeed>(seeds)) : (new List<EDConnectorSeed>());
+        }
+
+        public IReadOnlyList<EDConnectorSeed> GetConnectorSeeds() => connectorSeeds;
+
         // ---------------------------------------------------------------------------------------
         // Build bracket
         // ---------------------------------------------------------------------------------------
