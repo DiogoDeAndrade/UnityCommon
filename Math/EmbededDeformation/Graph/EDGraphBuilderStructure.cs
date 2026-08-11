@@ -43,22 +43,222 @@ namespace UC.ED
             {
             }
 
-            public override void Build(TopologyStatic topology, List<int> forcedVertices)
+            /// <summary>
+            /// Two structure endpoints closer together than this are the same node. Not a sampling
+            /// distance - the skeleton decides where nodes go - only a guard against a shared
+            /// junction arriving as two coincident points from two segments.
+            /// </summary>
+            private const float structureNodeMergeDistanceSq = 1e-8f;
+
+            public override void Build(List<int> forcedVertices)
             {
                 var def = (EDGraphBuilderStructure)builder;
-                var b = fixedBinding;
 
-                // Sampling distance, link mode, forced vertices and the direction-aware settings are all ignored by the structure path; they are passed as defaults rather than left to look meaningful.
-                deformation.BuildDeformationGraph(DeformationGraphSource.StructureOnly, topology, 1.0f, forcedVertices, false,
-                                                  b.selectionMode, b.weightMode,
-                                                  GraphLinkMode.PartitionAdjacency,
-                                                  structureSource, def.structureMaxSegmentLength,
-                                                  nav.upVector, nav.tryGetSurfaceNormal,
-                                                  b.nearestK, 2.0f, 20.0f,
-                                                  nav.hasLOS,
-                                                  b.attenuationPower,
-                                                  b.ResolveSigma(1.0f),
-                                                  def.fieldVoxelDensity, def.fieldMaxWeights);
+                TopologyStatic topology = ResolveTopology();
+                if (topology == null) return;
+
+                deformation.BeginGraphBuild(DeformationGraphSource.StructureOnly);
+
+                deformation.BuildStructure(structureSource, def.maxSegmentLength, nav.tryGetSurfaceNormal);
+
+                var structure = deformation.structure;
+
+                if ((structure == null) || (structure.Count == 0))
+                {
+                    Debug.LogError("Structure graph build failed: structure is null or empty.");
+                    return;
+                }
+
+                // -----------------------------------------------------------------
+                // 1) Copy source navmesh into ED rest data.
+                //    Even in StructureOnly mode, the mesh still needs to deform.
+                // -----------------------------------------------------------------
+                deformation.SetRestGeometry(topology);
+
+                // -----------------------------------------------------------------
+                // 2) Build ED graph directly from structure segment endpoints.
+                // -----------------------------------------------------------------
+                for (int i = 0; i < structure.Count; i++)
+                {
+                    var seg = structure[i];
+
+                    int idx1 = deformation.AddGraphNode(seg.p1, structureNodeMergeDistanceSq);
+                    int idx2 = deformation.AddGraphNode(seg.p2, structureNodeMergeDistanceSq);
+
+                    seg.node1 = idx1;
+                    seg.node2 = idx2;
+
+                    deformation.LinkGraphNodes(idx1, idx2);
+                }
+
+                if (deformation.nodes.Count == 0)
+                {
+                    Debug.LogError("Structure graph build failed: no nodes were created.");
+                    return;
+                }
+
+                // -----------------------------------------------------------------
+                // 3) Bind navmesh vertices to the structure graph.
+                // -----------------------------------------------------------------
+                deformation.SetGraphBindings(topology, def.binding, def.sampleMinDistance);
+
+                deformation.EndGraphBuild();
+
+                Debug.Log($"ED structure-only graph built. " +
+                          $"Vertices={topology.vertexCount}, " +
+                          $"Triangles={topology.triangleCount}, " +
+                          $"StructureSegments={structure.Count}, " +
+                          $"Nodes={deformation.nodes.Count}, " +
+                          $"Edges={deformation.graphEdgeCount}");
+
+                // -----------------------------------------------------------------
+                // 4) Everything that only means something on a skeleton graph.
+                // -----------------------------------------------------------------
+                deformation.BuildNodeRestFrames();
+                deformation.BuildLinkAngleConstraints();
+
+                BuildDeformationField(def);
+            }
+
+            /// <summary>
+            /// Voxelizes the source geometry and seeds it with the graph nodes, so that a point
+            /// anywhere in the solid is carried by geodesic distance through the volume rather than
+            /// by straight-line distance through whatever wall happens to be between it and a node.
+            /// </summary>
+            private void BuildDeformationField(EDGraphBuilderStructure def)
+            {
+                DebugProfiler timer = new();
+                timer.Mark();
+
+                List<Mesh> sourceGeometry = deformation.GetSourceGeometry();
+
+                if ((sourceGeometry == null) || (sourceGeometry.Count == 0))
+                {
+                    Debug.LogWarning("BuildDeformationField failed: no source geometry was provided.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                var nodes = deformation.nodes;
+
+                if ((nodes == null) || (nodes.Count == 0))
+                {
+                    Debug.LogWarning("BuildDeformationField failed: no deformation graph nodes exist.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                // -------------------------------------------------------------
+                // 1) Compute bounds from baked source geometry.
+                //    Important: Bounds is a struct, so do not use bounds.Value.Encapsulate().
+                // -------------------------------------------------------------
+                bool hasBounds = false;
+                Bounds bounds = default;
+
+                for (int i = 0; i < sourceGeometry.Count; i++)
+                {
+                    Mesh mesh = sourceGeometry[i];
+                    if (mesh == null)
+                        continue;
+
+                    if (!hasBounds)
+                    {
+                        bounds = mesh.bounds;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(mesh.bounds);
+                    }
+                }
+
+                if (!hasBounds)
+                {
+                    Debug.LogWarning("BuildDeformationField failed: source geometry has no valid meshes.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                // Make sure deformation graph nodes are inside the field bounds.
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    bounds.Encapsulate(nodes[i].restPosition.ToVector3());
+                }
+
+                float maxSize = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+
+                if (maxSize <= 1e-6f)
+                {
+                    Debug.LogWarning("BuildDeformationField failed: source geometry bounds are degenerate.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                float safeDensity = Mathf.Max(def.fieldVoxelDensity, 1e-5f);
+                float voxelSize = maxSize * safeDensity;
+
+                int safeMaxWeights = Mathf.Clamp(def.fieldMaxWeights, 1, nodes.Count);
+
+                // -------------------------------------------------------------
+                // 2) Create deformation field.
+                // -------------------------------------------------------------
+                FullDeformationField field = new FullDeformationField(voxelSize, safeMaxWeights);
+
+                // -------------------------------------------------------------
+                // 3) Fill the field using source geometry.
+                //
+                //    sourceGeometry is already baked to world space in SetSourceGeometry(),
+                //    so the voxelizer should receive identity matrices here.
+                // -------------------------------------------------------------
+                List<Matrix4x4> identityMatrices = new();
+
+                for (int i = 0; i < sourceGeometry.Count; i++)
+                {
+                    identityMatrices.Add(Matrix4x4.identity);
+                }
+
+                field.FillWithMesh(sourceGeometry, identityMatrices);
+
+                // -------------------------------------------------------------
+                // 4) Add deformation graph nodes as volumetric/geodesic seeds.
+                //
+                //    Add them in ED node order so the deformation field node id matches the ED node index.
+                // -------------------------------------------------------------
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    EDNode node = nodes[i];
+
+                    // TODO: Need to add this length, will work on it later
+                    field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), 0.0f);
+                }
+
+                // -------------------------------------------------------------
+                // 5) Extend the influence field outside occupied cells.
+                //
+                //    The occupied volume gets geodesic distances from AddDeformationNode(). GrowInfluence() lets nearby empty cells also query valid weights.
+                // -------------------------------------------------------------
+                field.GrowInfluence();
+
+                // -------------------------------------------------------------
+                // 6) Convert distances into normalized weights.
+                // -------------------------------------------------------------
+                field.ComputeWeights(safeMaxWeights);
+                field.BuildTrilinearRegions();
+
+                deformation.SetDeformationField(field);
+
+                timer.Mark();
+
+                Debug.Log(
+                    $"Deformation field built:\n" +
+                    $"  Meshes={sourceGeometry.Count}\n " +
+                    $"  Nodes={nodes.Count}\n" +
+                    $"  VoxelSize={voxelSize:F4}\n" +
+                    $"  MaxWeights={safeMaxWeights}\n" +
+                    $"  Bounds={bounds.size}\n" +
+                    $"  Grid Size={field.gridSize}\n" +
+                    $"  Time={timer.accumulatedTimeMS:F6} ms"
+                );
             }
         }
     }

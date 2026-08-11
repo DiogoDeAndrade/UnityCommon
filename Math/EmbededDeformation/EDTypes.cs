@@ -234,7 +234,7 @@ namespace UC.ED
         /// Cached clearance for a segment, or double.MaxValue when none was computed - the same
         /// "no clearance" marker ComputeClearance stores for segments it cannot measure.
         ///
-        /// The cache is absent entirely in every mode that does not run SetNavEDParameters, and
+        /// The cache is absent entirely in every mode that does not run BuildNavigationData, and
         /// because EDClearanceCache is [Serializable] Unity resurrects it after a domain reload as
         /// a live object wrapping a null array, so a plain null test is not sufficient.
         /// </summary>

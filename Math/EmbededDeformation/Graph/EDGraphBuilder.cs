@@ -6,12 +6,18 @@ using UnityEngine;
 namespace UC.ED
 {
     /// <summary>
-    /// Where the deformation graph comes from, and the parameters that construction needs.
+    /// Where the deformation graph comes from, and the construction that produces it.
     ///
     /// The two builders answer genuinely different questions. Sampling the navmesh has to decide
     /// which vertices become nodes and how to link them; taking the skeleton gets both for free
     /// from the structure, and instead builds a volumetric field. Because of that they also imply
     /// different ways of deforming a point, which is why the builder produces the deformer.
+    ///
+    /// A builder owns no state. It queries the deformation for what it needs - the topology it is
+    /// built over, the agent parameters, the skeleton - and pushes what it produces back through
+    /// the deformation's Add/Set calls. What it owns is its own parameters and its own algorithm,
+    /// which is the point: a builder no longer has to flatten both into one call whose signature is
+    /// the union of every builder's needs and whose unused arguments it has to invent values for.
     ///
     /// Definition and instance are split as elsewhere: the asset is shared and read-only during a
     /// build, the instance holds the live scene references and per-build state.
@@ -67,7 +73,37 @@ namespace UC.ED
                 this.nav = nav;
             }
 
-            public abstract void Build(TopologyStatic topology, List<int> forcedVertices);
+            /// <summary>
+            /// The mesh this builder is built over, or null with the error already reported. The
+            /// owner supplies both candidates through SetTopology before the build; asking for it
+            /// here rather than being handed it is what stops the graph, the bindings and the
+            /// vertex constraints ending up on different geometry.
+            /// </summary>
+            protected TopologyStatic ResolveTopology()
+            {
+                TopologyStatic topology = deformation.GetTopology(builder.topologySource);
+
+                if (topology == null)
+                    Debug.LogError($"{builder.name}: no {builder.topologySource} topology was supplied. Call SetTopology before building.");
+
+                return topology;
+            }
+
+            public abstract void Build(List<int> forcedVertices);
+
+            /// <summary>
+            /// Builds the per-segment bindings and clearance probes the nav-aware energies measure
+            /// through. Separate from Build, and driven by the owner, because whether a run is
+            /// navigation-aware is a property of the solver and the energy model rather than of the
+            /// graph - the same structure graph serves both a NavED run and a plain one.
+            ///
+            /// The binding configuration comes from the builder because that is where it lives now:
+            /// it describes how this graph reaches geometry, which is a construction question.
+            /// </summary>
+            public virtual void BuildNavigationData()
+            {
+                deformation.BuildNavigationData(builder.binding, builder.sampleMinDistance);
+            }
         }
     }
 }

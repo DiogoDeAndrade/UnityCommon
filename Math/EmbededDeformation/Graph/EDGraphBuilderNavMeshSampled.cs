@@ -14,7 +14,7 @@ namespace UC.ED
     /// to seed nodes and to carry the navigation structure - it does not define the graph.
     /// </summary>
     [CreateAssetMenu(fileName = "EDGraphBuilderNavMeshSampled", menuName = "Unity Common/ED/Graph Builder/NavMesh Sampled")]
-    public class EDGraphBuilderNavMeshSampled : EDGraphBuilder
+    public class EDGraphBuilderNavMeshSampled : EDGraphBuilderSampled
     {
         [SerializeField, Min(0.0f), Tooltip("Minimum spacing between sampled nodes.")]
         private float sampleDistance = 1.0f;
@@ -44,36 +44,15 @@ namespace UC.ED
         public override Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav)
             => new NavMeshSampledInstance(this, deformation, structureSource, nav);
 
-        public class NavMeshSampledInstance : Instance
+        /// <summary>
+        /// Nothing of its own: the sampling, the binding and all three linking strategies are the
+        /// shared construction, driven entirely by the parameters above.
+        /// </summary>
+        public class NavMeshSampledInstance : SampledInstance
         {
             public NavMeshSampledInstance(EDGraphBuilderNavMeshSampled builder, EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav)
                 : base(builder, deformation, structureSource, nav)
             {
-            }
-
-            public override void Build(TopologyStatic topology, List<int> forcedVertices)
-            {
-                var def = (EDGraphBuilderNavMeshSampled)builder;
-                var b = def.bindingConfig;
-
-                deformation.BuildDeformationGraph(DeformationGraphSource.NavMeshAndStructure,
-                                                  topology,
-                                                  def.sampleDistance,
-                                                  forcedVertices,
-                                                  def.forceStructure,
-                                                  b.selectionMode,
-                                                  b.weightMode,
-                                                  def.links,
-                                                  structureSource,
-                                                  def.structureMaxSegmentLength,
-                                                  nav.upVector,
-                                                  nav.tryGetSurfaceNormal,
-                                                  b.nearestK,
-                                                  def.directionAwareMaxDistance,
-                                                  def.directionAwareMinAngle,
-                                                  nav.hasLOS,
-                                                  b.attenuationPower,
-                                                  b.ResolveSigma(def.sampleDistance));
             }
         }
     }
