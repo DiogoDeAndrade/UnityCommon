@@ -119,6 +119,18 @@ public class FullDeformationField
         }
     }
 
+    [Serializable]
+    public struct DeformationNode
+    {
+        public Frame frame;
+        public float sourceLength;
+
+        public DeformationNode(Frame frame, float sourceLength = 0.0f)
+        {
+            this.frame = frame;
+            this.sourceLength = sourceLength;
+        }
+    }
 
     [Serializable]
     struct TrilinearRegion
@@ -146,7 +158,7 @@ public class FullDeformationField
     [SerializeField, HideInInspector]
     int                                 maxWeights;
     [SerializeField, HideInInspector]
-    List<Frame>                         deformationNodes = new List<Frame>();
+    List<DeformationNode>               deformationNodes = new List<DeformationNode>();
     [SerializeField, HideInInspector]
     List<Matrix4x4>                     restInverses = new List<Matrix4x4>();
 
@@ -500,36 +512,54 @@ public class FullDeformationField
         return m.inverse;
     }
 
-    public int AddDeformationNode(Vector3 position)
+    public int AddDeformationNode(Vector3 position, float sourceLength)
     {
-        return AddDeformationNode(new Frame(position));
+        return AddDeformationNode(new Frame(position), sourceLength);
     }
 
-    public int AddDeformationNode(Vector3 position, Vector3 right, Vector3 up, Vector3 forward)
+    public int AddDeformationNode(Vector3 position, Vector3 right, Vector3 up, Vector3 forward, float sourceLength)
     {
-        return AddDeformationNode(new Frame(position, right, up, forward));
+        return AddDeformationNode(new Frame(position, right, up, forward), sourceLength);
     }
 
-    public int AddDeformationNode(Frame frame)
+    public int AddDeformationNode(Frame frame, float sourceLength)
     {
         InvalidateTrilinearRegions();
 
-        deformationNodes.Add(frame);
+        var defNode = new DeformationNode(frame, sourceLength);
+        deformationNodes.Add(defNode);
         restInverses.Add(ComputeRestInverse(frame));
+
         int nodeIndex = deformationNodes.Count - 1;
 
-        int startIndex = FindClosestFilledVoxel(frame.position);
-        if (startIndex < 0)
-        {
+        if (!HasVoxelData())
             return nodeIndex;
-        }
 
         MinHeap heap = new();
+        HashSet<int> seededVoxels = new();
 
-        ref DeformationFieldWeights startVoxel = ref voxelData.data[startIndex];
-        if (TryStoreDistance(ref startVoxel, nodeIndex, 0f))
+        if (sourceLength <= DistanceEpsilon)
         {
-            heap.Enqueue(new QueueItem(startIndex, nodeIndex, 0f));
+            AddSeed(frame.position, nodeIndex, heap, seededVoxels);
+        }
+        else
+        {
+            Vector3 direction = frame.right.normalized;
+            Vector3 start = frame.position - direction * (sourceLength * 0.5f);
+            Vector3 end = frame.position + direction * (sourceLength * 0.5f);
+
+            // We're using samples every voxelSize * 0.5, but to be really correct, we could use a 3D DDA, but the advantages don't seem really great for this.
+            float stepLength = voxelSize * 0.5f;
+
+            int stepCount = Mathf.Max(1, Mathf.CeilToInt(sourceLength / stepLength));
+
+            for (int i = 0; i <= stepCount; i++)
+            {
+                float t = i / (float)stepCount;
+                Vector3 samplePosition = Vector3.Lerp(start, end, t);
+
+                AddSeed(samplePosition, nodeIndex, heap, seededVoxels);
+            }
         }
 
         while (heap.TryDequeue(out QueueItem current))
@@ -568,6 +598,23 @@ public class FullDeformationField
         }
 
         return nodeIndex;
+    }
+
+    void AddSeed(Vector3 position, int nodeIndex, MinHeap heap, HashSet<int> seededVoxels)
+    {
+        int startIndex = FindClosestFilledVoxel(position);
+        if (startIndex < 0) return;
+
+        // Several points along the segment may map to the same voxel.
+        if (!seededVoxels.Add(startIndex))
+            return;
+
+        ref DeformationFieldWeights startVoxel = ref voxelData.data[startIndex];
+
+        if (TryStoreDistance(ref startVoxel, nodeIndex, 0f))
+        {
+            heap.Enqueue(new QueueItem(startIndex, nodeIndex, 0f));
+        }
     }
 
     public void GrowInfluence()
@@ -640,7 +687,7 @@ public class FullDeformationField
 
         InvalidateTrilinearRegions();
 
-        int weightCount = maxWeights < 0 ? this.maxWeights : maxWeights;
+        int weightCount = (maxWeights < 0) ? (this.maxWeights) : (maxWeights);
         weightCount = Mathf.Clamp(weightCount, 0, this.maxWeights);
 
         for (int index = 0; index < voxelData.data.Length; index++)
@@ -739,15 +786,13 @@ public class FullDeformationField
 
         ref DeformationFieldWeights weights = ref voxelData.data[index];
 
-        // Defensive: useful if GetWeights is called before ComputeWeights(),
-        // or if some cells were not initialized for any reason.
+        // Defensive: useful if GetWeights is called before ComputeWeights(), or if some cells were not initialized for any reason.
         EnsureWeights(ref weights);
 
         return weights;
     }
 
-    // Per-node deformation: maps a point from the node's rest frame to its
-    // current frame (affine, so scale/shear in the frames is carried through).
+    // Per-node deformation: maps a point from the node's rest frame to its current frame (affine, so scale/shear in the frames is carried through).
     Matrix4x4 NodeDeformMatrix(int nodeIndex, Frame currentFrame)
     {
         return currentFrame.ToMatrix() * restInverses[nodeIndex];
@@ -784,7 +829,7 @@ public class FullDeformationField
             if (nodeIndex >= deformationNodes.Count) continue;
             if (nodeIndex >= currentNodePositions.Count) continue;
 
-            Vector3 restNodePosition = deformationNodes[nodeIndex].position;
+            Vector3 restNodePosition = deformationNodes[nodeIndex].frame.position;
             Vector3 currentNodePosition = currentNodePositions[nodeIndex];
 
             displacement += weight * (currentNodePosition - restNodePosition);
@@ -820,7 +865,7 @@ public class FullDeformationField
             if (nodeIndex < 0) continue;
             if (nodeIndex >= deformationNodes.Count) continue;
 
-            Vector3 restNodePosition = deformationNodes[nodeIndex].position;
+            Vector3 restNodePosition = deformationNodes[nodeIndex].frame.position;
             Vector3 currentNodePosition = getCurrentNodePosition(nodeIndex);
 
             displacement += weight * (currentNodePosition - restNodePosition);

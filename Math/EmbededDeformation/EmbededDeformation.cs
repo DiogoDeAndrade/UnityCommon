@@ -2640,21 +2640,20 @@ namespace UC.ED
             // -------------------------------------------------------------
             // 4) Add deformation graph nodes as volumetric/geodesic seeds.
             //
-            //    Add them in ED node order so the deformation field node id
-            //    matches the ED node index.
+            //    Add them in ED node order so the deformation field node id matches the ED node index.
             // -------------------------------------------------------------
             for (int i = 0; i < nodes.Count; i++)
             {
                 EDNode node = nodes[i];
 
-                deformationField.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3());
+                // TODO: Need to add this length, will work on it later
+                deformationField.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), 0.0f);
             }
 
             // -------------------------------------------------------------
             // 5) Extend the influence field outside occupied cells.
             //
-            //    The occupied volume gets geodesic distances from AddDeformationNode().
-            //    GrowInfluence() lets nearby empty cells also query valid weights.
+            //    The occupied volume gets geodesic distances from AddDeformationNode(). GrowInfluence() lets nearby empty cells also query valid weights.
             // -------------------------------------------------------------
             deformationField.GrowInfluence();
 

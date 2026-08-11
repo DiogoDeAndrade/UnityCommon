@@ -34,8 +34,7 @@ namespace UC.ED
         public override float deformationFieldVoxelDensity => fieldVoxelDensity;
         public override int deformationFieldMaxWeights => fieldMaxWeights;
 
-        public override Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav)
-            => new StructureInstance(this, deformation, structureSource, nav);
+        public override Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav) => new StructureInstance(this, deformation, structureSource, nav);
 
         public class StructureInstance : Instance
         {
@@ -49,29 +48,17 @@ namespace UC.ED
                 var def = (EDGraphBuilderStructure)builder;
                 var b = fixedBinding;
 
-                // Sampling distance, link mode, forced vertices and the direction-aware settings are
-                // all ignored by the structure path; they are passed as defaults rather than left to
-                // look meaningful.
-                deformation.BuildDeformationGraph(DeformationGraphSource.StructureOnly,
-                                                  topology,
-                                                  1.0f,
-                                                  forcedVertices,
-                                                  false,
-                                                  b.selectionMode,
-                                                  b.weightMode,
+                // Sampling distance, link mode, forced vertices and the direction-aware settings are all ignored by the structure path; they are passed as defaults rather than left to look meaningful.
+                deformation.BuildDeformationGraph(DeformationGraphSource.StructureOnly, topology, 1.0f, forcedVertices, false,
+                                                  b.selectionMode, b.weightMode,
                                                   GraphLinkMode.PartitionAdjacency,
-                                                  structureSource,
-                                                  def.structureMaxSegmentLength,
-                                                  nav.upVector,
-                                                  nav.tryGetSurfaceNormal,
-                                                  b.nearestK,
-                                                  2.0f,
-                                                  20.0f,
+                                                  structureSource, def.structureMaxSegmentLength,
+                                                  nav.upVector, nav.tryGetSurfaceNormal,
+                                                  b.nearestK, 2.0f, 20.0f,
                                                   nav.hasLOS,
                                                   b.attenuationPower,
                                                   b.ResolveSigma(1.0f),
-                                                  def.fieldVoxelDensity,
-                                                  def.fieldMaxWeights);
+                                                  def.fieldVoxelDensity, def.fieldMaxWeights);
             }
         }
     }
