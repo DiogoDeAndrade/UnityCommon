@@ -442,6 +442,24 @@ namespace UC.ED
         public bool isTerminal;
     }
 
+    /// <summary>
+    /// Where a connector meets the piece, and how wide its bar is, at rest.
+    ///
+    /// Supplied to the build rather than derived from the handle constraints, because those are
+    /// only assembled once the graph exists - and the deformation field, which is what needs this,
+    /// is built as part of making the graph. The same two numbers reach the solver later through
+    /// EDHandleConstraint; this is the subset the construction needs, and it arrives earlier.
+    /// </summary>
+    [Serializable]
+    public struct EDConnectorSeed
+    {
+        public Vector3  restPosition;
+
+        // The full bar length, unscaled - the same number the handle's vertex matching spans, so a
+        // connector influences the field over exactly the extent it is considered to hold.
+        public float    width;
+    }
+
     [Serializable]
     public struct EDTerminalConstraint
     {

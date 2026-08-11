@@ -26,6 +26,8 @@ namespace UC.ED
         private float fieldVoxelDensity = 0.05f;
         [SerializeField, Min(1), Tooltip("How many nodes may influence a single field cell.")]
         private int fieldMaxWeights = 4;
+        [SerializeField]
+        private bool useTerminalLength = true;
 
         private static readonly EDBindingConfig fixedBinding = new EDBindingConfig();
 
@@ -118,6 +120,59 @@ namespace UC.ED
                 deformation.BuildLinkAngleConstraints();
 
                 BuildDeformationField(def);
+            }
+
+            /// <summary>
+            /// The bar length to seed each node along, indexed by node. Zero everywhere except the
+            /// terminal nodes a connector attaches to, which seed along their whole cross-section.
+            ///
+            /// A skeleton graph puts exactly one node at a connector, so a vertex on the connector
+            /// cross-section is otherwise reached by geodesic distance from that single point - and
+            /// a vertex out at the edge of the bar is measurably further from it than one at the
+            /// centre, so it gets a blend where it should be controlled almost entirely by its
+            /// terminal. Seeding the whole bar at distance zero removes the asymmetry without
+            /// adding a variable or a per-vertex assignment.
+            ///
+            /// The sampled builders need none of this: every vertex the connector holds is already
+            /// forced to be a node of its own and constrained directly, and they build no field.
+            ///
+            /// Terminals are matched by the same GetClosestLeafNodeIndex the terminal constraints
+            /// use, so the node seeded along a bar is the node that bar goes on to drive.
+            /// </summary>
+            private float[] ResolveConnectorWidths()
+            {
+                float[] widths = new float[deformation.nodes.Count];
+
+                var seeds = deformation.GetConnectorSeeds();
+
+                if (seeds == null) return widths;
+
+                for (int i = 0; i < seeds.Count; i++)
+                {
+                    EDConnectorSeed seed = seeds[i];
+
+                    if (seed.width <= 0.0f) continue;
+
+                    int nodeIndex = deformation.GetClosestLeafNodeIndex(seed.restPosition);
+
+                    if ((nodeIndex < 0) || (nodeIndex >= widths.Length)) continue;
+
+                    // Two connectors landing on one node means the skeleton has no terminal to tell
+                    // them apart, and the terminal constraints are in the same trouble. Keep the
+                    // wider bar rather than whichever came last, and say so - a silent overwrite
+                    // here would show up only as a field that is subtly wrong at one connector.
+                    if (widths[nodeIndex] > 0.0f)
+                    {
+                        Debug.LogWarning($"Two connectors both resolve to leaf node {nodeIndex}. Seeding it with the wider bar; the terminal constraints on it will also be in conflict.");
+
+                        widths[nodeIndex] = Mathf.Max(widths[nodeIndex], seed.width);
+                        continue;
+                    }
+
+                    widths[nodeIndex] = seed.width;
+                }
+
+                return widths;
             }
 
             /// <summary>
@@ -224,12 +279,14 @@ namespace UC.ED
                 //
                 //    Add them in ED node order so the deformation field node id matches the ED node index.
                 // -------------------------------------------------------------
+                float[] connectorWidths = ResolveConnectorWidths();
+
                 for (int i = 0; i < nodes.Count; i++)
                 {
                     EDNode node = nodes[i];
 
-                    // TODO: Need to add this length, will work on it later
-                    field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), 0.0f);
+                    float connectorWidth = (def.useTerminalLength) ? (connectorWidths[i]) : (0.0f);
+                    field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), connectorWidth);
                 }
 
                 // -------------------------------------------------------------
