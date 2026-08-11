@@ -37,21 +37,27 @@ namespace UC.ED
         public TopologyStatic navMeshTopology;
 
         /// <summary>
-        /// Whether SetNavEDParameters has run, which is what supplies the navmesh topology, the
-        /// per-segment bindings and probes, and the slope/clearance limits. GenerateED only calls
-        /// it in NavED mode, so the navigation-aware features are simply unavailable in the
-        /// TranslationOnly and plain ED modes and callers must not assume otherwise.
+        /// Whether the navigation data the nav-aware energies measure through has been built - the
+        /// per-segment bindings and clearance probes. Only a navigation run builds them, so the
+        /// navigation-aware features are simply unavailable in the TranslationOnly and plain ED
+        /// modes and callers must not assume otherwise.
+        ///
+        /// The navmesh topology is necessary but no longer sufficient to say so, which is why
+        /// navigationDataBuilt is tested as well: the topology is handed to every run now, so that
+        /// a builder can sample it, and a run whose graph came off the navmesh is not thereby a
+        /// navigation run.
         ///
         /// Tests the edge data rather than the reference: TopologyStatic is [Serializable], so a
         /// topology that was null when the scene was written comes back as a live object with a
         /// null edge list, and a reference test would wrongly report it as configured.
         /// </summary>
-        public bool isNavConfigured => (navMeshTopology != null) && (navMeshTopology.edgeCount > 0);
+        public bool isNavConfigured => (navigationDataBuilt) && (navMeshTopology != null) && (navMeshTopology.edgeCount > 0);
         public List<NavEDSegments> structure;
         public float maxSlope = 45.0f;
         public float slopeSoftBand = 5.0f;
         public Vector3 upVector
         {
+            get => _upVector;
             set
             {
                 _upVector = value.normalized;
@@ -96,7 +102,6 @@ namespace UC.ED
         // Solver iterations actually run, so the report can divide by it. Comparing solvers on
         // totals alone is misleading when they run different numbers of iterations.
         private int solveIterations;
-        DebugProfiler timeDeformationFieldGeneration;
 #endif
 
         int deformGraphEdgeCount
@@ -119,242 +124,11 @@ namespace UC.ED
             }
         }
 
-        public void BuildDeformationGraph(DeformationGraphSource deformationGraphSource,
-                                          TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
-                                          BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
-                                          IEDStructureSource structureSource, float structureMaxSegmentLength = 0.0f, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
-                                          int k = 4, // When BindingSelectionMode = closest-K
-                                          float maxBindDistance = 2.0f, // When GraphLinKMode = DirectionAware
-                                          float minBindAngle = 20.0f, // When GraphLinKMode = DirectionAware
-                                          HasLOS hasLOSFunction = null, // When GraphLinKMode = DirectionAware
-                                          float power = 2.0f,
-                                          float sigma = 1.0f, // When BindingSelectionMode = closest-K and BindingWeightMode = InversePower
-                                          float deformationFieldVoxelSize = 0.05f,  // Voxel resolution: default = 5% of maximum size of encapsulating objects
-                                          int deformationFieldMaxWeights = 4) // How many weights influence the deformation at each cell
-        {
-            if (topology == null)
-            {
-                Debug.LogError("BuildDeformationGraph failed: topology is null.");
-                return;
-            }
-
-            if (structureFallbackUp.sqrMagnitude > 1e-8f)
-                this.upVector = structureFallbackUp;
-            else
-                this.upVector = Vector3.up;
-
-            this.deformationGraphSource = deformationGraphSource;
-
-            // Discard any field from a previous build; only the structure branch produces one.
-            // Note this is not sufficient on its own - see usesDeformationField.
-            deformationField = null;
-
-            switch (deformationGraphSource)
-            {
-                case DeformationGraphSource.NavMeshAndStructure:
-                    BuildDeformationGraphFromNavMesh(topology, minDistance, forcedVertices, forceStructureNodes, bindMode, weightMode, graphLinkMode, structureSource, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal, k, maxBindDistance, minBindAngle, hasLOSFunction, power, sigma);
-                    break;
-                case DeformationGraphSource.StructureOnly:
-                    BuildDeformationGraphFromStructure(topology,
-                                                       bindMode, weightMode,
-                                                       structureSource, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal,
-                                                       k, power,sigma);
-                    BuildNodeRestFrames();
-                    BuildLinkAngleConstraints();
-                    BuildDeformationField(deformationFieldVoxelSize, deformationFieldMaxWeights);
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        public void BuildDeformationGraphFromNavMesh(TopologyStatic topology, float minDistance, List<int> forcedVertices, bool forceStructureNodes,
-                                                     BindingSelectionMode bindMode, BindingWeightMode weightMode, GraphLinkMode graphLinkMode,
-                                                     IEDStructureSource structureSource, float structureMaxSegmentLength = 0.0f, Vector3 structureFallbackUp = default, TryGetSurfaceNormal tryGetSurfaceNormal = null,
-                                                     int k = 4, float maxBindDistance = 2.0f, float minBindAngle = 20.0f,
-                                                     HasLOS hasLOSFunction = null,
-                                                     float power = 2.0f, float sigma = 1.0f)
-        {
-            BuildStructure(structureSource, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal);
-
-            if (minDistance <= 0.0f)
-            {
-                Debug.LogWarning("BuildDeformationGraph: minDistance <= 0, clamping to a small value.");
-                minDistance = 0.001f;
-            }
-
-            // -----------------------------------------------------------------
-            // 1) Copy source navmesh into ED rest data
-            // -----------------------------------------------------------------
-            var v = topology.GetVertexPositions();
-            restVertices = new DVector3[v.Count];
-            for (int i = 0; i < v.Count; i++) restVertices[i] = v[i].ToDVector3();
-            triangles = topology.GetTriangleIndices().ToArray();
-
-            nodes.Clear();
-            bindings = null;
-            handleConstraints.Clear();
-            clearanceOpenings.Clear();
-            terminalConstraints.Clear();
-            linkAngleConstraints.Clear();
-
-            // -----------------------------------------------------------------
-            // 2) Sample graph nodes from navmesh vertices
-            //    - forced vertices first
-            //    - then radius-pruned fill over remaining vertices
-            // -----------------------------------------------------------------
-            float minDistanceSq = minDistance * minDistance;
-
-            HashSet<int> forcedSet = (forcedVertices != null) ? (new HashSet<int>(forcedVertices)) : (new HashSet<int>());
-
-            // Forced vertices first - min distance is set to 0.0f so that they're always added regardless of distance to each other
-            // There are no duplicates for sure, so this code could probabably be optimized a bit, but it's not a big deal since the number of forced vertices is expected to be low.
-            foreach (int vId in forcedSet)
-            {
-                if ((vId < 0) || (vId >= topology.vertexCount))
-                    continue;
-
-                TryAddSampleVertex(vId, topology, 0.0f);
-            }
-
-            // Add structure nodes
-            if ((structure != null) && (forceStructureNodes))
-                for (int i = 0; i < structure.Count; i++)
-                {
-                    var seg = structure[i];
-                    int idx1 = TryAddSampleVertex(seg.p1, minDistanceSq);
-                    int idx2 = TryAddSampleVertex(seg.p2, minDistanceSq);
-                    //AddUndirectedNeighbor(idx1, idx2);
-                }
-
-            // Fill remaining graph with radius-pruned vertex samples
-            for (int vId = 0; vId < topology.vertexCount; vId++)
-            {
-                if (forcedSet.Contains(vId))
-                    continue;
-
-                TryAddSampleVertex(vId, topology, minDistanceSq);
-            }
-
-            // Fallback safety
-            if ((nodes.Count == 0) && (topology.vertexCount > 0))
-            {
-                Debug.LogError("Failed to generate ED deformation graph: no nodes were sampled.");
-                return;
-            }
-
-            // -----------------------------------------------------------------
-            // 3) Build bindings: each navmesh vertex gets k nearest nodes
-            // -----------------------------------------------------------------
-            BuildBindings(topology, bindMode, weightMode, k, power, sigma);
-
-            // -----------------------------------------------------------------
-            // 4) Build graph edges from shared bindings
-            // -----------------------------------------------------------------
-            switch (graphLinkMode)
-            {
-                case GraphLinkMode.PartitionAdjacency:
-                    BuildGraphFromPartitionAdjacency(topology);
-                    break;
-
-                case GraphLinkMode.SharedBindings:
-                    BuildGraphFromBindings();
-                    break;
-
-                case GraphLinkMode.DirectionAware:
-                    BuildGraphDirectionAware(maxBindDistance, minBindAngle, hasLOSFunction);
-                    break;
-            }
-
-            currentState = new EDState(nodes.Count);
-            restState = new EDState(nodes.Count);
-
-            Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}, Edges={deformGraphEdgeCount}");
-        }
-
-        public void BuildDeformationGraphFromStructure(TopologyStatic topology,
-                                               BindingSelectionMode bindMode,
-                                               BindingWeightMode weightMode,
-                                               IEDStructureSource structureSource,
-                                               float structureMaxSegmentLength = 0.0f,
-                                               Vector3 structureFallbackUp = default,
-                                               TryGetSurfaceNormal tryGetSurfaceNormal = null,
-                                               int k = 4,
-                                               float power = 2.0f,
-                                               float sigma = 1.0f)
-        {
-            BuildStructure(structureSource, structureMaxSegmentLength, structureFallbackUp, tryGetSurfaceNormal);
-
-            if (topology == null)
-            {
-                Debug.LogError("BuildDeformationGraphFromStructure failed: topology is null.");
-                return;
-            }
-
-            if ((structure == null) || (structure.Count == 0))
-            {
-                Debug.LogError("BuildDeformationGraphFromStructure failed: structure is null or empty.");
-                return;
-            }
-
-            // -----------------------------------------------------------------
-            // 1) Copy source navmesh into ED rest data.
-            //    Even in StructureOnly mode, the mesh still needs to deform.
-            // -----------------------------------------------------------------
-            var v = topology.GetVertexPositions();
-
-            restVertices = new DVector3[v.Count];
-            for (int i = 0; i < v.Count; i++)
-                restVertices[i] = v[i].ToDVector3();
-
-            triangles = topology.GetTriangleIndices().ToArray();
-
-            nodes.Clear();
-            bindings = null;
-            handleConstraints.Clear();
-            clearanceOpenings.Clear();
-            terminalConstraints.Clear();
-            linkAngleConstraints.Clear();
-
-            // -----------------------------------------------------------------
-            // 2) Build ED graph directly from structure segment endpoints.
-            // -----------------------------------------------------------------
-            const float structureNodeMergeDistanceSq = 1e-8f;
-
-            for (int i = 0; i < structure.Count; i++)
-            {
-                var seg = structure[i];
-
-                int idx1 = TryAddSampleVertex(seg.p1, structureNodeMergeDistanceSq);
-                int idx2 = TryAddSampleVertex(seg.p2, structureNodeMergeDistanceSq);
-
-                seg.node1 = idx1;
-                seg.node2 = idx2;
-
-                AddUndirectedNeighbor(idx1, idx2);
-            }
-
-            if (nodes.Count == 0)
-            {
-                Debug.LogError("BuildDeformationGraphFromStructure failed: no nodes were created.");
-                return;
-            }
-
-            // -----------------------------------------------------------------
-            // 3) Bind navmesh vertices to the structure graph.
-            // -----------------------------------------------------------------
-            BuildBindings(topology, bindMode, weightMode, k, power, sigma);
-
-            currentState = new EDState(nodes.Count);
-            restState = new EDState(nodes.Count);
-
-            Debug.Log($"ED structure-only graph built. " +
-                      $"Vertices={topology.vertexCount}, " +
-                      $"Triangles={topology.triangleCount}, " +
-                      $"StructureSegments={structure.Count}, " +
-                      $"Nodes={nodes.Count}, " +
-                      $"Edges={deformGraphEdgeCount}");
-        }
+        /// <summary>
+        /// Undirected edge count of the built graph. Surfaced so a builder can report what it
+        /// produced without walking the neighbour lists itself.
+        /// </summary>
+        public int graphEdgeCount => deformGraphEdgeCount;
 
         private DVector3[] BuildNodeSurfaceNormals()
         {
@@ -493,7 +267,11 @@ namespace UC.ED
             return (longestDirection.sqrMagnitude > epsilon) ? (longestDirection.normalized) : (DVector3.forward);
         }
 
-        private void BuildNodeRestFrames()
+        /// <summary>
+        /// Orients every node from the skeleton running through it. Public because it is the
+        /// structure builder that knows its graph has meaningful frames - a sampled graph does not.
+        /// </summary>
+        public void BuildNodeRestFrames()
         {
             if ((nodes == null) || (nodes.Count == 0))
                 return;
@@ -508,130 +286,6 @@ namespace UC.ED
 
                 node.BuildSurfaceFrame(forward, surfaceNormals[i]);
             }
-        }
-
-        private struct DirectionAwareCandidate
-        {
-            public int nodeIndex;
-            public double distanceSq;
-            public Vector3 direction;
-        }
-
-        void BuildGraphDirectionAware(float maxBindDistance, float minBindAngle, HasLOS hasLOSFunction)
-        {
-
-            // Clamp to valid cosine range.
-            float sameDirectionCosTolerance = Mathf.Cos(minBindAngle * Mathf.Deg2Rad);
-            sameDirectionCosTolerance = Math.Max(-1.0f, Math.Min(1.0f, sameDirectionCosTolerance));
-
-            bool IsDirectionAlreadyChosen(Vector3 candidateDirection, List<Vector3> chosenDirections)
-            {
-                for (int i = 0; i < chosenDirections.Count; i++)
-                {
-                    double d = Vector3.Dot(candidateDirection, chosenDirections[i]);
-
-                    // Same direction only. If you want opposite directions to collapse too,
-                    // change this to Math.Abs(d) >= sameDirectionCosTolerance.
-                    if (d >= sameDirectionCosTolerance)
-                        return true;
-                }
-
-                return false;
-            }
-
-            if (nodes == null || nodes.Count == 0)
-                return;
-
-            if (maxBindDistance <= 0.0)
-            {
-                Debug.LogWarning("BuildGraphDirectionAware: maxBindDistance must be > 0.");
-                return;
-            }
-
-            // Clear previous graph
-            for (int i = 0; i < nodes.Count; i++) nodes[i].neighbors.Clear();
-
-            float maxBindDistanceSq = maxBindDistance * maxBindDistance;
-            const double eps = 1e-12;
-
-            for (int i = 0; i < nodes.Count; i++)
-            {
-                Vector3 pi = nodes[i].restPosition.ToVector3();
-
-                List<DirectionAwareCandidate> candidates = new();
-
-                // ---------------------------------------------------------
-                // 1) Gather valid candidates inside radius (+ optional LOS)
-                // ---------------------------------------------------------
-                for (int j = 0; j < nodes.Count; j++)
-                {
-                    if (i == j)
-                        continue;
-
-                    Vector3 pj = nodes[j].restPosition.ToVector3();
-                    Vector3 delta = pj - pi;
-
-                    float distSq = delta.sqrMagnitude;
-                    if ((distSq <= eps) || (distSq > maxBindDistanceSq))
-                        continue;
-
-                    if ((hasLOSFunction != null) && (!hasLOSFunction(pi, pj)))
-                        continue;
-
-                    float dist = Mathf.Sqrt(distSq);
-                    Vector3 dir = delta / dist;
-
-                    candidates.Add(new DirectionAwareCandidate
-                    {
-                        nodeIndex = j,
-                        distanceSq = distSq,
-                        direction = dir
-                    });
-                }
-
-                // ---------------------------------------------------------
-                // 2) Closest first
-                // ---------------------------------------------------------
-                candidates.Sort((a, b) => a.distanceSq.CompareTo(b.distanceSq));
-
-                // ---------------------------------------------------------
-                // 3) Greedily keep only one candidate per direction bucket
-                // ---------------------------------------------------------
-                List<Vector3> chosenDirections = new();
-
-                for (int c = 0; c < candidates.Count; c++)
-                {
-                    var cand = candidates[c];
-
-                    if (IsDirectionAlreadyChosen(cand.direction, chosenDirections))
-                        continue;
-
-                    AddUndirectedNeighbor(i, cand.nodeIndex);
-                    chosenDirections.Add(cand.direction);
-                }
-            }
-        }
-
-        private int TryAddSampleVertex(int vertexId, TopologyStatic topology, float minDistanceSq)
-        {
-            return TryAddSampleVertex(topology.GetVertexPosition(vertexId).ToDVector3(), minDistanceSq);
-        }
-
-        private int TryAddSampleVertex(DVector3 pos, float minDistanceSq)
-        {
-            if (minDistanceSq > 0.0f)
-            {
-                int index = GetSampledVertexIndex(pos, minDistanceSq);
-                if (index != -1) return index;
-            }
-
-            nodes.Add(new EDNode
-            {
-                restPosition = pos,
-                neighbors = new List<int>()
-            });
-
-            return nodes.Count - 1;
         }
 
         private int GetSampledVertexIndex(DVector3 pos, double tolerance)
@@ -674,68 +328,6 @@ namespace UC.ED
 
             if (!nodes[b].neighbors.Contains(a))
                 nodes[b].neighbors.Add(a);
-        }
-
-        private void EnsureNoIsolatedNodes()
-        {
-            if (nodes.Count <= 1)
-                return;
-
-            for (int i = 0; i < nodes.Count; i++)
-            {
-                if (nodes[i].neighbors.Count > 0)
-                    continue;
-
-                int bestJ = -1;
-                double bestDistSq = float.MaxValue;
-                DVector3 p = nodes[i].restPosition;
-
-                for (int j = 0; j < nodes.Count; j++)
-                {
-                    if (i == j)
-                        continue;
-
-                    double dSq = (nodes[j].restPosition - p).sqrMagnitude;
-                    if (dSq < bestDistSq)
-                    {
-                        bestDistSq = dSq;
-                        bestJ = j;
-                    }
-                }
-
-                if (bestJ >= 0)
-                    AddUndirectedNeighbor(i, bestJ);
-            }
-        }
-
-        private void BuildBindings(TopologyStatic topology, BindingSelectionMode bindMode, BindingWeightMode weightMode, int k = 4, float power = 2.0f, float sigma = 1.0f)
-        {
-            if (topology == null)
-            {
-                Debug.LogError("BuildBindings failed: topology is null.");
-                return;
-            }
-
-            if ((nodes == null) || (nodes.Count == 0))
-            {
-                Debug.LogError("BuildBindings failed: no ED nodes exist.");
-                return;
-            }
-
-            // Remembered so that points which are not navmesh vertices - the source geometry passed
-            // to DeformMesh, for instance - can be bound the same way later on.
-            RememberBindingSettings(bindMode, weightMode, k, power, sigma);
-
-            int vertexCount = topology.vertexCount;
-            int nodeCount = nodes.Count;
-            bindings = new EDVertexBinding[vertexCount];
-
-            for (int vId = 0; vId < vertexCount; vId++)
-            {
-                DVector3 p = topology.GetVertexPosition(vId).ToDVector3();
-
-                bindings[vId] = GetBinding(p, bindMode, weightMode, k, power, sigma);
-            }
         }
 
         EDVertexBinding GetBinding(DVector3 p, BindingSelectionMode bindMode, BindingWeightMode weightMode, int k = 4, float power = 2.0f, float sigma = 1.0f)
@@ -798,7 +390,7 @@ namespace UC.ED
                     }
                     break;
                 default:
-                    Debug.LogWarning($"BuildBindings: unsupported link mode {bindMode}.");
+                    Debug.LogWarning($"GetBinding: unsupported link mode {bindMode}.");
                     break;
             }
 
@@ -906,68 +498,6 @@ namespace UC.ED
             };
         }
 
-        private void BuildGraphFromBindings()
-        {
-            if (bindings == null || bindings.Length == 0)
-            {
-                Debug.LogWarning("BuildGraphFromBindings: no bindings available.");
-                return;
-            }
-
-            // Clear previous neighbors
-            for (int i = 0; i < nodes.Count; i++)
-                nodes[i].neighbors.Clear();
-
-            // For each vertex, connect every pair of nodes that influence it
-            for (int vId = 0; vId < bindings.Length; vId++)
-            {
-                int[] indices = bindings[vId].nodeIndices;
-                if (indices == null)
-                    continue;
-
-                for (int i = 0; i < indices.Length; i++)
-                {
-                    int a = indices[i];
-                    if (a < 0)
-                        continue;
-
-                    for (int j = i + 1; j < indices.Length; j++)
-                    {
-                        int b = indices[j];
-                        if ((b < 0) || (a == b))
-                            continue;
-
-                        AddUndirectedNeighbor(a, b);
-                    }
-                }
-            }
-        }
-
-        private void BuildGraphFromPartitionAdjacency(TopologyStatic topology)
-        {
-            if (bindings == null || bindings.Length == 0)
-            {
-                Debug.LogWarning("BuildGraphFromPartitionAdjacency: no bindings available.");
-                return;
-            }
-
-            for (int i = 0; i < nodes.Count; i++)
-                nodes[i].neighbors.Clear();
-
-            for (int edgeId = 0; edgeId < topology.edgeCount; edgeId++)
-            {
-                var edge = topology.GetEdgeVertex(edgeId);
-
-                int n0 = bindings[edge.i1].nodeIndices[0];
-                int n1 = bindings[edge.i2].nodeIndices[0];
-
-                if (n0 != n1)
-                    AddUndirectedNeighbor(n0, n1);
-            }
-
-            EnsureNoIsolatedNodes();
-        }
-
         /// <summary>
         /// Declares which vertex groups span openings, for clearance measurement. Independent of the
         /// handle constraints on purpose: what a piece is pinned by and where a piece opens are
@@ -1061,7 +591,12 @@ namespace UC.ED
             }*/
         }
 
-        private void BuildLinkAngleConstraints()
+        /// <summary>
+        /// Records the rest angle of every pair of links meeting at a node. Public for the same
+        /// reason as BuildNodeRestFrames: only the structure builder produces a graph whose link
+        /// angles mean anything.
+        /// </summary>
+        public void BuildLinkAngleConstraints()
         {
             linkAngleConstraints.Clear();
 
@@ -1374,21 +909,19 @@ namespace UC.ED
             return result;
         }
 
-        private Vector3 GetSafeStructureUp(Vector3 fallbackUp)
+        /// <summary>
+        /// The up vector this deformation was configured with, already normalized by the setter.
+        /// Deliberately not re-normalized: it used to be handed in raw and normalized here, and
+        /// normalizing a unit vector again can move its last bit.
+        /// </summary>
+        private Vector3 GetSafeStructureUp()
         {
-            if (fallbackUp.sqrMagnitude > 1e-8f)
-                return fallbackUp.normalized;
-
-            if (_upVector.sqrMagnitude > 1e-8f)
-                return _upVector.normalized;
-
-            return Vector3.up;
+            return (_upVector.sqrMagnitude > 1e-8f) ? (_upVector) : (Vector3.up);
         }
 
         private Vector3 GetStructureSegmentNormal(Vector3 p1,
                                                   Vector3 p2,
                                                   int fallbackSegmentIndex,
-                                                  Vector3 fallbackUp,
                                                   TryGetSurfaceNormal tryGetSurfaceNormal)
         {
             Vector3 mid = (p1 + p2) * 0.5f;
@@ -1402,9 +935,9 @@ namespace UC.ED
 
             // Note that this cannot actually contribute during construction: every segment in
             // `structure` right now was added by the loop below, and its probe bindings are not
-            // attached until SetNavEDParameters runs much later. GetSegmentSlopeNormal therefore
-            // returns zero here and we fall through to the up vector. Kept because the branch is
-            // meaningful if this is ever called on an already-bound structure.
+            // attached until BuildNavigationData runs at the end of the build. GetSegmentSlopeNormal
+            // therefore returns zero here and we fall through to the up vector. Kept because the
+            // branch is meaningful if this is ever called on an already-bound structure.
             if ((structure != null) &&
                 (fallbackSegmentIndex >= 0) &&
                 (fallbackSegmentIndex < structure.Count) &&
@@ -1416,10 +949,17 @@ namespace UC.ED
                     return normal.normalized;
             }
 
-            return GetSafeStructureUp(fallbackUp);
+            return GetSafeStructureUp();
         }
 
-        public void BuildStructure(IEDStructureSource structureSource, float structureMaxSegmentLength, Vector3 fallbackUp, TryGetSurfaceNormal tryGetSurfaceNormal)
+        /// <summary>
+        /// Snapshots the skeleton, subdividing anything longer than the given limit.
+        ///
+        /// The up vector is no longer a parameter: it is set once through SetAgentParameters and
+        /// read from there, so a build cannot be given one that disagrees with the one every
+        /// nav-aware energy measures against.
+        /// </summary>
+        public void BuildStructure(IEDStructureSource structureSource, float structureMaxSegmentLength, TryGetSurfaceNormal tryGetSurfaceNormal)
         {
             ClearStructure();
 
@@ -1437,7 +977,7 @@ namespace UC.ED
                 {
                     if (structureMaxSegmentLength <= 1e-3)
                     {
-                        Vector3 normal = GetStructureSegmentNormal(p1, p2, i, fallbackUp, tryGetSurfaceNormal);
+                        Vector3 normal = GetStructureSegmentNormal(p1, p2, i, tryGetSurfaceNormal);
 
                         AddStructureSegment(p1, p2, normal);
                     }
@@ -1451,7 +991,7 @@ namespace UC.ED
                             Vector3 sp1 = Vector3.Lerp(p1, p2, k * tInc);
                             Vector3 sp2 = Vector3.Lerp(p1, p2, (k + 1) * tInc);
 
-                            Vector3 normal = GetStructureSegmentNormal(sp1, sp2, i, fallbackUp, tryGetSurfaceNormal);
+                            Vector3 normal = GetStructureSegmentNormal(sp1, sp2, i, tryGetSurfaceNormal);
 
                             AddStructureSegment(sp1, sp2, normal);
                         }
@@ -1477,50 +1017,6 @@ namespace UC.ED
                 center = c.ToDVector3(),
                 normal = n0.ToDVector3()
             });
-        }
-
-        /// <summary>
-        /// Supplies the navigation data the nav-aware energies measure against.
-        ///
-        /// The limits those energies enforce no longer come through here - each term pushes its own
-        /// in ApplyRuntimeParameters, so a limit travels with the energy that reads it. What remains
-        /// is data rather than configuration: the topology, the agent radius, the up vector and the
-        /// per-segment bindings, none of which belongs to any single energy.
-        /// </summary>
-        public void SetNavEDParameters(TopologyStatic navMeshTopology,
-                                       float agentRadius, Vector3 upVector,
-                                       BindingSelectionMode bindMode, BindingWeightMode weightMode,
-                                       int k = 4, // When BindingSelectionMode = closest-K
-                                       float power = 2.0f,
-                                       float sigma = 1.0f)
-        {
-            this.upVector = upVector.normalized;
-            this.navMeshTopology = navMeshTopology;
-
-            for (int i = 0; i < structure.Count; i++)
-            {
-                var seg = structure[i];
-                seg.bind1 = GetBinding(seg.p1, bindMode, weightMode, k, power, sigma);
-                seg.bind2 = GetBinding(seg.p2, bindMode, weightMode, k, power, sigma);
-
-                // Build tangent space
-                var dir = (seg.p2 - seg.p1).normalized;
-                var t = DVector3.ProjectOnPlane(dir, seg.normal).normalized;
-                var b = DVector3.Cross(seg.normal, t).normalized;
-
-                float probeDistance = agentRadius * 0.5f;
-                seg.probeT = seg.center + probeDistance * t;
-                seg.probeB = seg.center + probeDistance * b;
-
-                seg.cBind = GetBinding(seg.center, bindMode, weightMode, k, power, sigma);
-                seg.tBind = GetBinding(seg.probeT, bindMode, weightMode, k, power, sigma);
-                seg.bBind = GetBinding(seg.probeB, bindMode, weightMode, k, power, sigma);
-            }
-
-            ComputeClearance(currentState);
-            ComputeClearance(restState);
-
-            LogClearance("Original clearance:", restState, restState);
         }
 
         public void LogCurrentClearance()
@@ -1634,10 +1130,11 @@ namespace UC.ED
 
         private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, out double clearance)
         {
-            // Single gate for "can this segment's clearance be measured at all". GetClearance
-            // walks navMeshTopology.edges, and that topology only exists once SetNavEDParameters
-            // has run. Both callers - the cache builder and the clearance residual - already treat
-            // false as "no clearance available", so this needs no special handling downstream.
+            // Single gate for "can this segment's clearance be measured at all". GetClearance walks
+            // navMeshTopology.edges and deforms through the per-segment bindings, and those only
+            // exist once BuildNavigationData has run. Both callers - the cache builder and the
+            // clearance residual - already treat false as "no clearance available", so this needs
+            // no special handling downstream.
             if (!isNavConfigured)
             {
                 clearance = double.MaxValue;
@@ -1674,11 +1171,10 @@ namespace UC.ED
 
             var ret = new EDClearanceCache((structure != null) ? (structure.Count) : (0));
 
-            // Clearance is a navigation-aware measurement, and everything it needs - the navmesh
-            // topology to measure against and the per-segment bindings to deform through - is
-            // supplied by SetNavEDParameters, which only NavED mode calls. In the other modes
-            // there is nothing to measure, so every segment reports the existing "no clearance"
-            // marker instead of doing the work and dereferencing a null topology.
+            // Clearance is a navigation-aware measurement, and the per-segment bindings it deforms
+            // through are supplied by BuildNavigationData, which only NavED mode calls. In the
+            // other modes there is nothing to measure, so every segment reports the existing "no
+            // clearance" marker instead of doing the work and dereferencing a null binding.
             if (!isNavConfigured)
             {
                 for (int i = 0; i < ret.count; i++)
@@ -2172,7 +1668,7 @@ namespace UC.ED
         {
             NavEDSegments segment = structure[segmentIndex];
 
-            // Without SetNavEDParameters the endpoint bindings are null, so there is nothing to
+            // Without BuildNavigationData the endpoint bindings are null, so there is nothing to
             // deform the segment through and it is still at its rest position. The deformation
             // field path ignores the bindings entirely, so it is left alone.
             if ((nodeFrames == null) && (!IsSegmentBound(segment)))
@@ -2201,12 +1697,12 @@ namespace UC.ED
         public Vector3 GetSegmentSlopeNormal(int segIndex) => GetTransformedSegmentSlopeNormal(new EDStateView(currentState), segIndex);
 
         /// <summary>
-        /// True once SetNavEDParameters has attached the endpoint, centre and probe bindings a
+        /// True once BuildNavigationData has attached the endpoint, centre and probe bindings a
         /// segment needs before anything can be evaluated on it. All five are attached together,
         /// so this is all-or-nothing per structure.
         ///
         /// BuildStructure produces segments with none of them, and only NavED mode ever
-        /// runs SetNavEDParameters, so unbound segments are the normal case in the other modes.
+        /// runs BuildNavigationData, so unbound segments are the normal case in the other modes.
         /// </summary>
         private static bool IsSegmentBound(NavEDSegments seg)
         {
@@ -2222,7 +1718,7 @@ namespace UC.ED
         {
             var seg = structure[segIndex];
 
-            // The probe bindings are only built by SetNavEDParameters, so they are still null
+            // The probe bindings are only built by BuildNavigationData, so they are still null
             // while BuildStructure is running, and in every mode that never calls it.
             // An unbound segment simply has no slope normal to report.
             if (!IsSegmentBound(seg))
@@ -2536,145 +2032,6 @@ namespace UC.ED
             }
 
             Debug.Log(sb.ToString());
-        }
-
-        void BuildDeformationField(float density = 0.05f, int maxWeights = 4)
-        {
-            timeDeformationFieldGeneration = new();
-
-            timeDeformationFieldGeneration.Mark();
-
-            if ((sourceGeometry == null) || (sourceGeometry.Count == 0))
-            {
-                Debug.LogWarning("BuildDeformationField failed: no source geometry was provided.");
-                deformationField = null;
-
-                timeDeformationFieldGeneration.Mark();
-                return;
-            }
-
-            if ((nodes == null) || (nodes.Count == 0))
-            {
-                Debug.LogWarning("BuildDeformationField failed: no deformation graph nodes exist.");
-                deformationField = null;
-
-                timeDeformationFieldGeneration.Mark();
-                return;
-            }
-
-            // -------------------------------------------------------------
-            // 1) Compute bounds from baked source geometry.
-            //    Important: Bounds is a struct, so do not use bounds.Value.Encapsulate().
-            // -------------------------------------------------------------
-            bool hasBounds = false;
-            Bounds bounds = default;
-
-            for (int i = 0; i < sourceGeometry.Count; i++)
-            {
-                Mesh mesh = sourceGeometry[i];
-                if (mesh == null)
-                    continue;
-
-                if (!hasBounds)
-                {
-                    bounds = mesh.bounds;
-                    hasBounds = true;
-                }
-                else
-                {
-                    bounds.Encapsulate(mesh.bounds);
-                }
-            }
-
-            if (!hasBounds)
-            {
-                Debug.LogWarning("BuildDeformationField failed: source geometry has no valid meshes.");
-                deformationField = null;
-
-                timeDeformationFieldGeneration.Mark();
-                return;
-            }
-
-            // Make sure deformation graph nodes are inside the field bounds.
-            for (int i = 0; i < nodes.Count; i++)
-            {
-                bounds.Encapsulate(nodes[i].restPosition.ToVector3());
-            }
-
-            float maxSize = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
-
-            if (maxSize <= 1e-6f)
-            {
-                Debug.LogWarning("BuildDeformationField failed: source geometry bounds are degenerate.");
-                deformationField = null;
-
-                timeDeformationFieldGeneration.Mark();
-                return;
-            }
-
-            float safeDensity = Mathf.Max(density, 1e-5f);
-            float voxelSize = maxSize * safeDensity;
-
-            int safeMaxWeights = Mathf.Clamp(maxWeights, 1, nodes.Count);
-
-            // -------------------------------------------------------------
-            // 2) Create deformation field.
-            // -------------------------------------------------------------
-            deformationField = new FullDeformationField(voxelSize, safeMaxWeights);
-
-            // -------------------------------------------------------------
-            // 3) Fill the field using source geometry.
-            //
-            //    sourceGeometry is already baked to world space in SetSourceGeometry(),
-            //    so the voxelizer should receive identity matrices here.
-            // -------------------------------------------------------------
-            List<Matrix4x4> identityMatrices = new();
-
-            for (int i = 0; i < sourceGeometry.Count; i++)
-            {
-                identityMatrices.Add(Matrix4x4.identity);
-            }
-
-            deformationField.FillWithMesh(sourceGeometry, identityMatrices);
-
-            // -------------------------------------------------------------
-            // 4) Add deformation graph nodes as volumetric/geodesic seeds.
-            //
-            //    Add them in ED node order so the deformation field node id matches the ED node index.
-            // -------------------------------------------------------------
-            for (int i = 0; i < nodes.Count; i++)
-            {
-                EDNode node = nodes[i];
-
-                // TODO: Need to add this length, will work on it later
-                deformationField.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), 0.0f);
-            }
-
-            // -------------------------------------------------------------
-            // 5) Extend the influence field outside occupied cells.
-            //
-            //    The occupied volume gets geodesic distances from AddDeformationNode(). GrowInfluence() lets nearby empty cells also query valid weights.
-            // -------------------------------------------------------------
-            deformationField.GrowInfluence();
-
-            // -------------------------------------------------------------
-            // 6) Convert distances into normalized weights.
-            // -------------------------------------------------------------
-            deformationField.ComputeWeights(safeMaxWeights);
-            deformationField.BuildTrilinearRegions();
-
-            timeDeformationFieldGeneration.Mark();
-
-            Debug.Log(
-                $"Deformation field built:\n" +
-                $"  Meshes={sourceGeometry.Count}\n " +
-                $"  Nodes={nodes.Count}\n" +
-                $"  VoxelSize={voxelSize:F4}\n" +
-                $"  MaxWeights={safeMaxWeights}\n" +
-                $"  Bounds={bounds.size}\n" +
-                $"  Grid Size={deformationField.gridSize}\n" +
-                $"  Time={timeDeformationFieldGeneration.accumulatedTimeMS:F6} ms"
-            );
         }
 
         public FullDeformationField GetDeformationField() => deformationField;

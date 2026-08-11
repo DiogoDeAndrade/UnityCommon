@@ -30,7 +30,7 @@ namespace UC.ED
     /// is expected to reject it rather than produce a number for it.
     /// </summary>
     [CreateAssetMenu(fileName = "EDGraphBuilderMeshSampled", menuName = "Unity Common/ED/Graph Builder/Mesh Sampled")]
-    public class EDGraphBuilderMeshSampled : EDGraphBuilder
+    public class EDGraphBuilderMeshSampled : EDGraphBuilderSampled
     {
         [SerializeField, Min(0.0f), Tooltip("Minimum spacing between sampled nodes. The geometry is far denser than a navmesh, so this decides the node count much more sharply here.")]
         private float sampleDistance = 1.0f;
@@ -57,40 +57,16 @@ namespace UC.ED
         public override Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav)
             => new MeshSampledInstance(this, deformation, structureSource, nav);
 
-        public class MeshSampledInstance : Instance
+        /// <summary>
+        /// The same shared construction the navmesh builder runs, differing only in the parameters
+        /// above: the geometry topology, no skeleton seeding, plain adjacency linking. The
+        /// direction-aware settings are never read, because linkMode is left at the default.
+        /// </summary>
+        public class MeshSampledInstance : SampledInstance
         {
             public MeshSampledInstance(EDGraphBuilderMeshSampled builder, EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav)
                 : base(builder, deformation, structureSource, nav)
             {
-            }
-
-            public override void Build(TopologyStatic topology, List<int> forcedVertices)
-            {
-                var def = (EDGraphBuilderMeshSampled)builder;
-                var b = def.bindingConfig;
-
-                deformation.BuildDeformationGraph(DeformationGraphSource.NavMeshAndStructure,
-                                                  topology,
-                                                  def.sampleDistance,
-                                                  forcedVertices,
-                                                  // No skeleton seeding: the nodes come from the
-                                                  // geometry and nothing else.
-                                                  false,
-                                                  b.selectionMode,
-                                                  b.weightMode,
-                                                  GraphLinkMode.PartitionAdjacency,
-                                                  structureSource,
-                                                  def.structureMaxSegmentLength,
-                                                  nav.upVector,
-                                                  nav.tryGetSurfaceNormal,
-                                                  b.nearestK,
-                                                  // Direction-aware linking is not offered, so the
-                                                  // two values it needs are inert.
-                                                  0.0f,
-                                                  0.0f,
-                                                  null,
-                                                  b.attenuationPower,
-                                                  b.ResolveSigma(def.sampleDistance));
             }
         }
     }

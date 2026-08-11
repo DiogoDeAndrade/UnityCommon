@@ -21,7 +21,7 @@ namespace UC.ED
     /// replaces.
     ///
     /// The limit and the soft band belong to the term, and are pushed onto the deformation before a
-    /// solve. They used to arrive through SetNavEDParameters from a field on the component, which
+    /// solve. They used to arrive through the navigation parameters from a field on the component, which
     /// meant an experiment's slope constraint was not part of the energy that expressed it.
     /// </summary>
     [Serializable]
