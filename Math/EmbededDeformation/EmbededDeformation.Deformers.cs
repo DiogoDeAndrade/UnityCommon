@@ -56,6 +56,8 @@ namespace UC.ED
             if (usesDeformationField)
                 return new FieldDeformer(this);
 
+            WarnIfFieldMissing(nameof(CreateDeformer));
+
             return new BindingDeformer(this);
         }
 
