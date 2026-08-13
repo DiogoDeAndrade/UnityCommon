@@ -2045,7 +2045,20 @@ namespace UC.ED
 
         public FullDeformationField GetDeformationField() => deformationField;
 
-        public Mesh DeformMesh(Mesh srcMesh, Matrix4x4 srcMatrix, Matrix4x4 destMatrix, bool rebuildNormals, bool rebuildTangents)
+        /// <summary>
+        /// Deforms a mesh through whichever mechanism the graph implies, from srcMatrix's space into
+        /// destMatrix's.
+        ///
+        /// restPositionUVChannel, when it is a real channel, writes each vertex's *rest* world
+        /// position into that UV set. Everything the deformation is indexed by - field cells,
+        /// bindings, weights - is keyed on where a vertex was, and the output mesh only records where
+        /// it ended up. Without this the two cannot be related again, and a tool that samples the
+        /// field at an output vertex is reading the weights of wherever that vertex was carried to.
+        /// Stored as a Vector4 with w = 1 rather than a Vector3 so that a piece lying flat in a plane
+        /// still keeps three components: the mesh simplifier sizes a UV channel by how many
+        /// components are actually used, and an all-zero z would silently drop to a 2D channel.
+        /// </summary>
+        public Mesh DeformMesh(Mesh srcMesh, Matrix4x4 srcMatrix, Matrix4x4 destMatrix, bool rebuildNormals, bool rebuildTangents, int restPositionUVChannel = -1)
         {
             if (srcMesh == null)
             {
@@ -2082,6 +2095,15 @@ namespace UC.ED
             Vector3[] outputNormals = rebuildNormals ? null : srcMesh.normals;
             Vector4[] outputTangents = rebuildTangents ? null : srcMesh.tangents;
 
+            if (restPositionUVChannel >= 8)
+            {
+                Debug.LogWarning($"Rest positions cannot be stored in UV channel {restPositionUVChannel}: a mesh has 8. They will not be written, and anything reading them back will fall back to the deformed positions.");
+
+                restPositionUVChannel = -1;
+            }
+
+            List<Vector4> restPositions = (restPositionUVChannel >= 0) ? (new List<Vector4>(sourceVertices.Length)) : (null);
+
             bool transformNormals = (!rebuildNormals) && (outputNormals != null) && (outputNormals.Length == sourceVertices.Length);
             bool transformTangents = (!rebuildTangents) && (outputTangents != null) && (outputTangents.Length == sourceVertices.Length);
 
@@ -2112,6 +2134,8 @@ namespace UC.ED
             for (int i = 0; i < sourceVertices.Length; i++)
             {
                 Vector3 sourcePosition = srcMatrix.MultiplyPoint3x4(sourceVertices[i]);
+
+                restPositions?.Add(new Vector4(sourcePosition.x, sourcePosition.y, sourcePosition.z, 1.0f));
 
                 bool hasDeformation = deformer.TryGetDeformationMatrix(sourcePosition, out Matrix4x4 deformationMatrix);
 
@@ -2155,6 +2179,11 @@ namespace UC.ED
             }
 
             outputMesh.vertices = outputVertices;
+
+            if (restPositions != null)
+            {
+                outputMesh.SetUVs(restPositionUVChannel, restPositions);
+            }
 
             if (rebuildNormals)
             {
