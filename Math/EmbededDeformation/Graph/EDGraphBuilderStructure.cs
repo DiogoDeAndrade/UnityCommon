@@ -176,6 +176,23 @@ namespace UC.ED
             }
 
             /// <summary>
+            /// Rebuilds only the volumetric field, for when it is missing rather than wrong.
+            ///
+            /// The field is [NonSerialized] on the deformation, so a domain reload or a scene load
+            /// discards it - while everything it is computed from (source geometry, nodes, connector
+            /// seeds) is serialized and survives. Recovering it therefore needs none of the rest of
+            /// Build(), which would also rebuild the navmesh, the topology and the deform points and
+            /// so move the starting point of the next solve.
+            ///
+            /// Same call the tail of Build() makes, deliberately: a field rebuilt this way has to be
+            /// the one Build() would have produced, or the two routes to it diverge.
+            /// </summary>
+            public void RebuildDeformationField()
+            {
+                BuildDeformationField((EDGraphBuilderStructure)builder);
+            }
+
+            /// <summary>
             /// Voxelizes the source geometry and seeds it with the graph nodes, so that a point
             /// anywhere in the solid is carried by geodesic distance through the volume rather than
             /// by straight-line distance through whatever wall happens to be between it and a node.
