@@ -3,6 +3,20 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// Superseded by <see cref="FullDeformationField"/>, and kept only until it can be deleted outright.
+///
+/// The two are a near line-for-line copy of the same algorithm - the same cell struct, the same
+/// insert-and-evict, the same selection sort, the same normalized inverse distance. That duplication
+/// is the problem: FullDeformationField has since gained trilinear sampling and region caching,
+/// segment sources for terminal nodes, and a storage slot count separate from the weighted influence
+/// count, and none of it exists here. Anything fixed in one silently stays broken in the other, and
+/// there is no compiler pressure to notice.
+///
+/// Nothing references this type. It is marked rather than removed so that the removal is a decision
+/// taken on purpose rather than a surprise in someone's merge.
+/// </summary>
+[Obsolete("Superseded by FullDeformationField, which carries the trilinear sampling, segment sources and separate storage slot count this copy never received. Nothing references SimpleDeformationField; use FullDeformationField and delete this once that is confirmed to hold.")]
 [Serializable]
 public class SimpleDeformationField
 {
