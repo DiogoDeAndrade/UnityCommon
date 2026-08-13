@@ -104,6 +104,11 @@ namespace UC.ED
         // Marked by the caller that generates output geometry - the subdivision and simplification
         // are mesh operations it owns, not the deformation's. Reported here so a run is described by
         // one report rather than by a report plus a scattering of separate log lines.
+        /// <summary>
+        /// The field rebuild, which happens before the solve rather than inside it. Owned here so it
+        /// lands in the same report as everything else it competes with for a press of the button.
+        /// </summary>
+        public DebugProfiler timeFieldRebuild;
         public DebugProfiler timeOutputSubdivide;
         public DebugProfiler timeOutputDeform;
         public DebugProfiler timeOutputSimplify;
@@ -1799,6 +1804,8 @@ namespace UC.ED
             timeSolve = new();
             timeUpdateClearance = new();
 
+            timeFieldRebuild = new();
+
             timeOutputSubdivide = new();
             timeOutputDeform = new();
             timeOutputSimplify = new();
@@ -1853,6 +1860,7 @@ namespace UC.ED
                 sb.AppendLine(line);
             }
 
+            double fieldTotal = ((timeFieldRebuild != null) ? (timeFieldRebuild.accumulatedTimeMS) : (0.0));
             double solveTotal = ((timeIteration != null) ? (timeIteration.accumulatedTimeMS) : (0.0));
             double outputTotal = ((timeOutputSubdivide != null) ? (timeOutputSubdivide.accumulatedTimeMS) : (0.0))
                                + ((timeOutputDeform != null) ? (timeOutputDeform.accumulatedTimeMS) : (0.0))
@@ -1865,6 +1873,10 @@ namespace UC.ED
             // order they were read in. A timing number without the configuration it was taken under
             // is not a measurement.
             sb.AppendLine($"  under {EDDiagnostics.DescribeProviders()}");
+
+            // First because it happens first, and never per-iteration: it runs once for the whole
+            // press, like the output stages do.
+            if (fieldTotal > 0.0) Row("Field rebuild", timeFieldRebuild, 2, false);
 
             Row("Solve", timeIteration, 2);
             Row("Residual evaluation", timeResidualEvaluate, 4);
@@ -1887,7 +1899,7 @@ namespace UC.ED
                 Row("Simplification", timeOutputSimplify, 4, false);
             }
 
-            sb.AppendLine($"  {"Total".PadRight(28)}{solveTotal + outputTotal,10:F3} ms");
+            sb.AppendLine($"  {"Total".PadRight(28)}{fieldTotal + solveTotal + outputTotal,10:F3} ms");
 
             Debug.Log(sb.ToString());
         }

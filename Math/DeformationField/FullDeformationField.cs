@@ -3,6 +3,28 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// Which neighbours a wavefront may step to.
+///
+/// Faces6 makes every step cost the same, so a distance is a hop count and the metric is L1: the
+/// isolines are diamonds, and a 45-degree path is overestimated by about 41%. The richer stencils
+/// add the diagonal steps at their true Euclidean cost, which rounds the isolines out - 18 removes
+/// most of the error in the axis planes, 26 the rest of it.
+///
+/// They are not free, and not only in time. A diagonal step passes between cells it never enters, so
+/// each one has to be checked against the volume it is crossing or the wavefront rounds the corner
+/// of a wall. That check is what StepIsClear does.
+/// </summary>
+public enum EDFieldConnectivity
+{
+    /// <summary>Faces only. Cheapest, and the metric is L1.</summary>
+    Faces6,
+    /// <summary>Faces and edges. Removes most of the diamond in the axis planes.</summary>
+    FacesEdges18,
+    /// <summary>Faces, edges and corners. Closest to Euclidean of the three.</summary>
+    FacesEdgesCorners26
+}
+
 [Serializable]
 public class FullDeformationField
 {
@@ -155,6 +177,11 @@ public class FullDeformationField
     VoxelData<DeformationFieldWeights>  voxelData;
     [SerializeField, HideInInspector]
     float                               voxelSize;
+    /// <summary>
+    /// The density voxelSize was derived from. Recorded, never used - see the constructor.
+    /// </summary>
+    [SerializeField, HideInInspector]
+    float                               voxelDensity;
     [SerializeField, HideInInspector]
     int                                 maxWeights;
     /// <summary>
@@ -171,6 +198,18 @@ public class FullDeformationField
     /// </summary>
     [SerializeField, HideInInspector]
     int                                 storageSlots;
+    /// <summary>
+    /// Slot i holds node i, so a cell needs neither a search nor a sort while distances propagate.
+    ///
+    /// Only valid when storageSlots is at least the node count, which is exactly the case where no
+    /// eviction can occur - and eviction is the only reason the per-cell array was ever kept sorted.
+    /// The k-nearest ordering the weights need is established once, in ComputeWeights, instead of
+    /// being maintained on every relaxation.
+    /// </summary>
+    [SerializeField, HideInInspector]
+    bool                                slotPerNode;
+    [SerializeField, HideInInspector]
+    EDFieldConnectivity                 connectivity;
     [SerializeField, HideInInspector]
     List<DeformationNode>               deformationNodes = new List<DeformationNode>();
     [SerializeField, HideInInspector]
@@ -189,7 +228,8 @@ public class FullDeformationField
     public Vector3 minBound => voxelData?.minBound ?? Vector3.zero;
     public int maxInfluencesPerCell => maxWeights;
     public int storedInfluencesPerCell => storageSlots;
-    public bool keepsAllDistances => (storageSlots > maxWeights);
+    public float builtVoxelDensity => voxelDensity;
+    public EDFieldConnectivity builtConnectivity => connectivity;
 
     const float DistanceEpsilon = 1e-5f;
 
@@ -202,6 +242,87 @@ public class FullDeformationField
         new Vector3Int( 0,  0, -1),
         new Vector3Int( 0,  0,  1),
     };
+
+    // Built rather than typed out: 26 literals is 26 chances to transpose a sign, and the rule that
+    // generates them is shorter than the list. Deterministic order, so the arrays are the same on
+    // every run.
+    static readonly Vector3Int[] FaceEdgeNeighbourOffsets;
+    static readonly Vector3Int[] FaceEdgeCornerNeighbourOffsets;
+
+    static FullDeformationField()
+    {
+        List<Vector3Int> faceEdge = new();
+        List<Vector3Int> all = new();
+
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = -1; y <= 1; y++)
+            {
+                for (int z = -1; z <= 1; z++)
+                {
+                    if ((x == 0) && (y == 0) && (z == 0)) continue;
+
+                    Vector3Int offset = new Vector3Int(x, y, z);
+
+                    all.Add(offset);
+
+                    if ((Mathf.Abs(x) + Mathf.Abs(y) + Mathf.Abs(z)) <= 2) faceEdge.Add(offset);
+                }
+            }
+        }
+
+        FaceEdgeNeighbourOffsets = faceEdge.ToArray();
+        FaceEdgeCornerNeighbourOffsets = all.ToArray();
+    }
+
+    Vector3Int[] NeighbourOffsets()
+    {
+        switch (connectivity)
+        {
+            case EDFieldConnectivity.FacesEdges18:        return FaceEdgeNeighbourOffsets;
+            case EDFieldConnectivity.FacesEdgesCorners26: return FaceEdgeCornerNeighbourOffsets;
+            default:                                      return FaceNeighbourOffsets;
+        }
+    }
+
+    /// <summary>
+    /// Whether a step may be taken, given that a diagonal one passes between cells it never enters.
+    ///
+    /// A face step touches nothing but its endpoints, which is why 6-connectivity needs no such
+    /// check. A diagonal step slides past the cells that share its axes: allowing it unconditionally
+    /// lets a wavefront round the corner of a wall - through the solid when growing outside it, or
+    /// across a doorway gap when measuring inside it. Either way the path does not exist in the
+    /// volume being measured, and the distance that comes back is shorter than any real route.
+    ///
+    /// The shoulders are tested in the same sense as the step itself, so this serves both phases:
+    /// wantOccupied is true while distances propagate through the solid, false while influence grows
+    /// outside it.
+    /// </summary>
+    bool StepIsClear(Vector3Int from, Vector3Int offset, bool wantOccupied)
+    {
+        int axes = ((offset.x != 0) ? 1 : 0) + ((offset.y != 0) ? 1 : 0) + ((offset.z != 0) ? 1 : 0);
+
+        if (axes < 2) return true;
+
+        if ((offset.x != 0) && (!ShoulderIsClear(from, new Vector3Int(offset.x, 0, 0), wantOccupied))) return false;
+        if ((offset.y != 0) && (!ShoulderIsClear(from, new Vector3Int(0, offset.y, 0), wantOccupied))) return false;
+        if ((offset.z != 0) && (!ShoulderIsClear(from, new Vector3Int(0, 0, offset.z), wantOccupied))) return false;
+
+        return true;
+    }
+
+    bool ShoulderIsClear(Vector3Int from, Vector3Int offset, bool wantOccupied)
+    {
+        int nx = from.x + offset.x;
+        int ny = from.y + offset.y;
+        int nz = from.z + offset.z;
+
+        // Outside the grid counts as blocked: a step that leaves the volume and comes back is the
+        // shortcut this is here to refuse.
+        if (!IsInside(nx, ny, nz)) return false;
+
+        return (voxelData.data[IndexOf(nx, ny, nz)].IsOccupied() == wantOccupied);
+    }
 
     struct QueueItem
     {
@@ -357,6 +478,19 @@ public class FullDeformationField
         return false;
     }
 
+    /// <summary>
+    /// Orders a cell's influences by distance, breaking ties by node index.
+    ///
+    /// The tie-break is not a tidiness measure, it is what makes the k-nearest set well defined.
+    /// Every step of the wavefront costs the same float - the neighbourhood is 6-connected and the
+    /// cell is a cube - so a distance is a hop count times the voxel size, and two nodes the same
+    /// number of hops away are exactly, bitwise equal. Ties are the normal case here, not a rarity.
+    ///
+    /// Ordering equal distances by arrival made the choice of which node the k-th slot holds a
+    /// property of the storage layout: change how slots are filled and a different node is weighted,
+    /// with nothing about the geometry having moved. Ordering by node index makes the result a
+    /// function of (distance, node) alone, so it survives any future change to how cells are stored.
+    /// </summary>
     void SortInfluences(ref DeformationFieldWeights element)
     {
         EnsureWeights(ref element);
@@ -365,14 +499,18 @@ public class FullDeformationField
         {
             int best = i;
             float bestDistance = (element.nodeId[i] >= 0) ? element.distances[i] : float.MaxValue;
+            int bestNode = (element.nodeId[i] >= 0) ? element.nodeId[i] : int.MaxValue;
 
             for (int j = i + 1; j < storageSlots; j++)
             {
                 float d = (element.nodeId[j] >= 0) ? element.distances[j] : float.MaxValue;
-                if (d < bestDistance)
+                int n = (element.nodeId[j] >= 0) ? element.nodeId[j] : int.MaxValue;
+
+                if ((d < bestDistance) || ((d == bestDistance) && (n < bestNode)))
                 {
                     best = j;
                     bestDistance = d;
+                    bestNode = n;
                 }
             }
 
@@ -396,6 +534,12 @@ public class FullDeformationField
     {
         if (element.nodeId == null) return float.MaxValue;
 
+        // Called on every heap pop, so the linear scan below is the inner loop of the whole build.
+        if ((slotPerNode) && (nodeIndex >= 0) && (nodeIndex < element.nodeId.Length))
+        {
+            return (element.nodeId[nodeIndex] == nodeIndex) ? (element.distances[nodeIndex]) : (float.MaxValue);
+        }
+
         for (int i = 0; i < element.nodeId.Length; i++)
         {
             if (element.nodeId[i] == nodeIndex)
@@ -410,6 +554,27 @@ public class FullDeformationField
     bool TryStoreDistance(ref DeformationFieldWeights element, int nodeIndex, float distance)
     {
         EnsureWeights(ref element);
+
+        // The whole point of the restructure. With a slot per node there is nothing to search for
+        // and nothing to evict, so the O(n) scan and the O(n^2) sort below both disappear from the
+        // relaxation loop - and they were the reason keeping every distance was expensive.
+        //
+        // Equivalent to the general path rather than a shortcut through it: an unset slot holds
+        // MaxValue, so a first arrival takes the same comparison an improvement does, and reaches
+        // the same store.
+        //
+        // Deliberately does not sort. Nothing in the propagation reads slot order - GetDistanceForNode
+        // indexes by node - and the ordering the weights need is established once in ComputeWeights.
+        if ((slotPerNode) && (nodeIndex >= 0) && (nodeIndex < storageSlots))
+        {
+            if (distance >= element.distances[nodeIndex] - DistanceEpsilon) return false;
+
+            element.distances[nodeIndex] = distance;
+            element.nodeId[nodeIndex] = nodeIndex;
+            element.weights[nodeIndex] = 0f;
+
+            return true;
+        }
 
         int existingSlot = -1;
         int emptySlot = -1;
@@ -502,12 +667,26 @@ public class FullDeformationField
     /// <paramref name="storageSlots"/> defaults to maxWeights, which is the ordinary case and keeps
     /// eviction as the bound on everything. Pass more to record nodes the cell will not weight - see
     /// the field's own note for what that costs.
+    ///
+    /// <paramref name="voxelDensity"/> is carried rather than used: voxelSize is derived from it and
+    /// from bounds this type never sees, so a caller holding only the field cannot work backwards to
+    /// the setting that produced it. Required rather than optional because a default would be a
+    /// plausible zero, and the one thing asking is the golden harness deciding whether a built field
+    /// still matches its settings - which must not be answered with a guess.
     /// </summary>
-    public FullDeformationField(float voxelSize, int maxWeights, int storageSlots = -1)
+    /// <param name="slotPerNode">
+    /// Only pass true when storageSlots is at least the number of nodes that will be added, so that
+    /// every node index is a valid slot index and no cell can ever evict. Wrong here would be quiet:
+    /// a node index past the end simply falls back to the searching path rather than throwing.
+    /// </param>
+    public FullDeformationField(float voxelSize, float voxelDensity, int maxWeights, int storageSlots = -1, bool slotPerNode = false, EDFieldConnectivity connectivity = EDFieldConnectivity.Faces6)
     {
         this.voxelSize = Mathf.Max(voxelSize, DistanceEpsilon);
+        this.voxelDensity = voxelDensity;
         this.maxWeights = Mathf.Max(1, maxWeights);
         this.storageSlots = Mathf.Max(this.maxWeights, storageSlots);
+        this.slotPerNode = slotPerNode;
+        this.connectivity = connectivity;
 
         voxelData = new VoxelData<DeformationFieldWeights>();
         deformationNodes = new();
@@ -609,9 +788,11 @@ public class FullDeformationField
 
             Vector3Int currentPos = PositionOf(current.voxelIndex);
 
-            for (int i = 0; i < FaceNeighbourOffsets.Length; i++)
+            Vector3Int[] offsets = NeighbourOffsets();
+
+            for (int i = 0; i < offsets.Length; i++)
             {
-                Vector3Int offset = FaceNeighbourOffsets[i];
+                Vector3Int offset = offsets[i];
                 int nx = currentPos.x + offset.x;
                 int ny = currentPos.y + offset.y;
                 int nz = currentPos.z + offset.z;
@@ -620,6 +801,9 @@ public class FullDeformationField
 
                 int neighbourIndex = IndexOf(nx, ny, nz);
                 if (!voxelData.data[neighbourIndex].IsOccupied()) continue;
+
+                // Measuring through the solid, so a diagonal may not slide across a gap in it.
+                if (!StepIsClear(currentPos, offset, true)) continue;
 
                 float newDistance = current.distance + StepCost(offset);
 
@@ -688,9 +872,11 @@ public class FullDeformationField
 
             Vector3Int currentPos = PositionOf(current.voxelIndex);
 
-            for (int i = 0; i < FaceNeighbourOffsets.Length; i++)
+            Vector3Int[] offsets = NeighbourOffsets();
+
+            for (int i = 0; i < offsets.Length; i++)
             {
-                Vector3Int offset = FaceNeighbourOffsets[i];
+                Vector3Int offset = offsets[i];
                 int nx = currentPos.x + offset.x;
                 int ny = currentPos.y + offset.y;
                 int nz = currentPos.z + offset.z;
@@ -703,6 +889,10 @@ public class FullDeformationField
                 // the volume. Occupied cells already have their geodesic distances
                 // computed by AddDeformationNode().
                 if (voxelData.data[neighbourIndex].IsOccupied()) continue;
+
+                // The same rule for diagonals: growing outside the solid, a corner step must not
+                // round the corner of it.
+                if (!StepIsClear(currentPos, offset, false)) continue;
 
                 float newDistance = current.distance + StepCost(offset);
 

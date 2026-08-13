@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using NaughtyAttributes;
 
 #if UC_ENABLE_ED
 namespace UC.ED
@@ -26,10 +27,16 @@ namespace UC.ED
         private float fieldVoxelDensity = 0.05f;
         [SerializeField, Min(1), Tooltip("How many nodes may influence a single field cell.")]
         private int fieldMaxWeights = 4;
+        [SerializeField, Tooltip("How many nodes each cell records, as opposed to how many it weights. Recording more never adds influences - only the nearest Field Max Weights are ever weighted - it stops eviction severing a node's shortest path partway, which otherwise inflates the distance recorded for nodes that ARE weighted. AllNodes removes that artifact by construction, at the cost of time.")]
+        private EDFieldDistanceStorage fieldDistanceStorage = EDFieldDistanceStorage.AllNodes;
+        [SerializeField, Min(1), ShowIf(nameof(usesExplicitStorage)), Tooltip("Only for measuring where the approximation stops mattering. Clamped to at least Field Max Weights and at most the node count.")]
+        private int fieldStorageSlots = 4;
+        [SerializeField, Tooltip("Which neighbours the distance wavefront may step to. Faces6 makes every step the same length, so the metric is L1 and the isolines are diamonds. The richer stencils add diagonals at their true cost and round that out, at the price of a corner-cutting check per diagonal step and more work per cell.")]
+        private EDFieldConnectivity fieldConnectivity = EDFieldConnectivity.FacesEdgesCorners26;
         [SerializeField]
         private bool useTerminalLength = true;
-        [SerializeField, Tooltip("Debug only, and slow. Records every node's distance in every cell instead of the nearest few, so the distance views can show a falloff that continues past the point where a node would normally be evicted. Weights are unchanged: only the nearest 'Field Max Weights' are ever weighted.")]
-        private bool keepAllDistances = false;
+
+        private bool usesExplicitStorage => (fieldDistanceStorage == EDFieldDistanceStorage.Explicit);
 
         private static readonly EDBindingConfig fixedBinding = new EDBindingConfig();
 
@@ -37,6 +44,9 @@ namespace UC.ED
         public override EDBindingConfig binding => fixedBinding;
         public override float deformationFieldVoxelDensity => fieldVoxelDensity;
         public override int deformationFieldMaxWeights => fieldMaxWeights;
+        public override EDFieldDistanceStorage deformationFieldDistanceStorage => fieldDistanceStorage;
+        public override int deformationFieldStorageSlots => fieldStorageSlots;
+        public override EDFieldConnectivity deformationFieldConnectivity => fieldConnectivity;
 
         public override Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav) => new StructureInstance(this, deformation, structureSource, nav);
 
@@ -271,18 +281,30 @@ namespace UC.ED
                 float safeDensity = Mathf.Max(def.fieldVoxelDensity, 1e-5f);
                 float voxelSize = maxSize * safeDensity;
 
-                int safeMaxWeights = Mathf.Clamp(def.fieldMaxWeights, 1, nodes.Count);
-
-                // Inspection only, and it does not change a single weight: the field still weights
-                // the nearest safeMaxWeights, the rest are recorded at weight zero for the debug
-                // views to read. It is slow, because eviction is also what stops a node's wavefront -
-                // keeping everything makes every node diffuse across the whole volume.
-                int storageSlots = (def.keepAllDistances) ? (nodes.Count) : (safeMaxWeights);
+                // Storage is clamped from below by the weight count, since storing fewer than are
+                // weighted is meaningless, and from above by the node count, past which there is
+                // nothing left to record. Zero means "match", which keeps the default identical.
+                //
+                // This is not only a debug setting. Eviction is what terminates a node's wavefront,
+                // so a node dropped from a cell partway along its shortest path arrives at later
+                // cells by a detour - and it can still be among the nearest few there, being weighted,
+                // with a distance that is too large. Extra slots buy back the accuracy of the
+                // distances actually in use, not just visibility of the ones that were dropped.
+                //
+                // Resolved through the shared helper because the golden harness applies the same
+                // clamps to decide whether an existing field still matches these settings.
+                EDGraphBuilder.ResolveFieldSlots(def.fieldMaxWeights, def.fieldDistanceStorage, def.fieldStorageSlots, nodes.Count,
+                                                 out int safeMaxWeights, out int storageSlots);
 
                 // -------------------------------------------------------------
                 // 2) Create deformation field.
                 // -------------------------------------------------------------
-                FullDeformationField field = new FullDeformationField(voxelSize, safeMaxWeights, storageSlots);
+                // Slot-per-node only when storage covers every node, which is exactly when no cell can
+                // evict. Derived from the resolved count rather than from the mode, so it stays true
+                // to what the field was actually given.
+                bool slotPerNode = (storageSlots >= nodes.Count);
+
+                FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.
