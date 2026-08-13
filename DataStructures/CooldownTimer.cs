@@ -40,6 +40,11 @@ namespace UC
 
         public void Start()
         {
+            Start(cooldown);
+        }
+
+        public void Start(float cooldown)
+        {
             timer = cooldown;
             if (cooldown == 0.0f) triggerNext = true;
             else triggerNext = false;
