@@ -28,6 +28,8 @@ namespace UC.ED
         private int fieldMaxWeights = 4;
         [SerializeField]
         private bool useTerminalLength = true;
+        [SerializeField, Tooltip("Debug only, and slow. Records every node's distance in every cell instead of the nearest few, so the distance views can show a falloff that continues past the point where a node would normally be evicted. Weights are unchanged: only the nearest 'Field Max Weights' are ever weighted.")]
+        private bool keepAllDistances = false;
 
         private static readonly EDBindingConfig fixedBinding = new EDBindingConfig();
 
@@ -271,10 +273,16 @@ namespace UC.ED
 
                 int safeMaxWeights = Mathf.Clamp(def.fieldMaxWeights, 1, nodes.Count);
 
+                // Inspection only, and it does not change a single weight: the field still weights
+                // the nearest safeMaxWeights, the rest are recorded at weight zero for the debug
+                // views to read. It is slow, because eviction is also what stops a node's wavefront -
+                // keeping everything makes every node diffuse across the whole volume.
+                int storageSlots = (def.keepAllDistances) ? (nodes.Count) : (safeMaxWeights);
+
                 // -------------------------------------------------------------
                 // 2) Create deformation field.
                 // -------------------------------------------------------------
-                FullDeformationField field = new FullDeformationField(voxelSize, safeMaxWeights);
+                FullDeformationField field = new FullDeformationField(voxelSize, safeMaxWeights, storageSlots);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.
