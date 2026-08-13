@@ -388,7 +388,17 @@ namespace UC
             }
         }
 
-        public static Mesh SubdivideLongEdgesImproved(Mesh sourceMesh, float maxEdgeLength, int maxPasses)
+        /// <summary>
+        /// Splits edges longer than maxEdgeLength, carrying normals, tangents, colours, every UV
+        /// channel, blend shapes and submeshes across the new vertices.
+        ///
+        /// <paramref name="uniform"/> promotes every triangle with any over-long edge to a full
+        /// 1-to-4 split. Adaptive refinement bisects only the offending edge, which reaches the
+        /// target edge length with the fewest vertices but leaves slivers and fans radiating from the
+        /// corners that were never split - fine for deforming, poor for looking at. Uniform costs
+        /// substantially more triangles for the same target and returns regular ones.
+        /// </summary>
+        public static Mesh SubdivideLongEdgesImproved(Mesh sourceMesh, float maxEdgeLength, int maxPasses, bool uniform = false)
         {
             if (sourceMesh == null)
                 throw new ArgumentNullException(nameof(sourceMesh));
@@ -504,7 +514,19 @@ namespace UC
             {
                 HashSet<ulong> edgesToSplit = new();
 
-                void TestEdge(int a, int b)
+                bool EdgeIsLong(int a, int b)
+                {
+                    if (a == b) return false;
+
+                    if ((a < 0) || (b < 0) || (a >= vertices.Count) || (b >= vertices.Count))
+                    {
+                        return false;
+                    }
+
+                    return ((vertices[a] - vertices[b]).sqrMagnitude > maxEdgeLengthSq);
+                }
+
+                void MarkEdge(int a, int b)
                 {
                     if (a == b) return;
 
@@ -513,12 +535,12 @@ namespace UC
                         return;
                     }
 
-                    float edgeLengthSq = (vertices[a] - vertices[b]).sqrMagnitude;
+                    edgesToSplit.Add(SubdivisionEdgeKey(a, b));
+                }
 
-                    if (edgeLengthSq > maxEdgeLengthSq)
-                    {
-                        edgesToSplit.Add(SubdivisionEdgeKey(a, b));
-                    }
+                void TestEdge(int a, int b)
+                {
+                    if (EdgeIsLong(a, b)) MarkEdge(a, b);
                 }
 
                 // Find all long triangle edges first. This ensures that shared edges
@@ -537,6 +559,23 @@ namespace UC
                         int a = indices[i + 0];
                         int b = indices[i + 1];
                         int c = indices[i + 2];
+
+                        if (uniform)
+                        {
+                            // Any over-long edge promotes the whole triangle, so it takes the
+                            // all-three-edges case below and splits 1-to-4 into four similar
+                            // triangles. Bisecting only the long edge is what produces the slivers
+                            // and the fans radiating from whichever corner never gets split - correct
+                            // for the target edge length, and unreadable as a display.
+                            if ((EdgeIsLong(a, b)) || (EdgeIsLong(b, c)) || (EdgeIsLong(c, a)))
+                            {
+                                MarkEdge(a, b);
+                                MarkEdge(b, c);
+                                MarkEdge(c, a);
+                            }
+
+                            continue;
+                        }
 
                         TestEdge(a, b);
                         TestEdge(b, c);
