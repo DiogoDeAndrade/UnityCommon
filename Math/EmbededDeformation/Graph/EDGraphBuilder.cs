@@ -6,6 +6,31 @@ using UnityEngine;
 namespace UC.ED
 {
     /// <summary>
+    /// How many nodes a deformation field cell records, as distinct from how many it weights.
+    ///
+    /// Stated as an intent rather than a count because the count is not the thing being chosen. The
+    /// slot limit is applied while the wavefronts are still propagating - a node evicted from a cell
+    /// stops spreading out of it - so it does not merely discard distances, it changes the ones that
+    /// remain. A node whose shortest path was cut arrives later by a detour and can still be among
+    /// the nearest few, weighted, with a distance that is too large.
+    ///
+    /// AllNodes removes that by construction: a cell can be reached by at most every node, so with
+    /// that many slots eviction never fires, no path is ever cut, and each distance is a function of
+    /// its own node and the geometry alone.
+    /// </summary>
+    public enum EDFieldDistanceStorage
+    {
+        /// <summary>Record only what is weighted. Cheapest, and the distances are approximate in the
+        /// way described above.</summary>
+        NearestWeighted,
+        /// <summary>Record a stated number, for measuring where the approximation stops mattering.
+        /// A fixed count silently stops meaning what it meant if the node count changes.</summary>
+        Explicit,
+        /// <summary>Record every node that reaches a cell. Exact, and the slowest.</summary>
+        AllNodes
+    }
+
+    /// <summary>
     /// Where the deformation graph comes from, and the construction that produces it.
     ///
     /// The two builders answer genuinely different questions. Sampling the navmesh has to decide
@@ -49,8 +74,43 @@ namespace UC.ED
         public virtual float minBindAngle => 20.0f;
         public virtual float deformationFieldVoxelDensity => 0.05f;
         public virtual int deformationFieldMaxWeights => 4;
+        public virtual EDFieldDistanceStorage deformationFieldDistanceStorage => EDFieldDistanceStorage.NearestWeighted;
+        public virtual int deformationFieldStorageSlots => 0;
+        public virtual EDFieldConnectivity deformationFieldConnectivity => EDFieldConnectivity.Faces6;
 
         public float maxSegmentLength => structureMaxSegmentLength;
+
+        /// <summary>
+        /// The slot counts a field built from these settings would end up with.
+        ///
+        /// Shared rather than duplicated: the field build applies these clamps, and so does the
+        /// golden harness when it checks whether an existing field still matches the settings. Two
+        /// copies of this arithmetic would agree right up until one of them was edited, and the
+        /// symptom would be a verification pass that means nothing.
+        /// </summary>
+        public static void ResolveFieldSlots(int maxWeightsSetting, EDFieldDistanceStorage storage, int storageSlotsSetting, int nodeCount, out int maxWeights, out int storageSlots)
+        {
+            int usableNodes = Mathf.Max(1, nodeCount);
+
+            maxWeights = Mathf.Clamp(maxWeightsSetting, 1, usableNodes);
+
+            switch (storage)
+            {
+                // Resolved against the live node count rather than stored, so it stays "all" when the
+                // graph gains a node instead of quietly becoming a number that used to be all.
+                case EDFieldDistanceStorage.AllNodes:
+                    storageSlots = usableNodes;
+                    break;
+
+                case EDFieldDistanceStorage.Explicit:
+                    storageSlots = Mathf.Clamp(storageSlotsSetting, maxWeights, usableNodes);
+                    break;
+
+                default:
+                    storageSlots = maxWeights;
+                    break;
+            }
+        }
 
         public abstract Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav);
 
