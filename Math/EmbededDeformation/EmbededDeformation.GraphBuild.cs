@@ -128,8 +128,7 @@ namespace UC.ED
             terminalConstraints.Clear();
             linkAngleConstraints.Clear();
 
-            // Only the structure path produces one. Note that clearing it is not sufficient on its
-            // own to say there is no field - see usesDeformationField.
+            // Only the structure path produces one.
             deformationField = null;
 
             navigationDataBuilt = false;
@@ -306,6 +305,10 @@ namespace UC.ED
         public void SetDeformationField(FullDeformationField field)
         {
             deformationField = field;
+
+            // Re-arm, so the next reload warns again rather than staying quiet on the strength of a
+            // build that a reload has since discarded.
+            warnedFieldMissing = false;
         }
     }
 }

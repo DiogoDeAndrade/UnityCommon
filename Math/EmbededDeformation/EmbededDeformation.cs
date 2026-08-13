@@ -699,6 +699,8 @@ namespace UC.ED
                 return deformed;
             }
 
+            WarnIfFieldMissing(nameof(DeformVertices));
+
             var state = new EDStateView(currentState);
 
             for (int vId = 0; vId < restVertices.Length; vId++)
@@ -1102,16 +1104,46 @@ namespace UC.ED
         /// Whether the volumetric field is what deforms things for this graph. Only the structure
         /// builder produces one.
         ///
-        /// The graph source is tested as well as the reference, and the graph source is the part
-        /// that matters: FullDeformationField is [Serializable] and lives on a [SerializeField]
-        /// member, so a field that was null when Unity serialized the component comes back as a
-        /// live but empty object. Clearing it on rebuild is not enough, because serialization
-        /// happens again afterwards. A null check alone silently routes navmesh graphs through an
-        /// empty field.
+        /// Both halves are still tested even though deformationField is [NonSerialized] and so is
+        /// honestly null in navmesh mode. The graph source says what this deformation is meant to
+        /// do; the reference says whether Build() has actually run. They answer different
+        /// questions, and fieldMissing below is the case where they disagree.
         /// </summary>
         private bool usesDeformationField => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField != null);
 
         internal bool UseDeformationFieldForClearance => usesDeformationField;
+
+        /// <summary>
+        /// A structure graph that should have a field and has not got one - the state after a domain
+        /// reload or a scene load, before Build() has run.
+        /// </summary>
+        private bool fieldMissing => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField == null);
+
+        // Deliberately [NonSerialized], and that is the whole mechanism: it comes back false from
+        // every domain reload, which is exactly when the warning needs to fire again.
+        [NonSerialized]
+        private bool warnedFieldMissing;
+
+        /// <summary>
+        /// Reports the fall back from field deformation to binding deformation, once per episode and
+        /// re-armed whenever a field is built.
+        ///
+        /// This has to be loud. The fallback produces a plausible deformation rather than an
+        /// obviously broken one, so a golden captured in this state is wrong in a way that reads as
+        /// correct - configs 6 and 7 are the ones that can hit it.
+        ///
+        /// Called from the main-thread, once-per-pass entry points only - never from inside the
+        /// parallel row work. This is pass-level reporting, not a per-point check.
+        /// </summary>
+        private void WarnIfFieldMissing(string context)
+        {
+            if (!fieldMissing) return;
+            if (warnedFieldMissing) return;
+
+            warnedFieldMissing = true;
+
+            Debug.LogWarning($"{context}: structure graph has no deformation field, falling back to binding deformation. Build() has not run since the last scene load or domain reload - rebuild before trusting this result or capturing a golden.");
+        }
 
         internal List<FullDeformationField.Frame> BuildNodeFrames(EDStateView state)
         {
@@ -1192,6 +1224,11 @@ namespace UC.ED
 
                 return ret;
             }
+
+            // The solve reaches clearance without necessarily going through CreateDeformer, so this
+            // path needs its own report. Here rather than in EDClearanceTerm.CreateRowScratch: this
+            // runs once on the main thread before the parallel loop, that one runs per worker.
+            WarnIfFieldMissing(nameof(ComputeClearance));
 
             if (UseDeformationFieldForClearance)
             {
