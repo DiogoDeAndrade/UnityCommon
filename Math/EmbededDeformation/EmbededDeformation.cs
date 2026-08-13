@@ -74,7 +74,16 @@ namespace UC.ED
         [SerializeField, HideInInspector]
         // Widened as terms adopt it - the clearance term measures against the rest clearances.
         internal EDState restState;
-        [SerializeField, HideInInspector]
+        // Deliberately not serialized. The per-cell distance/nodeId/weight arrays are the bulk of the
+        // whole scene when they are - 14.4 MB of an 18.7 MB SampleScene, re-uploaded to LFS on every
+        // commit that touches the scene. It is derived data: BuildDeformationField repopulates it
+        // inside Build(), so the only thing serializing it bought was skipping a rebuild on reload.
+        //
+        // It also repairs usesDeformationField. As a [SerializeField] this came back from a domain
+        // reload live but empty, so the "!= null" half of that guard was a no-op in structure mode
+        // and the field path ran against an empty grid. Now the reference is genuinely null until
+        // Build() runs and the guard means what it says.
+        [NonSerialized]
         private FullDeformationField    deformationField;
         [SerializeField, HideInInspector]
         private List<Mesh>  sourceGeometry;
