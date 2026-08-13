@@ -157,6 +157,20 @@ public class FullDeformationField
     float                               voxelSize;
     [SerializeField, HideInInspector]
     int                                 maxWeights;
+    /// <summary>
+    /// How many nodes a cell records, as opposed to how many it weights.
+    ///
+    /// Normally equal to maxWeights, and then eviction is what bounds the whole thing. Raised above
+    /// it for inspection: a cell keeps every node that reaches it, ComputeWeights still weights only
+    /// the nearest maxWeights, and the rest sit there at weight zero so a tool can read the distance
+    /// that would otherwise have been thrown away.
+    ///
+    /// That is not free, and the cost is time rather than memory. Eviction is also what terminates
+    /// the wavefront - a node dropped from a cell stops propagating out of it - so keeping
+    /// everything makes every node's front cross the whole volume.
+    /// </summary>
+    [SerializeField, HideInInspector]
+    int                                 storageSlots;
     [SerializeField, HideInInspector]
     List<DeformationNode>               deformationNodes = new List<DeformationNode>();
     [SerializeField, HideInInspector]
@@ -174,6 +188,8 @@ public class FullDeformationField
     public Vector3 cellSize => Vector3.one * voxelSize;
     public Vector3 minBound => voxelData?.minBound ?? Vector3.zero;
     public int maxInfluencesPerCell => maxWeights;
+    public int storedInfluencesPerCell => storageSlots;
+    public bool keepsAllDistances => (storageSlots > maxWeights);
 
     const float DistanceEpsilon = 1e-5f;
 
@@ -312,14 +328,17 @@ public class FullDeformationField
 
     void EnsureWeights(ref DeformationFieldWeights element)
     {
+        // Against storageSlots, not maxWeights. This is the one place where widening the arrays
+        // would otherwise be silently undone: a cell sized to hold everything would fail the length
+        // check on the very next touch and be reset back to empty.
         if ((element.distances == null) ||
             (element.weights == null) ||
             (element.nodeId == null) ||
-            (element.distances.Length != maxWeights) ||
-            (element.weights.Length != maxWeights) ||
-            (element.nodeId.Length != maxWeights))
+            (element.distances.Length != storageSlots) ||
+            (element.weights.Length != storageSlots) ||
+            (element.nodeId.Length != storageSlots))
         {
-            element.SetupWeights(maxWeights);
+            element.SetupWeights(storageSlots);
         }
     }
 
@@ -342,12 +361,12 @@ public class FullDeformationField
     {
         EnsureWeights(ref element);
 
-        for (int i = 0; i < maxWeights - 1; i++)
+        for (int i = 0; i < storageSlots - 1; i++)
         {
             int best = i;
             float bestDistance = (element.nodeId[i] >= 0) ? element.distances[i] : float.MaxValue;
 
-            for (int j = i + 1; j < maxWeights; j++)
+            for (int j = i + 1; j < storageSlots; j++)
             {
                 float d = (element.nodeId[j] >= 0) ? element.distances[j] : float.MaxValue;
                 if (d < bestDistance)
@@ -395,7 +414,7 @@ public class FullDeformationField
         int existingSlot = -1;
         int emptySlot = -1;
 
-        for (int i = 0; i < maxWeights; i++)
+        for (int i = 0; i < storageSlots; i++)
         {
             if (element.nodeId[i] == nodeIndex)
             {
@@ -422,7 +441,10 @@ public class FullDeformationField
             return true;
         }
 
-        int targetSlot = emptySlot >= 0 ? emptySlot : maxWeights - 1;
+        // With storageSlots above maxWeights there is always an empty slot until every node has
+        // reached this cell, so the eviction below simply stops happening - which is the whole point,
+        // since eviction is also what stops a node's wavefront.
+        int targetSlot = emptySlot >= 0 ? emptySlot : storageSlots - 1;
 
         if (emptySlot < 0 && distance >= element.distances[targetSlot] - DistanceEpsilon)
         {
@@ -476,10 +498,16 @@ public class FullDeformationField
         return bestIndex;
     }
 
-    public FullDeformationField(float voxelSize, int maxWeights)
+    /// <summary>
+    /// <paramref name="storageSlots"/> defaults to maxWeights, which is the ordinary case and keeps
+    /// eviction as the bound on everything. Pass more to record nodes the cell will not weight - see
+    /// the field's own note for what that costs.
+    /// </summary>
+    public FullDeformationField(float voxelSize, int maxWeights, int storageSlots = -1)
     {
         this.voxelSize = Mathf.Max(voxelSize, DistanceEpsilon);
         this.maxWeights = Mathf.Max(1, maxWeights);
+        this.storageSlots = Mathf.Max(this.maxWeights, storageSlots);
 
         voxelData = new VoxelData<DeformationFieldWeights>();
         deformationNodes = new();
@@ -490,11 +518,17 @@ public class FullDeformationField
     {
         InvalidateTrilinearRegions();
 
+        // Repaired here rather than trusted, because a zero would not throw: it would size every
+        // cell to zero slots and the field would come out uniformly empty, which reads as a field
+        // that reaches nothing rather than as a broken one. The constructor sets it correctly - this
+        // covers an instance that arrived any other way.
+        if (storageSlots < maxWeights) storageSlots = Mathf.Max(1, maxWeights);
+
         VoxelizerIntersectionCPU.Voxelize(voxelData, meshes, transformMatrices, voxelSize, fillEmpty: true);
 
         for (int i = 0; i < voxelData.data.Length; i++)
         {
-            voxelData.data[i].SetupWeights(maxWeights);
+            voxelData.data[i].SetupWeights(storageSlots);
         }
     }
 
@@ -633,7 +667,7 @@ public class FullDeformationField
             if (!element.IsOccupied()) continue;
             if (!HasInfluence(element)) continue;
 
-            for (int i = 0; i < maxWeights; i++)
+            for (int i = 0; i < storageSlots; i++)
             {
                 if (element.nodeId[i] < 0) continue;
                 if (element.distances[i] >= float.MaxValue) continue;
@@ -687,6 +721,9 @@ public class FullDeformationField
 
         InvalidateTrilinearRegions();
 
+        // Still clamped to maxWeights, never to storageSlots. This is what keeps extra stored nodes
+        // inert: the sort above puts the nearest first, so weighting only the leading weightCount
+        // produces exactly the weights a cell that had evicted the rest would have produced.
         int weightCount = (maxWeights < 0) ? (this.maxWeights) : (maxWeights);
         weightCount = Mathf.Clamp(weightCount, 0, this.maxWeights);
 
@@ -696,7 +733,9 @@ public class FullDeformationField
             EnsureWeights(ref element);
             SortInfluences(ref element);
 
-            for (int i = 0; i < this.maxWeights; i++)
+            // Every slot, so the ones past weightCount are left at zero rather than holding whatever
+            // a previous ComputeWeights put there.
+            for (int i = 0; i < storageSlots; i++)
             {
                 element.weights[i] = 0f;
             }
@@ -775,7 +814,7 @@ public class FullDeformationField
         if (!HasVoxelData())
         {
             DeformationFieldWeights empty = default;
-            empty.SetupWeights(maxWeights);
+            empty.SetupWeights(storageSlots);
             return empty;
         }
 
