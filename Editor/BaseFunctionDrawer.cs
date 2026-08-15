@@ -44,19 +44,58 @@ namespace UC.Editor
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
-            float height = EditorGUIUtility.singleLineHeight; // popup line
+            return GetReferenceHeaderHeight(property) + ((property.managedReferenceValue != null) ? (EditorGUIUtility.standardVerticalSpacing + GetReferenceChildrenHeight(property)) : (0f));
+        }
+
+        public static float GetReferenceHeaderHeight(SerializedProperty property)
+        {
+            return EditorGUIUtility.singleLineHeight;
+        }
+
+        public static float GetReferenceChildrenHeight(SerializedProperty property)
+        {
+            if (property.managedReferenceValue == null)
+                return 0f;
+
+            float height = 0f;
+
+            var iterator = property.Copy();
+            var end = iterator.GetEndProperty();
+            int targetDepth = property.depth + 1;
+            bool enterChildren = true;
+
+            while (iterator.NextVisible(enterChildren) &&
+                   !SerializedProperty.EqualContents(iterator, end))
+            {
+                enterChildren = false;
+
+                if (iterator.depth != targetDepth)
+                    continue;
+
+                if (PropertyUtility.IsVisible(iterator))
+                {
+                    height += EditorGUI.GetPropertyHeight(iterator, true) +
+                              EditorGUIUtility.standardVerticalSpacing;
+                }
+            }
+
+            return height > 0f ? height - EditorGUIUtility.standardVerticalSpacing : 0f;
+        }
+
+        public static float GetReferenceHeight(SerializedProperty property)
+        {
+            float height = EditorGUIUtility.singleLineHeight;
 
             if (property.managedReferenceValue != null)
             {
                 height += EditorGUIUtility.standardVerticalSpacing;
 
-                // Sum heights of all children of the managed reference
                 var iterator = property.Copy();
                 var end = iterator.GetEndProperty();
                 int targetDepth = property.depth + 1;
                 bool enterChildren = true;
 
-                while (iterator.NextVisible(enterChildren) && !SerializedProperty.EqualContents(iterator, end))
+                while (iterator.NextVisible(enterChildren) && (!SerializedProperty.EqualContents(iterator, end)))
                 {
                     enterChildren = false;
 
@@ -65,44 +104,39 @@ namespace UC.Editor
 
                     if (PropertyUtility.IsVisible(iterator))
                     {
-                        height += EditorGUI.GetPropertyHeight(iterator, true) +
-                                  EditorGUIUtility.standardVerticalSpacing;
+                        height += EditorGUI.GetPropertyHeight(iterator, true) + EditorGUIUtility.standardVerticalSpacing;
                     }
-                    enterChildren = false;
                 }
             }
 
             return height;
         }
 
-        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        public static void DrawReferenceHeader(Rect position, SerializedProperty property, GUIContent label, bool inline = false)
         {
             label = new GUIContent(property.displayName, label.image, label.tooltip);
 
             EditorGUI.BeginProperty(position, label, property);
 
-            // First line: label + popup
-            Rect lineRect = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
+            Rect popupRect;
 
-            Rect labelRect = new Rect(
-                lineRect.x,
-                lineRect.y,
-                EditorGUIUtility.labelWidth,
-                lineRect.height
-            );
+            if (!inline)
+            {
+                Rect lineRect = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
 
-            Rect popupRect = new Rect(
-                lineRect.x + EditorGUIUtility.labelWidth,
-                lineRect.y,
-                lineRect.width - EditorGUIUtility.labelWidth,
-                lineRect.height
-            );
+                Rect labelRect = new Rect(lineRect.x, lineRect.y, EditorGUIUtility.labelWidth, lineRect.height);
 
-            EditorGUI.LabelField(labelRect, new GUIContent(property.displayName));
+                popupRect = new Rect(lineRect.x + EditorGUIUtility.labelWidth, lineRect.y, lineRect.width - EditorGUIUtility.labelWidth, lineRect.height);
+
+                EditorGUI.LabelField(labelRect, new GUIContent(property.displayName));
+            }
+            else
+            {
+                popupRect = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
+            }
 
             int currentIndex = GetCurrentTypeIndex(property);
 
-            // Remove indent or else we get issues with this direct positioning
             var indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
             int newIndex = EditorGUI.Popup(popupRect, currentIndex + 1, _displayNames) - 1;
@@ -110,57 +144,79 @@ namespace UC.Editor
 
             HandleContextMenu(popupRect, (newIndex >= 0) ? _types[newIndex] : null);
 
-            bool justCreated = false;
-
             if (newIndex != currentIndex)
             {
-                if (newIndex >= 0 && newIndex < _types.Length)
-                {
+                if ((newIndex >= 0) && (newIndex < _types.Length))
                     property.managedReferenceValue = Activator.CreateInstance(_types[newIndex]);
-                    justCreated = true;
-                }
                 else
-                {
                     property.managedReferenceValue = null;
-                }
-            }
-
-            // Draw fields of the selected T below
-            if ((property.managedReferenceValue != null) && (!justCreated))
-            {
-                EditorGUI.indentLevel++;
-
-                float y = position.y + EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
-
-                var iterator = property.Copy();
-                var end = iterator.GetEndProperty();
-                int targetDepth = property.depth + 1;
-                bool enterChildren = true;
-
-                while (iterator.NextVisible(enterChildren) && !SerializedProperty.EqualContents(iterator, end))
-                {
-                    enterChildren = false;
-
-                    // only direct children of the managed ref object
-                    if (iterator.depth != targetDepth)
-                        continue;
-
-                    if (PropertyUtility.IsVisible(iterator))
-                    {
-                        float h = EditorGUI.GetPropertyHeight(iterator, true);
-                        Rect r = new Rect(position.x, y, position.width, h);
-                        NaughtyEditorGUI.PropertyField(r, iterator, true);
-                        y += h + EditorGUIUtility.standardVerticalSpacing;
-                    }
-                }
-
-                EditorGUI.indentLevel--;
             }
 
             EditorGUI.EndProperty();
         }
 
-        private void HandleContextMenu(Rect popupRect, Type selectedType)
+        public static void DrawReferenceChildren(Rect position, SerializedProperty property)
+        {
+            if (property.managedReferenceValue == null)
+                return;
+
+            int oldIndent = EditorGUI.indentLevel;
+
+            // These are children of the managed-reference object.
+            EditorGUI.indentLevel = oldIndent + 1;
+
+            float y = position.y;
+
+            var iterator = property.Copy();
+            var end = iterator.GetEndProperty();
+            int targetDepth = property.depth + 1;
+            bool enterChildren = true;
+
+            while (iterator.NextVisible(enterChildren) &&
+                   !SerializedProperty.EqualContents(iterator, end))
+            {
+                enterChildren = false;
+
+                if (iterator.depth != targetDepth)
+                    continue;
+
+                if (!PropertyUtility.IsVisible(iterator))
+                    continue;
+
+                float h = EditorGUI.GetPropertyHeight(iterator, true);
+
+                Rect r = new Rect(position.x, y, position.width, h);
+
+                NaughtyEditorGUI.PropertyField(r, iterator, true);
+
+                y += h + EditorGUIUtility.standardVerticalSpacing;
+            }
+
+            EditorGUI.indentLevel = oldIndent;
+        }
+
+        public static void DrawReference(Rect position, SerializedProperty property, GUIContent label)
+        {
+            float headerHeight = GetReferenceHeaderHeight(property);
+
+            Rect headerRect = new Rect(position.x, position.y, position.width, headerHeight);
+            DrawReferenceHeader(headerRect, property, label);
+
+            if (property.managedReferenceValue != null)
+            {
+                Rect bodyRect = new Rect(position.x, position.y + headerHeight + EditorGUIUtility.standardVerticalSpacing, position.width, GetReferenceChildrenHeight(property));
+
+                DrawReferenceChildren(bodyRect, property);
+            }
+        }
+
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+
+            DrawReference(position, property, label);
+        }
+
+        private static void HandleContextMenu(Rect popupRect, Type selectedType)
         {
             var e = Event.current;
             if (e.type != EventType.ContextClick)
