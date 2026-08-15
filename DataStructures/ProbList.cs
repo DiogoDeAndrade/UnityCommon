@@ -8,7 +8,7 @@ namespace UC
 {
 
     [Serializable]
-    public class ProbList<T> : IEnumerable<(T element, float weight)>
+    public class ProbList<T> : IEnumerable<(T element, float weight)>, ISerializationCallbackReceiver
     {
         [Serializable]
         class Element
@@ -19,6 +19,7 @@ namespace UC
             public float    weight;
         }
 
+        [NonSerialized] // This is needed because Unity doesn't evict the object completely on a domain reload in editor mode, even if this is private
         private List<Element>   elements = new List<Element>();          // Current elements for selection
         [SerializeField]
         private List<Element>   originalElements = new List<Element>();       // Backup of the original elements
@@ -26,7 +27,9 @@ namespace UC
         [SerializeField]
         private bool            withReplacement = true;
         private bool            resetWhenEmpty = true;
+        [NonSerialized] // This is needed because Unity doesn't evict the object completely on a domain reload in editor mode, even if this is private
         private float           totalWeight;
+        [NonSerialized] // This is needed because Unity doesn't evict the object completely on a domain reload in editor mode, even if this is private
         private bool            init = false;
 
         // Constructor with optional Random generator and option for with/without replacement
@@ -234,6 +237,13 @@ namespace UC
             totalWeight = 0;
         }
 
+        public void Invalidate()
+        {
+            init = false;
+            elements = null;
+            totalWeight = 0.0f;
+        }
+
         internal void Set(T element, float weight)
         {
             // Sets a specific element to the given value
@@ -481,10 +491,16 @@ namespace UC
 
             return selectedColors;
         }
+
+        public void OnBeforeSerialize() { }
+        public void OnAfterDeserialize()
+        {
+            Invalidate();
+        }
     }
 
     [Serializable]
-    public class ReferenceProbList<T> : IEnumerable<(T element, float weight)>
+    public class ReferenceProbList<T> : IEnumerable<(T element, float weight)>, ISerializationCallbackReceiver
     {
         [Serializable]
         class Element
@@ -495,14 +511,17 @@ namespace UC
             public float weight;
         }
 
+        [NonSerialized] // This is needed because Unity doesn't evict the object completely on a domain reload in editor mode, even if this is private
         private List<Element> elements = new List<Element>();          // Current elements for selection
         [SerializeField]
-        private List<Element> originalElements = new List<Element>();       // Backup of the original elements
+        private List<Element> originalElements = new List<Element>();  // Backup of the original elements
         private System.Random systemRandom;
         [SerializeField]
         private bool withReplacement = true;
         private bool resetWhenEmpty = true;
+        [NonSerialized] // This is needed because Unity doesn't evict the object completely on a domain reload in editor mode, even if this is private
         private float totalWeight;
+        [NonSerialized] // This is needed because Unity doesn't evict the object completely on a domain reload in editor mode, even if this is private
         private bool init = false;
 
         // Constructor with optional Random generator and option for with/without replacement
@@ -710,6 +729,13 @@ namespace UC
             totalWeight = 0;
         }
 
+        public void Invalidate()
+        {
+            init = false;
+            elements = null;
+            totalWeight = 0.0f;
+        }
+
         internal void Set(T element, float weight)
         {
             // Sets a specific element to the given value
@@ -957,6 +983,12 @@ namespace UC
 
             return selectedColors;
         }
+        public void OnBeforeSerialize() { }
+        public void OnAfterDeserialize()
+        {
+            Invalidate();
+        }
+
     }
 
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]

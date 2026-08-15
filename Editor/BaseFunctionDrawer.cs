@@ -42,6 +42,24 @@ namespace UC.Editor
             }
         }
 
+        private static SerializedProperty GetMinimizeProperty(SerializedProperty property)
+        {
+            var minimize = property.FindPropertyRelative("minimize");
+
+            if ((minimize != null) &&
+                (minimize.propertyType == SerializedPropertyType.Boolean))
+            {
+                return minimize;
+            }
+
+            return null;
+        }
+
+        private static bool IsMinimized(SerializedProperty property)
+        {
+            return GetMinimizeProperty(property)?.boolValue ?? false;
+        }
+
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
             return GetReferenceHeaderHeight(property) + ((property.managedReferenceValue != null) ? (EditorGUIUtility.standardVerticalSpacing + GetReferenceChildrenHeight(property)) : (0f));
@@ -57,6 +75,9 @@ namespace UC.Editor
             if (property.managedReferenceValue == null)
                 return 0f;
 
+            if (IsMinimized(property))
+                return 0f;
+
             float height = 0f;
 
             var iterator = property.Copy();
@@ -64,12 +85,14 @@ namespace UC.Editor
             int targetDepth = property.depth + 1;
             bool enterChildren = true;
 
-            while (iterator.NextVisible(enterChildren) &&
-                   !SerializedProperty.EqualContents(iterator, end))
+            while ((iterator.NextVisible(enterChildren)) && (!SerializedProperty.EqualContents(iterator, end)))
             {
                 enterChildren = false;
 
                 if (iterator.depth != targetDepth)
+                    continue;
+                
+                if (iterator.name == "minimize")
                     continue;
 
                 if (PropertyUtility.IsVisible(iterator))
@@ -112,7 +135,7 @@ namespace UC.Editor
             return height;
         }
 
-        public static void DrawReferenceHeader(Rect position, SerializedProperty property, GUIContent label, bool inline = false)
+        public static bool DrawReferenceHeader(Rect position, SerializedProperty property, GUIContent label, bool inline)
         {
             label = new GUIContent(property.displayName, label.image, label.tooltip);
 
@@ -135,6 +158,29 @@ namespace UC.Editor
                 popupRect = new Rect(position.x, position.y, position.width, EditorGUIUtility.singleLineHeight);
             }
 
+            var minimizeProperty = GetMinimizeProperty(property);
+
+            if (minimizeProperty != null)
+            {
+                const float foldoutWidth = 14f;
+                const float foldoutGap = 2f;
+
+                Rect foldoutRect = new Rect(popupRect.x + foldoutWidth * 0.5f, popupRect.y, foldoutWidth * 0.5f, popupRect.height);
+
+                bool expanded = !minimizeProperty.boolValue;
+
+                bool newExpanded = EditorGUI.Foldout(foldoutRect, expanded, GUIContent.none, false);
+
+                if (newExpanded != expanded)
+                    minimizeProperty.boolValue = !newExpanded;
+
+                // Shave the foldout space directly from the popup.
+                float offset = foldoutWidth + foldoutGap;
+
+                popupRect.x += offset;
+                popupRect.width -= offset;
+            }
+
             int currentIndex = GetCurrentTypeIndex(property);
 
             var indent = EditorGUI.indentLevel;
@@ -144,7 +190,10 @@ namespace UC.Editor
 
             HandleContextMenu(popupRect, (newIndex >= 0) ? _types[newIndex] : null);
 
-            if (newIndex != currentIndex)
+            bool changed = newIndex != currentIndex;
+
+
+            if (changed)
             {
                 if ((newIndex >= 0) && (newIndex < _types.Length))
                     property.managedReferenceValue = Activator.CreateInstance(_types[newIndex]);
@@ -153,11 +202,16 @@ namespace UC.Editor
             }
 
             EditorGUI.EndProperty();
-        }
+
+            return changed;
+        }        
 
         public static void DrawReferenceChildren(Rect position, SerializedProperty property)
         {
             if (property.managedReferenceValue == null)
+                return;
+
+            if (IsMinimized(property))
                 return;
 
             int oldIndent = EditorGUI.indentLevel;
@@ -183,6 +237,9 @@ namespace UC.Editor
                 if (!PropertyUtility.IsVisible(iterator))
                     continue;
 
+                if (iterator.name == "minimize")
+                    continue;
+
                 float h = EditorGUI.GetPropertyHeight(iterator, true);
 
                 Rect r = new Rect(position.x, y, position.width, h);
@@ -195,16 +252,28 @@ namespace UC.Editor
             EditorGUI.indentLevel = oldIndent;
         }
 
+        private static bool IsArrayElement(SerializedProperty property)
+        {
+            string path = property.propertyPath;
+
+            return (path.EndsWith("]")) && (path.Contains(".Array.data["));
+        }
+
         public static void DrawReference(Rect position, SerializedProperty property, GUIContent label)
         {
             float headerHeight = GetReferenceHeaderHeight(property);
 
             Rect headerRect = new Rect(position.x, position.y, position.width, headerHeight);
-            DrawReferenceHeader(headerRect, property, label);
 
-            if (property.managedReferenceValue != null)
+            bool inline = IsArrayElement(property);
+
+            bool changed = DrawReferenceHeader(headerRect, property, label, inline);
+
+            if ((!changed) && (property.managedReferenceValue != null))
             {
-                Rect bodyRect = new Rect(position.x, position.y + headerHeight + EditorGUIUtility.standardVerticalSpacing, position.width, GetReferenceChildrenHeight(property));
+                float bodyHeight = GetReferenceChildrenHeight(property);
+
+                Rect bodyRect = new Rect(position.x, position.y + headerHeight + EditorGUIUtility.standardVerticalSpacing, position.width, bodyHeight);
 
                 DrawReferenceChildren(bodyRect, property);
             }
@@ -212,7 +281,6 @@ namespace UC.Editor
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-
             DrawReference(position, property, label);
         }
 

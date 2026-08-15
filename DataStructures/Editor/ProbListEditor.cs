@@ -15,7 +15,7 @@ namespace UC.Editor
         protected abstract float GetValueHeaderHeight(SerializedProperty valueProperty);
         protected virtual float GetValueBodyHeight(SerializedProperty valueProperty) => 0f;
 
-        protected abstract void DrawValueHeader(Rect position, SerializedProperty valueProperty);
+        protected abstract bool DrawValueHeader(Rect position, SerializedProperty valueProperty);
         protected virtual void DrawValueBody(Rect position, SerializedProperty valueProperty) { }
 
         protected abstract void InitializeValue(SerializedProperty valueProperty);
@@ -158,7 +158,7 @@ namespace UC.Editor
                 Rect percentRect = new Rect(weightRect.xMax + 1f, contentY, percentWidth, EditorGUIUtility.singleLineHeight);
 
                 // Top row
-                DrawValueHeader(valueHeaderRect, valueProperty);
+                bool valueChanged = DrawValueHeader(valueHeaderRect, valueProperty);
 
                 if (weightProperty != null)
                 {
@@ -175,7 +175,7 @@ namespace UC.Editor
                 }
 
                 // Children below, full width
-                if (bodyHeight > 0f)
+                if ((!valueChanged) && (bodyHeight > 0f))
                 {
                     Rect bodyRect = new Rect(elementRect.x + bodyLeftPadding, contentY + headerHeight + EditorGUIUtility.standardVerticalSpacing, elementRect.width - bodyLeftPadding, bodyHeight);
 
@@ -256,9 +256,11 @@ namespace UC.Editor
             return EditorGUI.GetPropertyHeight(valueProperty, GUIContent.none, true);
         }
 
-        protected override void DrawValueHeader(Rect position, SerializedProperty valueProperty)
+        protected override bool DrawValueHeader(Rect position, SerializedProperty valueProperty)
         {
             EditorGUI.PropertyField(position, valueProperty, GUIContent.none, true);
+
+            return false;
         }
 
         protected override void InitializeValue(SerializedProperty valueProperty)
@@ -288,9 +290,9 @@ namespace UC.Editor
             return BaseFunctionDrawer<T>.GetReferenceChildrenHeight(valueProperty);
         }
 
-        protected override void DrawValueHeader(Rect position, SerializedProperty valueProperty)
+        protected override bool DrawValueHeader(Rect position, SerializedProperty valueProperty)
         {
-            BaseFunctionDrawer<T>.DrawReferenceHeader(position, valueProperty, GUIContent.none, inline: true);
+            return BaseFunctionDrawer<T>.DrawReferenceHeader(position, valueProperty, GUIContent.none, inline: true);
         }
 
         protected override void DrawValueBody(Rect position, SerializedProperty valueProperty)

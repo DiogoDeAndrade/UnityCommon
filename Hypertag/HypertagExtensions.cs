@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace UC
@@ -32,6 +33,18 @@ namespace UC
             if (obj.gameObject.HasHypertag(tag)) return obj;
 
             return null;
+        }
+        public static List<T> GetComponentsInChildrenWithHypertag<T>(this Component go, Hypertag tag) where T : Component
+        {
+            var ret = new List<T>();
+
+            var objects = go.GetComponentsInChildren<T>();
+            foreach (var obj in objects)
+            {
+                if (obj.gameObject.HasHypertag(tag)) ret.Add(obj);
+            }
+
+            return ret;
         }
 
         public static T GetComponentInChildrenWithHypertag<T>(this Component go, Hypertag[] tags) where T : Component

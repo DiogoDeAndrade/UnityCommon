@@ -10,9 +10,11 @@ namespace UC.Editor
             return EditorGUI.GetPropertyHeight(valueProperty, GUIContent.none, true);
         }
 
-        protected override void DrawValueHeader(Rect position, SerializedProperty valueProperty)
+        protected override bool DrawValueHeader(Rect position, SerializedProperty valueProperty)
         {
             EditorGUI.PropertyField(position, valueProperty, GUIContent.none, true);
+
+            return false;
         }
 
         protected override void InitializeValue(SerializedProperty valueProperty)
@@ -44,9 +46,9 @@ namespace UC.Editor
             return BaseFunctionDrawer<T>.GetReferenceChildrenHeight(valueProperty);
         }
 
-        protected override void DrawValueHeader(Rect position, SerializedProperty valueProperty)
+        protected override bool DrawValueHeader(Rect position, SerializedProperty valueProperty)
         {
-            BaseFunctionDrawer<T>.DrawReferenceHeader(position, valueProperty, GUIContent.none, inline: true);
+            return BaseFunctionDrawer<T>.DrawReferenceHeader(position, valueProperty, GUIContent.none, inline: true);
         }
 
         protected override void DrawValueBody(Rect position, SerializedProperty valueProperty)
