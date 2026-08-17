@@ -169,7 +169,7 @@ namespace UC
             return false;
         }
 
-        // Doesn't clamp to segment - p0 and p1 are treated as points in an infinite line
+        // Clamped to segment - p beyond either end measures to that endpoint
         public static float Distance(Vector3 p0, Vector3 p1, Vector3 p)
         {
             Vector3 ab = p1 - p0;
@@ -177,8 +177,7 @@ namespace UC
 
             if (Vector3.Dot(av, ab) <= 0)
             {
-
-                return ab.magnitude;
+                return av.magnitude;
             }
             Vector3 bv = p - p1;
             if (Vector3.Dot(bv, ab) >= 0)
