@@ -24,6 +24,17 @@ namespace UC.ED
 
         public int count => (nodeIndices != null) ? (nodeIndices.Length) : (0);
 
+        /// <summary>
+        /// For influences that were computed rather than read out of a cell - the trilinear blend,
+        /// which has no backing array to filter.
+        /// </summary>
+        public static EDInfluences FromArrays(int[] nodeIndices, float[] weights)
+        {
+            if ((nodeIndices == null) || (weights == null)) return default;
+
+            return new EDInfluences(nodeIndices, weights);
+        }
+
         public static EDInfluences FromField(FullDeformationField.DeformationFieldWeights source)
         {
             if (source.weights == null) return default;
@@ -158,7 +169,21 @@ namespace UC.ED
         /// get one method - before this existed, every scene-view tool worked only on the two
         /// structure configurations and silently drew nothing for the other five.
         /// </summary>
-        public bool TryGetInfluences(Vector3 position, out EDInfluences influences)
+        public bool TryGetInfluences(Vector3 position, out EDInfluences influences) => TryGetInfluences(position, false, out influences);
+
+        /// <summary>
+        /// As TryGetInfluences, but able to report the trilinear blend rather than the containing
+        /// cell's own weights.
+        ///
+        /// Worth having both, and worth a caller stating which it wants. The cell weights are what
+        /// the field stores and are a step function across cell boundaries; the trilinear blend is
+        /// what deforms geometry. A tool that draws a trilinear deformation while printing cell
+        /// weights beside it is showing two different answers as though they were one, and the
+        /// disagreement looks like a discontinuity in the field rather than in the readout.
+        ///
+        /// Ignored in binding mode, which has no cells.
+        /// </summary>
+        public bool TryGetInfluences(Vector3 position, bool trilinear, out EDInfluences influences)
         {
             influences = default;
 
@@ -168,6 +193,13 @@ namespace UC.ED
 
             if (field != null)
             {
+                if ((trilinear) && (field.TryGetTrilinearInfluences(position, out int[] nodeIds, out float[] blended)))
+                {
+                    influences = EDInfluences.FromArrays(nodeIds, blended);
+
+                    return true;
+                }
+
                 var weights = field.GetWeights(position);
 
                 influences = EDInfluences.FromField(weights);
@@ -198,6 +230,59 @@ namespace UC.ED
             if (field == null) return false;
 
             weights = field.GetWeights(position);
+
+            return true;
+        }
+
+        /// <summary>
+        /// The geodesic distance the field itself stored for a node at a position, and the cell it
+        /// came from.
+        ///
+        /// This is the distance the weights were computed from. It is emphatically not the straight
+        /// line from the point to the node: the field propagates through the volume, so a node on the
+        /// far side of a wall is near in a straight line and far here, which is the entire reason the
+        /// field exists. A readout showing the Euclidean distance beside a field weight is showing
+        /// two unrelated numbers.
+        ///
+        /// Per cell, because distance is a per-cell quantity - there is no trilinear version of it.
+        /// The cell is returned with it so a caller can say which one it read.
+        /// </summary>
+        public bool TryGetFieldDistance(Vector3 position, int nodeIndex, out float distance, out Vector3Int cell)
+        {
+            distance = float.MaxValue;
+            cell = new Vector3Int(-1, -1, -1);
+
+            FullDeformationField field = GetField();
+
+            if (field == null) return false;
+
+            cell = field.GetVoxelCoordinate(position);
+
+            var weights = field.GetWeights(position);
+
+            if (weights.nodeId == null) return false;
+
+            for (int i = 0; i < weights.nodeId.Length; i++)
+            {
+                if (weights.nodeId[i] != nodeIndex) continue;
+
+                distance = weights.distances[i];
+
+                return (distance < float.MaxValue);
+            }
+
+            return false;
+        }
+
+        public bool TryGetFieldCell(Vector3 position, out Vector3Int cell)
+        {
+            cell = new Vector3Int(-1, -1, -1);
+
+            FullDeformationField field = GetField();
+
+            if (field == null) return false;
+
+            cell = field.GetVoxelCoordinate(position);
 
             return true;
         }
