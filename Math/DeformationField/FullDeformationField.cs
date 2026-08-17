@@ -779,11 +779,10 @@ public class FullDeformationField
             return nodeIndex;
 
         MinHeap heap = new();
-        HashSet<int> seededVoxels = new();
 
         if (sourceLength <= DistanceEpsilon)
         {
-            AddSeed(frame.position, nodeIndex, heap, seededVoxels);
+            AddSeed(frame.position, frame.position, frame.position, nodeIndex, heap);
         }
         else
         {
@@ -791,6 +790,10 @@ public class FullDeformationField
             Vector3 start = frame.position - direction * (sourceLength * 0.5f);
             Vector3 end = frame.position + direction * (sourceLength * 0.5f);
 
+            // The sampling decides *which* cells are seeds and nothing else. The distance each one
+            // carries is computed from the bar itself, in AddSeed - so the sample spacing cannot get
+            // into the distances, which is the whole reason it is safe to sample here at all.
+            //
             // We're using samples every voxelSize * 0.5, but to be really correct, we could use a 3D DDA, but the advantages don't seem really great for this.
             float stepLength = voxelSize * 0.5f;
 
@@ -801,7 +804,7 @@ public class FullDeformationField
                 float t = i / (float)stepCount;
                 Vector3 samplePosition = Vector3.Lerp(start, end, t);
 
-                AddSeed(samplePosition, nodeIndex, heap, seededVoxels);
+                AddSeed(samplePosition, start, end, nodeIndex, heap);
             }
         }
 
@@ -848,20 +851,48 @@ public class FullDeformationField
         return nodeIndex;
     }
 
-    void AddSeed(Vector3 position, int nodeIndex, MinHeap heap, HashSet<int> seededVoxels)
+    /// <summary>
+    /// Starts <paramref name="nodeIndex"/>'s wavefront in the cell nearest <paramref name="position"/>,
+    /// labelled with its true distance to the source rather than with zero.
+    ///
+    /// **The label is the distance to the source segment, not to the sample that found the cell.**
+    /// A seed used to store 0f, which is not a fact about the geometry - it is where the seed happened
+    /// to snap. A cell's real distance to the source is anywhere in [0, voxelSize*sqrt(3)/2], and
+    /// discarding that was what made exact zeros, and therefore exact ties, the normal case: the
+    /// even-split branch in ComputeWeights then fires wherever two sources reach the same cell, and
+    /// there it is a step function of how many did. Storing the real distance means almost no cell is
+    /// exactly zero and that branch stops firing on its own, without touching the mapping.
+    ///
+    /// Distance to the *segment* and not to the sample, because the bar is the source set S and the
+    /// quantity being propagated is min over q in S of d(x, q) - point-to-segment is that minimum,
+    /// exactly, while distance-to-nearest-sample would ripple along the bar with the sample period at
+    /// an amplitude comparable to the sub-voxel distances themselves. That would be an artifact as
+    /// large as the thing it was added to measure.
+    ///
+    /// Measured against the voxel centre because that is the point FindClosestFilledVoxel compares
+    /// and the point the relaxation's step costs run between. A point source passes start == end, and
+    /// the segment distance degenerates to the point distance on its own.
+    ///
+    /// *No dedup.* Several samples along the bar do land in the same cell, but they now all compute
+    /// the same distance from the same segment, so TryStoreDistance rejects the repeats as
+    /// non-improvements. The HashSet that used to sit here was harmless only because every seed was
+    /// zero; the moment seeds carry a real distance it silently becomes first-sample-wins instead of
+    /// nearest-wins.
+    /// </summary>
+    void AddSeed(Vector3 position, Vector3 sourceStart, Vector3 sourceEnd, int nodeIndex, MinHeap heap)
     {
         int startIndex = FindClosestFilledVoxel(position);
         if (startIndex < 0) return;
 
-        // Several points along the segment may map to the same voxel.
-        if (!seededVoxels.Add(startIndex))
-            return;
+        Vector3Int voxel = PositionOf(startIndex);
+
+        float distance = LineHelpers.Distance(sourceStart, sourceEnd, VoxelCenter(voxel.x, voxel.y, voxel.z), out _);
 
         ref DeformationFieldWeights startVoxel = ref voxelData.data[startIndex];
 
-        if (TryStoreDistance(ref startVoxel, nodeIndex, 0f))
+        if (TryStoreDistance(ref startVoxel, nodeIndex, distance))
         {
-            heap.Enqueue(new QueueItem(startIndex, nodeIndex, 0f));
+            heap.Enqueue(new QueueItem(startIndex, nodeIndex, distance));
         }
     }
 
@@ -1468,6 +1499,82 @@ public class FullDeformationField
         int rz = bz + 1;
 
         region = trilinearRegions[TrilinearRegionIndex(rx, ry, rz)];
+
+        return true;
+    }
+
+    /// <summary>
+    /// Which cell a position reads its weights from - the same lookup GetWeights makes, clamped the
+    /// same way.
+    ///
+    /// For diagnostics only, and specifically so a tool can tell "the numbers changed" apart from
+    /// "I crossed a cell boundary". The per-cell weights are piecewise constant by construction, so
+    /// without the cell coordinate those two are indistinguishable in a readout.
+    /// </summary>
+    public Vector3Int GetVoxelCoordinate(Vector3 position)
+    {
+        if (!HasVoxelData()) return new Vector3Int(-1, -1, -1);
+
+        return ClampVoxelPosition(WorldToVoxel(position));
+    }
+
+    /// <summary>
+    /// The weights trilinear sampling actually applies at a position, rather than the containing
+    /// cell's own weights.
+    ///
+    /// This is what deforms geometry - DeformPositionFromNodeFramesTrilinear blends node transforms
+    /// with exactly these numbers, normalized by exactly this sum - so a tool reporting them is
+    /// reporting the deformation rather than an ingredient of it. The per-cell weights that
+    /// GetWeights returns are a step function across cell boundaries and will jump for a movement of
+    /// a fraction of a voxel; these will not.
+    ///
+    /// There is deliberately no interpolated *distance* to go with them. A distance is a per-cell
+    /// quantity that the weights were computed from, and inventing a blended one would put a number
+    /// in front of a reader that nothing in the field ever computed.
+    /// </summary>
+    public bool TryGetTrilinearInfluences(Vector3 position, out int[] nodeIds, out float[] blendedWeights)
+    {
+        nodeIds = null;
+        blendedWeights = null;
+
+        EnsureTrilinearRegionsBuilt();
+
+        if (!TryGetTrilinearRegion(position, out TrilinearRegion region, out float fx, out float fy, out float fz))
+        {
+            return false;
+        }
+
+        int influenceEnd = region.influenceStart + region.influenceCount;
+
+        var ids = new List<int>(region.influenceCount);
+        var values = new List<float>(region.influenceCount);
+
+        float weightSum = 0f;
+
+        for (int i = region.influenceStart; i < influenceEnd; i++)
+        {
+            TrilinearInfluence influence = trilinearInfluences[i];
+
+            float weight = InterpolateTrilinearWeight(influence, fx, fy, fz);
+
+            if (weight <= 0f) continue;
+            if (influence.nodeId < 0) continue;
+
+            ids.Add(influence.nodeId);
+            values.Add(weight);
+
+            weightSum += weight;
+        }
+
+        if (weightSum <= DistanceEpsilon) return false;
+
+        for (int i = 0; i < values.Count; i++)
+        {
+            values[i] /= weightSum;
+        }
+
+        nodeIds = ids.ToArray();
+        blendedWeights = values.ToArray();
 
         return true;
     }
