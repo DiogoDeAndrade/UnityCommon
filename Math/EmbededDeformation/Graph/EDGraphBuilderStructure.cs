@@ -33,8 +33,10 @@ namespace UC.ED
         private int fieldStorageSlots = 4;
         [SerializeField, Tooltip("Which neighbours the distance wavefront may step to. Faces6 makes every step the same length, so the metric is L1 and the isolines are diamonds. The richer stencils add diagonals at their true cost and round that out, at the price of a corner-cutting check per diagonal step and more work per cell.")]
         private EDFieldConnectivity fieldConnectivity = EDFieldConnectivity.FacesEdgesCorners26;
-        [SerializeField]
+        [SerializeField, Tooltip("Seed each terminal node along its connector's whole cross-section rather than from the single voxel at the frame origin. Off gives every terminal a point source, which is what the field did before.")]
         private bool useTerminalLength = true;
+        [SerializeField, Tooltip("Seed every node along a bar as wide as the navigable corridor is at that node, measured across the node's right axis. This is what makes one node's distance the same kind of quantity as another's: a point source and a bar source are not comparable, so a piece where only the terminals are bars has terminals staying competitive further out than they should.")]
+        private bool useCorridorLength = false;
 
         private bool usesExplicitStorage => (fieldDistanceStorage == EDFieldDistanceStorage.Explicit);
 
@@ -47,6 +49,8 @@ namespace UC.ED
         public override EDFieldDistanceStorage deformationFieldDistanceStorage => fieldDistanceStorage;
         public override int deformationFieldStorageSlots => fieldStorageSlots;
         public override EDFieldConnectivity deformationFieldConnectivity => fieldConnectivity;
+        public override bool deformationFieldSeedTerminals => useTerminalLength;
+        public override bool deformationFieldSeedCorridors => useCorridorLength;
 
         public override Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav) => new StructureInstance(this, deformation, structureSource, nav);
 
@@ -135,8 +139,138 @@ namespace UC.ED
             }
 
             /// <summary>
-            /// The bar length to seed each node along, indexed by node. Zero everywhere except the
-            /// terminal nodes a connector attaches to, which seed along their whole cross-section.
+            /// The bar length to seed each node along, indexed by node. Zero means a point source.
+            ///
+            /// Two independent contributions, and they are kept independent on purpose - the four
+            /// combinations of the two toggles are the measurement. Corridor widths are laid down
+            /// first and connector widths overwrite them, because the connector width is the stated
+            /// width of the piece's mouth while the corridor probe is only an estimate of it; where
+            /// both exist the stated one wins.
+            ///
+            /// That ordering also makes the free consistency check available: with terminal seeding
+            /// off and corridor seeding on, the probe measures the terminals too, and what it
+            /// measures there should come out close to the connector width it is not being given.
+            /// MeasureCorridorWidths logs the comparison so a wrong measurement is caught before it
+            /// reaches a golden.
+            /// </summary>
+            private float[] ResolveSeedLengths(EDGraphBuilderStructure def, float runawayLimit)
+            {
+                int nodeCount = deformation.nodes.Count;
+
+                float[] connectorWidths = ResolveConnectorWidths();
+                float[] lengths = new float[nodeCount];
+
+                if (def.useCorridorLength)
+                {
+                    MeasureCorridorWidths(lengths, connectorWidths, runawayLimit);
+                }
+
+                if (def.useTerminalLength)
+                {
+                    for (int i = 0; i < nodeCount; i++)
+                    {
+                        if (connectorWidths[i] > 0.0f) lengths[i] = connectorWidths[i];
+                    }
+                }
+
+                return lengths;
+            }
+
+            /// <summary>
+            /// Fills <paramref name="lengths"/> with the navigable corridor width at each node,
+            /// measured across the node's rest right axis.
+            ///
+            /// The rest frames this reads are built by BuildNodeRestFrames, which Build calls
+            /// immediately before BuildDeformationField. That ordering is load-bearing: run this any
+            /// earlier and every node's right axis is the identity default, which measures a real
+            /// width along an arbitrary direction and looks entirely plausible.
+            ///
+            /// Deliberately not capped by the node spacing. The spacing runs *along* the corridor and
+            /// the bar runs across it, so one does not bound the other - and the width is wanted in
+            /// full, since it is what the influences are then computed from. The probe terminates on
+            /// its own: a bounded surface means a probe from an interior point crosses a boundary
+            /// eventually, and a side that crosses nothing is unbounded rather than failed, which the
+            /// symmetric width already handles by losing the Min.
+            /// </summary>
+            private void MeasureCorridorWidths(float[] lengths, float[] connectorWidths, float runawayLimit)
+            {
+                var nodes = deformation.nodes;
+
+                int measured = 0;
+                int unmeasured = 0;
+                int openEnded = 0;
+                int runaway = 0;
+
+                float minWidth = float.MaxValue;
+                float maxWidth = 0.0f;
+                double totalWidth = 0.0;
+
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    EDNode node = nodes[i];
+
+                    // Rest geometry: this runs inside Build, before BuildNavigationData, so there are
+                    // no bindings to deform through and nothing has moved anyway.
+                    if (!deformation.TryMeasureCorridor(node.restPosition, node.restRight, node.restUp, null, null, out EDCorridorExtent extent))
+                    {
+                        unmeasured++;
+
+                        Debug.LogWarning($"Corridor width could not be measured at node {i} ({node.restPosition.ToVector3()}): the probe crossed no navmesh boundary on either side. Seeding it as a point source. A node outside the navmesh, or one whose rest frame is degenerate, would both look like this.");
+                        continue;
+                    }
+
+                    if ((!extent.hasPositive) || (!extent.hasNegative)) openEnded++;
+
+                    float width = (float)extent.symmetricWidth;
+
+                    // Not a clamp on a measurement that might be right - a bar longer than the piece
+                    // itself is a symptom, and one that would otherwise seed silently across the whole
+                    // volume. Left at zero so it reads as "not measured" rather than as a number.
+                    if (width > runawayLimit)
+                    {
+                        runaway++;
+
+                        Debug.LogWarning($"Corridor width at node {i} measured {width:F3}, which exceeds the piece's own extent ({runawayLimit:F3}). Discarding it and seeding a point source - something is wrong with the probe or with this node's rest frame.");
+                        continue;
+                    }
+
+                    lengths[i] = width;
+
+                    measured++;
+                    totalWidth += width;
+                    minWidth = Mathf.Min(minWidth, width);
+                    maxWidth = Mathf.Max(maxWidth, width);
+
+                    // The check that does not need a golden: at a terminal the probe is measuring the
+                    // connector mouth, whose width is stated independently. They should agree.
+                    if (connectorWidths[i] > 0.0f)
+                    {
+                        Debug.Log($"Corridor width at terminal node {i}: measured {width:F3} against a stated connector width of {connectorWidths[i]:F3} (+{DescribeExtent(extent.positive)} / -{DescribeExtent(extent.negative)}).");
+                    }
+                }
+
+                if (measured == 0)
+                {
+                    Debug.LogWarning("Corridor seeding is on but not one node could be measured. Every node is a point source, which is the same field corridor seeding off would have produced - so this is on in name only.");
+                    return;
+                }
+
+                Debug.Log($"Corridor widths: measured {measured} of {nodes.Count} nodes, " +
+                          $"min {minWidth:F3}, max {maxWidth:F3}, mean {(totalWidth / measured):F3}. " +
+                          $"Open-ended on one side {openEnded}, unmeasured {unmeasured}, discarded as runaway {runaway}.");
+            }
+
+            /// <summary>
+            /// An extent as text, with the unbounded case named rather than printed - MaxValue under
+            /// a numeric format is a 300-digit number that reads as a measurement.
+            /// </summary>
+            private static string DescribeExtent(double extent)
+            {
+                return (extent == double.MaxValue) ? ("open") : (extent.ToString("F3"));
+            }
+
+            /// <summary>
+            /// The connector cross-section width at each terminal node, zero elsewhere.
             ///
             /// A skeleton graph puts exactly one node at a connector, so a vertex on the connector
             /// cross-section is otherwise reached by geodesic distance from that single point - and
@@ -169,10 +303,8 @@ namespace UC.ED
 
                     if ((nodeIndex < 0) || (nodeIndex >= widths.Length)) continue;
 
-                    // Two connectors landing on one node means the skeleton has no terminal to tell
-                    // them apart, and the terminal constraints are in the same trouble. Keep the
-                    // wider bar rather than whichever came last, and say so - a silent overwrite
-                    // here would show up only as a field that is subtly wrong at one connector.
+                    // Two connectors landing on one node means the skeleton has no terminal to tell them apart, and the terminal constraints are in the same trouble. Keep the
+                    // wider bar rather than whichever came last, and say so - a silent overwrite here would show up only as a field that is subtly wrong at one connector.
                     if (widths[nodeIndex] > 0.0f)
                     {
                         Debug.LogWarning($"Two connectors both resolve to leaf node {nodeIndex}. Seeding it with the wider bar; the terminal constraints on it will also be in conflict.");
@@ -304,7 +436,8 @@ namespace UC.ED
                 // to what the field was actually given.
                 bool slotPerNode = (storageSlots >= nodes.Count);
 
-                FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity);
+                FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity,
+                                                                      def.useTerminalLength, def.useCorridorLength);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.
@@ -326,14 +459,16 @@ namespace UC.ED
                 //
                 //    Add them in ED node order so the deformation field node id matches the ED node index.
                 // -------------------------------------------------------------
-                float[] connectorWidths = ResolveConnectorWidths();
+                //    The runaway limit is the piece's own diagonal. It is a symptom detector rather
+                //    than a cap - see MeasureCorridorWidths for why the measurement itself is not
+                //    bounded - and it is derived here because this is where the bounds exist.
+                float[] seedLengths = ResolveSeedLengths(def, bounds.size.magnitude);
 
                 for (int i = 0; i < nodes.Count; i++)
                 {
                     EDNode node = nodes[i];
 
-                    float connectorWidth = (def.useTerminalLength) ? (connectorWidths[i]) : (0.0f);
-                    field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), connectorWidth);
+                    field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), seedLengths[i]);
                 }
 
                 // -------------------------------------------------------------

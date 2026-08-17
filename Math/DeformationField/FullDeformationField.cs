@@ -210,6 +210,16 @@ public class FullDeformationField
     bool                                slotPerNode;
     [SerializeField, HideInInspector]
     EDFieldConnectivity                 connectivity;
+    /// <summary>
+    /// Which nodes were seeded along a bar rather than from a single voxel. Recorded rather than
+    /// derived: with every seeding mode off the source lengths are all zero, and so are they when
+    /// corridor seeding is on and every measurement failed - two states that must not be mistaken
+    /// for each other by whatever later asks what this field is.
+    /// </summary>
+    [SerializeField, HideInInspector]
+    bool                                seedTerminals;
+    [SerializeField, HideInInspector]
+    bool                                seedCorridors;
     [SerializeField, HideInInspector]
     List<DeformationNode>               deformationNodes = new List<DeformationNode>();
     [SerializeField, HideInInspector]
@@ -230,6 +240,17 @@ public class FullDeformationField
     public int storedInfluencesPerCell => storageSlots;
     public float builtVoxelDensity => voxelDensity;
     public EDFieldConnectivity builtConnectivity => connectivity;
+    public bool builtSeedTerminals => seedTerminals;
+    public bool builtSeedCorridors => seedCorridors;
+
+    /// <summary>
+    /// The seeded nodes, for drawing. The rest frame and the bar length are what the field was
+    /// actually built from, so a gizmo reading them shows the seeding rather than a reconstruction
+    /// of it that could disagree.
+    /// </summary>
+    public int deformationNodeCount => (deformationNodes != null) ? (deformationNodes.Count) : (0);
+
+    public DeformationNode GetDeformationNode(int index) => deformationNodes[index];
 
     const float DistanceEpsilon = 1e-5f;
 
@@ -679,7 +700,14 @@ public class FullDeformationField
     /// every node index is a valid slot index and no cell can ever evict. Wrong here would be quiet:
     /// a node index past the end simply falls back to the searching path rather than throwing.
     /// </param>
-    public FullDeformationField(float voxelSize, float voxelDensity, int maxWeights, int storageSlots = -1, bool slotPerNode = false, EDFieldConnectivity connectivity = EDFieldConnectivity.Faces6)
+    /// <param name="seedTerminals">
+    /// Carried, not used, for the same reason as voxelDensity. The two seeding flags decide the
+    /// source lengths the caller passes to AddDeformationNode, so they change every distance in the
+    /// field - and a field built under one of them is not comparable with a field built under the
+    /// other. The golden harness reads them back to refuse a comparison across that change.
+    /// </param>
+    public FullDeformationField(float voxelSize, float voxelDensity, int maxWeights, int storageSlots = -1, bool slotPerNode = false, EDFieldConnectivity connectivity = EDFieldConnectivity.Faces6,
+                                bool seedTerminals = false, bool seedCorridors = false)
     {
         this.voxelSize = Mathf.Max(voxelSize, DistanceEpsilon);
         this.voxelDensity = voxelDensity;
@@ -687,6 +715,8 @@ public class FullDeformationField
         this.storageSlots = Mathf.Max(this.maxWeights, storageSlots);
         this.slotPerNode = slotPerNode;
         this.connectivity = connectivity;
+        this.seedTerminals = seedTerminals;
+        this.seedCorridors = seedCorridors;
 
         voxelData = new VoxelData<DeformationFieldWeights>();
         deformationNodes = new();

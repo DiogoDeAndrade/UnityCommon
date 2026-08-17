@@ -77,6 +77,8 @@ namespace UC.ED
         public virtual EDFieldDistanceStorage deformationFieldDistanceStorage => EDFieldDistanceStorage.NearestWeighted;
         public virtual int deformationFieldStorageSlots => 0;
         public virtual EDFieldConnectivity deformationFieldConnectivity => EDFieldConnectivity.Faces6;
+        public virtual bool deformationFieldSeedTerminals => false;
+        public virtual bool deformationFieldSeedCorridors => false;
 
         public float maxSegmentLength => structureMaxSegmentLength;
 
