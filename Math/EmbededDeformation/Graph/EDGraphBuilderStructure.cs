@@ -38,7 +38,29 @@ namespace UC.ED
         [SerializeField, Tooltip("Seed every node along a bar as wide as the navigable corridor is at that node, measured across the node's right axis. This is what makes one node's distance the same kind of quantity as another's: a point source and a bar source are not comparable, so a piece where only the terminals are bars has terminals staying competitive further out than they should.")]
         private bool useCorridorLength = false;
 
+        [SerializeField, Tooltip("How a cell turns the distances it stored into blend weights. InverseDistance is what every structure golden up to now was captured against. Note that InversePower at p = 1 does NOT reproduce it: the epsilon is added to the distance rather than used as a floor, so there is no singularity and no even-split-at-zero branch.")]
+        private EDFieldWeightMode fieldWeightMode = EDFieldWeightMode.InverseDistance;
+        [SerializeField, Min(0.01f), ShowIf(nameof(usesWeightPower)), Tooltip("The exponent. For InversePower, 1/(d+eps)^p - above 1 sharpens, below 1 flattens. For Gaussian, exp(-(d/sigma)^p) - 2 is the true Gaussian, higher flattens the centre and steepens the shoulder.")]
+        private float fieldWeightPower = 2.0f;
+        [SerializeField, Min(1e-4f), ShowIf(nameof(usesWeightEpsilon)), Tooltip("Added to the distance before the power, so there is no singularity at zero. World units.")]
+        private float fieldWeightEpsilon = 0.01f;
+        [SerializeField, Min(1e-4f), ShowIf(nameof(usesWeightSigma)), Tooltip("Gaussian falloff width. A fraction of the furthest kept distance when Normalize Distances is on, and a world-space length when it is off.")]
+        private float fieldWeightSigma = 0.4f;
+        [SerializeField, Range(1.01f, 2.0f), ShowIf(nameof(usesWeightAlpha)), Tooltip("Entmax alpha. Towards 1 is softmax-like and dense; 2 is sparsemax; 1.5 is the usual choice and the one with the cheapest exact solution elsewhere in the literature.")]
+        private float fieldWeightAlpha = 1.5f;
+        [SerializeField, Min(1e-4f), ShowIf(nameof(usesWeightTemperature)), Tooltip("Divides the distances before entmax sees them. Smaller concentrates the weights and produces more exact zeros; larger spreads them out.")]
+        private float fieldWeightTemperature = 0.25f;
+        [SerializeField, ShowIf(nameof(usesNormalizedDistances)), Tooltip("Divide each cell's distances by the furthest one it keeps before mapping them. This is what makes sigma and the entmax temperature dimensionless - without it they are world-space lengths, and as brittle against voxel density and piece scale as a fixed softmax temperature. Off exists to demonstrate that rather than assert it.")]
+        private bool fieldWeightNormalizeDistances = true;
+
         private bool usesExplicitStorage => (fieldDistanceStorage == EDFieldDistanceStorage.Explicit);
+
+        private bool usesWeightPower => (fieldWeightMode == EDFieldWeightMode.InversePower) || (fieldWeightMode == EDFieldWeightMode.Gaussian);
+        private bool usesWeightEpsilon => (fieldWeightMode == EDFieldWeightMode.InversePower);
+        private bool usesWeightSigma => (fieldWeightMode == EDFieldWeightMode.Gaussian);
+        private bool usesWeightAlpha => (fieldWeightMode == EDFieldWeightMode.Entmax);
+        private bool usesWeightTemperature => (fieldWeightMode == EDFieldWeightMode.Entmax);
+        private bool usesNormalizedDistances => (fieldWeightMode == EDFieldWeightMode.Gaussian) || (fieldWeightMode == EDFieldWeightMode.Entmax);
 
         private static readonly EDBindingConfig fixedBinding = new EDBindingConfig();
 
@@ -51,6 +73,24 @@ namespace UC.ED
         public override EDFieldConnectivity deformationFieldConnectivity => fieldConnectivity;
         public override bool deformationFieldSeedTerminals => useTerminalLength;
         public override bool deformationFieldSeedCorridors => useCorridorLength;
+
+        public override FullDeformationField.WeightResolver CreateFieldWeightResolver()
+        {
+            switch (fieldWeightMode)
+            {
+                case EDFieldWeightMode.InversePower:
+                    return new FullDeformationField.InversePowerWeights(fieldWeightPower, fieldWeightEpsilon);
+
+                case EDFieldWeightMode.Gaussian:
+                    return new FullDeformationField.GaussianWeights(fieldWeightSigma, fieldWeightPower, fieldWeightNormalizeDistances);
+
+                case EDFieldWeightMode.Entmax:
+                    return new FullDeformationField.EntmaxWeights(fieldWeightAlpha, fieldWeightTemperature, fieldWeightNormalizeDistances);
+
+                default:
+                    return new FullDeformationField.InverseDistanceWeights();
+            }
+        }
 
         public override Instance NewInstance(EmbededDeformation deformation, IEDStructureSource structureSource, EDNavQueries nav) => new StructureInstance(this, deformation, structureSource, nav);
 
@@ -481,7 +521,7 @@ namespace UC.ED
                 // -------------------------------------------------------------
                 // 6) Convert distances into normalized weights.
                 // -------------------------------------------------------------
-                field.ComputeWeights(safeMaxWeights);
+                field.ComputeWeights(safeMaxWeights, def.CreateFieldWeightResolver());
                 field.BuildTrilinearRegions();
 
                 deformation.SetDeformationField(field);

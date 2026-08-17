@@ -31,6 +31,30 @@ namespace UC.ED
     }
 
     /// <summary>
+    /// How a deformation field cell turns the distances it stored into blend weights.
+    ///
+    /// An enum here, resolved into a FullDeformationField.WeightResolver at build time, rather than a
+    /// resolver reference on the asset. The enum and its parameters are what the golden dump records
+    /// and what the harness compares; the resolver is behaviour, built per graph build and discarded
+    /// with it, which keeps it out of serialization entirely.
+    /// </summary>
+    public enum EDFieldWeightMode
+    {
+        /// <summary>1/max(d, eps) over the sum, splitting evenly at zero. The mapping every structure
+        /// golden up to now was captured against.</summary>
+        InverseDistance,
+        /// <summary>1/(d + eps)^p. Sharper above p = 1, flatter below, and with no singularity to
+        /// guard - so it does not reproduce InverseDistance even at p = 1.</summary>
+        InversePower,
+        /// <summary>exp(-(d/sigma)^p), with sigma a fraction of the furthest kept distance.</summary>
+        Gaussian,
+        /// <summary>Alpha-entmax over negated distances. The only mapping here that can put a weight
+        /// at exactly zero through the normalization rather than through a cutoff, so the effective
+        /// number of influences varies by itself.</summary>
+        Entmax
+    }
+
+    /// <summary>
     /// Where the deformation graph comes from, and the construction that produces it.
     ///
     /// The two builders answer genuinely different questions. Sampling the navmesh has to decide
@@ -79,6 +103,16 @@ namespace UC.ED
         public virtual EDFieldConnectivity deformationFieldConnectivity => EDFieldConnectivity.Faces6;
         public virtual bool deformationFieldSeedTerminals => false;
         public virtual bool deformationFieldSeedCorridors => false;
+
+        /// <summary>
+        /// The distance-to-weight mapping this builder's settings describe, freshly built.
+        ///
+        /// Null for a builder that produces no field, which ComputeWeights reads as the legacy
+        /// inverse-distance mapping. Called by the field build and, separately, by the golden harness
+        /// to ask what the settings *now* say so it can compare that against what the built field
+        /// actually used - which is why it returns a new instance rather than a cached one.
+        /// </summary>
+        public virtual FullDeformationField.WeightResolver CreateFieldWeightResolver() => null;
 
         public float maxSegmentLength => structureMaxSegmentLength;
 
