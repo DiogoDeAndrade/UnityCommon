@@ -46,8 +46,7 @@ namespace UC
             var tex = Selection.activeObject as Texture2D;
             if (tex == null)
             {
-                EditorUtility.DisplayDialog("Voxel Extrude",
-                    "Please select a Texture2D asset first.", "OK");
+                EditorUtility.DisplayDialog("Voxel Extrude", "Please select a Texture2D asset first.", "OK");
                 return;
             }
 
@@ -58,8 +57,7 @@ namespace UC
         }
 
         [MenuItem("Assets/Unity Common Tools/Model/Extrude", true)]
-        private static bool OpenFromContextMenuValidate()
-            => Selection.activeObject is Texture2D;
+        private static bool OpenFromContextMenuValidate() => Selection.activeObject is Texture2D;
 
         // ---------------------------------------------------------------------
         // Public API
@@ -312,7 +310,7 @@ namespace UC
             _statusStyle = new GUIStyle(EditorStyles.helpBox) { wordWrap = true, fontSize = 11 };
         }
 
-        [MenuItem("Unity Common/Voxel Extrude", priority = 10)]
+        [MenuItem("Unity Common/Geometry/Voxel Extrude", priority = 10)]
         private static void OpenFromMenu()
         {
             var win = GetWindow<VoxelExtruderWindow>(true, "Voxel Extrude", true);
