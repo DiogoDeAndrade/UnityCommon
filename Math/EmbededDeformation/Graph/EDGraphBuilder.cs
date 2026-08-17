@@ -43,8 +43,9 @@ namespace UC.ED
         /// <summary>1/max(d, eps) over the sum, splitting evenly at zero. The mapping every structure
         /// golden up to now was captured against.</summary>
         InverseDistance,
-        /// <summary>1/(d + eps)^p. Sharper above p = 1, flatter below, and with no singularity to
-        /// guard - so it does not reproduce InverseDistance even at p = 1.</summary>
+        /// <summary>1/max(d, floor)^p. Sharper above p = 1, flatter below. The floor clamps the
+        /// distance rather than being added to it, so its effect does not grow with p. At p = 1 it
+        /// differs from InverseDistance by the even-split branch and nothing else.</summary>
         InversePower,
         /// <summary>exp(-(d/sigma)^p), with sigma a fraction of the furthest kept distance.</summary>
         Gaussian,
