@@ -274,6 +274,35 @@ namespace UC.ED
             return false;
         }
 
+        /// <summary>
+        /// The length of the bar a node was seeded along, or false when it was a point source or
+        /// there is no field at all.
+        ///
+        /// Read off the field's own node rather than recomputed from the builder settings, for the
+        /// same reason the seed-bar gizmo does: a re-derived length would agree with the field right
+        /// up until one of the two was edited.
+        ///
+        /// Worth keeping distinct from the node frame's right axis, which is easily mistaken for it.
+        /// The rest axes are unit, so that magnitude is a scale factor and reads 1 on an undeformed
+        /// node whatever the corridor is doing; this is a width in world units. Carrying the bar
+        /// through the deformation means scaling this by that - the two multiply, they are not
+        /// alternatives.
+        /// </summary>
+        public bool TryGetNodeSourceLength(int nodeIndex, out float sourceLength)
+        {
+            sourceLength = 0.0f;
+
+            FullDeformationField field = GetField();
+
+            if (field == null) return false;
+
+            if ((nodeIndex < 0) || (nodeIndex >= field.deformationNodeCount)) return false;
+
+            sourceLength = field.GetDeformationNode(nodeIndex).sourceLength;
+
+            return (sourceLength > 0.0f);
+        }
+
         public bool TryGetFieldCell(Vector3 position, out Vector3Int cell)
         {
             cell = new Vector3Int(-1, -1, -1);
