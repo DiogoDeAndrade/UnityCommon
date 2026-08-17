@@ -167,36 +167,55 @@ public partial class FullDeformationField
     }
 
     /// <summary>
-    /// Powered inverse distance, 1/(d + eps)^p over the sum.
+    /// Powered inverse distance, 1/max(d, floor)^p over the sum.
     ///
     /// Sharper than the legacy mapping above p = 1 and flatter below it, which is the first thing
-    /// Phase 7 wants to sweep. Note it is *not* the legacy mapping at p = 1: the epsilon is added to
-    /// the distance rather than used as a floor under it, so there is no singularity and therefore no
-    /// even-split branch. That difference is the point - it is what makes the zero-distance case stop
-    /// being special - and it means p = 1 will not reproduce the legacy goldens.
+    /// Phase 7 wants to sweep.
+    ///
+    /// **The floor clamps the distance, it is not added to it**, and the difference matters more than
+    /// it looks. Written as 1/(d + eps)^p the correction is roughly p*eps/d, so the constant's
+    /// influence grows with the very parameter being swept - at p = 8 and eps = 0.01 it distorts a
+    /// distance of 0.2 by around 40%, which means the thing held fixed changes meaning as the thing
+    /// being varied moves. Written as 1/(d^p + eps) it is worse the other way: the constant dominates
+    /// wherever d^p is below it, i.e. under d = eps^(1/p), which at p = 8 is 0.56 and swallows most of
+    /// a map piece's near range. Clamping instead gives exactly 1/d^p everywhere above the floor -
+    /// which is everywhere that matters, since the floor sits below the smallest real distance - while
+    /// still being bounded at d = 0. The floor stays a distance and means the same thing at every p.
+    ///
+    /// So at p = 1 this differs from the legacy mapping by the even-split branch and by nothing else,
+    /// which is exactly the comparison worth having: it isolates what that branch was doing. It still
+    /// does not reproduce the legacy goldens, and that is the reason.
+    ///
+    /// Two nodes both under the floor get identical scores and split evenly once normalized, so the
+    /// legacy branch's behaviour falls out of the arithmetic rather than being special-cased. Nodes
+    /// further out keep a small share rather than being zeroed, which is the smooth version of what
+    /// the branch did abruptly.
     ///
     /// No distance normalization is offered. Scaling every distance by the same factor scales every
     /// score by that factor to the power p, which the normalization then divides straight back out -
-    /// so it would change nothing here except through the epsilon.
+    /// so it would change nothing here except through the floor.
     /// </summary>
     public sealed class InversePowerWeights : WeightResolver
     {
         private readonly float power;
-        private readonly float epsilon;
+        private readonly float distanceFloor;
 
-        public InversePowerWeights(float power, float epsilon)
+        public InversePowerWeights(float power, float distanceFloor)
         {
             this.power = power;
-            this.epsilon = Mathf.Max(epsilon, DistanceEpsilon);
+            this.distanceFloor = Mathf.Max(distanceFloor, DistanceEpsilon);
         }
 
-        public override string Describe() => $"invpow p {power:F4} eps {epsilon:F6}";
+        // "floor" rather than "eps", because the two named the same number and meant different
+        // arithmetic. A dump that recorded one while the code did the other would be worse than a
+        // dump that recorded nothing.
+        public override string Describe() => $"invpow p {power:F4} floor {distanceFloor:F6}";
 
         public override void ComputeCellWeights(float[] distances, int count, float[] weights)
         {
             for (int i = 0; i < count; i++)
             {
-                weights[i] = 1.0f / Mathf.Pow(distances[i] + epsilon, power);
+                weights[i] = 1.0f / Mathf.Pow(Mathf.Max(distances[i], distanceFloor), power);
             }
 
             NormalizeInPlace(weights, count);
