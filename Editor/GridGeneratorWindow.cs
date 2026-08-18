@@ -33,7 +33,7 @@ namespace UC
 
         private Transform parent;
 
-        [MenuItem("Unity Common/Spawn Objects in Grid", priority = 10)]
+        [MenuItem("Unity Common/Objects/Spawn Objects in Grid", priority = 10)]
         public static void Open()
         {
             GetWindow<GridGeneratorWindow>("Grid Generator");

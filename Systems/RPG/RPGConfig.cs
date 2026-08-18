@@ -21,7 +21,7 @@ namespace UC
         [SerializeField]
         private List<ArmourModuleFunctionElem> _armourFunctions;
         [SerializeField, Tooltip("This stat is used for the calculation of the K component in the armour mitigation code.")]
-        private StatType _itemArmourKStat;
+        private UC.RPG.StatType _itemArmourKStat;
 
         List<ArmourModuleFunction> _GetArmourFunctions(DamageType damageType)
         {
@@ -63,6 +63,6 @@ namespace UC
         {
             return instanceBase?._GetArmourFunctions(damageType);
         }
-        public static StatType itemArmourKStat => instanceBase?._itemArmourKStat;
+        public static RPG.StatType itemArmourKStat => instanceBase?._itemArmourKStat;
     }
 }

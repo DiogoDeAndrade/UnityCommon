@@ -7,7 +7,7 @@ namespace UC.RPG.Actions
     [System.Serializable]
     [GameActionName("RPG/Add Item")]
     public class GameAction_AddItem : GameAction
-    {
+    { 
         [SerializeField] private RPGTarget itemTarget;
 
         public override bool NeedWait() { return false; }

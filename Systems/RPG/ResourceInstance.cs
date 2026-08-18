@@ -103,7 +103,7 @@ namespace UC.RPG
             {
                 if (canAddOnEmpty)
                 {
-                    if (value < type.maxValue)
+                    if (value < maxValue)
                     {
                         value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, maxValue);
 
@@ -119,7 +119,7 @@ namespace UC.RPG
                 else if (_resourceEmpty) ret = false;
                 else
                 {
-                    if (value < type.maxValue)
+                    if (value < maxValue)
                     {
                         value = Mathf.Clamp(value + changeData.deltaValue, 0.0f, maxValue);
 

@@ -55,7 +55,7 @@ namespace UC
 
         Camera _cameraObjCache;
 
-        [MenuItem("Unity Common/Screenshot Options")]
+        [MenuItem("Unity Common/Screenshots/Options")]
         public static void Open()
         {
             var w = GetWindow<ScreenshotOptionsWindow>("Screenshot Options");
@@ -120,7 +120,7 @@ namespace UC
 
     public static class ScreenshotTool
     {
-        [MenuItem("Unity Common/Take Screenshot _F12")]
+        [MenuItem("Unity Common/Screenshots/Take _F12")]
         public static void TakeScreenshotMenu()
         {
             TakeScreenshot();
@@ -166,11 +166,7 @@ namespace UC
                     // GameView path: Play Mode only
                     if (!Application.isPlaying)
                     {
-                        EditorUtility.DisplayDialog(
-                            "Take Screenshot",
-                            "No Camera is set.\n\nGameView screenshots require Play Mode.\n\n" +
-                            "Either enter Play Mode or assign a Camera in Screenshot Options.",
-                            "OK");
+                        EditorUtility.DisplayDialog("Take Screenshot", "No Camera is set.\n\nGameView screenshots require Play Mode.\n\n" + "Either enter Play Mode or assign a Camera in Screenshot Options.", "OK");
                         Debug.LogError("GameView screenshot requires Play Mode when no camera is assigned.");
                         return;
                     }
