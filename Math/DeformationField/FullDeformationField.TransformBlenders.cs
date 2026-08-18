@@ -25,7 +25,12 @@ public enum EDFieldBlendMode
     /// The weighted mean of the affine matrices, component by component. The original formulation,
     /// and the only mode the goldens have ever been captured under.
     /// </summary>
-    LinearAffine
+    LinearAffine,
+    /// <summary>
+    /// Split each transform into translation, rotation and stretch by polar decomposition, combine
+    /// each part where it lives, recompose. EDFieldRotationBlend and EDFieldScaleBlend say how.
+    /// </summary>
+    Polar
 }
 
 public partial class FullDeformationField
@@ -256,7 +261,7 @@ public partial class FullDeformationField
         /// consecutive parameters belong to one node, so perturbing a parameter moves exactly one
         /// frame. A second call replaces the first rather than adding to it.
         /// </summary>
-        public void SetNodeOverride(int nodeIndex, Frame frame)
+        public virtual void SetNodeOverride(int nodeIndex, Frame frame)
         {
             if ((nodeIndex < 0) || (nodeIndex >= nodeMatrices.Length)) return;
 
@@ -268,10 +273,16 @@ public partial class FullDeformationField
         /// Back to the frozen transforms. Total rather than paired with a particular Set, so it is
         /// safe to call in a finally without knowing whether the Set ran.
         /// </summary>
-        public void ClearNodeOverride()
+        public virtual void ClearNodeOverride()
         {
             overrideNode = -1;
         }
+
+        /// <summary>
+        /// Which node the override is standing in for, or -1. For a subclass that caches something
+        /// derived from the transforms and has to keep that derivation in step with the override.
+        /// </summary>
+        protected int overriddenNodeIndex => overrideNode;
 
         /// <summary>
         /// The blend and its parameters, short and stable, for the golden dump and for the check that
@@ -339,7 +350,10 @@ public partial class FullDeformationField
         {
         }
 
-        public override string Describe() => "linear";
+        // Not "linear". The string is what the goldens carry, and the linear baselines were captured
+        // before any blender had parameters to describe - so this one keeps the bare mode name it was
+        // recorded under, and only the modes that need parameters spell them out.
+        public override string Describe() => DescribeBlend(EDFieldBlendMode.LinearAffine, default, default);
 
         public override bool TryGetMatrix(Vector3 position, bool trilinear, out Matrix4x4 matrix)
         {
@@ -422,8 +436,33 @@ public partial class FullDeformationField
     {
         switch (blendMode)
         {
+            case EDFieldBlendMode.Polar:
+                return new PolarBlender(this, getCurrentNodeFrame, rotationBlend, scaleBlend);
+
             default:
                 return new LinearAffineBlender(this, getCurrentNodeFrame);
+        }
+    }
+
+    /// <summary>
+    /// The one place a blend is turned into the string the dump records and the harness compares.
+    ///
+    /// Shared by the blenders' Describe and by the field's own descriptor, so that the settings a
+    /// field was built asking for and the behaviour it actually has cannot be described differently -
+    /// which is the failure that makes a recorded setting worse than none.
+    ///
+    /// LinearAffine deliberately renders as the bare mode name: it has no parameters, and it is what
+    /// every existing golden already says.
+    /// </summary>
+    public static string DescribeBlend(EDFieldBlendMode mode, EDFieldRotationBlend rotationBlend, EDFieldScaleBlend scaleBlend)
+    {
+        switch (mode)
+        {
+            case EDFieldBlendMode.Polar:
+                return $"Polar rot {rotationBlend} scale {scaleBlend}";
+
+            default:
+                return "LinearAffine";
         }
     }
 

@@ -117,6 +117,13 @@ namespace UC.ED
         public virtual EDFieldBlendMode deformationFieldBlendMode => EDFieldBlendMode.LinearAffine;
 
         /// <summary>
+        /// The two halves of a decomposed blend. Ignored by LinearAffine, which has no parts to
+        /// combine separately.
+        /// </summary>
+        public virtual EDFieldRotationBlend deformationFieldRotationBlend => EDFieldRotationBlend.Chordal;
+        public virtual EDFieldScaleBlend deformationFieldScaleBlend => EDFieldScaleBlend.Full;
+
+        /// <summary>
         /// The distance-to-weight mapping this builder's settings describe, freshly built.
         ///
         /// Null for a builder that produces no field, which ComputeWeights reads as the legacy
