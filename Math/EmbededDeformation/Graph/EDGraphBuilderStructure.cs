@@ -53,8 +53,14 @@ namespace UC.ED
         [SerializeField, ShowIf(nameof(usesNormalizedDistances)), Tooltip("Divide each cell's distances by the furthest one it keeps before mapping them. This is what makes sigma and the entmax temperature dimensionless - without it they are world-space lengths, and as brittle against voxel density and piece scale as a fixed softmax temperature. Off exists to demonstrate that rather than assert it.")]
         private bool fieldWeightNormalizeDistances = true;
 
-        [SerializeField, Tooltip("How the transforms of the influencing nodes are combined once their weights are known. The weights decide how much each node says; this decides what averaging what they say means. LinearAffine is the component-wise mean of the affine matrices - the original formulation, and what every golden is captured against.")]
+        [SerializeField, Tooltip("How the transforms of the influencing nodes are combined once their weights are known. The weights decide how much each node says; this decides what averaging what they say means. LinearAffine is the component-wise mean of the affine matrices - the original formulation, and what every golden is captured against. Polar splits each transform into translation, rotation and stretch and combines each where it lives.")]
         private EDFieldBlendMode fieldBlendMode = EDFieldBlendMode.LinearAffine;
+        [SerializeField, ShowIf(nameof(usesDecomposedBlend)), Tooltip("How the rotations are averaged. Chordal is the exact minimiser of the chordal distance - blend the matrices as the linear mode does, then project back onto SO(3) - and is the smallest departure from the baseline. Nlerp is the cheap quaternion blend. Karcher is the intrinsic geodesic mean, the principled and slowest answer, worth having as the reference the other two are measured against.")]
+        private EDFieldRotationBlend fieldRotationBlend = EDFieldRotationBlend.Chordal;
+        [SerializeField, ShowIf(nameof(usesDecomposedBlend)), Tooltip("What happens to the non-rotational part. Full blends the whole symmetric stretch factor and so keeps shear. Diagonal blends only the principal stretches and reattaches them to the blended rotation's frame, which is 'translation, rotation and scale' in the usual sense and is strictly weaker - the loss is the orientation of each node's stretch.")]
+        private EDFieldScaleBlend fieldScaleBlend = EDFieldScaleBlend.Full;
+
+        private bool usesDecomposedBlend => (fieldBlendMode != EDFieldBlendMode.LinearAffine);
 
         private bool usesExplicitStorage => (fieldDistanceStorage == EDFieldDistanceStorage.Explicit);
 
@@ -77,6 +83,8 @@ namespace UC.ED
         public override bool deformationFieldSeedTerminals => useTerminalLength;
         public override bool deformationFieldSeedCorridors => useCorridorLength;
         public override EDFieldBlendMode deformationFieldBlendMode => fieldBlendMode;
+        public override EDFieldRotationBlend deformationFieldRotationBlend => fieldRotationBlend;
+        public override EDFieldScaleBlend deformationFieldScaleBlend => fieldScaleBlend;
 
         public override FullDeformationField.WeightResolver CreateFieldWeightResolver()
         {
@@ -481,7 +489,8 @@ namespace UC.ED
                 bool slotPerNode = (storageSlots >= nodes.Count);
 
                 FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity,
-                                                                      def.useTerminalLength, def.useCorridorLength, def.fieldBlendMode);
+                                                                      def.useTerminalLength, def.useCorridorLength, def.fieldBlendMode,
+                                                                      def.fieldRotationBlend, def.fieldScaleBlend);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.
