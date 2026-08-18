@@ -698,8 +698,12 @@ namespace UC.ED
 
             if (usesDeformationField)
             {
+                // One blender for the whole sweep, not one per vertex - the frames do not change
+                // while it runs, which is the condition the freeze is built around.
+                FullDeformationField.TransformBlender blender = CreateDebugFieldBlender();
+
                 for (int vId = 0; vId < restVertices.Length; vId++)
-                    deformed[vId] = deformationField.DeformPositionFromNodeFramesTrilinear(restVertices[vId].ToVector3(), GetDebugNodeFrame);
+                    deformed[vId] = blender.DeformPosition(restVertices[vId].ToVector3(), trilinear: true);
 
                 return deformed;
             }
@@ -1162,11 +1166,28 @@ namespace UC.ED
             return frames;
         }
 
-        private DVector3 DeformClearancePoint(DVector3 restPosition, EDVertexBinding standardBinding, EDStateView state, List<FullDeformationField.Frame> nodeFrames)
+        /// <summary>
+        /// The blender the field path deforms through, over a snapshot of the node frames.
+        ///
+        /// One per pass. It freezes the frames and precomputes each node's transform, so it is
+        /// read-only afterwards and can be shared across the workers of a parallel clearance pass -
+        /// which is exactly what the list of frames it replaces was being used for.
+        ///
+        /// Null when the field is not what deforms here, which is the same "field mode or not" flag
+        /// the frame list was doing double duty as.
+        /// </summary>
+        internal FullDeformationField.TransformBlender CreateFieldBlender(EDStateView state)
         {
-            if (nodeFrames != null)
+            if (deformationField == null) return null;
+
+            return deformationField.CreateBlender(BuildNodeFrames(state));
+        }
+
+        private DVector3 DeformClearancePoint(DVector3 restPosition, EDVertexBinding standardBinding, EDStateView state, FullDeformationField.TransformBlender blender)
+        {
+            if (blender != null)
             {
-                Vector3 deformed = deformationField.DeformPositionFromNodeFramesTrilinear(restPosition.ToVector3(), nodeFrames);
+                Vector3 deformed = blender.DeformPosition(restPosition.ToVector3(), trilinear: true);
 
                 return deformed.ToDVector3();
             }
@@ -1174,7 +1195,7 @@ namespace UC.ED
             return DeformVertex(restPosition, standardBinding, state);
         }
 
-        private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames, out double clearance)
+        private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, FullDeformationField.TransformBlender blender, out double clearance)
         {
             // Single gate for "can this segment's clearance be measured at all". GetClearance walks
             // navMeshTopology.edges and deforms through the per-segment bindings, and those only
@@ -1187,28 +1208,14 @@ namespace UC.ED
                 return false;
             }
 
-            (Vector3 p1, Vector3 p2) = GetTransformedSegment(state, segmentIndex, nodeFrames);
+            (Vector3 p1, Vector3 p2) = GetTransformedSegment(state, segmentIndex, blender);
 
-            return GetClearance(state, p1.ToDVector3(), p2.ToDVector3(),nodeFrames, out clearance);
+            return GetClearance(state, p1.ToDVector3(), p2.ToDVector3(), blender, out clearance);
         }
 
         EDClearanceCache ComputeClearance(EDState state)
         {
             return state.clearances = ComputeClearance(new EDStateView(state));
-        }
-
-        private sealed class ClearanceThreadScratch
-        {
-            public readonly List<FullDeformationField.Frame> nodeFrames;
-
-            public ClearanceThreadScratch(int capacity) : this(capacity, null)
-            {
-            }
-
-            public ClearanceThreadScratch(int capacity, List<FullDeformationField.Frame> baseNodeFrames)
-            {
-                nodeFrames = (baseNodeFrames != null) ? (new List<FullDeformationField.Frame>(baseNodeFrames)) : (null);
-            }
         }
 
         EDClearanceCache ComputeClearance(EDStateView state)
@@ -1237,32 +1244,21 @@ namespace UC.ED
 
             if (UseDeformationFieldForClearance)
             {
-                // Read-only during the parallel loop.
-                List<FullDeformationField.Frame> nodeFrames = BuildNodeFrames(state);
+                // Built once and read-only during the parallel loop, which is the whole reason a
+                // blender freezes its transforms rather than tracking them.
+                //
+                // There used to be a per-worker scratch object here, carrying a private copy of the
+                // node frames. It was constructed through the overload that leaves that copy null, so
+                // every worker shared the one list anyway and the scratch carried nothing - it went
+                // with the frames it was meant to hold.
+                FullDeformationField.TransformBlender blender = CreateFieldBlender(state);
 
-                int scratchCapacity = Mathf.Min(nodes.Count, 8 * deformationField.maxInfluencesPerCell);
+                Parallel.For(0, structure.Count, EDDiagnostics.parallelOptions, index =>
+                {
+                    bool valid = TryComputeSegmentClearance(state, index, blender, out double clearance);
 
-                Parallel.For(
-                    0,
-                    structure.Count,
-                    EDDiagnostics.parallelOptions,
-                    // One scratch object per worker, not per segment.
-                    () => new ClearanceThreadScratch(scratchCapacity),
-
-                    (index, loopState, scratch) =>
-                    {
-                        bool valid = TryComputeSegmentClearance(state, index, nodeFrames, out double clearance);
-
-                        ret.Set(index, (valid) ? (clearance) : (double.MaxValue));
-
-                        return scratch;
-                    },
-
-                    scratch =>
-                    {
-                        // Nothing to merge or dispose.
-                    }
-                );
+                    ret.Set(index, (valid) ? (clearance) : (double.MaxValue));
+                });
             }
             else
             {
@@ -1278,18 +1274,18 @@ namespace UC.ED
             return ret;
         }
 
-        private double EvaluateSingleClearanceResidual(EDStateView state, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null)
+        private double EvaluateSingleClearanceResidual(EDStateView state, int segmentIndex, double wClearance, FullDeformationField.TransformBlender blender = null)
         {
             double original = restState.GetClearance(segmentIndex);
 
             // Fallback for serial callers. The optimized Jacobian path supplies
-            // nodeFrames explicitly, so it does not reach this allocation.
-            if ((UseDeformationFieldForClearance) && (nodeFrames == null))
+            // the blender explicitly, so it does not reach this allocation.
+            if ((UseDeformationFieldForClearance) && (blender == null))
             {
-                nodeFrames = BuildNodeFrames(state);
+                blender = CreateFieldBlender(state);
             }
 
-            if (!TryComputeSegmentClearance(state, segmentIndex, nodeFrames, out double current))
+            if (!TryComputeSegmentClearance(state, segmentIndex, blender, out double current))
             {
                 return 0.0;
             }
@@ -1539,7 +1535,7 @@ namespace UC.ED
             return Math.Max(0.0, loss);
         }
 
-        bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, List<FullDeformationField.Frame> nodeFrames, out double minClearance)
+        bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, FullDeformationField.TransformBlender blender, out double minClearance)
         {
             minClearance = double.MaxValue;
 
@@ -1555,8 +1551,8 @@ namespace UC.ED
                 if (!edge.isBoundary) continue;
                 if (IsOpeningEdge(edge)) continue;
 
-                DVector3 e1 = DeformClearancePoint(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state, nodeFrames);
-                DVector3 e2 = DeformClearancePoint(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state, nodeFrames);
+                DVector3 e1 = DeformClearancePoint(restVertices[edge.vertices.i1], bindings[edge.vertices.i1], state, blender);
+                DVector3 e2 = DeformClearancePoint(restVertices[edge.vertices.i2], bindings[edge.vertices.i2], state, blender);
 
                 double t1 = DVector3.Dot(e1 - p1, dir);
                 double t2 = DVector3.Dot(e2 - p1, dir);
@@ -1708,26 +1704,27 @@ namespace UC.ED
         {
             EDStateView state = new EDStateView(currentState);
 
-            List<FullDeformationField.Frame> nodeFrames = (UseDeformationFieldForClearance) ? (BuildNodeFrames(state)) : (null);
+            FullDeformationField.TransformBlender blender = (UseDeformationFieldForClearance) ? (CreateFieldBlender(state)) : (null);
 
-            // GetSegment is currently called serially by the debug drawing, so null
-            // scratch buffers may safely use FullDeformationField's shared cache.
-            return GetTransformedSegment(state, segmentIndex, nodeFrames);
+            // Its own blender, because this is called serially by the debug drawing rather than from
+            // inside a pass that already has one. Nothing overrides on it, so there is no ownership
+            // question to answer here.
+            return GetTransformedSegment(state, segmentIndex, blender);
         }
 
-        private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segmentIndex, List<FullDeformationField.Frame> nodeFrames)
+        private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segmentIndex, FullDeformationField.TransformBlender blender)
         {
             NavEDSegments segment = structure[segmentIndex];
 
             // Without BuildNavigationData the endpoint bindings are null, so there is nothing to
             // deform the segment through and it is still at its rest position. The deformation
             // field path ignores the bindings entirely, so it is left alone.
-            if ((nodeFrames == null) && (!IsSegmentBound(segment)))
+            if ((blender == null) && (!IsSegmentBound(segment)))
                 return (segment.p1.ToVector3(), segment.p2.ToVector3());
 
-            DVector3 p1 = DeformClearancePoint(segment.p1, segment.bind1, state, nodeFrames);
+            DVector3 p1 = DeformClearancePoint(segment.p1, segment.bind1, state, blender);
 
-            DVector3 p2 = DeformClearancePoint(segment.p2, segment.bind2, state, nodeFrames);
+            DVector3 p2 = DeformClearancePoint(segment.p2, segment.bind2, state, blender);
 
             return (p1.ToVector3(), p2.ToVector3());
         }
@@ -1915,6 +1912,24 @@ namespace UC.ED
         {
             EDStateView state = new EDStateView(currentState);
             return GetNodeFrame(nodeIndex, state);
+        }
+
+        /// <summary>
+        /// The blender the field is currently deforming through, for the tools that report where it
+        /// carries a point.
+        ///
+        /// Handed out rather than left to the caller to construct, so a readout cannot end up on a
+        /// different blend from the geometry it is drawn beside - the same reason the binding path
+        /// reports through TryGetDebugBindingMatrix instead of rebinding on its own terms.
+        ///
+        /// Null when the field is not what deforms here, which is the caller's cue to ask the binding
+        /// path instead.
+        /// </summary>
+        internal FullDeformationField.TransformBlender CreateDebugFieldBlender()
+        {
+            if (!usesDeformationField) return null;
+
+            return deformationField.CreateBlender(GetDebugNodeFrame);
         }
 
         public bool TryGetDebugNodeFrame(int nodeIndex, out FullDeformationField.Frame frame)

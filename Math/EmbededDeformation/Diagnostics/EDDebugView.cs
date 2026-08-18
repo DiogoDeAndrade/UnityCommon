@@ -333,8 +333,15 @@ namespace UC.ED
 
             if (field != null)
             {
-                deformedPosition = (trilinear) ? (field.DeformPositionFromNodeFramesTrilinear(position, GetNodeFrame))
-                                               : (field.DeformPositionFromNodeFrames(position, GetNodeFrame));
+                // The blend comes from the deformation rather than being constructed here with a
+                // default. Same argument the binding branch below already makes: a readout built on a
+                // different blend from the one the geometry went through would disagree with it for a
+                // reason the reader has no way to see.
+                //
+                // Sampling mode stays this method's argument. Cell and trilinear are two questions
+                // about one state, and seeing the difference between them is the point of the tool
+                // that passes false here.
+                deformedPosition = deformation.CreateDebugFieldBlender().DeformPosition(position, trilinear);
 
                 return true;
             }

@@ -89,20 +89,21 @@ namespace UC.ED
             public override bool supportsParallelRows => true;
 
             /// <summary>
-            /// One node frame list per worker. The finite-difference path perturbs a parameter,
-            /// rewrites the affected frames and measures, so workers sharing a list would overwrite
-            /// each other's perturbations. Null when the deformation does not carry points through
-            /// the field, in which case the row needs no frames at all.
+            /// One blender per worker. The finite-difference path overrides the perturbed node's
+            /// transform and measures, so workers sharing one would overwrite each other's
+            /// perturbations - this is the ownership rule TransformBlender's override field states,
+            /// and this method is what satisfies it. Null when the deformation does not carry points
+            /// through the field, in which case the row needs no blender at all.
             /// </summary>
             public override object CreateRowScratch(EDState state)
             {
                 if (!deformation.UseDeformationFieldForClearance) return null;
 
-                return deformation.BuildNodeFrames(new EDStateView(state));
+                return deformation.CreateFieldBlender(new EDStateView(state));
             }
 
             public override double FillJacobianRow(EDState state, DenseMatrix jacobian, int rowOffset, int localIndex, object scratch)
-                => deformation.FillClearanceJacobianRow(state, jacobian, rowOffset + localIndex, localIndex, residualWeight, scratch as List<FullDeformationField.Frame>);
+                => deformation.FillClearanceJacobianRow(state, jacobian, rowOffset + localIndex, localIndex, residualWeight, scratch as FullDeformationField.TransformBlender);
 
             /// <summary>
             /// Serial fallback, for a caller that does not take the parallel path. Kept equivalent

@@ -87,10 +87,10 @@ namespace UC.ED
         /// <paramref name="state"/> null measures the rest geometry, which is what the field build
         /// needs: it runs inside Build, before BuildNavigationData, so there are no bindings to deform
         /// through yet and the rest vertices are the rest vertices. Pass a state to measure the
-        /// deformed navmesh, with nodeFrames when the field is doing the deforming.
+        /// deformed navmesh, with a blender when the field is doing the deforming.
         /// </summary>
         internal bool TryMeasureCorridor(DVector3 center, DVector3 across, DVector3 up,
-                                         EDStateView? state, List<FullDeformationField.Frame> nodeFrames,
+                                         EDStateView? state, FullDeformationField.TransformBlender blender,
                                          out EDCorridorExtent extent)
         {
             extent = EDCorridorExtent.unmeasured;
@@ -113,7 +113,7 @@ namespace UC.ED
 
             // Deforming needs one of the two routes to a deformed vertex. Without either, a caller
             // asking for a deformed measurement would silently get rest positions back.
-            if ((state != null) && (nodeFrames == null) && (bindings == null))
+            if ((state != null) && (blender == null) && (bindings == null))
             {
                 Debug.LogError("TryMeasureCorridor was asked for a deformed measurement with neither node frames nor bindings. Build the navigation data first.");
                 return false;
@@ -138,8 +138,8 @@ namespace UC.ED
                 // clearance makes, for the same reason.
                 if (IsOpeningEdge(edge)) continue;
 
-                DVector3 a = CorridorEdgePoint(edge.vertices.i1, state, nodeFrames) - center;
-                DVector3 b = CorridorEdgePoint(edge.vertices.i2, state, nodeFrames) - center;
+                DVector3 a = CorridorEdgePoint(edge.vertices.i1, state, blender) - center;
+                DVector3 b = CorridorEdgePoint(edge.vertices.i2, state, blender) - center;
 
                 double va = DVector3.Dot(a, f);
                 double vb = DVector3.Dot(b, f);
@@ -206,18 +206,18 @@ namespace UC.ED
             return (f.sqrMagnitude >= epsilon);
         }
 
-        private DVector3 CorridorEdgePoint(int vertexIndex, EDStateView? state, List<FullDeformationField.Frame> nodeFrames)
+        private DVector3 CorridorEdgePoint(int vertexIndex, EDStateView? state, FullDeformationField.TransformBlender blender)
         {
             DVector3 rest = restVertices[vertexIndex];
 
             if (state == null) return rest;
 
-            // A default binding is only ever reached with nodeFrames present, where
+            // A default binding is only ever reached with a blender present, where
             // DeformClearancePoint goes through the field and ignores the binding entirely - the
             // entry guard rejects the combination that would actually need it.
             EDVertexBinding binding = (bindings != null) ? (bindings[vertexIndex]) : (default);
 
-            return DeformClearancePoint(rest, binding, state.Value, nodeFrames);
+            return DeformClearancePoint(rest, binding, state.Value, blender);
         }
     }
 }
