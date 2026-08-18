@@ -17,6 +17,21 @@ namespace UC.ED
         /// lies outside the deformation's influence, in which case it should be left alone.
         /// </summary>
         public abstract bool TryGetDeformationMatrix(Vector3 restWorldPosition, out Matrix4x4 matrix);
+
+        /// <summary>
+        /// Where the deformation carries a point.
+        ///
+        /// Virtual, with "get the transform and apply it" as the default, because that is what it
+        /// means for both mechanisms here. The field path overrides it: for the linear-affine blend
+        /// the two are algebraically identical but not bit-identical, and the goldens were captured
+        /// against the other one.
+        /// </summary>
+        public virtual Vector3 DeformPosition(Vector3 restWorldPosition)
+        {
+            if (!TryGetDeformationMatrix(restWorldPosition, out Matrix4x4 matrix)) return restWorldPosition;
+
+            return matrix.MultiplyPoint3x4(restWorldPosition);
+        }
     }
 
     public partial class EmbededDeformation
@@ -62,22 +77,28 @@ namespace UC.ED
         }
 
         /// <summary>
-        /// Trilinear sampling of the volumetric field. The node frames are captured once, since
-        /// they are constant for the duration of a deformation pass.
+        /// Trilinear sampling of the volumetric field.
+        ///
+        /// The blender freezes the node frames, which are constant for the duration of a deformation
+        /// pass, and precomputes each node's transform once instead of rebuilding it per vertex.
         /// </summary>
         private sealed class FieldDeformer : EDDeformer
         {
-            private readonly EmbededDeformation owner;
-            private readonly System.Collections.Generic.List<FullDeformationField.Frame> nodeFrames;
+            private readonly FullDeformationField.TransformBlender blender;
 
             public FieldDeformer(EmbededDeformation owner)
             {
-                this.owner = owner;
-                this.nodeFrames = owner.BuildNodeFrames(new EDStateView(owner.currentState));
+                this.blender = owner.CreateFieldBlender(new EDStateView(owner.currentState));
             }
 
             public override bool TryGetDeformationMatrix(Vector3 restWorldPosition, out Matrix4x4 matrix)
-                => owner.deformationField.TryGetDeformationMatrixTrilinear(restWorldPosition, nodeFrames, out matrix);
+                => blender.TryGetMatrix(restWorldPosition, trilinear: true, out matrix);
+
+            // Not the base "get the matrix and apply it": the field's position path never formed a
+            // matrix, and under the linear-affine blend that difference is invisible in the reals and
+            // real in float. LinearAffineBlender keeps the original arithmetic; this routes to it.
+            public override Vector3 DeformPosition(Vector3 restWorldPosition)
+                => blender.DeformPosition(restWorldPosition, trilinear: true);
         }
 
         /// <summary>

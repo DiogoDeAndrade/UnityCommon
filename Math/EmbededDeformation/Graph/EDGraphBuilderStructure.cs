@@ -53,6 +53,9 @@ namespace UC.ED
         [SerializeField, ShowIf(nameof(usesNormalizedDistances)), Tooltip("Divide each cell's distances by the furthest one it keeps before mapping them. This is what makes sigma and the entmax temperature dimensionless - without it they are world-space lengths, and as brittle against voxel density and piece scale as a fixed softmax temperature. Off exists to demonstrate that rather than assert it.")]
         private bool fieldWeightNormalizeDistances = true;
 
+        [SerializeField, Tooltip("How the transforms of the influencing nodes are combined once their weights are known. The weights decide how much each node says; this decides what averaging what they say means. LinearAffine is the component-wise mean of the affine matrices - the original formulation, and what every golden is captured against.")]
+        private EDFieldBlendMode fieldBlendMode = EDFieldBlendMode.LinearAffine;
+
         private bool usesExplicitStorage => (fieldDistanceStorage == EDFieldDistanceStorage.Explicit);
 
         private bool usesWeightPower => (fieldWeightMode == EDFieldWeightMode.InversePower) || (fieldWeightMode == EDFieldWeightMode.Gaussian);
@@ -73,6 +76,7 @@ namespace UC.ED
         public override EDFieldConnectivity deformationFieldConnectivity => fieldConnectivity;
         public override bool deformationFieldSeedTerminals => useTerminalLength;
         public override bool deformationFieldSeedCorridors => useCorridorLength;
+        public override EDFieldBlendMode deformationFieldBlendMode => fieldBlendMode;
 
         public override FullDeformationField.WeightResolver CreateFieldWeightResolver()
         {
@@ -477,7 +481,7 @@ namespace UC.ED
                 bool slotPerNode = (storageSlots >= nodes.Count);
 
                 FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity,
-                                                                      def.useTerminalLength, def.useCorridorLength);
+                                                                      def.useTerminalLength, def.useCorridorLength, def.fieldBlendMode);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.

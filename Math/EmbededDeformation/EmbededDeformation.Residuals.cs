@@ -297,18 +297,18 @@ namespace UC.ED
         }
 
         // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, List<FullDeformationField.Frame> nodeFrames = null)
+        internal double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, FullDeformationField.TransformBlender blender = null)
         {
             var baseView = new EDStateView(state);
 
             // Serial fallback. In the StructureOnly Jacobian path, this should
             // already have been supplied by the worker-local scratch object.
-            if ((UseDeformationFieldForClearance) && (nodeFrames == null))
+            if ((UseDeformationFieldForClearance) && (blender == null))
             {
-                nodeFrames = BuildNodeFrames(baseView);
+                blender = CreateFieldBlender(baseView);
             }
 
-            double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance, nodeFrames);
+            double r0 = EvaluateSingleClearanceResidual(baseView, segmentIndex, wClearance, blender);
 
             if (Math.Abs(r0) <= 1e-12) return 0.0;
 
@@ -323,33 +323,24 @@ namespace UC.ED
 
                 var modifiedState = new EDStateView(state, col, eps);
 
-                int perturbedNodeIndex = -1;
-                FullDeformationField.Frame originalFrame = default;
-
-                if (nodeFrames != null)
+                if (blender != null)
                 {
-                    // Twelve consecutive parameters belong to one ED node.
-                    perturbedNodeIndex = col / 12;
-
-                    originalFrame = nodeFrames[perturbedNodeIndex];
-
-                    // Only this node's frame changes for this perturbation.
-                    nodeFrames[perturbedNodeIndex] = GetNodeFrame(perturbedNodeIndex, modifiedState);
+                    // Twelve consecutive parameters belong to one ED node, so only this node's frame
+                    // changes for this perturbation.
+                    blender.SetNodeOverride(col / 12, GetNodeFrame(col / 12, modifiedState));
                 }
 
                 double r1;
 
                 try
                 {
-                    r1 = EvaluateSingleClearanceResidual(modifiedState, segmentIndex, wClearance, nodeFrames);
+                    r1 = EvaluateSingleClearanceResidual(modifiedState, segmentIndex, wClearance, blender);
                 }
                 finally
                 {
-                    // Restore the base frame before evaluating the next column.
-                    if (perturbedNodeIndex >= 0)
-                    {
-                        nodeFrames[perturbedNodeIndex] = originalFrame;
-                    }
+                    // Back to the frozen transforms before the next column. Unconditional, because
+                    // clearing is total - there is no state left over from a Set that did not run.
+                    blender?.ClearNodeOverride();
                 }
 
                 double value = (r1 - r0) / eps;

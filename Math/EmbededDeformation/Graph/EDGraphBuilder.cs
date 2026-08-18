@@ -106,6 +106,17 @@ namespace UC.ED
         public virtual bool deformationFieldSeedCorridors => false;
 
         /// <summary>
+        /// How the field combines the transforms of the nodes influencing a point.
+        ///
+        /// On the builder beside the weighting rather than on the output, even though it is strictly a
+        /// property of evaluation and not of construction. A builder already decides how deformation
+        /// happens here - a binding-based one deforms through bindings and has no field to blend at
+        /// all - so this is the same kind of choice as the ones around it, and it lands in the golden
+        /// dump by the same route.
+        /// </summary>
+        public virtual EDFieldBlendMode deformationFieldBlendMode => EDFieldBlendMode.LinearAffine;
+
+        /// <summary>
         /// The distance-to-weight mapping this builder's settings describe, freshly built.
         ///
         /// Null for a builder that produces no field, which ComputeWeights reads as the legacy
