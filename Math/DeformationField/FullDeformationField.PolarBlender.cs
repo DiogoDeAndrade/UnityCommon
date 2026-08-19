@@ -184,7 +184,7 @@ public partial class FullDeformationField
             parts.valid = true;
             parts.translation = new Vector3(m.m03, m.m13, m.m23);
 
-            Matrix3x3 linear = Matrix3x3.FromMatrix(m);
+            Matrix3x3 linear = new Matrix3x3(m);
 
             PolarDecompose(linear, out parts.rotation, out parts.stretch);
 
@@ -250,7 +250,7 @@ public partial class FullDeformationField
             Matrix3x3 rotation = BlendRotation(position, trilinear, rotationSum, referenceNode);
 
             Matrix3x3 stretch = (scaleBlend == EDFieldScaleBlend.Diagonal)
-                         ? (Matrix3x3.Diagonal(principalSum * invWeightSum))
+                         ? (Matrix3x3.FromDiagonal(principalSum * invWeightSum))
                          : ((stretchSum * invWeightSum).symmetrized);
 
             matrix = (rotation * stretch).ToMatrix(translation);
@@ -314,7 +314,7 @@ public partial class FullDeformationField
 
             float invLength = 1.0f / length;
 
-            return Matrix3x3.FromQuaternion(new Quaternion(x * invLength, y * invLength, z * invLength, w * invLength));
+            return new Matrix3x3(new Quaternion(x * invLength, y * invLength, z * invLength, w * invLength));
         }
 
         private Matrix3x3 BlendRotationKarcher(Vector3 position, bool trilinear, Matrix3x3 initial)
@@ -376,7 +376,7 @@ public partial class FullDeformationField
         /// A determinant at or below zero is not repaired here. It is carried into the stretch by the
         /// sign flip at the end, where it stays visible.
         /// </summary>
-        internal static void PolarDecompose(Matrix3x3 m, out Matrix3x3 rotation, out Matrix3x3 stretch)
+        public static void PolarDecompose(Matrix3x3 m, out Matrix3x3 rotation, out Matrix3x3 stretch)
         {
             Matrix3x3 current = m;
 
@@ -437,7 +437,7 @@ public partial class FullDeformationField
         /// no correspondence between two nodes' stretch axes to do better with, which is the same
         /// statement from the other side.
         /// </summary>
-        internal static Vector3 SymmetricEigenvalues(Matrix3x3 s)
+        public static Vector3 SymmetricEigenvalues(Matrix3x3 s)
         {
             Matrix3x3 a = s;
 
