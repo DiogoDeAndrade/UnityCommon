@@ -119,10 +119,22 @@ namespace UC.ED
         /// </summary>
         public int count => (values != null) ? (values.Length) : (0);
 
+        /// <summary>
+        /// A copy, using the same "count, not reference" test the rest of this class uses.
+        ///
+        /// A cache that came back from a domain reload never having been populated is a live object
+        /// wrapping a null array, and cloning it used to throw. That never happened on the solve
+        /// path, where ComputeClearance runs before anything clones - but it is exactly the state a
+        /// tool snapshotting the deformation outside a solve can find, and an empty clone is the
+        /// honest answer for an empty cache.
+        /// </summary>
         public EDClearanceCache Clone()
         {
-            var clone = new EDClearanceCache(values.Length);
-            Array.Copy(values, clone.values, values.Length);
+            var clone = new EDClearanceCache(count);
+
+            if (count > 0)
+                Array.Copy(values, clone.values, values.Length);
+
             return clone;
         }
 
@@ -219,7 +231,10 @@ namespace UC.ED
         {
             EDState clone = new EDState(parameters.Length / 12);
             Array.Copy(parameters, clone.parameters, parameters.Length);
-            clone.clearances = clearances.Clone();
+            // Guarded for the same reason EDClearanceCache.Clone is: a state cloned outside a solve
+            // can carry a cache that was never populated, and Unity hands that back as a live object
+            // rather than as a null.
+            clone.clearances = (clearances != null) ? (clearances.Clone()) : (new EDClearanceCache(0));
             return clone;
         }
 

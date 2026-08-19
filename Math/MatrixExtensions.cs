@@ -5,7 +5,10 @@ using UnityEngine;
 namespace UC
 {
 
-    public static class MatrixExtensions
+    // Partial: the symmetric eigendecomposition lives in MatrixExtensions.SymmetricEigen.cs, kept
+    // apart because it is a self-contained algorithm with its own verification harness rather than
+    // another one-screen helper.
+    public static partial class MatrixExtensions
     {
         public static Vector3[] TransformPositions(this Matrix4x4 matrix, Vector3[] src)
         {
