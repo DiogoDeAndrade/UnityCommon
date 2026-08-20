@@ -130,6 +130,7 @@ namespace UC.ED
 
             // Only the structure path produces one.
             deformationField = null;
+            structureTree = null;
 
             navigationDataBuilt = false;
         }

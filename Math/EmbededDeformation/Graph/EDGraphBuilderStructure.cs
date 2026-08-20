@@ -187,6 +187,10 @@ namespace UC.ED
                 deformation.BuildNodeRestFrames();
                 deformation.BuildLinkAngleConstraints();
 
+                // After the node loop above, which is what makes it possible: the tree is recovered
+                // from seg.node1/seg.node2, and those are written there.
+                deformation.BuildStructureTree();
+
                 BuildDeformationField(def);
             }
 

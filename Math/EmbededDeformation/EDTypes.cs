@@ -501,6 +501,79 @@ namespace UC.ED
         public double restSin;
     }
 
+    /// <summary>
+    /// The rooted tree the skeleton came from, recovered onto the deformation graph's node indices.
+    ///
+    /// **The graph itself cannot answer this.** EDNode carries an undirected neighbour list, so
+    /// "which way is away from the root" has no answer there - anything wanting it has to pick a
+    /// spanning tree and hope, and on a graph with cycles that pick is an artifact of link build
+    /// order rather than a fact. The skeleton *is* a tree and knows its own root; this is where that
+    /// knowledge survives the trip into the solver instead of being thrown away and guessed at.
+    ///
+    /// Only the structure path produces one. A sampled graph has no skeleton behind it and must get
+    /// `hasStructureTree == false` rather than a plausible-looking tree over the wrong thing.
+    /// </summary>
+    [Serializable]
+    public class EDStructureTree
+    {
+        [SerializeField]
+        private int[] parent;
+
+        /// <summary>
+        /// An ordering in which every node appears after its parent.
+        ///
+        /// Stored rather than recomputed because it is what makes a subtree collectable in one
+        /// forward pass, and because computing it is also the cycle check - a graph that cannot be
+        /// ordered this way is not a tree, and finding that out at build time is the point.
+        /// </summary>
+        [SerializeField]
+        private int[] order;
+
+        [SerializeField]
+        private int rootCount;
+
+        public EDStructureTree(int[] parent, int[] order, int rootCount)
+        {
+            this.parent = parent;
+            this.order = order;
+            this.rootCount = rootCount;
+        }
+
+        public int nodeCount => (parent != null) ? (parent.Length) : (0);
+
+        /// <summary>How many separate trees this is - one per connected component of the skeleton.</summary>
+        public int treeCount => rootCount;
+
+        /// <summary>
+        /// Whether this describes a graph of the given size.
+        ///
+        /// The size test rather than a null test on the reference, and that is the recurring trap in
+        /// this codebase rather than pedantry: Unity cannot serialize null for a [Serializable]
+        /// class, so a tree that was never built comes back from a domain reload as a live object
+        /// wrapping null arrays, and a tree built against a previous graph comes back the wrong
+        /// length while looking entirely healthy.
+        /// </summary>
+        public bool Matches(int graphNodeCount)
+        {
+            return (graphNodeCount > 0) &&
+                   (parent != null) && (parent.Length == graphNodeCount) &&
+                   (order != null) && (order.Length == graphNodeCount);
+        }
+
+        /// <summary>The node this one hangs from, or -1 when it is a root of its own component.</summary>
+        public int GetParent(int nodeIndex)
+        {
+            if ((parent == null) || (nodeIndex < 0) || (nodeIndex >= parent.Length)) return -1;
+
+            return parent[nodeIndex];
+        }
+
+        public bool IsRoot(int nodeIndex) => (GetParent(nodeIndex) < 0);
+
+        /// <summary>The traversal order, parents before children. Empty rather than null when there is no tree.</summary>
+        public IReadOnlyList<int> traversalOrder => (order != null) ? (order) : (System.Array.Empty<int>());
+    }
+
     [Serializable]
     public struct EDVertexConstraint
     {
