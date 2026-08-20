@@ -34,6 +34,13 @@ namespace UC.ED
         public List<EDVertexConstraint> vertexConstraints = new();
         public List<EDTerminalConstraint> terminalConstraints = new();
         public List<EDLinkAngleConstraint> linkAngleConstraints = new();
+
+        // The skeleton's own rooted tree, mapped onto graph node indices. Null on every path but the
+        // structure one; ask hasStructureTree rather than testing this, since a [Serializable] class
+        // does not survive a domain reload as null.
+        [SerializeField, HideInInspector]
+        private EDStructureTree structureTree;
+
         public TopologyStatic navMeshTopology;
 
         /// <summary>
@@ -673,6 +680,155 @@ namespace UC.ED
             Debug.Log($"Built {linkAngleConstraints.Count} structure link-angle constraints.");
         }
 
+        /// <summary>
+        /// Recovers the skeleton's rooted tree onto the graph's node indices.
+        ///
+        /// **The direction is already here and was being thrown away.** `IEDStructureSource`
+        /// enumerates a segment as (parent, child) - see the contract on that interface - and
+        /// `BuildStructure` subdivides p1 towards p2, so every sub-segment runs parent-ward to
+        /// child-ward too. The structure builder then writes `node1` and `node2` in that order. So
+        /// `structure[i].node1` is the parent of `structure[i].node2`, for every segment, and has
+        /// been all along. Nothing here reorders, renumbers or re-derives anything: it reads a fact
+        /// the build already established and stores it where something can use it.
+        ///
+        /// That is why this needs no new interface and no change to how nodes are made. The
+        /// alternative - handing the whole `Tree&lt;Node&gt;` across and rebuilding the graph from it -
+        /// would renumber every node, and node index is the identity the bindings, the clearance
+        /// cache and every golden dump are written against.
+        ///
+        /// **Only call this on a structure graph.** A sampled graph has segments whose `node1` and
+        /// `node2` were never set, and a tree derived from those would be a confident answer about
+        /// nothing.
+        /// </summary>
+        public bool BuildStructureTree()
+        {
+            structureTree = null;
+
+            if ((nodes == null) || (nodes.Count == 0)) return false;
+            if ((structure == null) || (structure.Count == 0)) return false;
+
+            // The sampled builders also produce a `structure` - for clearance and the nav energies -
+            // but they never set node1/node2 on it, so every segment there says -1. Without this
+            // guard that reads as "no node has a parent", which is a perfectly well-formed forest of
+            // singletons and completely false. Refusing on the mode is exact; inferring it from the
+            // data would be guessing at the same question one layer down.
+            if (deformationGraphSource != DeformationGraphSource.StructureOnly)
+            {
+                Debug.LogError("BuildStructureTree is only meaningful on a structure graph. The sampled builders leave " +
+                               "segment node indices unset, so the tree derived from them would be a confident answer about nothing.");
+                return false;
+            }
+
+            int count = nodes.Count;
+
+            var parent = new int[count];
+
+            for (int i = 0; i < count; i++) parent[i] = -1;
+
+            int conflicts = 0;
+
+            for (int i = 0; i < structure.Count; i++)
+            {
+                NavEDSegments seg = structure[i];
+
+                int p = seg.node1;
+                int c = seg.node2;
+
+                if ((p < 0) || (p >= count) || (c < 0) || (c >= count)) continue;
+
+                // A segment whose ends merged onto one node carries no parentage. It is not an
+                // error - a zero-length skeleton edge is degenerate, not malformed - but it must not
+                // make a node its own parent.
+                if (p == c) continue;
+
+                if (parent[c] < 0)
+                {
+                    parent[c] = p;
+                    continue;
+                }
+
+                // Two segments claiming the same child. On a real tree this cannot happen, so it
+                // means the node merge welded two distinct skeleton nodes into one - the first
+                // claim is kept and the count is reported, because a silent choice here would put
+                // an arbitrary branch under an arbitrary parent.
+                if (parent[c] != p) conflicts++;
+            }
+
+            // Parents before children, which doubles as the cycle check: a node whose parent has not
+            // been emitted yet cannot be emitted, so anything left over at the end is in a cycle.
+            var order = new int[count];
+            var emitted = new bool[count];
+
+            int written = 0;
+            int rootCount = 0;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (parent[i] >= 0) continue;
+
+                order[written++] = i;
+                emitted[i] = true;
+
+                rootCount++;
+            }
+
+            // Each pass emits at least one node while any node remains emittable, so this terminates
+            // in at most `count` passes and usually in the depth of the tree.
+            bool progressed = true;
+
+            while ((written < count) && (progressed))
+            {
+                progressed = false;
+
+                for (int i = 0; i < count; i++)
+                {
+                    if (emitted[i]) continue;
+                    if (!emitted[parent[i]]) continue;
+
+                    order[written++] = i;
+                    emitted[i] = true;
+
+                    progressed = true;
+                }
+            }
+
+            if (written < count)
+            {
+                Debug.LogError($"Structure tree build failed: {count - written} node(s) sit in a cycle, so the skeleton is not a tree. " +
+                               "The graph still works; nothing that needs a parent will be available.");
+                return false;
+            }
+
+            structureTree = new EDStructureTree(parent, order, rootCount);
+
+            if (conflicts > 0)
+            {
+                Debug.LogWarning($"Structure tree: {conflicts} node(s) were claimed as a child by more than one segment, which a tree cannot do. " +
+                                 "The usual cause is two skeleton nodes closer together than the node merge tolerance, welded into one. " +
+                                 "The first claim was kept.");
+            }
+
+            Debug.Log($"Structure tree built over {count} node(s): {rootCount} root(s), {count - rootCount} with a parent.");
+
+            return true;
+        }
+
+        /// <summary>
+        /// Whether there is a skeleton tree matching the graph in front of it.
+        ///
+        /// The size test rather than a null test, for the reason EDStructureTree.Matches spells out.
+        /// </summary>
+        public bool hasStructureTree => (structureTree != null) && (structureTree.Matches(nodeCount));
+
+        /// <summary>The node this one hangs from in the skeleton, or -1 for a root or when there is no tree.</summary>
+        public int GetStructureParent(int nodeIndex) => (hasStructureTree) ? (structureTree.GetParent(nodeIndex)) : (-1);
+
+        /// <summary>Node indices ordered parents-before-children, or an empty list when there is no tree.</summary>
+        public IReadOnlyList<int> structureTraversalOrder => (hasStructureTree) ? (structureTree.traversalOrder) : (System.Array.Empty<int>());
+
+        /// <summary>How many separate skeleton trees there are - one per connected component.</summary>
+        public int structureTreeCount => (hasStructureTree) ? (structureTree.treeCount) : (0);
+
         public void ResetDeformation()
         {
             currentState = new EDState(nodes.Count);
@@ -1003,6 +1159,11 @@ namespace UC.ED
                     }
                     else
                     {
+                        // The sub-segments run p1 towards p2 and are added in that order, so each
+                        // one's first end is the parent-ward one. That is what carries the source's
+                        // parent-child direction through subdivision, and it is why the tree can be
+                        // recovered afterwards without the subdivision having to know about it -
+                        // see IEDStructureSource and BuildStructureTree.
                         int subdivision = Mathf.Max(1, Mathf.CeilToInt(distance / structureMaxSegmentLength));
                         float tInc = 1.0f / subdivision;
 
