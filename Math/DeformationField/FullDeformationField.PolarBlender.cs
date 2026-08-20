@@ -96,7 +96,21 @@ public partial class FullDeformationField
         private struct NodeParts
         {
             public bool         valid;
-            public Vector3      translation;
+
+            /// <summary>
+            /// Where the node sits at rest, and where its transform puts that point now.
+            ///
+            /// **The pair, rather than the transform's translation column, and that is the whole
+            /// correction here.** A node's map is naturally written about its own rest position -
+            /// `p' = deformed + A*(p - rest)` - and the translation column is that same map rewritten
+            /// about the world origin, `A*p + (deformed - A*rest)`. The two are identical as long as
+            /// the linear part stays `A`. They stop being identical the moment a *blended* linear
+            /// part is substituted, because the column carries `-A*rest` for the node's own `A`,
+            /// which no longer matches. Keeping the two points instead lets the blend be anchored
+            /// where the geometry is rather than at the world origin.
+            /// </summary>
+            public Vector3      restPosition;
+            public Vector3      deformedPosition;
             public Matrix3x3         rotation;
             public Matrix3x3         stretch;
             public Quaternion   quaternion;
@@ -133,7 +147,7 @@ public partial class FullDeformationField
             {
                 if (!TryGetNodeMatrix(i, out Matrix4x4 m)) continue;
 
-                nodeParts[i] = Decompose(m);
+                nodeParts[i] = Decompose(m, field.GetDeformationNode(i).frame.position);
             }
         }
 
@@ -149,7 +163,9 @@ public partial class FullDeformationField
 
             TryGetNodeMatrix(nodeIndex, out Matrix4x4 m);
 
-            overrideParts = Decompose(m);
+            // The perturbation moves the node's current frame, never its rest position, so the rest
+            // position is still the field's.
+            overrideParts = Decompose(m, field.GetDeformationNode(nodeIndex).frame.position);
         }
 
         /// <summary>
@@ -177,12 +193,18 @@ public partial class FullDeformationField
             return parts.valid;
         }
 
-        private NodeParts Decompose(Matrix4x4 m)
+        private NodeParts Decompose(Matrix4x4 m, Vector3 restPosition)
         {
             NodeParts parts = default;
 
             parts.valid = true;
-            parts.translation = new Vector3(m.m03, m.m13, m.m23);
+
+            // The node's own map applied to its own rest position, which is where the node itself has
+            // gone. Derived from the matrix rather than read off the current frame so that the two
+            // can never disagree - and so a perturbed override, which changes the matrix and not the
+            // rest position, stays consistent for free.
+            parts.restPosition = restPosition;
+            parts.deformedPosition = m.MultiplyPoint3x4(restPosition);
 
             Matrix3x3 linear = new Matrix3x3(m);
 
@@ -202,7 +224,8 @@ public partial class FullDeformationField
         {
             matrix = Matrix4x4.identity;
 
-            Vector3 translation = Vector3.zero;
+            Vector3 pivotRest = Vector3.zero;
+            Vector3 pivotDeformed = Vector3.zero;
             Matrix3x3 stretchSum = default;
             Vector3 principalSum = Vector3.zero;
             Matrix3x3 rotationSum = default;
@@ -222,7 +245,8 @@ public partial class FullDeformationField
             {
                 if (!TryGetParts(nodeIndex, out NodeParts parts)) continue;
 
-                translation += weight * parts.translation;
+                pivotRest += weight * parts.restPosition;
+                pivotDeformed += weight * parts.deformedPosition;
 
                 if (scaleBlend == EDFieldScaleBlend.Diagonal) principalSum += weight * parts.principalStretch;
                 else                                          stretchSum = stretchSum + (parts.stretch * weight);
@@ -244,7 +268,8 @@ public partial class FullDeformationField
 
             float invWeightSum = 1.0f / weightSum;
 
-            translation *= invWeightSum;
+            pivotRest *= invWeightSum;
+            pivotDeformed *= invWeightSum;
             rotationSum = rotationSum * invWeightSum;
 
             Matrix3x3 rotation = BlendRotation(position, trilinear, rotationSum, referenceNode);
@@ -253,7 +278,30 @@ public partial class FullDeformationField
                          ? (Matrix3x3.FromDiagonal(principalSum * invWeightSum))
                          : ((stretchSum * invWeightSum).symmetrized);
 
-            matrix = (rotation * stretch).ToMatrix(translation);
+            Matrix3x3 linear = rotation * stretch;
+
+            // The blend anchored where the geometry is, not at the world origin.
+            //
+            // Every node's map is naturally `p' = deformed_i + A_i*(p - rest_i)`. Substituting the
+            // blended linear part for each A_i and summing gives
+            //   sum w_i * [deformed_i + L*(p - rest_i)]  =  pivotDeformed + L*(p - pivotRest)
+            // so the two weighted pivots are all that survives of the per-node anchoring. Both are
+            // ordinary convex averages of points sitting on the piece.
+            //
+            // **What this replaces was anchored at the origin**, and that is the defect rather than a
+            // refinement: the old code averaged each node's translation *column*, which is
+            // `deformed_i - A_i*rest_i`, and paired it with L. That pairing is exact only while
+            // L equals the plain mean of the A_i - which is what LinearAffine does, and why that mode
+            // never had this problem - and wrong by `(L - mean(A))*p` otherwise. Note the `p`: the
+            // error grew with distance from the world origin and vanished only where the blended
+            // rotations agreed, so it was invisible along a straight corridor and metres wide at a
+            // terminal where the frames disagree.
+            //
+            // Written back as a plain affine so nothing downstream of TryGetMatrix changes: the
+            // linear part is L and the column is whatever sends pivotRest to pivotDeformed under it.
+            Vector3 translation = pivotDeformed - (linear * pivotRest);
+
+            matrix = linear.ToMatrix(translation);
 
             return true;
         }

@@ -179,6 +179,20 @@ namespace UC
             };
         }
 
+        /// <summary>
+        /// The matrix applied to a vector, columns times components.
+        ///
+        /// A 3x3 has no translation, so there is no point-versus-vector distinction to get wrong
+        /// here - unlike Matrix4x4, where MultiplyPoint3x4 and MultiplyVector differ and picking the
+        /// wrong one is silent. That is the reason this is safe to spell as an operator.
+        /// </summary>
+        public static Vector3 operator *(Matrix3x3 m, Vector3 v)
+        {
+            return new Vector3(m.m00 * v.x + m.m01 * v.y + m.m02 * v.z,
+                               m.m10 * v.x + m.m11 * v.y + m.m12 * v.z,
+                               m.m20 * v.x + m.m21 * v.y + m.m22 * v.z);
+        }
+
         public static Matrix3x3 operator *(Matrix3x3 a, float s)
         {
             return new Matrix3x3
