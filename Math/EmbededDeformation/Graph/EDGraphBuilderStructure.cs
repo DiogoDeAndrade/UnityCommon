@@ -256,6 +256,7 @@ namespace UC.ED
                 int unmeasured = 0;
                 int openEnded = 0;
                 int runaway = 0;
+                int junctions = 0;
 
                 float minWidth = float.MaxValue;
                 float maxWidth = 0.0f;
@@ -264,6 +265,28 @@ namespace UC.ED
                 for (int i = 0; i < nodes.Count; i++)
                 {
                     EDNode node = nodes[i];
+
+                    // A junction is left as a point source, and that is a statement about what the
+                    // measurement means rather than a shortcut. The bar is laid across the corridor,
+                    // along restRight - and at a node with three or more incident links there is no
+                    // "the corridor" to be across. restForward there is the average of the outgoing
+                    // edge directions, which points along none of them, so a bar laid on it is a real
+                    // width measured in a direction with no meaning. A point source is the honest
+                    // degenerate case: it seeds one voxel and the wavefront leaves it equally in
+                    // every direction, which is what a junction actually looks like.
+                    //
+                    // Note what this costs, because the notes argue the other way and the argument
+                    // still holds: a point source is *less* competitive than a bar, since a bar wins
+                    // the nearest-source test anywhere along its length. So a junction node now loses
+                    // ground near itself to the barred corridor nodes around it. That is a smaller
+                    // wrong than a bar pointing somewhere arbitrary, and the fuller answer - a disc
+                    // of the minimised width, genuinely omnidirectional and comparable with the bars -
+                    // needs AddDeformationNode to seed something other than a segment.
+                    if ((node.neighbors != null) && (node.neighbors.Count > 2))
+                    {
+                        junctions++;
+                        continue;
+                    }
 
                     // Rest geometry: this runs inside Build, before BuildNavigationData, so there are
                     // no bindings to deform through and nothing has moved anyway.
@@ -313,7 +336,8 @@ namespace UC.ED
 
                 Debug.Log($"Corridor widths: measured {measured} of {nodes.Count} nodes, " +
                           $"min {minWidth:F3}, max {maxWidth:F3}, mean {(totalWidth / measured):F3}. " +
-                          $"Open-ended on one side {openEnded}, unmeasured {unmeasured}, discarded as runaway {runaway}.");
+                          $"Open-ended on one side {openEnded}, unmeasured {unmeasured}, discarded as runaway {runaway}, " +
+                          $"junctions left as point sources {junctions}.");
             }
 
             /// <summary>
