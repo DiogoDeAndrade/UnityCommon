@@ -92,7 +92,8 @@ namespace UC.ED
         [SerializeField, HideInInspector]
         private EDState currentState;
         [SerializeField, HideInInspector]
-        // Widened as terms adopt it - the clearance term measures against the rest clearances.
+        // Internal for the clearance term, which measures every segment against the clearance it
+        // had at rest rather than against an absolute floor.
         internal EDState restState;
         // Deliberately not serialized. The per-cell distance/nodeId/weight arrays are the bulk of the
         // whole scene when they are - 14.4 MB of an 18.7 MB SampleScene, re-uploaded to LFS on every
@@ -819,8 +820,9 @@ namespace UC.ED
             return deformed;
         }
 
-        // Internal because the navmesh constraint term deforms its constrained vertices exactly the
-        // way the legacy constraint block does.
+        // Internal for the terms that deform a point through its binding - the navmesh vertex
+        // constraint and the navmesh form of segment length. Blending a point across the nodes that
+        // hold it is the piece's own rule, not any one energy's.
         internal DVector3 DeformVertex(DVector3 v, EDVertexBinding binding, EDStateView state)
         {
             DVector3 result = DVector3.zero;
@@ -1446,8 +1448,9 @@ namespace UC.ED
             return false;
         }
 
-        // Internal because the structure rotation term needs the same answer the legacy rotation
-        // block does about which nodes have their right-axis scale dictated by a terminal.
+        // Internal for the two terms that have to defer to a terminal's sanctioned scaling - the
+        // structure rotation term, which drops its right-axis length row, and the structure
+        // determinant term, which measures against that scale rather than against one.
         internal bool HasTerminalScaleConstraint(int nodeIndex)
         {
             if (terminalConstraints == null)

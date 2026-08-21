@@ -37,7 +37,6 @@ namespace UC.ED
             // Row counts and weights are resolved once here rather than rebuilt inside every
             // residual evaluation, as the layout builder used to be. They are a function of the
             // graph and the weights, neither of which changes during a solve.
-            energy.ApplyRuntimeParameters();
             energy.Resolve();
 
             TraceResidualLayout(energy);
@@ -132,7 +131,6 @@ namespace UC.ED
             // Row counts and weights are resolved once here rather than rebuilt inside every
             // residual evaluation, as the layout builder used to be. They are a function of the
             // graph and the weights, neither of which changes during a solve.
-            energy.ApplyRuntimeParameters();
             energy.Resolve();
 
             TraceResidualLayout(energy);
@@ -302,7 +300,6 @@ namespace UC.ED
             // Row counts and weights are resolved once here rather than rebuilt inside every
             // residual evaluation, as the layout builder used to be. They are a function of the
             // graph and the weights, neither of which changes during a solve.
-            energy.ApplyRuntimeParameters();
             energy.Resolve();
 
             TraceResidualLayout(energy);

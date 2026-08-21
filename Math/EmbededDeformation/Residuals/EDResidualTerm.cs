@@ -14,11 +14,17 @@ namespace UC.ED
     /// One energy in the least-squares problem: how many rows it occupies, what residual it puts in
     /// them, and what its derivative contributes to the Jacobian.
     ///
-    /// The point of naming these individually is that the row count, the residual and the Jacobian
-    /// for a single energy currently live in three separate places that have to be kept in step by
-    /// hand, and have already drifted apart at least once - the terminal and link-angle rows are
-    /// silently unreachable in the navmesh layout because the shared layout builder never allocates
-    /// them. A term owns all three, so they cannot disagree.
+    /// The point of naming these individually is that those three used to live in three separate
+    /// places that had to be kept in step by hand, and had already drifted apart at least once - the
+    /// terminal and link-angle rows were silently unreachable in the navmesh layout because the
+    /// shared layout builder never allocated them. A term owns all three, so they cannot disagree.
+    /// As of 2026-08-21 every term does: nothing in the residual or the Jacobian of any energy is on
+    /// EmbededDeformation any more, and its parameters are read off it rather than pushed onto the
+    /// deformation before a solve.
+    ///
+    /// What a term still asks the deformation for is the graph and the geometry - the node list, the
+    /// structure, the bindings, the navmesh measurements, the constraint sets built for it. Those
+    /// belong to the piece rather than to any one energy, and several energies read the same ones.
     ///
     /// Definition and instance are split as elsewhere: the definition is a serialized description
     /// that may be shared, the instance resolves it against a particular graph and holds the
@@ -36,26 +42,6 @@ namespace UC.ED
         public abstract string name { get; }
 
         public float conceptualWeight => weight;
-
-        /// <summary>
-        /// Pushes any limits this term needs onto the deformation before a solve - the slope term's
-        /// maximum angle, for instance. Called once per solve, not per evaluation.
-        ///
-        /// This writes to state the deformation holds rather than owning it outright, so two terms
-        /// pushing the same limit means the last one applied wins. That is not a configuration worth
-        /// supporting - a piece has one notion of what counts as too steep - but it is the reason
-        /// these are pushes rather than reads.
-        ///
-        /// It is also, historically, why the limits moved here only after the legacy path was gone:
-        /// while both paths read the same mutated state, a term pushing a wrong value moved both
-        /// sides equally and the parity check reported EXACT regardless. The baselines catch it; the
-        /// parity tool never could.
-        ///
-        /// It also runs for every term regardless of row count, so a term contributing no rows can
-        /// still change the solve. That is why the energy models list only the terms their
-        /// configuration actually uses, rather than carrying disabled ones at zero weight.
-        /// </summary>
-        public virtual void ApplyRuntimeParameters(EmbededDeformation deformation) { }
 
 #if MATH_NET_AVAILABLE
         public abstract Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights);
@@ -148,8 +134,16 @@ namespace UC.ED
         }
 
         /// <summary>
-        /// Shared with the legacy layout builder so a migrated term produces exactly the same
-        /// weight the block it replaces did.
+        /// sqrt(weight / rows) when normalising, sqrt(weight) otherwise.
+        ///
+        /// Dividing by the row count before the square root is what makes conceptual weights
+        /// comparable across terms: a term then contributes conceptualWeight times mean(r squared),
+        /// so a term with three thousand rows does not outvote one with thirty by being larger.
+        ///
+        /// Public and static because it was shared with the legacy layout builder, so that a
+        /// migrated term produced exactly the weight the block it replaced did. That builder is
+        /// gone and Resolve is the only caller left - but the weights in the goldens are this
+        /// expression, so it stays one place rather than being inlined into it.
         /// </summary>
         public static double BuildResidualWeight(double conceptualWeight, int residualRows, bool normalizeResidualGroups)
         {
