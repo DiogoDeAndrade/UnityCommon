@@ -70,15 +70,74 @@ namespace UC.ED
 
             public override void FillJacobian(EDState state, DenseMatrix jacobian, int rowOffset, ref double jacobianNormSq)
             {
-                var stateView = new EDStateView(state);
-
                 int row = rowOffset;
 
-                // Deliberately not guarding the vertex index the way the residual does. The legacy
-                // block does not either, and the two have to agree bit for bit; a constraint that
-                // would trip it throws there just as it does here.
+                // Deliberately not guarding the vertex index the way the residual does, which is a
+                // real asymmetry rather than an oversight: the residual emits three zero rows for a
+                // constraint naming a vertex outside the mesh, and this throws. It is preserved
+                // because the baselines were captured against it and no golden configuration
+                // contains such a constraint - so the guard has never had anything to do.
                 for (int c = 0; c < deformation.vertexConstraints.Count; c++)
-                    row = deformation.FillConstraintJacobianBlock(stateView, jacobian, row, deformation.vertexConstraints[c].vertexIndex, residualWeight, ref jacobianNormSq);
+                    row = FillJacobianBlock(jacobian, row, deformation.vertexConstraints[c].vertexIndex, residualWeight, ref jacobianNormSq);
+            }
+
+            /// <summary>
+            /// The three rows for one constrained vertex, analytically.
+            ///
+            /// It accumulates rather than assigns, and that is load-bearing: the vertex is deformed
+            /// through its binding, so it writes into every node it is bound to, and two entries of
+            /// one binding can name the same node. Assigning would keep only the last of them.
+            ///
+            /// No state, for the same reason the regularization block needs none - the residual is
+            /// affine in the parameters, so every entry is a rest offset times a binding weight.
+            /// </summary>
+            private int FillJacobianBlock(DenseMatrix J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
+            {
+                DVector3 v = deformation.restVertices[vertexIndex];
+                EDVertexBinding binding = deformation.bindings[vertexIndex];
+
+                for (int b = 0; b < binding.nodeIndices.Length; b++)
+                {
+                    int nodeIndex = binding.nodeIndices[b];
+                    if (nodeIndex < 0)
+                        continue;
+
+                    double wb = ((binding.weights != null) && (b < binding.weights.Length)) ? (binding.weights[b]) : (1.0 / binding.nodeIndices.Length);
+
+                    int p = EDStateView.ParamBase(nodeIndex);
+
+                    DVector3 g = deformation.nodes[nodeIndex].restPosition;
+                    DVector3 u = v - g;
+
+                    double ux = u.x;
+                    double uy = u.y;
+                    double uz = u.z;
+
+                    double s = wCon * wb;
+
+                    // residual x
+                    J[row + 0, p + 0] += s * ux; // m00
+                    J[row + 0, p + 1] += s * uy; // m01
+                    J[row + 0, p + 2] += s * uz; // m02
+                    J[row + 0, p + 3] += s;      // m03 / tx
+
+                    // residual y
+                    J[row + 1, p + 4] += s * ux; // m10
+                    J[row + 1, p + 5] += s * uy; // m11
+                    J[row + 1, p + 6] += s * uz; // m12
+                    J[row + 1, p + 7] += s;      // m13 / ty
+
+                    // residual z
+                    J[row + 2, p + 8] += s * ux; // m20
+                    J[row + 2, p + 9] += s * uy; // m21
+                    J[row + 2, p + 10] += s * uz; // m22
+                    J[row + 2, p + 11] += s;      // m23 / tz
+
+                    double u2 = ux * ux + uy * uy + uz * uz;
+                    jNormRunningTotalSq += 3.0 * s * s * (u2 + 1.0);
+                }
+
+                return row + 3;
             }
         }
 #endif
