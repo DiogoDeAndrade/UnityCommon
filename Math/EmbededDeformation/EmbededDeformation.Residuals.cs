@@ -120,41 +120,6 @@ namespace UC.ED
             return localJNorm;
         }
 
-        internal int FillTerminalScaleJacobianBlock(EDStateView state, DenseMatrix J, int row, int terminalIndex, double wTerminalScale, ref double jNorm)
-        {
-            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
-
-            int nodeIndex = terminal.nodeIndex;
-
-            EDNode      node = nodes[nodeIndex];
-            DVector3    restRight = node.restRight;
-            DVector3    currentRight = state.TransformVector(nodeIndex, restRight);
-            double      currentScale = currentRight.magnitude;
-
-            if (currentScale < 1e-12)
-                return row + 1;
-
-            int parameterBase = EDStateView.ParamBase(nodeIndex);
-
-            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
-            {
-                double normalizedCurrentComponent = currentRight.GetComponent(outputAxis) / currentScale;
-
-                for (int inputAxis = 0; inputAxis < 3; inputAxis++)
-                {
-                    int col = parameterBase + outputAxis * 4 + inputAxis;
-
-                    double value = wTerminalScale * normalizedCurrentComponent * restRight.GetComponent(inputAxis);
-
-                    J[row, col] = value;
-
-                    jNorm += value * value;
-                }
-            }
-
-            return row + 1;
-        }
-
         #endregion
 
         #region Structure-based constraints

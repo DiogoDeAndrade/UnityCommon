@@ -1400,20 +1400,6 @@ namespace UC.ED
             return wClearance * ComputeClearanceLoss(original, current);
         }
 
-        internal double EvaluateSingleTerminalScaleResidual(EDStateView state, int terminalIndex, double wTerminalScale)
-        {
-            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
-
-            EDNode node = nodes[terminal.nodeIndex];
-
-            DVector3 transformedRight = state.TransformVector(terminal.nodeIndex, node.restRight);
-
-            double currentScale = transformedRight.magnitude;
-            double targetScale = Math.Max(terminal.targetScale, 1e-8);
-
-            return wTerminalScale * (currentScale - targetScale);
-        }
-
         internal double ComputeClearanceLoss(double original, double current)
         {
             if ((original == double.MaxValue) || (current == double.MaxValue))
