@@ -196,9 +196,9 @@ namespace UC.ED
                 double wStructureBend = residualWeight;
 
                 EDStructureBendConstraint constraint = constraints[constraintIndex];
-                DVector3 center = deformation.DeformStructureNodePosition(constraint.centerNode, state);
-                DVector3 positionA = deformation.DeformStructureNodePosition(constraint.neighborA, state);
-                DVector3 positionB = deformation.DeformStructureNodePosition(constraint.neighborB, state);
+                DVector3 center = state.DeformNodePosition(constraint.centerNode, deformation.nodes[constraint.centerNode].restPosition);
+                DVector3 positionA = state.DeformNodePosition(constraint.neighborA, deformation.nodes[constraint.neighborA].restPosition);
+                DVector3 positionB = state.DeformNodePosition(constraint.neighborB, deformation.nodes[constraint.neighborB].restPosition);
                 DVector3 directionA = positionA - center;
                 DVector3 directionB = positionB - center;
 
@@ -214,7 +214,7 @@ namespace UC.ED
                 directionA.Normalize();
                 directionB.Normalize();
 
-                DVector3 currentUp = deformation.GetTransformedNodeUp(state, constraint.centerNode);
+                DVector3 currentUp = state.TransformDirection(constraint.centerNode, deformation.nodes[constraint.centerNode].restUp);
 
                 if (currentUp.sqrMagnitude < epsilon)
                     currentUp = deformation.nodes[constraint.centerNode].restUp.normalized;
@@ -266,7 +266,7 @@ namespace UC.ED
                 EvaluateSingleResidual(baseView, constraintIndex, out double baseCosineResidual, out double baseSineResidual);
 
                 // Centre node: orientation and translation both matter.
-                int centerBase = deformation.ParamBase(constraint.centerNode);
+                int centerBase = EDStateView.ParamBase(constraint.centerNode);
 
                 for (int localParameter = 0; localParameter < 12; localParameter++)
                 {
@@ -274,7 +274,7 @@ namespace UC.ED
                 }
 
                 // Neighbour positions depend only on translation.
-                int neighborABase = deformation.ParamBase(constraint.neighborA);
+                int neighborABase = EDStateView.ParamBase(constraint.neighborA);
 
                 for (int outputAxis = 0; outputAxis < 3; outputAxis++)
                 {
@@ -283,7 +283,7 @@ namespace UC.ED
                     FillJacobianColumn(state, J, row, constraintIndex, baseCosineResidual, baseSineResidual, col, ref jNorm);
                 }
 
-                int neighborBBase = deformation.ParamBase(constraint.neighborB);
+                int neighborBBase = EDStateView.ParamBase(constraint.neighborB);
 
                 for (int outputAxis = 0; outputAxis < 3; outputAxis++)
                 {

@@ -64,9 +64,6 @@ namespace UC.ED
 
         #region NavMesh-based constraints
 
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal int ParamBase(int nodeIndex) => nodeIndex * 12;
-
         // Widened as terms adopt it - see FillRotationJacobianBlock below.
         internal int FillRotationJacobianBlockStructure(EDStateView state, DenseMatrix J, int row, int nodeIndex, double wRot, bool allowRightScale, ref double jNorm)
         {
@@ -119,7 +116,7 @@ namespace UC.ED
             DVector3 up = state.TransformVector(nodeIndex, node.restUp);
             DVector3 forward = state.TransformVector(nodeIndex, node.restForward);
 
-            int parameterBase = ParamBase(nodeIndex);
+            int parameterBase = EDStateView.ParamBase(nodeIndex);
 
             row = FillFrameDotJacobianRow(J, row, parameterBase, right, node.restRight, up, node.restUp, wRot, ref jNorm);
             row = FillFrameDotJacobianRow(J, row, parameterBase, right, node.restRight, forward, node.restForward, wRot, ref jNorm);
@@ -136,7 +133,7 @@ namespace UC.ED
         internal int FillRotationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
         {
 
-            int p = ParamBase(nodeIndex);
+            int p = EDStateView.ParamBase(nodeIndex);
             var aX = state.GetAxisX(nodeIndex);
             var aY = state.GetAxisY(nodeIndex);
             var aZ = state.GetAxisZ(nodeIndex);
@@ -203,8 +200,8 @@ namespace UC.ED
         internal int FillRegularizationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
         {
 
-            int pj = ParamBase(nodeJ);
-            int pk = ParamBase(nodeK);
+            int pj = EDStateView.ParamBase(nodeJ);
+            int pk = EDStateView.ParamBase(nodeK);
 
             DVector3 gj = nodes[nodeJ].restPosition;
             DVector3 gk = nodes[nodeK].restPosition;
@@ -260,7 +257,7 @@ namespace UC.ED
 
                 double wb = ((binding.weights != null) && (b < binding.weights.Length)) ? (binding.weights[b]) : (1.0 / binding.nodeIndices.Length);
 
-                int p = ParamBase(nodeIndex);
+                int p = EDStateView.ParamBase(nodeIndex);
 
                 DVector3 g = nodes[nodeIndex].restPosition;
                 DVector3 u = v - g;
@@ -512,7 +509,7 @@ namespace UC.ED
 
             DVector3 r0 = EvaluateSingleTerminalOrientationResidual(baseView, terminalIndex, wTerminalOrientation);
 
-            int parameterBase = ParamBase(nodeIndex);
+            int parameterBase = EDStateView.ParamBase(nodeIndex);
 
             // Only the linear 3x3 transform affects orientation.
             for (int outputAxis = 0; outputAxis < 3; outputAxis++)
@@ -559,7 +556,7 @@ namespace UC.ED
             if (currentScale < 1e-12)
                 return row + 1;
 
-            int parameterBase = ParamBase(nodeIndex);
+            int parameterBase = EDStateView.ParamBase(nodeIndex);
 
             for (int outputAxis = 0; outputAxis < 3; outputAxis++)
             {
@@ -647,15 +644,6 @@ namespace UC.ED
 
 
         // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal DVector3 DeformStructureNodePosition(int nodeIndex, EDStateView state)
-        {
-            DVector3 restPosition = nodes[nodeIndex].restPosition;
-
-            // At the node itself, local offset is zero, so only the node translation matters.
-            return restPosition + state.TransformOffset(nodeIndex, DVector3.zero);
-        }
-
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillNodePositionJacobianBlockStructure(DenseMatrix J, int row, int nodeIndex, DVector3 restPoint, double wCon, ref double jNormRunningTotalSq)
         {
 
@@ -665,7 +653,7 @@ namespace UC.ED
                 return row + 3;
             }
 
-            int p = ParamBase(nodeIndex);
+            int p = EDStateView.ParamBase(nodeIndex);
 
             DVector3 localOffset = restPoint - nodes[nodeIndex].restPosition;
 

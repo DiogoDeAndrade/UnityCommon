@@ -433,6 +433,41 @@ namespace UC.ED
                 Get(o + 11)   // m23
             );
         }
+
+        /// <summary>
+        /// Where a node's twelve parameters start. Every Jacobian column index in the solver is
+        /// this plus an offset within the 3x4, so it is the one place the layout is written down.
+        ///
+        /// Static because a column index is a fact about the parameter vector's shape rather than
+        /// about any particular state, which is what lets a Jacobian filler holding no state - the
+        /// handle term's, for one - ask the same question.
+        /// </summary>
+        public static int ParamBase(int nodeIndex) => nodeIndex * 12;
+
+        /// <summary>
+        /// A rest direction carried through the node's linear part and renormalized, or zero when
+        /// the transform collapsed it. The caller supplies the rest vector because the state does
+        /// not know the graph - which is also why this takes a direction rather than reading the
+        /// node's up for itself.
+        /// </summary>
+        public DVector3 TransformDirection(int nodeIndex, DVector3 restDirection)
+        {
+            DVector3 transformed = TransformVector(nodeIndex, restDirection);
+
+            if (transformed.sqrMagnitude < 1e-12) return DVector3.zero;
+
+            return transformed.normalized;
+        }
+
+        /// <summary>
+        /// Where a node itself ends up. At the node the local offset is zero, so only the node's
+        /// translation column matters - the rest of the transform acts on an offset there is none
+        /// of. Not the same question as deforming a vertex, which blends several nodes.
+        /// </summary>
+        public DVector3 DeformNodePosition(int nodeIndex, DVector3 restPosition)
+        {
+            return restPosition + TransformOffset(nodeIndex, DVector3.zero);
+        }
     }
 
     [Serializable]
