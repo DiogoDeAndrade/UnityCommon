@@ -46,18 +46,81 @@ namespace UC.ED
                 int row = rowOffset;
 
                 for (int i = 0; i < rowCount; i++)
-                    residual[row++] = deformation.EvaluateSingleTerminalScaleResidual(state, i, residualWeight);
+                    residual[row++] = EvaluateRow(state, i, residualWeight);
             }
 
             public override void FillJacobian(EDState state, DenseMatrix jacobian, int rowOffset, ref double jacobianNormSq)
             {
-                // Takes a view rather than the state itself, as the legacy call site does.
                 var stateView = new EDStateView(state);
 
                 int row = rowOffset;
 
                 for (int i = 0; i < rowCount; i++)
-                    row = deformation.FillTerminalScaleJacobianBlock(stateView, jacobian, row, i, residualWeight, ref jacobianNormSq);
+                    row = FillJacobianBlock(stateView, jacobian, row, i, residualWeight, ref jacobianNormSq);
+            }
+
+            /// <summary>
+            /// How far the terminal's deformed right axis is from the width its connector asked for.
+            /// Signed, unlike the one-sided navigation energies - a connector that is too narrow and
+            /// one that is too wide both fail to join, so there is no permitted side.
+            /// </summary>
+            private double EvaluateRow(EDStateView state, int terminalIndex, double wTerminalScale)
+            {
+                EDTerminalConstraint terminal = deformation.terminalConstraints[terminalIndex];
+
+                EDNode node = deformation.nodes[terminal.nodeIndex];
+
+                DVector3 transformedRight = state.TransformVector(terminal.nodeIndex, node.restRight);
+
+                double currentScale = transformedRight.magnitude;
+                double targetScale = Math.Max(terminal.targetScale, 1e-8);
+
+                return wTerminalScale * (currentScale - targetScale);
+            }
+
+            /// <summary>
+            /// One row, analytically. The residual is the length of A times the rest right axis, so
+            /// its derivative with respect to each matrix entry is the corresponding component of
+            /// that axis, scaled by the normalized current one - no finite differences needed, which
+            /// is what separates this from its orientation companion.
+            ///
+            /// A node whose right axis has collapsed leaves the row at zero rather than dividing by
+            /// the length: at zero length the derivative genuinely does not exist, and there is no
+            /// direction to push it back out along.
+            /// </summary>
+            private int FillJacobianBlock(EDStateView state, DenseMatrix J, int row, int terminalIndex, double wTerminalScale, ref double jNorm)
+            {
+                EDTerminalConstraint terminal = deformation.terminalConstraints[terminalIndex];
+
+                int nodeIndex = terminal.nodeIndex;
+
+                EDNode      node = deformation.nodes[nodeIndex];
+                DVector3    restRight = node.restRight;
+                DVector3    currentRight = state.TransformVector(nodeIndex, restRight);
+                double      currentScale = currentRight.magnitude;
+
+                if (currentScale < 1e-12)
+                    return row + 1;
+
+                int parameterBase = EDStateView.ParamBase(nodeIndex);
+
+                for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+                {
+                    double normalizedCurrentComponent = currentRight.GetComponent(outputAxis) / currentScale;
+
+                    for (int inputAxis = 0; inputAxis < 3; inputAxis++)
+                    {
+                        int col = parameterBase + outputAxis * 4 + inputAxis;
+
+                        double value = wTerminalScale * normalizedCurrentComponent * restRight.GetComponent(inputAxis);
+
+                        J[row, col] = value;
+
+                        jNorm += value * value;
+                    }
+                }
+
+                return row + 1;
             }
         }
 #endif
