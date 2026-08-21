@@ -276,7 +276,6 @@ namespace UC.ED
 
             InitMathNet();
 
-            energy.ApplyRuntimeParameters();
             energy.Resolve();
 
             Vector<double> f = energy.EvaluateResidual(new EDStateView(currentState));

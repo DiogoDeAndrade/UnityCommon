@@ -110,12 +110,6 @@ namespace UC.ED
                 }
             }
 
-            public void ApplyRuntimeParameters()
-            {
-                for (int i = 0; i < termInstances.Count; i++)
-                    termInstances[i].term.ApplyRuntimeParameters(deformation);
-            }
-
             /// <summary>
             /// Row ranges in list order, which is the layout. Replaces the hand-maintained
             /// EDResidualLayout struct and the four places that had to agree with it.
