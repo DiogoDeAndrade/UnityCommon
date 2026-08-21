@@ -185,7 +185,6 @@ namespace UC.ED
                 // 4) Everything that only means something on a skeleton graph.
                 // -----------------------------------------------------------------
                 deformation.BuildNodeRestFrames();
-                deformation.BuildLinkAngleConstraints();
 
                 // After the node loop above, which is what makes it possible: the tree is recovered
                 // from seg.node1/seg.node2, and those are written there.

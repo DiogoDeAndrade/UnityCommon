@@ -126,7 +126,6 @@ namespace UC.ED
             handleConstraints.Clear();
             clearanceOpenings.Clear();
             terminalConstraints.Clear();
-            linkAngleConstraints.Clear();
 
             // Only the structure path produces one.
             deformationField = null;

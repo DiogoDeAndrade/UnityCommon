@@ -33,7 +33,6 @@ namespace UC.ED
         private List<EDClearanceOpening> clearanceOpenings = new();
         public List<EDVertexConstraint> vertexConstraints = new();
         public List<EDTerminalConstraint> terminalConstraints = new();
-        public List<EDLinkAngleConstraint> linkAngleConstraints = new();
 
         // The skeleton's own rooted tree, mapped onto graph node indices. Null on every path but the
         // structure one; ask hasStructureTree rather than testing this, since a [Serializable] class
@@ -610,74 +609,6 @@ namespace UC.ED
                     $"forward={terminal.targetForward}"
                 );
             }*/
-        }
-
-        /// <summary>
-        /// Records the rest angle of every pair of links meeting at a node. Public for the same
-        /// reason as BuildNodeRestFrames: only the structure builder produces a graph whose link
-        /// angles mean anything.
-        /// </summary>
-        public void BuildLinkAngleConstraints()
-        {
-            linkAngleConstraints.Clear();
-
-            if ((nodes == null) || (nodes.Count == 0))
-                return;
-
-            const double epsilon = 1e-12;
-
-            for (int centerIndex = 0; centerIndex < nodes.Count; centerIndex++)
-            {
-                EDNode centerNode = nodes[centerIndex];
-
-                if ((centerNode.neighbors == null) || (centerNode.neighbors.Count < 2))
-                    continue;
-
-                DVector3 center = centerNode.restPosition;
-                DVector3 restUp = centerNode.restUp;
-
-                if (restUp.sqrMagnitude < epsilon)
-                    restUp = DVector3.up;
-                else
-                    restUp.Normalize();
-
-                for (int a = 0; a < centerNode.neighbors.Count - 1; a++)
-                {
-                    int neighborA = centerNode.neighbors[a];
-                    DVector3 directionA = nodes[neighborA].restPosition - center;
-
-                    if (directionA.sqrMagnitude < epsilon)
-                        continue;
-
-                    directionA.Normalize();
-
-                    for (int b = a + 1; b < centerNode.neighbors.Count;b++) 
-                    {
-                        int neighborB = centerNode.neighbors[b];
-
-                        DVector3 directionB = nodes[neighborB].restPosition - center;
-
-                        if (directionB.sqrMagnitude < epsilon)
-                            continue;
-
-                        directionB.Normalize();
-
-                        double restCos = Math.Clamp(DVector3.Dot(directionA, directionB), -1.0, 1.0);
-
-                        double restSin = Math.Clamp(DVector3.Dot(restUp, DVector3.Cross(directionA, directionB)), -1.0, 1.0);
-
-                    linkAngleConstraints.Add(new EDLinkAngleConstraint {
-                            centerNode = centerIndex,
-                            neighborA = neighborA,
-                            neighborB = neighborB,
-                            restCos = restCos,
-                            restSin = restSin
-                        });
-                    }
-                }
-            }
-
-            Debug.Log($"Built {linkAngleConstraints.Count} structure link-angle constraints.");
         }
 
         /// <summary>
@@ -1554,42 +1485,8 @@ namespace UC.ED
             return wOrientation * (currentUp - restUp);
         }
 
-        internal void EvaluateSingleLinkAngleResidual(EDStateView state, int constraintIndex, double wLinkAngle, out double cosineResidual, out double sineResidual)
-        {
-            const double epsilon = 1e-12;
-
-            EDLinkAngleConstraint constraint = linkAngleConstraints[constraintIndex];
-            DVector3 center = DeformStructureNodePosition(constraint.centerNode,state);
-            DVector3 positionA = DeformStructureNodePosition(constraint.neighborA, state);
-            DVector3 positionB = DeformStructureNodePosition(constraint.neighborB, state);
-            DVector3 directionA = positionA - center;
-            DVector3 directionB = positionB - center;
-
-            if ((directionA.sqrMagnitude < epsilon) || (directionB.sqrMagnitude < epsilon))
-            {
-                // A collapsed link is strongly invalid.
-                cosineResidual = wLinkAngle * (0.0 - constraint.restCos);
-                sineResidual = wLinkAngle * (0.0 - constraint.restSin);
-
-                return;
-            }
-
-            directionA.Normalize();
-            directionB.Normalize();
-
-            DVector3 currentUp = GetTransformedNodeUp(state, constraint.centerNode);
-
-            if (currentUp.sqrMagnitude < epsilon)
-                currentUp = nodes[constraint.centerNode].restUp.normalized;
-
-            double currentCos = Math.Clamp(DVector3.Dot(directionA, directionB), -1.0, 1.0);
-            double currentSin = Math.Clamp(DVector3.Dot(currentUp, DVector3.Cross(directionA, directionB)), -1.0, 1.0);
-
-            cosineResidual = wLinkAngle * (currentCos - constraint.restCos);
-            sineResidual = wLinkAngle * (currentSin - constraint.restSin);
-        }
-
-        private DVector3 GetTransformedNodeUp(EDStateView state, int nodeIndex)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal DVector3 GetTransformedNodeUp(EDStateView state, int nodeIndex)
         {
             DVector3 transformed = state.TransformVector(nodeIndex, nodes[nodeIndex].restUp);
 

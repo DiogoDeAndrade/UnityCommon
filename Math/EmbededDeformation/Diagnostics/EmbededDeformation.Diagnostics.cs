@@ -21,12 +21,17 @@ namespace UC.ED
         /// Writes the state that exists before a solve: the graph, the bindings, the structure and
         /// the constraints. Call this after Build/UpdateBindings and before running the solver.
         /// </summary>
-        public void DumpStaticState(TextWriter w)
+        /// <remarks>
+        /// The energy instance is passed in because some constraint sets are owned by the term that
+        /// uses them rather than by the deformation - see EDStructureBendTerm. Null is allowed and dumps
+        /// those sets as empty, which is what a caller with no energy model honestly has.
+        /// </remarks>
+        public void DumpStaticState(TextWriter w, EDEnergyModel.Instance energy = null)
         {
             DumpGraph(w);
             DumpBindings(w);
             DumpStructure(w);
-            DumpConstraints(w);
+            DumpConstraints(w, energy);
         }
 
         /// <summary>
@@ -137,7 +142,7 @@ namespace UC.ED
             }
         }
 
-        private void DumpConstraints(TextWriter w)
+        private void DumpConstraints(TextWriter w, EDEnergyModel.Instance energy)
         {
             w.WriteLine("[constraints]");
 
@@ -170,13 +175,23 @@ namespace UC.ED
                 }
             }
 
-            w.WriteLine($"linkAngle {((linkAngleConstraints != null) ? (linkAngleConstraints.Count) : (0))}");
-            if (linkAngleConstraints != null)
+            // The header is written whether or not the model carries a link-angle term, because
+            // seven of the nine baselines have no such term and record "structureBend 0" regardless.
+            // Emitting it only when the term exists would silently delete a line from all of them.
+#if MATH_NET_AVAILABLE
+            IReadOnlyList<EDStructureBendConstraint> structureBendConstraints =
+                energy?.GetTermInstance<EDStructureBendTerm.StructureBendInstance>()?.constraintList;
+#else
+            IReadOnlyList<EDStructureBendConstraint> structureBendConstraints = null;
+#endif
+
+            w.WriteLine($"structureBend {((structureBendConstraints != null) ? (structureBendConstraints.Count) : (0))}");
+            if (structureBendConstraints != null)
             {
-                for (int i = 0; i < linkAngleConstraints.Count; i++)
+                for (int i = 0; i < structureBendConstraints.Count; i++)
                 {
-                    var l = linkAngleConstraints[i];
-                    w.WriteLine($"linkAngle {i} center {l.centerNode} a {l.neighborA} b {l.neighborB} cos {EDDiagnostics.F(l.restCos)} sin {EDDiagnostics.F(l.restSin)}");
+                    var l = structureBendConstraints[i];
+                    w.WriteLine($"structureBend {i} center {l.centerNode} a {l.neighborA} b {l.neighborB} cos {EDDiagnostics.F(l.restCos)} sin {EDDiagnostics.F(l.restSin)}");
                 }
             }
         }
