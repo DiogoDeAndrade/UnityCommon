@@ -66,7 +66,80 @@ namespace UC.ED
                 int row = rowOffset;
 
                 for (int i = 0; i < deformation.nodes.Count; i++)
-                    row = deformation.FillRotationJacobianBlock(stateView, jacobian, row, i, residualWeight, ref jacobianNormSq);
+                    row = FillJacobianBlock(stateView, jacobian, row, i, residualWeight, ref jacobianNormSq);
+            }
+
+            /// <summary>
+            /// The six rows for one node, analytically. Three dot products and three squared
+            /// lengths, all quadratic in the matrix entries, so the derivatives are the other axis
+            /// and twice the axis respectively.
+            ///
+            /// The norm contribution is added in closed form at the end rather than accumulated
+            /// entry by entry, which is not the same sum in floating point - it is the sum the
+            /// baselines were captured against.
+            /// </summary>
+            private int FillJacobianBlock(EDStateView state, DenseMatrix J, int row, int nodeIndex, double wRot, ref double jNormRunningTotalSq)
+            {
+                int p = EDStateView.ParamBase(nodeIndex);
+                var aX = state.GetAxisX(nodeIndex);
+                var aY = state.GetAxisY(nodeIndex);
+                var aZ = state.GetAxisZ(nodeIndex);
+
+                // r0 = X dot Y
+                J[row, p + 0] = wRot * aY.x;
+                J[row, p + 4] = wRot * aY.y;
+                J[row, p + 8] = wRot * aY.z;
+
+                J[row, p + 1] = wRot * aX.x;
+                J[row, p + 5] = wRot * aX.y;
+                J[row, p + 9] = wRot * aX.z;
+                row++;
+
+                // r1 = X dot Z
+                J[row, p + 0] = wRot * aZ.x;
+                J[row, p + 4] = wRot * aZ.y;
+                J[row, p + 8] = wRot * aZ.z;
+
+                J[row, p + 2] = wRot * aX.x;
+                J[row, p + 6] = wRot * aX.y;
+                J[row, p + 10] = wRot * aX.z;
+                row++;
+
+                // r2 = Y dot Z
+                J[row, p + 1] = wRot * aZ.x;
+                J[row, p + 5] = wRot * aZ.y;
+                J[row, p + 9] = wRot * aZ.z;
+
+                J[row, p + 2] = wRot * aY.x;
+                J[row, p + 6] = wRot * aY.y;
+                J[row, p + 10] = wRot * aY.z;
+                row++;
+
+                // r3 = X dot X - 1
+                J[row, p + 0] = wRot * 2.0 * aX.x;
+                J[row, p + 4] = wRot * 2.0 * aX.y;
+                J[row, p + 8] = wRot * 2.0 * aX.z;
+                row++;
+
+                // r4 = Y dot Y - 1
+                J[row, p + 1] = wRot * 2.0 * aY.x;
+                J[row, p + 5] = wRot * 2.0 * aY.y;
+                J[row, p + 9] = wRot * 2.0 * aY.z;
+                row++;
+
+                // r5 = Z dot Z - 1
+                J[row, p + 2] = wRot * 2.0 * aZ.x;
+                J[row, p + 6] = wRot * 2.0 * aZ.y;
+                J[row, p + 10] = wRot * 2.0 * aZ.z;
+                row++;
+
+                double ax2 = aX.x * aX.x + aX.y * aX.y + aX.z * aX.z;
+                double ay2 = aY.x * aY.x + aY.y * aY.y + aY.z * aY.z;
+                double az2 = aZ.x * aZ.x + aZ.y * aZ.y + aZ.z * aZ.z;
+
+                jNormRunningTotalSq += 6.0 * wRot * wRot * (ax2 + ay2 + az2);
+
+                return row;
             }
         }
 #endif
