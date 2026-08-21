@@ -242,32 +242,6 @@ namespace UC.ED
             return row + 3;
         }
 
-        internal int FillSegmentLengthJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSegmentLength, ref double jNorm)
-        {
-            var baseView = new EDStateView(state);
-
-            double r0 = EvaluateSingleSegmentLengthResidual(baseView, segmentIndex, wSegmentLength);
-
-            if (Math.Abs(r0) <= 1e-12)
-                return row + 1;
-
-            for (int col = 0; col < state.Count; col++)
-            {
-                double original = state.Get(col);
-                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
-
-                var modifiedState = new EDStateView(state, col, eps);
-
-                double r1 = EvaluateSingleSegmentLengthResidual(modifiedState, segmentIndex, wSegmentLength);
-                double v = (r1 - r0) / eps;
-
-                J[row, col] = v;
-                jNorm += v * v;
-            }
-
-            return row + 1;
-        }
-
         // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillTerminalOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int terminalIndex, double wTerminalOrientation, ref double jNorm)
         {
