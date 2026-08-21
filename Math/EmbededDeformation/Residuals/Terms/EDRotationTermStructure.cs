@@ -75,8 +75,80 @@ namespace UC.ED
                 {
                     bool allowRightScale = deformation.HasTerminalScaleConstraint(i);
 
-                    row = deformation.FillRotationJacobianBlockStructure(stateView, jacobian, row, i, residualWeight, allowRightScale, ref jacobianNormSq);
+                    row = FillJacobianBlock(stateView, jacobian, row, i, residualWeight, allowRightScale, ref jacobianNormSq);
                 }
+            }
+
+            /// <summary>
+            /// The six rows for one node, analytically, measured against the node's rest frame
+            /// rather than the raw matrix axes - so unlike the navmesh form the rest vector appears
+            /// in every derivative.
+            ///
+            /// The disabled right-axis length row advances the row counter and writes nothing. The
+            /// Jacobian arrives zero-filled, so not writing is writing zeros, and it is what keeps
+            /// the block a plain six rows whether or not this node is a terminal.
+            /// </summary>
+            private int FillJacobianBlock(EDStateView state, DenseMatrix J, int row, int nodeIndex, double wRot, bool allowRightScale, ref double jNorm)
+            {
+                static int FillFrameDotJacobianRow(DenseMatrix J, int row, int parameterBase, DVector3 transformedA, DVector3 restA, DVector3 transformedB, DVector3 restB, double weight, ref double jNorm)
+                {
+                    for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+                    {
+                        double a = transformedA.GetComponent(outputAxis);
+                        double b = transformedB.GetComponent(outputAxis);
+
+                        for (int inputAxis = 0; inputAxis < 3; inputAxis++)
+                        {
+                            int col = parameterBase + outputAxis * 4 + inputAxis;
+
+                            double value = weight * (b * restA.GetComponent(inputAxis) + a * restB.GetComponent(inputAxis));
+
+                            J[row, col] = value;
+                            jNorm += value * value;
+                        }
+                    }
+
+                    return row + 1;
+                }
+
+                static int FillFrameLengthJacobianRow(DenseMatrix J, int row, int parameterBase, DVector3 transformed, DVector3 rest, double weight, bool enabled, ref double jNorm)
+                {
+                    if (!enabled) return row + 1;
+
+                    for (int outputAxis = 0; outputAxis < 3; outputAxis++)
+                    {
+                        double transformedComponent = transformed.GetComponent(outputAxis);
+
+                        for (int inputAxis = 0; inputAxis < 3; inputAxis++)
+                        {
+                            int col = parameterBase + outputAxis * 4 + inputAxis;
+                            double value = 2.0 * weight * transformedComponent * rest.GetComponent(inputAxis);
+
+                            J[row, col] = value;
+
+                            jNorm += value * value;
+                        }
+                    }
+
+                    return row + 1;
+                }
+
+                EDNode node = deformation.nodes[nodeIndex];
+
+                DVector3 right = state.TransformVector(nodeIndex, node.restRight);
+                DVector3 up = state.TransformVector(nodeIndex, node.restUp);
+                DVector3 forward = state.TransformVector(nodeIndex, node.restForward);
+
+                int parameterBase = EDStateView.ParamBase(nodeIndex);
+
+                row = FillFrameDotJacobianRow(J, row, parameterBase, right, node.restRight, up, node.restUp, wRot, ref jNorm);
+                row = FillFrameDotJacobianRow(J, row, parameterBase, right, node.restRight, forward, node.restForward, wRot, ref jNorm);
+                row = FillFrameDotJacobianRow(J, row, parameterBase, up, node.restUp, forward, node.restForward, wRot, ref jNorm);
+                row = FillFrameLengthJacobianRow(J, row, parameterBase, right, node.restRight, wRot, !allowRightScale, ref jNorm);
+                row = FillFrameLengthJacobianRow(J, row, parameterBase, up, node.restUp, wRot, true, ref jNorm);
+                row = FillFrameLengthJacobianRow(J, row, parameterBase, forward, node.restForward, wRot, true, ref jNorm);
+
+                return row;
             }
         }
 #endif
