@@ -88,7 +88,6 @@ namespace UC.ED
         /// the float one and normalized when it is set, rather than converted per row.
         /// </summary>
         internal DVector3 upVectorD => _upVectorD;
-        public double clearanceMinRatio = 0.85;
 
         [SerializeField, HideInInspector]
         private EDState currentState;
@@ -1302,7 +1301,9 @@ namespace UC.ED
             return DeformVertex(restPosition, standardBinding, state);
         }
 
-        private bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, FullDeformationField.TransformBlender blender, out double clearance)
+        // Internal for the clearance term, whose Jacobian has to measure the geometry rather than
+        // read the cache - a perturbed column has no cached clearance to read.
+        internal bool TryComputeSegmentClearance(EDStateView state, int segmentIndex, FullDeformationField.TransformBlender blender, out double clearance)
         {
             // Single gate for "can this segment's clearance be measured at all". GetClearance walks
             // navMeshTopology.edges and deforms through the per-segment bindings, and those only
@@ -1379,46 +1380,6 @@ namespace UC.ED
             DebugProfiler.DebugMark(timeUpdateClearance);
 
             return ret;
-        }
-
-        private double EvaluateSingleClearanceResidual(EDStateView state, int segmentIndex, double wClearance, FullDeformationField.TransformBlender blender = null)
-        {
-            double original = restState.GetClearance(segmentIndex);
-
-            // Fallback for serial callers. The optimized Jacobian path supplies
-            // the blender explicitly, so it does not reach this allocation.
-            if ((UseDeformationFieldForClearance) && (blender == null))
-            {
-                blender = CreateFieldBlender(state);
-            }
-
-            if (!TryComputeSegmentClearance(state, segmentIndex, blender, out double current))
-            {
-                return 0.0;
-            }
-
-            return wClearance * ComputeClearanceLoss(original, current);
-        }
-
-        internal double ComputeClearanceLoss(double original, double current)
-        {
-            if ((original == double.MaxValue) || (current == double.MaxValue))
-                return 0.0;
-
-            const double epsilon = 1e-3;
-
-            // Optional world-space slack, useful when original clearance is large.
-            const double absoluteSlack = 0.05;
-
-            double allowedByRatio = original * clearanceMinRatio;
-            double allowedBySlack = Math.Max(0.0, original - absoluteSlack);
-
-            // More permissive of the two.
-            double allowed = Math.Min(allowedByRatio, allowedBySlack);
-
-            double loss = (allowed - current) / (original + epsilon);
-
-            return Math.Max(0.0, loss);
         }
 
         bool GetClearance(EDStateView state, DVector3 p1, DVector3 p2, FullDeformationField.TransformBlender blender, out double minClearance)
@@ -1795,7 +1756,9 @@ namespace UC.ED
             return false;
         }
 
-        private FullDeformationField.Frame GetNodeFrame(int nodeIndex, EDStateView state)
+        // Internal for the clearance term, which overrides one node's frame on the blender per
+        // Jacobian column and needs the frame that column's perturbation implies.
+        internal FullDeformationField.Frame GetNodeFrame(int nodeIndex, EDStateView state)
         {
             EDNode node = nodes[nodeIndex];
 
