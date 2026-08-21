@@ -491,7 +491,7 @@ namespace UC.ED
     }
 
     [Serializable]
-    public struct EDLinkAngleConstraint
+    public struct EDStructureBendConstraint
     {
         public int centerNode;
         public int neighborA;

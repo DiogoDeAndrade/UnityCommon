@@ -109,6 +109,25 @@ namespace UC.ED
                     rowCount = 0;
             }
 
+            /// <summary>
+            /// Rebuilds whatever this term derives from the graph - the constraint set it will put
+            /// rows for, typically. Called once when the instance is created and again whenever the
+            /// graph underneath it is rebuilt; never per solve and never per iteration.
+            ///
+            /// **This is separate from Resolve on purpose.** Resolve answers "how many rows and at
+            /// what weight", which is a question about the term's configuration and is cheap enough
+            /// to ask every solve. This answers "what am I constraining", which is a question about
+            /// the graph, and doing it inside ComputeRowCount would be a query that mutates - the
+            /// kind of thing that is correct until someone reasonably assumes a getter is a getter.
+            ///
+            /// A term deriving nothing from the graph does not override it, which is most of them.
+            /// </summary>
+            public virtual void Reset() { }
+
+            /// <summary>
+            /// Rows this term will occupy. A pure query - anything that has to be *built* first
+            /// belongs in Reset, which has already run by the time this is called.
+            /// </summary>
             protected abstract int ComputeRowCount();
 
             public abstract void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset);

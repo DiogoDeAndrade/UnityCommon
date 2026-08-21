@@ -56,6 +56,42 @@ namespace UC.ED
 
                     termInstances.Add(model.terms[i].NewInstance(deformation, model.normalizeWeights));
                 }
+
+                // Here as well as from the graph rebuild, and neither call is redundant. An instance
+                // is created lazily on first use, and Run Iteration reaches the solver without going
+                // through the rebuild path at all - so a term whose constraints are only built there
+                // would silently contribute no rows the first time that button is pressed. The
+                // rebuild call is what keeps an already-built instance from going stale; this one is
+                // what keeps a fresh one from being empty.
+                Reset();
+            }
+
+            /// <summary>
+            /// Rebuilds what every term derives from the graph. Call after the graph is rebuilt and
+            /// before anything reads rows from it - see EDResidualTerm.Instance.Reset.
+            /// </summary>
+            public void Reset()
+            {
+                for (int i = 0; i < termInstances.Count; i++)
+                    termInstances[i].Reset();
+            }
+
+            /// <summary>
+            /// The instance of a term of this type, or null when the model does not carry one.
+            ///
+            /// For the diagnostics dump, which has to describe data a term owns without the
+            /// deformation holding a copy of it. Terms are unique per model in every configuration
+            /// that exists, so the first match is the match.
+            /// </summary>
+            public T GetTermInstance<T>() where T : EDResidualTerm.Instance
+            {
+                for (int i = 0; i < termInstances.Count; i++)
+                {
+                    if (termInstances[i] is T typed)
+                        return typed;
+                }
+
+                return null;
             }
 
             /// <summary>

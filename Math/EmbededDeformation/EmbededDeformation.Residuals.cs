@@ -64,7 +64,8 @@ namespace UC.ED
 
         #region NavMesh-based constraints
 
-        private int ParamBase(int nodeIndex) => nodeIndex * 12;
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal int ParamBase(int nodeIndex) => nodeIndex * 12;
 
         // Widened as terms adopt it - see FillRotationJacobianBlock below.
         internal int FillRotationJacobianBlockStructure(EDStateView state, DenseMatrix J, int row, int nodeIndex, double wRot, bool allowRightScale, ref double jNorm)
@@ -579,65 +580,6 @@ namespace UC.ED
             return row + 1;
         }
 
-        private void FillLinkAngleJacobianColumn(EDState state, DenseMatrix J, int row, int constraintIndex, double wLinkAngle, double baseCosineResidual, double baseSineResidual, int col, ref double jNorm)
-        {
-            double original = state.Get(col);
-
-            double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
-
-            EDStateView modified = new EDStateView(state, col, eps);
-
-            EvaluateSingleLinkAngleResidual(modified, constraintIndex, wLinkAngle, out double modifiedCosineResidual, out double modifiedSineResidual);
-
-            double cosineDerivative = (modifiedCosineResidual - baseCosineResidual) / eps;
-
-            double sineDerivative = (modifiedSineResidual - baseSineResidual) / eps;
-
-            J[row + 0, col] = cosineDerivative;
-            J[row + 1, col] = sineDerivative;
-
-            jNorm += cosineDerivative * cosineDerivative + sineDerivative * sineDerivative;
-        }
-
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal int FillLinkAngleJacobianBlock(EDState state, DenseMatrix J, int row, int constraintIndex, double wLinkAngle, ref double jNorm)
-        {
-            EDLinkAngleConstraint constraint = linkAngleConstraints[constraintIndex];
-
-            EDStateView baseView = new EDStateView(state);
-
-            EvaluateSingleLinkAngleResidual(baseView, constraintIndex, wLinkAngle, out double baseCosineResidual, out double baseSineResidual);
-
-            // Centre node: orientation and translation both matter.
-            int centerBase = ParamBase(constraint.centerNode);
-
-            for (int localParameter = 0; localParameter < 12; localParameter++)
-            {
-                FillLinkAngleJacobianColumn(state, J, row, constraintIndex, wLinkAngle, baseCosineResidual, baseSineResidual, centerBase + localParameter, ref jNorm);
-            }
-
-            // Neighbour positions depend only on translation.
-            int neighborABase = ParamBase(constraint.neighborA);
-
-            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
-            {
-                int col = neighborABase + outputAxis * 4 + 3;
-
-                FillLinkAngleJacobianColumn(state, J, row, constraintIndex, wLinkAngle, baseCosineResidual, baseSineResidual, col, ref jNorm);
-            }
-
-            int neighborBBase = ParamBase(constraint.neighborB);
-
-            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
-            {
-                int col = neighborBBase + outputAxis * 4 + 3;
-
-                FillLinkAngleJacobianColumn(state, J, row, constraintIndex, wLinkAngle, baseCosineResidual, baseSineResidual, col, ref jNorm);
-            }
-
-            return row + 2;
-        }
-
         #endregion
 
         #region Structure-based constraints
@@ -704,7 +646,8 @@ namespace UC.ED
         }
 
 
-        private DVector3 DeformStructureNodePosition(int nodeIndex, EDStateView state)
+        // Widened as terms adopt it - see FillRotationJacobianBlock.
+        internal DVector3 DeformStructureNodePosition(int nodeIndex, EDStateView state)
         {
             DVector3 restPosition = nodes[nodeIndex].restPosition;
 
