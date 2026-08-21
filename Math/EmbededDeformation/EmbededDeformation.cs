@@ -1851,6 +1851,20 @@ namespace UC.ED
             return currentState.GetClearance(segIndex);
         }
 
+        /// <summary>
+        /// What this segment's clearance was at rest - the value the clearance term measures the
+        /// current one against, not a fresh measurement of the undeformed geometry.
+        ///
+        /// Reading the same store the term reads is the point. A debug view that re-measured would
+        /// be a second opinion, and the whole use of this number is to explain an energy, so it has
+        /// to be the number that energy used. Returns double.MaxValue when no rest clearance was
+        /// computed, exactly as GetClearance does.
+        /// </summary>
+        public double GetRestClearance(int segIndex)
+        {
+            return (restState != null) ? (restState.GetClearance(segIndex)) : (double.MaxValue);
+        }
+
         public void ClearTimers()
         {
             timeIteration = new();
