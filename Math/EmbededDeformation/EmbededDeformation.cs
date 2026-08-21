@@ -1400,41 +1400,6 @@ namespace UC.ED
             return wClearance * ComputeClearanceLoss(original, current);
         }
 
-        internal DVector3 EvaluateSingleOrientationResidual(EDStateView state, int segmentIndex, double wOrientation)
-        {
-            Vector3 current = GetTransformedSegmentSlopeNormal(state, segmentIndex);
-
-            if (current.sqrMagnitude < 1e-12f)
-            {
-                // Degenerate local frame: strongly invalid.
-                Vector3 fallback = structure[segmentIndex].normal.ToVector3();
-                if (fallback.sqrMagnitude < 1e-12f)
-                    fallback = _upVector.normalized;
-                else
-                    fallback.Normalize();
-
-                return new DVector3(-wOrientation * fallback.x, -wOrientation * fallback.y, -wOrientation * fallback.z);
-            }
-
-            current.Normalize();
-
-            Vector3 target = structure[segmentIndex].normal.ToVector3().SafeNormalized();
-
-            return new DVector3(wOrientation * (current.x - target.x), wOrientation * (current.y - target.y), wOrientation * (current.z - target.z));
-        }
-
-        internal DVector3 EvaluateSingleNodeOrientationResidualStructure(EDStateView state, int nodeIndex, double wOrientation)
-        {
-            DVector3 currentUp = state.TransformDirection(nodeIndex, nodes[nodeIndex].restUp);
-
-            DVector3 restUp = nodes[nodeIndex].restUp.normalized;
-
-            if (currentUp.sqrMagnitude < 1e-12f)
-                return -wOrientation * restUp;
-
-            return wOrientation * (currentUp - restUp);
-        }
-
         internal DVector3 EvaluateSingleTerminalOrientationResidual(EDStateView state, int terminalIndex, double wTerminalOrientation)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];

@@ -92,11 +92,63 @@ namespace UC.ED
 
             protected override int domainCount => (deformation.structure != null) ? (deformation.structure.Count) : (0);
 
+            /// <summary>
+            /// The segment's probe-triangle normal against the normal it was built with. A
+            /// degenerate frame returns the negated target, which is the residual a normal of zero
+            /// would give and is what makes the degenerate case the worst score rather than an
+            /// accidental zero.
+            /// </summary>
             protected override DVector3 EvaluateItem(EDStateView state, int index, double weight)
-                => deformation.EvaluateSingleOrientationResidual(state, index, weight);
+            {
+                Vector3 current = deformation.GetTransformedSegmentSlopeNormal(state, index);
+
+                if (current.sqrMagnitude < 1e-12f)
+                {
+                    // Degenerate local frame: strongly invalid.
+                    Vector3 fallback = deformation.structure[index].normal.ToVector3();
+                    if (fallback.sqrMagnitude < 1e-12f)
+                        fallback = deformation.upVector.normalized;
+                    else
+                        fallback.Normalize();
+
+                    return new DVector3(-weight * fallback.x, -weight * fallback.y, -weight * fallback.z);
+                }
+
+                current.Normalize();
+
+                Vector3 target = deformation.structure[index].normal.ToVector3().SafeNormalized();
+
+                return new DVector3(weight * (current.x - target.x), weight * (current.y - target.y), weight * (current.z - target.z));
+            }
 
             protected override int FillItem(EDState state, DenseMatrix jacobian, int row, int index, double weight, ref double jacobianNormSq)
-                => deformation.FillOrientationJacobianBlock(state, jacobian, row, index, weight, ref jacobianNormSq);
+            {
+                var baseView = new EDStateView(state);
+
+                DVector3 r0 = EvaluateItem(baseView, index, weight);
+
+                for (int col = 0; col < state.Count; col++)
+                {
+                    double original = state.Get(col);
+                    double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+                    var modifiedState = new EDStateView(state, col, eps);
+
+                    DVector3 r1 = EvaluateItem(modifiedState, index, weight);
+
+                    double jx = (r1.x - r0.x) / eps;
+                    double jy = (r1.y - r0.y) / eps;
+                    double jz = (r1.z - r0.z) / eps;
+
+                    jacobian[row + 0, col] = jx;
+                    jacobian[row + 1, col] = jy;
+                    jacobian[row + 2, col] = jz;
+
+                    jacobianNormSq += jx * jx + jy * jy + jz * jz;
+                }
+
+                return row + 3;
+            }
         }
 #endif
     }
@@ -121,11 +173,52 @@ namespace UC.ED
 
             protected override int domainCount => deformation.nodes.Count;
 
+            /// <summary>
+            /// The node's deformed up against its rest up. Unlike the structure slope form this
+            /// does not take an absolute value anywhere, so it does hold the node the right way up -
+            /// which is why this is the term that word belongs to, and the structure bend term is
+            /// not.
+            /// </summary>
             protected override DVector3 EvaluateItem(EDStateView state, int index, double weight)
-                => deformation.EvaluateSingleNodeOrientationResidualStructure(state, index, weight);
+            {
+                DVector3 currentUp = state.TransformDirection(index, deformation.nodes[index].restUp);
+
+                DVector3 restUp = deformation.nodes[index].restUp.normalized;
+
+                if (currentUp.sqrMagnitude < 1e-12f)
+                    return -weight * restUp;
+
+                return weight * (currentUp - restUp);
+            }
 
             protected override int FillItem(EDState state, DenseMatrix jacobian, int row, int index, double weight, ref double jacobianNormSq)
-                => deformation.FillOrientationJacobianBlockStructure(state, jacobian, row, index, weight, ref jacobianNormSq);
+            {
+                var baseView = new EDStateView(state);
+
+                DVector3 r0 = EvaluateItem(baseView, index, weight);
+
+                for (int col = 0; col < state.Count; col++)
+                {
+                    double original = state.Get(col);
+                    double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+
+                    var modifiedState = new EDStateView(state, col, eps);
+
+                    DVector3 r1 = EvaluateItem(modifiedState, index, weight);
+
+                    double jx = (r1.x - r0.x) / eps;
+                    double jy = (r1.y - r0.y) / eps;
+                    double jz = (r1.z - r0.z) / eps;
+
+                    jacobian[row + 0, col] = jx;
+                    jacobian[row + 1, col] = jy;
+                    jacobian[row + 2, col] = jz;
+
+                    jacobianNormSq += jx * jx + jy * jy + jz * jz;
+                }
+
+                return row + 3;
+            }
         }
 #endif
     }

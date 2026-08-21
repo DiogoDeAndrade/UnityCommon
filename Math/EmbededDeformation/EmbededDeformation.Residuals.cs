@@ -121,65 +121,6 @@ namespace UC.ED
         }
 
         // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal int FillOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wOrientation, ref double jNorm)
-        {
-            var baseView = new EDStateView(state);
-
-            DVector3 r0 = EvaluateSingleOrientationResidual(baseView, segmentIndex, wOrientation);
-
-            for (int col = 0; col < state.Count; col++)
-            {
-                double original = state.Get(col);
-                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
-
-                var modifiedState = new EDStateView(state, col, eps);
-
-                DVector3 r1 = EvaluateSingleOrientationResidual(modifiedState, segmentIndex, wOrientation);
-
-                double jx = (r1.x - r0.x) / eps;
-                double jy = (r1.y - r0.y) / eps;
-                double jz = (r1.z - r0.z) / eps;
-
-                J[row + 0, col] = jx;
-                J[row + 1, col] = jy;
-                J[row + 2, col] = jz;
-
-                jNorm += jx * jx + jy * jy + jz * jz;
-            }
-
-            return row + 3;
-        }
-
-        internal int FillOrientationJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wOrientation, ref double jNorm)
-        {
-            var baseView = new EDStateView(state);
-
-            DVector3 r0 = EvaluateSingleNodeOrientationResidualStructure(baseView, nodeIndex, wOrientation);
-
-            for (int col = 0; col < state.Count; col++)
-            {
-                double original = state.Get(col);
-                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
-
-                var modifiedState = new EDStateView(state, col, eps);
-
-                DVector3 r1 = EvaluateSingleNodeOrientationResidualStructure(modifiedState, nodeIndex, wOrientation);
-
-                double jx = (r1.x - r0.x) / eps;
-                double jy = (r1.y - r0.y) / eps;
-                double jz = (r1.z - r0.z) / eps;
-
-                J[row + 0, col] = jx;
-                J[row + 1, col] = jy;
-                J[row + 2, col] = jz;
-
-                jNorm += jx * jx + jy * jy + jz * jz;
-            }
-
-            return row + 3;
-        }
-
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillTerminalOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int terminalIndex, double wTerminalOrientation, ref double jNorm)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
