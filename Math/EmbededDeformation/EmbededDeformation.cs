@@ -1400,25 +1400,6 @@ namespace UC.ED
             return wClearance * ComputeClearanceLoss(original, current);
         }
 
-        internal DVector3 EvaluateSingleTerminalOrientationResidual(EDStateView state, int terminalIndex, double wTerminalOrientation)
-        {
-            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
-
-            if (!TryGetNodeRotation(state, terminal.nodeIndex, out Quaternion currentRotation))
-            {
-                return new DVector3(wTerminalOrientation * Math.PI, 0.0, 0.0);
-            }
-
-            Vector3 targetForward = terminal.targetForward.ToVector3().normalized;
-            Vector3 targetUp = terminal.targetUp.ToVector3().normalized;
-
-            Quaternion targetRotation = Quaternion.LookRotation(targetForward, targetUp);
-
-            Quaternion rotationError = Quaternion.Inverse(targetRotation) * currentRotation;
-
-            return wTerminalOrientation * QuaternionRotationVector(rotationError);
-        }
-
         internal double EvaluateSingleTerminalScaleResidual(EDStateView state, int terminalIndex, double wTerminalScale)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
@@ -1534,87 +1515,6 @@ namespace UC.ED
             }
 
             return false;
-        }
-
-        private bool TryGetNodeRotation(EDStateView state, int nodeIndex, out Quaternion rotation)
-        {
-            const float epsilon = 1e-8f;
-
-            rotation = Quaternion.identity;
-
-            if ((nodeIndex < 0) || (nodeIndex >= nodes.Count))
-            {
-                return false;
-            }
-
-            EDNode node = nodes[nodeIndex];
-
-            DVector3 right = state.TransformVector(nodeIndex, node.restRight);
-            DVector3 up = state.TransformVector(nodeIndex, node.restUp);
-            DVector3 forward = state.TransformVector(nodeIndex, node.restForward);
-
-            if (forward.sqrMagnitude < epsilon)
-            {
-                if ((right.sqrMagnitude > epsilon) && (up.sqrMagnitude > epsilon))
-                {
-                    forward = DVector3.Cross(right, up);
-                }
-            }
-
-            if (forward.sqrMagnitude < epsilon)
-                return false;
-
-            forward.Normalize();
-
-            // Remove scale and shear from the orientation measurement.
-            up = DVector3.ProjectOnPlane(up, forward);
-
-            if ((up.sqrMagnitude < epsilon) && (right.sqrMagnitude > epsilon))
-            {
-                up = DVector3.Cross(forward, right);
-            }
-
-            if (up.sqrMagnitude < epsilon)
-            {
-                DVector3 fallback = (Math.Abs(DVector3.Dot(forward, DVector3.up)) < 0.95f) ? (DVector3.up) : (DVector3.right);
-
-                up = DVector3.ProjectOnPlane(fallback, forward);
-            }
-
-            if (up.sqrMagnitude < epsilon) return false;
-
-            up.Normalize();
-
-            rotation = Quaternion.LookRotation(forward.ToVector3(), up.ToVector3());
-
-            return true;
-        }
-
-        private static DVector3 QuaternionRotationVector(Quaternion rotation)
-        {
-            Quaternion q = rotation.normalized;
-
-            // Select the shortest quaternion representation.
-            if (q.w < 0.0f)
-            {
-                q = new Quaternion(-q.x, -q.y, -q.z, -q.w);
-            }
-
-            Vector3 vectorPart = new Vector3(q.x, q.y, q.z);
-
-            double sinHalfAngle = vectorPart.magnitude;
-
-            if (sinHalfAngle < 1e-8)
-            {
-                // log(q) ~= 2v close to identity.
-                return new DVector3(2.0 * q.x, 2.0 * q.y, 2.0 * q.z);
-            }
-
-            double angle = 2.0 * Math.Atan2(sinHalfAngle, Math.Clamp(q.w, -1.0f, 1.0f));
-
-            Vector3 axis = vectorPart / (float)sinHalfAngle;
-
-            return angle * axis.ToDVector3();
         }
 
         public int GetSegmentCount() => structure.Count;
