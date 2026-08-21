@@ -121,69 +121,6 @@ namespace UC.ED
         }
 
         // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal int FillSlopeJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wSlope, ref double jNorm)
-        {
-
-            var baseView = new EDStateView(state);
-
-            // Base residual value for this segment.
-            double r0 = EvaluateSingleSlopeResidual(baseView, segmentIndex, wSlope);
-
-            if (r0 <= 1e-12)
-            {
-                return row + 1;
-            }
-
-            for (int col = 0; col < state.Count; col++)
-            {
-                double original = state.Get(col);
-
-                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
-                var modifiedState = new EDStateView(state, col, eps);
-
-                double r1 = EvaluateSingleSlopeResidual(modifiedState, segmentIndex, wSlope);
-
-                J[row, col] = (r1 - r0) / eps;
-
-                jNorm += J[row, col] * J[row, col];
-            }
-
-
-            return row + 1;
-        }
-
-        internal int FillSlopeJacobianBlockStructure(EDState state, DenseMatrix J, int row, int nodeIndex, double wSlope, ref double jNorm)
-        {
-
-            var baseView = new EDStateView(state);
-
-            // Base residual value for this segment.
-            double r0 = EvaluateSingleNodeSlopeResidualStructure(baseView, nodeIndex, wSlope);
-
-            if (r0 <= 1e-12)
-            {
-                return row + 1;
-            }
-
-            for (int col = 0; col < state.Count; col++)
-            {
-                double original = state.Get(col);
-
-                double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
-                var modifiedState = new EDStateView(state, col, eps);
-
-                double r1 = EvaluateSingleNodeSlopeResidualStructure(modifiedState, nodeIndex, wSlope);
-
-                J[row, col] = (r1 - r0) / eps;
-
-                jNorm += J[row, col] * J[row, col];
-            }
-
-
-            return row + 1;
-        }
-
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int segmentIndex, double wOrientation, ref double jNorm)
         {
             var baseView = new EDStateView(state);

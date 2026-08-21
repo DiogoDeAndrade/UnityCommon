@@ -59,8 +59,18 @@ namespace UC.ED
         /// </summary>
         public bool isNavConfigured => (navigationDataBuilt) && (navMeshTopology != null) && (navMeshTopology.edgeCount > 0);
         public List<NavEDSegments> structure;
+
+        /// <summary>
+        /// The steepest ground this piece is meant to be navigable on, in degrees.
+        ///
+        /// **This is the piece's limit, not the slope energy's.** The corridor probe uses it to open
+        /// its height cone at the surface's own steepest permitted rate, and the gizmos colour a
+        /// segment by it - both of which happen at build time, before any energy exists. EDSlopeTerm
+        /// carries its own copy of the same number for the residual it puts rows for, and no longer
+        /// writes this one; it used to, which meant the corridor was measured against whatever the
+        /// last solve happened to push and against the default before the first.
+        /// </summary>
         public float maxSlope = 45.0f;
-        public float slopeSoftBand = 5.0f;
         public Vector3 upVector
         {
             get => _upVector;
@@ -72,6 +82,12 @@ namespace UC.ED
         }
         private Vector3 _upVector = Vector3.up;
         private DVector3 _upVectorD = DVector3.up;
+
+        /// <summary>
+        /// The double form of the piece's up, for the terms that measure against it. Kept beside
+        /// the float one and normalized when it is set, rather than converted per row.
+        /// </summary>
+        internal DVector3 upVectorD => _upVectorD;
         public double clearanceMinRatio = 0.85;
 
         [SerializeField, HideInInspector]
@@ -1384,71 +1400,6 @@ namespace UC.ED
             return wClearance * ComputeClearanceLoss(original, current);
         }
 
-        internal double EvaluateSingleSlopeResidual(EDStateView state, int segmentIndex, double wSlope)
-        {
-            // Normalized hinge:
-            //   0 at or below maxSlope - softBand
-            //   1 at maxSlope
-            //   >1 beyond maxSlope
-            // -------------------------------------------------------------
-            double hardAngleDeg = maxSlope;
-            double softAngleDeg = Math.Max(0.0, maxSlope - slopeSoftBand);
-
-            double hardAngle = hardAngleDeg * Math.PI / 180.0;
-            double softAngle = softAngleDeg * Math.PI / 180.0;
-
-            double hardDot = Math.Cos(hardAngle);
-            double softDot = Math.Cos(softAngle);
-
-            double denom = Math.Max(softDot - hardDot, 1e-12);
-
-            Vector3 upNorm = _upVector.normalized;
-            Vector3 segNormal = GetTransformedSegmentSlopeNormal(state, segmentIndex);
-
-            double penalty;
-
-            if (segNormal.sqrMagnitude < 1e-12f)
-            {
-                // Degenerate frame: strongly invalid.
-                penalty = 1.0;
-            }
-            else
-            {
-                segNormal.Normalize();
-
-                double dp = Vector3.Dot(segNormal, upNorm);
-                dp = Math.Clamp(dp, -1.0, 1.0);
-
-                penalty = Math.Max(0.0, (softDot - dp) / denom);
-            }
-
-            return wSlope * penalty;
-        }
-
-        internal double EvaluateSingleNodeSlopeResidualStructure(EDStateView state, int nodeIndex, double wSlope)
-        {
-            double hardAngle = maxSlope * Math.PI / 180.0;
-
-            double softAngle = Math.Max(0.0, maxSlope - slopeSoftBand) * Math.PI / 180.0;
-
-            double hardDot = Math.Cos(hardAngle);
-            double softDot = Math.Cos(softAngle);
-
-            double denom = Math.Max(softDot - hardDot, 1e-12);
-
-            DVector3 currentUp = state.TransformDirection(nodeIndex, nodes[nodeIndex].restUp);
-
-            if (currentUp.sqrMagnitude < 1e-12) return wSlope;
-
-            double dp = Math.Abs(DVector3.Dot(currentUp, _upVectorD));
-
-            dp = Math.Clamp(dp, 0.0, 1.0);
-
-            double penalty = Math.Max(0.0, (softDot - dp) / denom);
-
-            return wSlope * penalty;
-        }
-
         internal DVector3 EvaluateSingleOrientationResidual(EDStateView state, int segmentIndex, double wOrientation)
         {
             Vector3 current = GetTransformedSegmentSlopeNormal(state, segmentIndex);
@@ -1765,7 +1716,10 @@ namespace UC.ED
                    (seg.bBind.nodeIndices != null);
         }
 
-        Vector3 GetTransformedSegmentSlopeNormal(EDStateView state, int segIndex)
+        // Internal for the navmesh slope and orientation terms, which both measure this same
+        // probe-triangle normal - and for GetSegmentSlopeNormal above, which is the gizmos'
+        // read of it at the current state.
+        internal Vector3 GetTransformedSegmentSlopeNormal(EDStateView state, int segIndex)
         {
             var seg = structure[segIndex];
 
