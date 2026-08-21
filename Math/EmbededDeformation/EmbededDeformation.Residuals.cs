@@ -196,52 +196,6 @@ namespace UC.ED
             return row;
         }
 
-        // Widened as terms adopt it - see FillRotationJacobianBlock above.
-        internal int FillRegularizationJacobianBlock(EDStateView state, Matrix<double> J, int row, int nodeJ, int nodeK, double wReg, ref double jNormRunningTotalSq)
-        {
-
-            int pj = EDStateView.ParamBase(nodeJ);
-            int pk = EDStateView.ParamBase(nodeK);
-
-            DVector3 gj = nodes[nodeJ].restPosition;
-            DVector3 gk = nodes[nodeK].restPosition;
-            DVector3 d = gk - gj;
-
-            double dx = d.x;
-            double dy = d.y;
-            double dz = d.z;
-
-            // r.x
-            J[row, pj + 0] = wReg * dx;   // m00
-            J[row, pj + 1] = wReg * dy;   // m01
-            J[row, pj + 2] = wReg * dz;   // m02
-            J[row, pj + 3] = wReg * 1.0;  // m03 / tx_j
-            J[row, pk + 3] = wReg * -1.0; // tx_k
-            row++;
-
-            // r.y
-            J[row, pj + 4] = wReg * dx;   // m10
-            J[row, pj + 5] = wReg * dy;   // m11
-            J[row, pj + 6] = wReg * dz;   // m12
-            J[row, pj + 7] = wReg * 1.0;  // m13 / ty_j
-            J[row, pk + 7] = wReg * -1.0; // ty_k
-            row++;
-
-            // r.z
-            J[row, pj + 8] = wReg * dx;   // m20
-            J[row, pj + 9] = wReg * dy;   // m21
-            J[row, pj + 10] = wReg * dz;   // m22
-            J[row, pj + 11] = wReg * 1.0;  // m23 / tz_j
-            J[row, pk + 11] = wReg * -1.0; // tz_k
-            row++;
-
-            double d2 = dx * dx + dy * dy + dz * dz;
-            jNormRunningTotalSq += 3.0 * wReg * wReg * (d2 + 2.0);
-
-
-            return row;
-        }
-
         // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal int FillConstraintJacobianBlock(EDStateView state, Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
         {
