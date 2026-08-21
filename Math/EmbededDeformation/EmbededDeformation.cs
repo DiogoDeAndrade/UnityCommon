@@ -1437,7 +1437,7 @@ namespace UC.ED
 
             double denom = Math.Max(softDot - hardDot, 1e-12);
 
-            DVector3 currentUp = GetTransformedNodeUp(state, nodeIndex);
+            DVector3 currentUp = state.TransformDirection(nodeIndex, nodes[nodeIndex].restUp);
 
             if (currentUp.sqrMagnitude < 1e-12) return wSlope;
 
@@ -1475,7 +1475,7 @@ namespace UC.ED
 
         internal DVector3 EvaluateSingleNodeOrientationResidualStructure(EDStateView state, int nodeIndex, double wOrientation)
         {
-            DVector3 currentUp = GetTransformedNodeUp(state, nodeIndex);
+            DVector3 currentUp = state.TransformDirection(nodeIndex, nodes[nodeIndex].restUp);
 
             DVector3 restUp = nodes[nodeIndex].restUp.normalized;
 
@@ -1483,16 +1483,6 @@ namespace UC.ED
                 return -wOrientation * restUp;
 
             return wOrientation * (currentUp - restUp);
-        }
-
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal DVector3 GetTransformedNodeUp(EDStateView state, int nodeIndex)
-        {
-            DVector3 transformed = state.TransformVector(nodeIndex, nodes[nodeIndex].restUp);
-
-            if (transformed.sqrMagnitude < 1e-12) return DVector3.zero;
-
-            return transformed.normalized;
         }
 
         /// <summary>
@@ -1514,8 +1504,8 @@ namespace UC.ED
                 (seg.node1 >= 0) &&
                 (seg.node2 >= 0))
             {
-                p1 = DeformStructureNodePosition(seg.node1, state);
-                p2 = DeformStructureNodePosition(seg.node2, state);
+                p1 = state.DeformNodePosition(seg.node1, nodes[seg.node1].restPosition);
+                p2 = state.DeformNodePosition(seg.node2, nodes[seg.node2].restPosition);
             }
             else
             {
