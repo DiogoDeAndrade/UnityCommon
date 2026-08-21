@@ -65,58 +65,6 @@ namespace UC.ED
         #region NavMesh-based constraints
 
         // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal int FillConstraintJacobianBlock(EDStateView state, Matrix<double> J, int row, int vertexIndex, double wCon, ref double jNormRunningTotalSq)
-        {
-
-            DVector3 v = restVertices[vertexIndex];
-            EDVertexBinding binding = bindings[vertexIndex];
-
-            for (int b = 0; b < binding.nodeIndices.Length; b++)
-            {
-                int nodeIndex = binding.nodeIndices[b];
-                if (nodeIndex < 0)
-                    continue;
-
-                double wb = ((binding.weights != null) && (b < binding.weights.Length)) ? (binding.weights[b]) : (1.0 / binding.nodeIndices.Length);
-
-                int p = EDStateView.ParamBase(nodeIndex);
-
-                DVector3 g = nodes[nodeIndex].restPosition;
-                DVector3 u = v - g;
-
-                double ux = u.x;
-                double uy = u.y;
-                double uz = u.z;
-
-                double s = wCon * wb;
-
-                // residual x
-                J[row + 0, p + 0] += s * ux; // m00
-                J[row + 0, p + 1] += s * uy; // m01
-                J[row + 0, p + 2] += s * uz; // m02
-                J[row + 0, p + 3] += s;      // m03 / tx
-
-                // residual y
-                J[row + 1, p + 4] += s * ux; // m10
-                J[row + 1, p + 5] += s * uy; // m11
-                J[row + 1, p + 6] += s * uz; // m12
-                J[row + 1, p + 7] += s;      // m13 / ty
-
-                // residual z
-                J[row + 2, p + 8] += s * ux; // m20
-                J[row + 2, p + 9] += s * uy; // m21
-                J[row + 2, p + 10] += s * uz; // m22
-                J[row + 2, p + 11] += s;      // m23 / tz
-
-                double u2 = ux * ux + uy * uy + uz * uz;
-                jNormRunningTotalSq += 3.0 * s * s * (u2 + 1.0);
-            }
-
-
-            return row + 3;
-        }
-
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
         internal double FillClearanceJacobianRow(EDState state, DenseMatrix J, int row, int segmentIndex, double wClearance, FullDeformationField.TransformBlender blender = null)
         {
             var baseView = new EDStateView(state);
