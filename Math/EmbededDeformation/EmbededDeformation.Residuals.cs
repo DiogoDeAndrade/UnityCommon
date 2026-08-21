@@ -120,50 +120,6 @@ namespace UC.ED
             return localJNorm;
         }
 
-        // Widened as terms adopt it - see FillRotationJacobianBlock.
-        internal int FillTerminalOrientationJacobianBlock(EDState state, DenseMatrix J, int row, int terminalIndex, double wTerminalOrientation, ref double jNorm)
-        {
-            EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
-
-            int nodeIndex = terminal.nodeIndex;
-
-            var baseView = new EDStateView(state);
-
-            DVector3 r0 = EvaluateSingleTerminalOrientationResidual(baseView, terminalIndex, wTerminalOrientation);
-
-            int parameterBase = EDStateView.ParamBase(nodeIndex);
-
-            // Only the linear 3x3 transform affects orientation.
-            for (int outputAxis = 0; outputAxis < 3; outputAxis++)
-            {
-                for (int inputAxis = 0; inputAxis < 3; inputAxis++)
-                {
-                    int col = parameterBase + outputAxis * 4 + inputAxis;
-
-                    double original = state.Get(col);
-
-                    // Orientation construction uses Unity float quaternions.
-                    double eps = 1e-5 * Math.Max(1.0, Math.Abs(original));
-
-                    var modified = new EDStateView(state, col, eps);
-
-                    DVector3 r1 = EvaluateSingleTerminalOrientationResidual(modified, terminalIndex, wTerminalOrientation);
-
-                    double jx = (r1.x - r0.x) / eps;
-                    double jy = (r1.y - r0.y) / eps;
-                    double jz = (r1.z - r0.z) / eps;
-
-                    J[row + 0, col] = jx;
-                    J[row + 1, col] = jy;
-                    J[row + 2, col] = jz;
-
-                    jNorm += jx * jx + jy * jy + jz * jz;
-                }
-            }
-
-            return row + 3;
-        }
-
         internal int FillTerminalScaleJacobianBlock(EDStateView state, DenseMatrix J, int row, int terminalIndex, double wTerminalScale, ref double jNorm)
         {
             EDTerminalConstraint terminal = terminalConstraints[terminalIndex];
