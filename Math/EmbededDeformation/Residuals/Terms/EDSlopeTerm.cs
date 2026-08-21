@@ -20,9 +20,17 @@ namespace UC.ED
     /// finite differences, but one row at a time rather than in parallel, matching the block it
     /// replaces.
     ///
-    /// The limit and the soft band belong to the term, and are pushed onto the deformation before a
-    /// solve. They used to arrive through the navigation parameters from a field on the component, which
-    /// meant an experiment's slope constraint was not part of the energy that expressed it.
+    /// The limit and the soft band belong to the term and are read straight off it. They used to
+    /// arrive through the navigation parameters from a field on the component, which meant an
+    /// experiment's slope constraint was not part of the energy that expressed it; then they were
+    /// pushed onto the deformation before a solve, which put the energy's own number somewhere
+    /// anything could read it.
+    ///
+    /// **EmbededDeformation.maxSlope is a different number that happens to agree**, and this term no
+    /// longer writes it. That one is the piece's navigability limit, used by the corridor probe and
+    /// the gizmos at build time - before any energy exists to be asked. While this pushed, the
+    /// corridor was measured against whatever the previous solve left behind, and against the
+    /// default 45 on a piece that had never been solved.
     /// </summary>
     [Serializable]
     public abstract class EDSlopeTerm : EDResidualTerm
@@ -35,28 +43,26 @@ namespace UC.ED
 
         public override string name => "slope";
 
-        /// <summary>
-        /// The limit lives on the term that enforces it rather than on the component, so an
-        /// experiment's slope constraint travels with the energy that expresses it.
-        ///
-        /// Both slope forms read the same two values off the deformation, so if a model ever carried
-        /// both of them with different limits the last one applied would win. That is not a
-        /// configuration worth supporting - a piece has one notion of what is too steep - but it is
-        /// worth knowing that this pushes rather than owns.
-        /// </summary>
-        public override void ApplyRuntimeParameters(EmbededDeformation deformation)
-        {
-            deformation.maxSlope = maxSlope;
-            deformation.slopeSoftBand = softBand;
-        }
-
 #if MATH_NET_AVAILABLE
         public abstract class SlopeInstance : Instance
         {
+            private readonly EDSlopeTerm slopeTerm;
+
             protected SlopeInstance(EDSlopeTerm term, EmbededDeformation deformation)
                 : base(term, deformation)
             {
+                slopeTerm = term;
             }
+
+            /// <summary>
+            /// Ground steeper than this is penalised, in degrees.
+            /// </summary>
+            protected float maxSlope => slopeTerm.maxSlope;
+
+            /// <summary>
+            /// How far below the limit the penalty starts rising.
+            /// </summary>
+            protected float softBand => slopeTerm.softBand;
 
             /// <summary>
             /// How many things this form measures - segments or nodes. Gated on the navigation data
@@ -110,11 +116,80 @@ namespace UC.ED
 
             protected override int domainCount => (deformation.structure != null) ? (deformation.structure.Count) : (0);
 
+            /// <summary>
+            /// The segment's probe-triangle normal against the piece's up, through the same hinge
+            /// the structure form uses. A degenerate frame scores a full penalty rather than zero,
+            /// since a segment whose normal cannot be recovered is not a flat one.
+            /// </summary>
             protected override double EvaluateRow(EDStateView state, int index, double weight)
-                => deformation.EvaluateSingleSlopeResidual(state, index, weight);
+            {
+                // Normalized hinge:
+                //   0 at or below maxSlope - softBand
+                //   1 at maxSlope
+                //   >1 beyond maxSlope
+                // -------------------------------------------------------------
+                double hardAngleDeg = maxSlope;
+                double softAngleDeg = Math.Max(0.0, maxSlope - softBand);
+
+                double hardAngle = hardAngleDeg * Math.PI / 180.0;
+                double softAngle = softAngleDeg * Math.PI / 180.0;
+
+                double hardDot = Math.Cos(hardAngle);
+                double softDot = Math.Cos(softAngle);
+
+                double denom = Math.Max(softDot - hardDot, 1e-12);
+
+                Vector3 upNorm = deformation.upVector.normalized;
+                Vector3 segNormal = deformation.GetTransformedSegmentSlopeNormal(state, index);
+
+                double penalty;
+
+                if (segNormal.sqrMagnitude < 1e-12f)
+                {
+                    // Degenerate frame: strongly invalid.
+                    penalty = 1.0;
+                }
+                else
+                {
+                    segNormal.Normalize();
+
+                    double dp = Vector3.Dot(segNormal, upNorm);
+                    dp = Math.Clamp(dp, -1.0, 1.0);
+
+                    penalty = Math.Max(0.0, (softDot - dp) / denom);
+                }
+
+                return weight * penalty;
+            }
 
             protected override int FillRow(EDState state, DenseMatrix jacobian, int row, int index, double weight, ref double jacobianNormSq)
-                => deformation.FillSlopeJacobianBlock(state, jacobian, row, index, weight, ref jacobianNormSq);
+            {
+                var baseView = new EDStateView(state);
+
+                // Base residual value for this segment.
+                double r0 = EvaluateRow(baseView, index, weight);
+
+                if (r0 <= 1e-12)
+                {
+                    return row + 1;
+                }
+
+                for (int col = 0; col < state.Count; col++)
+                {
+                    double original = state.Get(col);
+
+                    double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+                    var modifiedState = new EDStateView(state, col, eps);
+
+                    double r1 = EvaluateRow(modifiedState, index, weight);
+
+                    jacobian[row, col] = (r1 - r0) / eps;
+
+                    jacobianNormSq += jacobian[row, col] * jacobian[row, col];
+                }
+
+                return row + 1;
+            }
         }
 #endif
     }
@@ -140,11 +215,67 @@ namespace UC.ED
 
             protected override int domainCount => deformation.nodes.Count;
 
+            /// <summary>
+            /// The node's deformed up against the piece's up, through the same hinge the navmesh
+            /// form uses.
+            ///
+            /// Two differences from that form, both preserved rather than reconciled: the dot is
+            /// taken in absolute value, so a node flipped upside down reads as flat ground rather
+            /// than as a cliff, and a collapsed up scores the full weight directly instead of going
+            /// through the hinge.
+            /// </summary>
             protected override double EvaluateRow(EDStateView state, int index, double weight)
-                => deformation.EvaluateSingleNodeSlopeResidualStructure(state, index, weight);
+            {
+                double hardAngle = maxSlope * Math.PI / 180.0;
+
+                double softAngle = Math.Max(0.0, maxSlope - softBand) * Math.PI / 180.0;
+
+                double hardDot = Math.Cos(hardAngle);
+                double softDot = Math.Cos(softAngle);
+
+                double denom = Math.Max(softDot - hardDot, 1e-12);
+
+                DVector3 currentUp = state.TransformDirection(index, deformation.nodes[index].restUp);
+
+                if (currentUp.sqrMagnitude < 1e-12) return weight;
+
+                double dp = Math.Abs(DVector3.Dot(currentUp, deformation.upVectorD));
+
+                dp = Math.Clamp(dp, 0.0, 1.0);
+
+                double penalty = Math.Max(0.0, (softDot - dp) / denom);
+
+                return weight * penalty;
+            }
 
             protected override int FillRow(EDState state, DenseMatrix jacobian, int row, int index, double weight, ref double jacobianNormSq)
-                => deformation.FillSlopeJacobianBlockStructure(state, jacobian, row, index, weight, ref jacobianNormSq);
+            {
+                var baseView = new EDStateView(state);
+
+                // Base residual value for this node.
+                double r0 = EvaluateRow(baseView, index, weight);
+
+                if (r0 <= 1e-12)
+                {
+                    return row + 1;
+                }
+
+                for (int col = 0; col < state.Count; col++)
+                {
+                    double original = state.Get(col);
+
+                    double eps = 1e-6 * Math.Max(1.0, Math.Abs(original));
+                    var modifiedState = new EDStateView(state, col, eps);
+
+                    double r1 = EvaluateRow(modifiedState, index, weight);
+
+                    jacobian[row, col] = (r1 - r0) / eps;
+
+                    jacobianNormSq += jacobian[row, col] * jacobian[row, col];
+                }
+
+                return row + 1;
+            }
         }
 #endif
     }
