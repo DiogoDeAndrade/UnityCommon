@@ -124,6 +124,24 @@ namespace UC
         public List<TEdge> edges => _edges;
         public List<TTriangle> triangles => _triangles;
 
+        /// <summary>
+        /// An empty topology, holding nothing.
+        ///
+        /// It exists so that a serialized field of this type can be *emptied*, which assigning null
+        /// does not do: this is a plain [Serializable] class rather than a UnityEngine.Object, so a
+        /// null field does not clear what the scene already holds for it - the old vertex, edge and
+        /// triangle lists are written straight back on the next save. Observed on 2026-08-22, where
+        /// nulling one left 3576 lines of vertex data in a scene that was being cleared precisely to
+        /// get rid of them.
+        ///
+        /// Leaving the three lists null is deliberate and safe: vertexCount, edgeCount and
+        /// triangleCount all test for null and answer zero, which is what every "is this configured"
+        /// check in the ED code actually asks.
+        /// </summary>
+        public TopologyStatic()
+        {
+        }
+
         public TopologyStatic(Mesh mesh, Matrix4x4 matrix, bool weld = true, float epsilon = 1e-3f)
         {
             var verts = mesh.vertices;
