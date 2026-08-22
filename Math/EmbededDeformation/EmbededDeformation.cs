@@ -1461,7 +1461,7 @@ namespace UC.ED
             return false;
         }
 
-        public int GetSegmentCount() => structure.Count;
+        public int GetSegmentCount() => structure?.Count ?? 0;
 
         public (Vector3, Vector3) GetSegment(int segmentIndex)
         {
