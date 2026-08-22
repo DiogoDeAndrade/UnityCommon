@@ -38,6 +38,9 @@ namespace UC.ED
         [SerializeField, Tooltip("Seed every node along a bar as wide as the navigable corridor is at that node, measured across the node's right axis. This is what makes one node's distance the same kind of quantity as another's: a point source and a bar source are not comparable, so a piece where only the terminals are bars has terminals staying competitive further out than they should.")]
         private bool useCorridorLength = false;
 
+        [SerializeField, Min(0.0f), ShowIf(nameof(useCorridorLength)), AllowNesting, Tooltip("How fast the corridor probe's height band opens with distance, in degrees. A filter on which navmesh boundary crossings count as walls rather than as floor or ceiling - NOT a navigability limit, and no reason for it to match the slope any energy penalises. Too low rejects the far wall of a ramp; too high accepts a wall that is really the floor further along. 45 is what the probe measured with before it had a setting of its own.")]
+        private float corridorConeAngleDegrees = 45.0f;
+
         [SerializeField, Tooltip("How a cell turns the distances it stored into blend weights. InverseDistance is what every structure golden up to now was captured against. InversePower at p = 1 does NOT reproduce it - it differs by the even-split-at-zero branch, which is the point: that comparison isolates what the branch was doing.")]
         private EDFieldWeightMode fieldWeightMode = EDFieldWeightMode.InverseDistance;
         [SerializeField, Min(0.01f), ShowIf(nameof(usesWeightPower)), Tooltip("The exponent. For InversePower, 1/max(d, floor)^p - above 1 sharpens, below 1 flattens. For Gaussian, exp(-(d/sigma)^p) - 2 is the true Gaussian, higher flattens the centre and steepens the shoulder.")]
@@ -82,6 +85,7 @@ namespace UC.ED
         public override EDFieldConnectivity deformationFieldConnectivity => fieldConnectivity;
         public override bool deformationFieldSeedTerminals => useTerminalLength;
         public override bool deformationFieldSeedCorridors => useCorridorLength;
+        public override float corridorConeAngle => corridorConeAngleDegrees;
         public override EDFieldBlendMode deformationFieldBlendMode => fieldBlendMode;
         public override EDFieldRotationBlend deformationFieldRotationBlend => fieldRotationBlend;
         public override EDFieldScaleBlend deformationFieldScaleBlend => fieldScaleBlend;
@@ -217,7 +221,7 @@ namespace UC.ED
 
                 if (def.useCorridorLength)
                 {
-                    MeasureCorridorWidths(lengths, connectorWidths, runawayLimit);
+                    MeasureCorridorWidths(lengths, connectorWidths, runawayLimit, def.corridorConeAngleDegrees);
                 }
 
                 if (def.useTerminalLength)
@@ -247,7 +251,7 @@ namespace UC.ED
             /// eventually, and a side that crosses nothing is unbounded rather than failed, which the
             /// symmetric width already handles by losing the Min.
             /// </summary>
-            private void MeasureCorridorWidths(float[] lengths, float[] connectorWidths, float runawayLimit)
+            private void MeasureCorridorWidths(float[] lengths, float[] connectorWidths, float runawayLimit, float coneAngle)
             {
                 var nodes = deformation.nodes;
 
@@ -289,7 +293,7 @@ namespace UC.ED
 
                     // Rest geometry: this runs inside Build, before BuildNavigationData, so there are
                     // no bindings to deform through and nothing has moved anyway.
-                    if (!deformation.TryMeasureCorridor(node.restPosition, node.restRight, node.restUp, null, null, out EDCorridorExtent extent))
+                    if (!deformation.TryMeasureCorridor(node.restPosition, node.restRight, node.restUp, null, null, coneAngle, out EDCorridorExtent extent))
                     {
                         unmeasured++;
 

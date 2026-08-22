@@ -60,17 +60,11 @@ namespace UC.ED
         public bool isNavConfigured => (navigationDataBuilt) && (navMeshTopology != null) && (navMeshTopology.edgeCount > 0);
         public List<NavEDSegments> structure;
 
-        /// <summary>
-        /// The steepest ground this piece is meant to be navigable on, in degrees.
-        ///
-        /// **This is the piece's limit, not the slope energy's.** The corridor probe uses it to open
-        /// its height cone at the surface's own steepest permitted rate, and the gizmos colour a
-        /// segment by it - both of which happen at build time, before any energy exists. EDSlopeTerm
-        /// carries its own copy of the same number for the residual it puts rows for, and no longer
-        /// writes this one; it used to, which meant the corridor was measured against whatever the
-        /// last solve happened to push and against the default before the first.
-        /// </summary>
-        public float maxSlope = 45.0f;
+        // There was a maxSlope here until 2026-08-22, and every reader of it now owns the number it
+        // actually wanted: EDSlopeTerm the angle its energy penalises, EDGraphBuilder the angle the
+        // corridor probe opens its height band at, EDDebugSettings the angle the slope gizmos colour
+        // against. They were one field because they happened to agree, not because they are one
+        // question - and being one field meant the slope energy silently set the other two.
         public Vector3 upVector
         {
             get => _upVector;

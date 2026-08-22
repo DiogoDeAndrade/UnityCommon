@@ -60,8 +60,8 @@ namespace UC.ED
         private const double corridorPlaneEpsilon = 1e-3;
 
         /// <summary>
-        /// Nothing steeper than this may be asked of the cone, whatever maxSlope is set to. tan blows
-        /// up at 90 degrees and a vertical limit means "accept every height", which is not a band.
+        /// Nothing steeper than this may be asked of the cone, whatever it is given. tan blows up at
+        /// 90 degrees and a vertical limit means "accept every height", which is not a band.
         /// </summary>
         private const double corridorMaxConeAngle = 89.0;
 
@@ -89,8 +89,16 @@ namespace UC.ED
         /// through yet and the rest vertices are the rest vertices. Pass a state to measure the
         /// deformed navmesh, with a blender when the field is doing the deforming.
         /// </summary>
+        /// <param name="coneAngleDegrees">
+        /// How fast the height band is allowed to open with distance from the probe origin. **This is
+        /// a filter on which boundary crossings count as walls, not a navigability limit**, and it has
+        /// no reason to equal the slope any energy penalises - the two are different questions and are
+        /// allowed to disagree. It used to read the deformation's own maxSlope, which coupled them by
+        /// accident and made the measurement depend on which energy had last been solved.
+        /// </param>
         internal bool TryMeasureCorridor(DVector3 center, DVector3 across, DVector3 up,
                                          EDStateView? state, FullDeformationField.TransformBlender blender,
+                                         double coneAngleDegrees,
                                          out EDCorridorExtent extent)
         {
             extent = EDCorridorExtent.unmeasured;
@@ -125,7 +133,7 @@ namespace UC.ED
             // than a slab: tight at the origin, where a wrong crossing would do real damage, and
             // opening at the surface's own steepest permitted rate further out. A slab of any fixed
             // thickness rejects the far wall of a ramp, which is a wall this must find.
-            double coneSlope = Math.Tan(Math.Min(maxSlope, corridorMaxConeAngle) * Mathf.Deg2Rad);
+            double coneSlope = Math.Tan(Math.Min(coneAngleDegrees, corridorMaxConeAngle) * Mathf.Deg2Rad);
 
             double bestPositive = double.MaxValue;
             double bestNegative = double.MaxValue;

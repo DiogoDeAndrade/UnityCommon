@@ -106,6 +106,18 @@ namespace UC.ED
         public virtual bool deformationFieldSeedCorridors => false;
 
         /// <summary>
+        /// How fast the corridor probe's height band opens with distance, in degrees. Only read when
+        /// deformationFieldSeedCorridors is on, since that is the one thing that measures corridors.
+        ///
+        /// **A filter, not a navigability limit.** It decides which navmesh boundary crossings count
+        /// as walls of the corridor rather than as floor or ceiling; the slope an energy penalises is
+        /// a different question and the two are free to disagree. 45 is what the probe has always
+        /// used in practice - it read EmbededDeformation.maxSlope, which Build resets to that default
+        /// - so this is the existing behaviour given a name and an owner.
+        /// </summary>
+        public virtual float corridorConeAngle => 45.0f;
+
+        /// <summary>
         /// How the field combines the transforms of the nodes influencing a point.
         ///
         /// On the builder beside the weighting rather than on the output, even though it is strictly a
