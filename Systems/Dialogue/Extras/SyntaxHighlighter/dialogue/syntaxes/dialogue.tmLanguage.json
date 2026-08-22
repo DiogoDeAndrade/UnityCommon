@@ -19,7 +19,22 @@
 		"match": "^\\s*(\\[.*?\\]:)([^\n]*)",
 		"captures": {
 		  "1": { "name": "entity.name.speaker.dialogue" },
-		  "2": { "name": "string.quoted.dialogue" }
+		  "2": {
+			"name": "string.quoted.dialogue",
+			"patterns": [ { "include": "#interpolation" } ]
+		  }
+		}
+	  },
+	  {
+		"match": "^\\s*(@)([A-Za-z0-9_.-]+)(?:\\s*(=)\\s*([^\n]*))?",
+		"captures": {
+		  "1": { "name": "punctuation.definition.attribute.dialogue" },
+		  "2": { "name": "variable.other.attribute.dialogue" },
+		  "3": { "name": "keyword.operator.assignment.dialogue" },
+		  "4": {
+			"name": "string.unquoted.attribute.dialogue",
+			"patterns": [ { "include": "#interpolation" } ]
+		  }
 		}
 	  },
 	  {
@@ -27,33 +42,58 @@
 		"name": "keyword.operator.redirect.dialogue"
 	  },
 	  {
+		"match": "^\\s*\\{\\s*[0-9]+(?:\\.[0-9]+)?\\s*%?\\s*\\}",
+		"name": "constant.numeric.weight.dialogue"
+	  },
+	  {
 		"begin": "(\\{)",
 		"end": "(\\})",
-		"name": "meta.code.dialogue",		
+		"name": "meta.code.dialogue",
+		"beginCaptures": {
+		  "1": { "name": "punctuation.section.code.begin.dialogue" }
+		},
+		"endCaptures": {
+		  "1": { "name": "punctuation.section.code.end.dialogue" }
+		},
 		"patterns": [
 		  {
-			"match": "(//.*)",
-			"name": "comment.line.dialogue"
-		  },
-		  {
-			"begin": "/\\*",
-			"end": "\\*/",
-			"name": "comment.block.dialogue"
+			"include": "source.cs"
 		  }
 		]
 	  },
 	  {
-		"match": "^(?![#\\*\\{\\[].*?$)(.+)",
-		"name": "string.quoted.dialogue"
+		"match": "^(?![#\\*\\{\\[@].*?$)(.+)",
+		"captures": {
+		  "1": {
+			"name": "string.quoted.dialogue",
+			"patterns": [ { "include": "#interpolation" } ]
+		  }
+		}
 	  },
 	  {
 		"match": "(?<==>\\s?|->\\s?)([A-Za-z0-9:_-]+)",
 		"name": "entity.name.title.dialogue"
 	  },
 	  {
-		"match": "^\\*(.*?) ->",
-		"name": "markup.bold.choice.dialogue"
+		"match": "^\\*(.*?)(?=\\s*(?:->|=>))",
+		"captures": {
+		  "1": {
+			"name": "markup.bold.choice.dialogue",
+			"patterns": [ { "include": "#interpolation" } ]
+		  }
+		}
 	  }
-	]
+	],
+	"repository": {
+	  "interpolation": {
+		"comment": "${expression} inside text. Scoped as markup.inserted so it is green in the stock VS Code themes too, not only in the Dialogue Theme",
+		"match": "(\\$\\{)([^}]*)(\\})",
+		"name": "meta.interpolation.dialogue",
+		"captures": {
+		  "1": { "name": "markup.inserted.punctuation.begin.dialogue" },
+		  "2": { "name": "markup.inserted.interpolation.dialogue" },
+		  "3": { "name": "markup.inserted.punctuation.end.dialogue" }
+		}
+	  }
+	}
   }
-  

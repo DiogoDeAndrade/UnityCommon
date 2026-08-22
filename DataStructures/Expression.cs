@@ -186,6 +186,15 @@ namespace UC
                 case Type.GEqual: return DataType.Bool;
                 case Type.Equal: return DataType.Bool;
                 case Type.NEqual: return DataType.Bool;
+                // Arithmetic is always numeric - EvaluateNumber handles all of these and EvaluateString
+                // has no Add case, so "+" is never string concatenation
+                case Type.UnaryMinus: return DataType.Number;
+                case Type.UnaryPlus: return DataType.Number;
+                case Type.Add: return DataType.Number;
+                case Type.Subtract: return DataType.Number;
+                case Type.Multiply: return DataType.Number;
+                case Type.Divide: return DataType.Number;
+                case Type.Modulo: return DataType.Number;
                 case Type.Var: return context.GetVariableDataType(sLiteral);
                 case Type.FLiteral: return DataType.Number;
                 case Type.BLiteral: return DataType.Bool;

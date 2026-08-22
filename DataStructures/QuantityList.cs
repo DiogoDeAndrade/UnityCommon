@@ -84,6 +84,25 @@ namespace UC
             }
         }
 
+        public void Remove(T element, float quantity = 1)
+        {
+            int index = IndexOf(element);
+            if (index == -1) return;
+
+            originalElements[index].quantity = Mathf.Max(originalElements[index].quantity - quantity, 0);
+
+            originalElements.RemoveAll((v) => v.quantity <= 0);
+        }
+
+        public void Remove(int index, float quantity = 1)
+        {
+            if (index == -1) return;
+
+            originalElements[index].quantity = Mathf.Max(originalElements[index].quantity - quantity, 0);
+
+            originalElements.RemoveAll((v) => v.quantity <= 0);
+        }
+
         public int IndexOf(T item)
         {
             for (int i = 0; i < originalElements.Count; i++)
@@ -132,7 +151,7 @@ namespace UC
             }
         }
 
-        internal float GetQuantity(T element)
+        public float GetQuantity(T element)
         {
             int index = IndexOf(element);
             if (index == -1) return 0;

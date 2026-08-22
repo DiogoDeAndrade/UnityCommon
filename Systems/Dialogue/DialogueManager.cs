@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace UC
 {
 
-    public class DialogueManager : MonoBehaviour
+    public class DialogueManager : Singleton<DialogueManager>
     {
         public delegate void OnDialogueStart(string dialogueKey);
         public event OnDialogueStart onDialogueStart;
@@ -16,36 +18,11 @@ namespace UC
         [SerializeField] private DialogueData[] dialogueData;
         [SerializeField] private DialogueDisplay display;
 
-        DialogueData currentDialogueData = null;
-        DialogueData.Dialogue currentDialogue = null;
-        int currentDialogueIndex = -1;
-        Dictionary<string, int> dialogueCount = new();
-        Dictionary<string, int> dialogueEvents = new();
-
-        static DialogueManager instance = null;
-
-        public static DialogueManager Instance
-        {
-            get
-            {
-                if (instance == null)
-                {
-                    instance = FindAnyObjectByType<DialogueManager>();
-                }
-                return instance;
-            }
-        }
-
-        void Awake()
-        {
-            if (instance != null)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            instance = this;
-        }
+        protected DialogueData              currentDialogueData = null;
+        protected DialogueData.Dialogue     currentDialogue = null;
+        protected int                       currentDialogueIndex = -1;
+        protected Dictionary<string, int>   dialogueCount = new();
+        protected Dictionary<string, int>   dialogueEvents = new();
 
         (DialogueData, DialogueData.Dialogue) FindDialogue(string dialogueKey)
         {
@@ -64,8 +41,45 @@ namespace UC
 
         protected bool _StartConversation(string dialogueKey)
         {
-            (var dialogueData, var dialogue) = FindDialogue(dialogueKey);
+            DialogueData            dialogueData = null;
+            DialogueData.Dialogue   dialogue = null;
+            if (currentDialogueData != null)
+            {
+                dialogue = currentDialogueData.GetDialogue(dialogueKey);
+                if (dialogue != null)
+                {
+                    dialogueData = currentDialogueData;
+                }
+            }
+            if (dialogue == null)
+            {
+                (dialogueData, dialogue) = FindDialogue(dialogueKey);
+            }
+            if (dialogue == null)
+            {
+                if (currentDialogueData)
+                    Debug.LogWarning($"Can't find dialogue key {dialogueKey} in {currentDialogueData.name} nor in global dialogues!");
+                else
+                    Debug.LogWarning($"Can't find dialogue key {dialogueKey} in global dialogues!");
+                return false;
+            }
+
+            return _StartConversation(dialogueData, dialogue);
+        }
+
+        protected bool _StartConversation(DialogueData dialogueData, string dialogueKey = "")
+        {
+            var dialogue = (dialogueKey == "") ? (dialogueData.GetFirstDialogue()) : (dialogueData.GetDialogue(dialogueKey));
+
+            return _StartConversation(dialogueData, dialogue);
+        }
+
+        protected bool _StartConversation(DialogueData dialogueData, DialogueData.Dialogue dialogue)
+        { 
             if (dialogue == null) return false;
+
+            var dialogueKey = dialogue.name;
+
             if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
                 dialogueCount.ContainsKey(dialogueKey))
             {
@@ -87,6 +101,10 @@ namespace UC
                 dialogueCount[dialogueKey] = 1;
 
             onDialogueStart?.Invoke(dialogueKey);
+
+            // "{ ... }" blocks run on entering the node, before NextDialogue puts anything on screen, so
+            // a beat that says "+1000 ammo" and the number on the HUD agree while it's being read
+            RunEntryCode();
 
             NextDialogue();
 
@@ -110,6 +128,19 @@ namespace UC
                     // Get selected option
                     int selectedOption = display.GetSelectedOption();
                     var option = currentDialogue.elems[currentDialogueIndex].options[selectedOption];
+
+                    // Picking an option is also a way of dismissing the beat, so the node's code has to
+                    // run here as well - otherwise a "=>{ ... }" block on a node with options would be
+                    // unreachable. Where to go next is the option's call, not the code block's.
+                    RunCode();
+
+                    // ...and then whatever this particular option carries ("*<text>=>{ ... }-><key>")
+                    if (option.hasCode)
+                    {
+                        var optionContext = GetComponent<Expression.IContext>();
+                        ExecuteCode(option.code, optionContext);
+                    }
+
                     _StartConversation(option.key);
                     return;
                 }
@@ -133,41 +164,25 @@ namespace UC
 
             if (currentDialogueIndex < currentDialogue.elems.Count)
             {
-                display.Display(currentDialogue.elems[currentDialogueIndex]);
+                display.Display(ExpandText(currentDialogue.elems[currentDialogueIndex]));
             }
             else
             {
-                // Check if current dialogue is done (or has nothing), check if it redirects to something
+                // Check if current dialogue is done (or has nothing), check if it redirects to something.
+                // Any code blocks along the way are run by EvaluateNext through the callback.
                 if ((currentDialogue.conditionalNext != null) &&
                     (currentDialogue.conditionalNext.Count > 0))
                 {
+                    // A context is only needed to run code and to evaluate conditions - a plain "=>Key"
+                    // redirect doesn't need one, so a missing context is not a reason to skip the walk
+                    // (it used to be, which silently turned every redirect into an end of dialogue).
                     var context = GetComponent<Expression.IContext>();
-                    if (context != null)
+
+                    var nextKey = currentDialogue.EvaluateNext(context, (code) => ExecuteCode(code, context));
+                    if (!string.IsNullOrEmpty(nextKey))
                     {
-                        foreach (var condition in currentDialogue.conditionalNext)
-                        {
-                            if (string.IsNullOrEmpty(condition.condition))
-                            {
-                                var cd = currentDialogue;
-                                Execute(condition.nextKey);
-                                if (currentDialogue == cd) EndDialogue();
-                                return;
-                            }
-                            if (Expression.TryParse(condition.condition, out var expression))
-                            {
-                                if (expression.EvaluateBool(context))
-                                {
-                                    var cd = currentDialogue;
-                                    Execute(condition.nextKey);
-                                    if (currentDialogue == cd) EndDialogue();
-                                    return;
-                                }
-                            }
-                            else
-                            {
-                                Debug.LogWarning($"Can't parse expression \"{condition.condition}\"!");
-                            }
-                        }
+                        if (!_StartConversation(nextKey)) EndDialogue();
+                        return;
                     }
                 }
 
@@ -175,44 +190,70 @@ namespace UC
             }
         }
 
-        private void Execute(DialogueData.NextKeyOrCode nextKey)
+        void RunEntryCode()
         {
-            if (nextKey.isCode)
+            if ((currentDialogue.entryCode == null) ||
+                (currentDialogue.entryCode.Count == 0)) return;
+
+            var context = GetComponent<Expression.IContext>();
+
+            ExecuteCode(currentDialogue.entryCode, context);
+        }
+
+        // Runs the current dialogue's code blocks and throws away wherever it would have redirected to.
+        // It's the same walk NextDialogue does when a node runs out of text, so the code that runs is
+        // exactly the code that would have run had the beat been dismissed without an option.
+        void RunCode()
+        {
+            if ((currentDialogue.conditionalNext == null) ||
+                (currentDialogue.conditionalNext.Count == 0)) return;
+
+            var context = GetComponent<Expression.IContext>();
+
+            currentDialogue.EvaluateNext(context, (code) => ExecuteCode(code, context));
+        }
+
+        private void ExecuteCode(DialogueData.NextKeyOrCode nextKey, Expression.IContext context)
+        {
+            if (!nextKey.isCode) return;
+
+            ExecuteCode(nextKey.code, context);
+        }
+
+        private void ExecuteCode(List<DialogueData.CodeElem> code, Expression.IContext context)
+        {
+            if ((code == null) || (code.Count == 0)) return;
+
+            if (context == null)
             {
-                var context = GetComponent<Expression.IContext>();
-
-                foreach (var c in nextKey.code)
-                {
-                    if (c.type == DialogueData.CodeElem.Type.FunctionCall)
-                    {
-                        FunctionCall(c, context);
-                    }
-                    else if (c.type == DialogueData.CodeElem.Type.Attribution)
-                    {
-                        if ((c.expressions == null) || (c.expressions.Count < 1))
-                        {
-                            throw new Expression.ErrorException("Missing expression for assignment!");
-                        }
-
-                        if (Expression.TryParse(c.expressions[0], out var expression))
-                        {
-                            if (expression.GetDataType(context) == Expression.DataType.Bool)
-                                context.SetVariable(c.functionOrVarName, expression.EvaluateBool(context));
-                            else
-                                context.SetVariable(c.functionOrVarName, expression.EvaluateNumber(context));
-                        }
-                        else
-                        {
-                            Debug.LogWarning($"Can't parse expression \"{c.expressions[0]}\"!");
-                        }
-                    }
-                }
+                Debug.LogError($"Dialogue \"{currentDialogue?.name}\" has code to run, but there's no Expression.IContext component on {gameObject.name}!");
+                return;
             }
-            else
+
+            foreach (var c in code)
             {
-                if (!_StartConversation(nextKey.nextKey))
+                if (c.type == DialogueData.CodeElem.Type.FunctionCall)
                 {
-                    EndDialogue();
+                    FunctionCall(c, context);
+                }
+                else if (c.type == DialogueData.CodeElem.Type.Attribution)
+                {
+                    if ((c.expressions == null) || (c.expressions.Count < 1))
+                    {
+                        throw new Expression.ErrorException("Missing expression for assignment!");
+                    }
+
+                    if (Expression.TryParse(c.expressions[0], out var expression))
+                    {
+                        if (expression.GetDataType(context) == Expression.DataType.Bool)
+                            context.SetVariable(c.functionOrVarName, expression.EvaluateBool(context));
+                        else
+                            context.SetVariable(c.functionOrVarName, expression.EvaluateNumber(context));
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Can't parse expression \"{c.expressions[0]}\"!");
+                    }
                 }
             }
         }
@@ -256,7 +297,9 @@ namespace UC
 
                     if (index >= code.expressions.Count)
                     {
-                        args.Add(null);
+                        // Optional parameter that wasn't given a value - Invoke needs the actual default,
+                        // a null would fail to convert on a value type
+                        args.Add((param.HasDefaultValue) ? (param.DefaultValue) : (null));
                         continue;
                     }
                     if (Expression.TryParse(code.expressions[index], out var expression))
@@ -331,6 +374,110 @@ namespace UC
                 }
             }
         }
+
+        // -----------------------------------------------------------------------------------------
+        // "${expression}" inside text. Evaluated against the context at the moment the element is
+        // shown, so a line can read "${survivorCount} of the ${sentCount} return" and the game only
+        // has to SetVariable the two numbers beforehand. Anything the Expression parser accepts is
+        // allowed, not just a name: "${sentCount - survivorCount}" works as well. Because it happens
+        // per element, a code block that changes a variable mid-conversation is reflected in the
+        // lines that follow it.
+        // -----------------------------------------------------------------------------------------
+
+        static readonly Regex textExpressionRegex = new Regex(@"\$\{([^}]*)\}", RegexOptions.Compiled);
+
+        // Returns the element with every "${...}" in its text, option texts and attribute values
+        // replaced. The parsed elements belong to the DialogueData asset and are reused by every
+        // conversation, so an element with something to expand is copied and the asset is never
+        // written to; one with nothing to expand is returned as is.
+        DialogueData.DialogueElement ExpandText(DialogueData.DialogueElement element)
+        {
+            if (!NeedsExpansion(element)) return element;
+
+            var context = GetComponent<Expression.IContext>();
+            if (context == null)
+            {
+                Debug.LogWarning($"Dialogue \"{currentDialogue?.name}\" has ${{...}} in its text, but there's no Expression.IContext component on {gameObject.name} to evaluate it with!");
+                return element;
+            }
+
+            var expanded = new DialogueData.DialogueElement
+            {
+                speaker = element.speaker,
+                text = ExpandText(element.text, context)
+            };
+            if (element.options != null)
+            {
+                foreach (var option in element.options)
+                {
+                    expanded.options.Add(new DialogueData.Option { text = ExpandText(option.text, context), key = option.key, code = option.code });
+                }
+            }
+            if (element.attributes != null)
+            {
+                foreach (var attribute in element.attributes)
+                {
+                    expanded.attributes.Add(new DialogueData.Attribute { name = attribute.name, value = ExpandText(attribute.value, context) });
+                }
+            }
+
+            return expanded;
+        }
+
+        static bool NeedsExpansion(DialogueData.DialogueElement element)
+        {
+            if (HasTextExpression(element.text)) return true;
+            if (element.options != null)
+            {
+                foreach (var option in element.options) if (HasTextExpression(option.text)) return true;
+            }
+            if (element.attributes != null)
+            {
+                foreach (var attribute in element.attributes) if (HasTextExpression(attribute.value)) return true;
+            }
+
+            return false;
+        }
+
+        static bool HasTextExpression(string text) => (!string.IsNullOrEmpty(text)) && (text.Contains("${"));
+
+        // Expands every "${...}" in a string. Public so a display or context can run it over text of
+        // its own (a title built elsewhere, say) with the same rules.
+        public static string ExpandText(string text, Expression.IContext context)
+        {
+            if (!HasTextExpression(text)) return text;
+
+            return textExpressionRegex.Replace(text, (match) =>
+            {
+                string source = match.Groups[1].Value.Trim();
+
+                // Anything that can't be evaluated is left exactly as written, so a typo shows up on
+                // screen as "${survivorCont}" instead of quietly vanishing
+                if (source.Length == 0) return match.Value;
+                if (!Expression.TryParse(source, out var expression)) return match.Value;
+
+                try
+                {
+                    switch (expression.GetDataType(context))
+                    {
+                        case Expression.DataType.Number: return FormatNumber(expression.EvaluateNumber(context));
+                        case Expression.DataType.Bool: return (expression.EvaluateBool(context)) ? ("true") : ("false");
+                        case Expression.DataType.String: return expression.EvaluateString(context);
+                        default:
+                            Debug.LogWarning($"Dialogue text expression \"{source}\" has no value - is the variable set on the context?");
+                            return match.Value;
+                    }
+                }
+                catch (Expression.ErrorException e)
+                {
+                    Debug.LogWarning($"Dialogue text expression \"{source}\": {e.Message}");
+                    return match.Value;
+                }
+            });
+        }
+
+        // A count reads as "3", not "3.0"; anything fractional keeps up to two decimals
+        static string FormatNumber(float value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
         public void EndDialogue()
         {
@@ -433,9 +580,24 @@ namespace UC
 
         public static bool StartConversation(string dialogueKey)
         {
-            if (Instance == null) return false;
+            if (Instance == null)
+            {
+                Debug.LogError($"Can't start conversation {dialogueKey} - No DialogueManager present!");
+                return false;
+            }
 
             return Instance._StartConversation(dialogueKey);
+        }
+
+        public static bool StartConversation(DialogueData dialogue, string key = "")
+        {
+            if (Instance == null)
+            {
+                Debug.LogError($"Can't start conversation {dialogue.name} - No DialogueManager present!");
+                return false;
+            }
+
+            return Instance._StartConversation(dialogue, key);
         }
 
         public static void Continue()

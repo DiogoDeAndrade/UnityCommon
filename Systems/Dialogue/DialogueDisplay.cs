@@ -7,7 +7,7 @@ namespace UC
     {
         protected CanvasGroup canvasGroup;
 
-        private void Start()
+        protected virtual void Start()
         {
             canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup)

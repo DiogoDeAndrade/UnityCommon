@@ -38,7 +38,76 @@
       {
         "scope": "markup.bold.choice.dialogue",
         "settings": { "foreground": "#F8cd7d", "fontStyle": "italic" }
+      },
+      {
+        "scope": "punctuation.definition.attribute.dialogue",
+        "settings": { "foreground": "#8a5fbf" }
+      },
+      {
+        "scope": "variable.other.attribute.dialogue",
+        "settings": { "foreground": "#b57edc" }
+      },
+      {
+        "scope": "keyword.operator.assignment.dialogue",
+        "settings": { "foreground": "#8a5fbf" }
+      },
+      {
+        "scope": "string.unquoted.attribute.dialogue",
+        "settings": { "foreground": "#d9b8ff" }
+      },
+      {
+        "scope": "constant.numeric.weight.dialogue",
+        "settings": { "foreground": "#ff9d5c", "fontStyle": "bold" }
+      },
+      {
+        "scope": "meta.code.dialogue comment",
+        "settings": { "foreground": "#56ac61" }
+      },
+      {
+        "scope": "meta.code.dialogue keyword",
+        "settings": { "foreground": "#c586c0" }
+      },
+      {
+        "scope": [
+          "meta.code.dialogue storage",
+          "meta.code.dialogue keyword.type",
+          "meta.code.dialogue entity.name.type"
+        ],
+        "settings": { "foreground": "#4ec9b0" }
+      },
+      {
+        "scope": "meta.code.dialogue keyword.operator",
+        "settings": { "foreground": "#99dfdb" }
+      },
+      {
+        "scope": "meta.code.dialogue string",
+        "settings": { "foreground": "#ce9178" }
+      },
+      {
+        "scope": [
+          "meta.code.dialogue constant.numeric",
+          "meta.code.dialogue constant.language"
+        ],
+        "settings": { "foreground": "#b5cea8" }
+      },
+      {
+        "scope": "meta.code.dialogue entity.name.function",
+        "settings": { "foreground": "#dcdcaa" }
+      },
+      {
+        "scope": "meta.code.dialogue variable",
+        "settings": { "foreground": "#9cdcfe" }
+      },
+      {
+        "scope": "meta.interpolation.dialogue",
+        "settings": { "foreground": "#7ce38b" }
+      },
+      {
+        "scope": [
+          "markup.inserted.punctuation.begin.dialogue",
+          "markup.inserted.punctuation.end.dialogue"
+        ],
+        "settings": { "foreground": "#7ce38b", "fontStyle": "bold" }
       }
     ]
   }
-  

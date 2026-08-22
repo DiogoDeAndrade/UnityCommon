@@ -57,3 +57,54 @@ Now, grab that shovel over there, we're going to do something really neat!
 =>{
     SpawnShovel();
 }
+
+// Weighted random branching: a run of consecutive {<weight>%}=> lines is a single group, rolled once.
+// Weights are relative (they don't have to add up to 100) and a weight of 0 is never picked, so a
+// branch can be switched off without deleting it. Plain conditions can be mixed in - they are still
+// evaluated in order, so this reads as "if the tutorial is done always nag, otherwise roll":
+# RandomGreeting
+{TutorialStage == 0}=>IntroText
+{50%}=>RandomGreeting:Hello
+{30%}=>RandomGreeting:Weather
+{20%}=>RandomGreeting:Silence
+
+# RandomGreeting:Hello
+[TestSpeaker]: Hello again!
+
+# RandomGreeting:Weather
+[TestSpeaker]: Still dark out there, isn't it?
+
+# RandomGreeting:Silence
+[TestSpeaker]: ...
+
+// A code block no longer ends the dialogue: it runs and evaluation continues with the next line, so
+// code and a redirect can be combined (this used to silently drop the =>RandomGreeting).
+# RandomGreeting:Again
+=>{
+    TutorialStage = 2;
+}
+=>RandomGreeting
+
+// Attributes: "@name=value" attaches arbitrary metadata to the element it is written in. The dialogue
+// system doesn't interpret them at all - read them from the display or the context (HasAttribute,
+// GetAttribute, GetAttributeNumber, GetAttributeBool on DialogueElement) and decide there what they
+// mean for your game. A bare "@name" with no value reads as true, which is handy for flags.
+// They can be written before or after the [Speaker] line of the element.
+# AttributeSample
+@portrait=old_man_worried
+@shake=0.5
+@skippable
+[TestSpeaker]: The ground is moving!
+
+// Text expressions: "${...}" anywhere in a line is evaluated against the context when the element is
+// shown, and replaced by the result. The inside is a full expression, not just a variable name, so
+// arithmetic works too. Set the variables from code (context.SetVariable) or from a code block before
+// the text is reached. Something that can't be evaluated (a misspelt variable, say) is left exactly
+// as written, so it's easy to spot in the game. Also works in option text and attribute values.
+// (The bare "{ ... }" block is entry code - it runs on entering the node, before the text shows.)
+# ExpressionSample
+{
+    sentCount = 5;
+    survivorCount = 3;
+}
+[TestSpeaker]: Of the ${sentCount} who left, ${survivorCount} came back. We lost ${sentCount - survivorCount}.
