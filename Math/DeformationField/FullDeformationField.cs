@@ -291,6 +291,32 @@ public partial class FullDeformationField
 
     public DeformationNode GetDeformationNode(int index) => deformationNodes[index];
 
+    /// <summary>
+    /// Whether a cell is inside the voxelized source geometry - filled by FillWithMesh, as opposed
+    /// to merely reached by GrowInfluence. For a sampler that wants to measure the deformation of
+    /// the solid and nothing else. False for anything outside the grid.
+    /// </summary>
+    public bool IsCellOccupied(int x, int y, int z)
+    {
+        if (!HasVoxelData()) return false;
+        if (!IsInside(x, y, z)) return false;
+
+        return voxelData.data[IndexOf(x, y, z)].IsOccupied();
+    }
+
+    /// <summary>
+    /// The world position of a cell's minimum corner. Corner (x, y, z) is shared by the eight cells
+    /// around it, so a sampler laying stencils over the grid can index its vertices by these
+    /// coordinates and deform each corner once. Valid one past the grid in every axis, which is
+    /// where the last cell's far corners are.
+    /// </summary>
+    public Vector3 CellCorner(int x, int y, int z)
+    {
+        if (!HasVoxelData()) return Vector3.zero;
+
+        return voxelData.minBound + new Vector3(x * voxelData.voxelSize.x, y * voxelData.voxelSize.y, z * voxelData.voxelSize.z);
+    }
+
     const float DistanceEpsilon = 1e-5f;
 
     static readonly Vector3Int[] FaceNeighbourOffsets =
