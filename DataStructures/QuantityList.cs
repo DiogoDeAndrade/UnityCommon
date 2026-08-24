@@ -43,6 +43,19 @@ namespace UC
         }
 
         public int Count => originalElements.Count;
+        public float totalQuantity
+        {
+            get
+            {
+                float count = 0;
+                foreach (var elem in originalElements)
+                {
+                    count += elem.quantity;
+                }
+
+                return count;
+            }
+        }
 
         public (T value, float quantity) this[int index]
         {

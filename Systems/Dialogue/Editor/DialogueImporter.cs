@@ -5,7 +5,7 @@ using UnityEditor.AssetImporters;
 namespace UC
 {
 
-    [ScriptedImporter(1, "dialogue")] // 1 is the version, "dialogue" is the file extension 
+    [ScriptedImporter(2, "dialogue")] // 2 is the version, "dialogue" is the file extension
     public class DialogueImporter : ScriptedImporter
     {
         public override void OnImportAsset(AssetImportContext ctx)

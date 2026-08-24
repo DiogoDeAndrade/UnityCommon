@@ -21,6 +21,10 @@ namespace UC
         protected DialogueData              currentDialogueData = null;
         protected DialogueData.Dialogue     currentDialogue = null;
         protected int                       currentDialogueIndex = -1;
+        // The copy of the current element actually handed to the display: guarded options have been
+        // filtered/rolled by FilterOptions, so this is the only list the display's selection index
+        // is valid in - the asset's own element still has every option
+        protected DialogueData.DialogueElement currentDisplayedElement = null;
         protected Dictionary<string, int>   dialogueCount = new();
         protected Dictionary<string, int>   dialogueEvents = new();
 
@@ -94,6 +98,7 @@ namespace UC
             currentDialogueData = dialogueData;
             currentDialogue = dialogue;
             currentDialogueIndex = -1;
+            currentDisplayedElement = null;
 
             if (dialogueCount.ContainsKey(dialogueKey))
                 dialogueCount[dialogueKey]++;
@@ -120,14 +125,22 @@ namespace UC
                 return;
             }
 
-            // Check if it's an option
+            // Check if it's an option. If every option was filtered out (or only unavailable ones
+            // remain, under ShowInvalid), the beat behaves like plain text and falls through.
             if ((currentDialogueIndex >= 0) && (currentDialogue.elems.Count > currentDialogueIndex))
             {
-                if (currentDialogue.elems[currentDialogueIndex].hasOptions)
+                var displayedElement = currentDisplayedElement ?? currentDialogue.elems[currentDialogueIndex];
+                if (HasSelectableOption(displayedElement))
                 {
                     // Get selected option
                     int selectedOption = display.GetSelectedOption();
-                    var option = currentDialogue.elems[currentDialogueIndex].options[selectedOption];
+                    if ((selectedOption < 0) || (selectedOption >= displayedElement.options.Count) ||
+                        (!displayedElement.options[selectedOption].available))
+                    {
+                        Debug.LogWarning($"Selected option {selectedOption} isn't an available option of dialogue \"{currentDialogue.name}\"!");
+                        return;
+                    }
+                    var option = displayedElement.options[selectedOption];
 
                     // Picking an option is also a way of dismissing the beat, so the node's code has to
                     // run here as well - otherwise a "=>{ ... }" block on a node with options would be
@@ -164,7 +177,8 @@ namespace UC
 
             if (currentDialogueIndex < currentDialogue.elems.Count)
             {
-                display.Display(ExpandText(currentDialogue.elems[currentDialogueIndex]));
+                currentDisplayedElement = ExpandText(FilterOptions(currentDialogue.elems[currentDialogueIndex]));
+                display.Display(currentDisplayedElement);
             }
             else
             {
@@ -188,6 +202,83 @@ namespace UC
 
                 EndDialogue();
             }
+        }
+
+        // Applies option guards ("{<expr>}*", "{50%}*", "{50% && <expr>}*"): evaluates each option's
+        // condition and rolls its chance, returning a copy of the element with what survived.
+        // Condition failures are kept - marked unavailable - when the dialogue has the ShowInvalid
+        // flag, so the UI can grey them out; chance failures are always dropped outright, since a
+        // hidden roll is nothing the player can reason about (and is only rolled once the condition
+        // has passed). The roll happens once per display, so the options stay put while the player
+        // picks one. Elements without guarded options pass through untouched.
+        DialogueData.DialogueElement FilterOptions(DialogueData.DialogueElement element)
+        {
+            if (!element.hasOptions) return element;
+            if (!element.options.Exists(o => o.hasCondition || o.hasChance)) return element;
+
+            bool showInvalid = (currentDialogue.flags & DialogueData.DialogueFlags.ShowInvalid) != 0;
+            var context = GetComponent<Expression.IContext>();
+
+            var filtered = new DialogueData.DialogueElement
+            {
+                speaker = element.speaker,
+                text = element.text,
+                attributes = element.attributes
+            };
+
+            foreach (var option in element.options)
+            {
+                bool available = EvaluateOptionCondition(option, context);
+
+                if ((!available) && (!showInvalid)) continue;
+                if (available && option.hasChance && (UnityEngine.Random.Range(0.0f, 100.0f) >= option.chance)) continue;
+
+                filtered.options.Add(new DialogueData.Option
+                {
+                    text = option.text,
+                    key = option.key,
+                    code = option.code,
+                    condition = option.condition,
+                    chance = option.chance,
+                    available = available
+                });
+            }
+
+            return filtered;
+        }
+
+        // A condition that can't be evaluated (no context, parse error, unknown function) makes the
+        // option available, loudly - hiding content over a typo would be the worse failure mode
+        bool EvaluateOptionCondition(DialogueData.Option option, Expression.IContext context)
+        {
+            if (!option.hasCondition) return true;
+
+            if (context == null)
+            {
+                Debug.LogWarning($"Can't evaluate option condition \"{option.condition}\" in dialogue \"{currentDialogue.name}\" - no context!");
+                return true;
+            }
+
+            if (!Expression.TryParse(option.condition, out var expression))
+            {
+                Debug.LogWarning($"Can't parse option condition \"{option.condition}\"!");
+                return true;
+            }
+
+            try
+            {
+                return expression.EvaluateBool(context);
+            }
+            catch (Expression.ErrorException e)
+            {
+                Debug.LogWarning($"Option condition \"{option.condition}\" in dialogue \"{currentDialogue.name}\": {e.Message}");
+                return true;
+            }
+        }
+
+        static bool HasSelectableOption(DialogueData.DialogueElement element)
+        {
+            return (element != null) && element.hasOptions && element.options.Exists(o => o.available);
         }
 
         void RunEntryCode()
@@ -410,7 +501,7 @@ namespace UC
             {
                 foreach (var option in element.options)
                 {
-                    expanded.options.Add(new DialogueData.Option { text = ExpandText(option.text, context), key = option.key, code = option.code });
+                    expanded.options.Add(new DialogueData.Option { text = ExpandText(option.text, context), key = option.key, code = option.code, condition = option.condition, chance = option.chance, available = option.available });
                 }
             }
             if (element.attributes != null)
@@ -482,6 +573,7 @@ namespace UC
         public void EndDialogue()
         {
             display.Clear();
+            currentDisplayedElement = null;
             if (currentDialogue != null)
             {
                 currentDialogue = null;
@@ -525,7 +617,7 @@ namespace UC
 
                 if (currentDialogueIndex >= currentDialogue.elems.Count) return false;
 
-                if (currentDialogue.elems[currentDialogueIndex].hasOptions) return true;
+                if (HasSelectableOption(currentDisplayedElement ?? currentDialogue.elems[currentDialogueIndex])) return true;
 
                 if (currentDialogueIndex < currentDialogue.elems.Count - 1) return true;
 

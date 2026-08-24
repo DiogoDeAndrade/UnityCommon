@@ -17,7 +17,10 @@ namespace UC
         {
             None = 0,
             OneShot = 1,
-            Random = 2
+            Random = 2,
+            // Options whose condition failed are still handed to the display, marked unavailable,
+            // instead of being dropped - so the player can see what the choice would have been.
+            ShowInvalid = 4
         };
 
         [Serializable]
@@ -25,12 +28,25 @@ namespace UC
         {
             public string text;
             public string key;
+            // "{<expr>}*<text>": the option only exists while the expression is true. Empty = always.
+            public string condition;
+            // "{50%}*<text>" / "{50% && <expr>}*<text>": chance (in percent) of the option appearing
+            // at all, rolled once each time the element is displayed. Negative = no roll. Unlike the
+            // weights of a "{25%}=>" group this is an absolute probability, not a share of a group.
+            public float chance = -1.0f;
+            // Set by the manager on the copies it hands to the display: false when the condition
+            // failed but the dialogue's ShowInvalid flag kept the option visible, so the UI can grey
+            // it out. Options that fail their chance roll are dropped outright instead - a hidden
+            // roll is nothing the player can reason about.
+            public bool available = true;
             // Code written as part of the option itself ("*<text>=>{ ... }-><key>"). It runs when this
             // option is picked, before going to key - which is the only way to attach a side effect to
             // one specific choice instead of to the whole beat.
             public List<CodeElem> code;
 
             public bool hasCode => (code != null) && (code.Count > 0);
+            public bool hasCondition => !string.IsNullOrEmpty(condition);
+            public bool hasChance => chance >= 0.0f;
         }
 
         // Free-form metadata attached to an element with "@name=value". The dialogue system doesn't
@@ -319,6 +335,10 @@ namespace UC
             // Set while the code block being parsed belongs to an option instead of to the node, in
             // which case the line that closes it also carries the option's destination ("}-><key>")
             string currentOptionText = null;
+            // Guard of the option whose code block is being parsed ("{<expr>}*<text>=>{"), waiting
+            // for the closing "}-><key>" line to become an Option together with it
+            string currentOptionCondition = "";
+            float currentOptionChance = -1.0f;
             // Set while the code block being parsed is a "{ ... }" entry block instead of a "=>{ ... }"
             bool isEntryCode = false;
             string currentCondition = "";
@@ -380,8 +400,10 @@ namespace UC
                         if (currentOptionText != null)
                         {
                             // "}-><key>": the code belongs to the option, and so does where it goes next
-                            AddOption(currentElement, currentOptionText, trimmedLine.Substring(1).Trim(), code);
+                            AddOption(currentElement, currentOptionText, trimmedLine.Substring(1).Trim(), code, currentOptionCondition, currentOptionChance);
                             currentOptionText = null;
+                            currentOptionCondition = "";
+                            currentOptionChance = -1.0f;
                         }
                         else if (isEntryCode)
                         {
@@ -451,6 +473,36 @@ namespace UC
                     if (!string.IsNullOrEmpty(dialogueText))
                         textBuffer.Add(dialogueText);
                 }
+                else if ((trimmedLine.StartsWith("*")) || (GetOptionGuardEnd(trimmedLine) >= 0))
+                {
+                    // "*<text>" or "{<guard>}*<text>" - both are options; the guard, when there is
+                    // one, is the option's condition and/or chance
+                    string optionCondition = "";
+                    float optionChance = -1.0f;
+                    string optionLine = trimmedLine;
+
+                    int guardEnd = GetOptionGuardEnd(trimmedLine);
+                    if (guardEnd >= 0)
+                    {
+                        ParseOptionGuard(trimmedLine.Substring(1, guardEnd - 1), out optionCondition, out optionChance);
+                        optionLine = trimmedLine.Substring(guardEnd + 1).TrimStart();
+                    }
+
+                    int codeIdx = optionLine.IndexOf("=>{");
+                    if (codeIdx >= 0)
+                    {
+                        // "*<text>=>{" opens a code block that belongs to this option; the destination
+                        // comes on the line that closes it
+                        currentOptionText = optionLine.Substring(1, codeIdx - 1).Trim();
+                        currentOptionCondition = optionCondition;
+                        currentOptionChance = optionChance;
+                        isParsingCodeBlock = true;
+                    }
+                    else
+                    {
+                        ParseOption(optionLine, currentElement, optionCondition, optionChance);
+                    }
+                }
                 else if (trimmedLine.StartsWith("{"))
                 {
                     if (trimmedLine.Contains("}=>{"))
@@ -491,21 +543,6 @@ namespace UC
                         condition = "",
                         nextKey = new NextKeyOrCode { nextKey = nextKey }
                     });
-                }
-                else if (trimmedLine.StartsWith("*"))
-                {
-                    int codeIdx = trimmedLine.IndexOf("=>{");
-                    if (codeIdx >= 0)
-                    {
-                        // "*<text>=>{" opens a code block that belongs to this option; the destination
-                        // comes on the line that closes it
-                        currentOptionText = trimmedLine.Substring(1, codeIdx - 1).Trim();
-                        isParsingCodeBlock = true;
-                    }
-                    else
-                    {
-                        ParseOption(trimmedLine, currentElement);
-                    }
                 }
                 else if (trimmedLine.StartsWith("@"))
                 {
@@ -550,12 +587,57 @@ namespace UC
         // and a dialogue flags line ("{OneShot}"). Statements have to end with ";" (ParseCodeStatements
         // enforces it) and flag names never contain one, so that is the difference. A "{" that doesn't
         // close on its own line can only be a block, since a flags line has to be complete.
+        // A guarded option ("{<expr>}*<text>") also starts with "{" and its text may contain ";", so it
+        // is ruled out first.
         private bool IsEntryCodeBlock(string line)
         {
             if (line.Contains("=>")) return false;
+            if (GetOptionGuardEnd(line) >= 0) return false;
             if (!line.Contains("}")) return true;
 
             return line.Contains(";");
+        }
+
+        // A line whose "{...}" guard is immediately followed by "*" is a guarded option
+        // ("{<expr>}*<text> -> <key>"). Returns the index of the guard's closing brace, or -1 when the
+        // line is not that. The first "}" is taken as the guard's end - an expression has no use for
+        // a brace of its own.
+        private static int GetOptionGuardEnd(string line)
+        {
+            if (!line.StartsWith("{")) return -1;
+
+            int guardEnd = line.IndexOf('}');
+            if (guardEnd < 0) return -1;
+
+            for (int i = guardEnd + 1; i < line.Length; i++)
+            {
+                if (char.IsWhiteSpace(line[i])) continue;
+                return (line[i] == '*') ? (guardEnd) : (-1);
+            }
+
+            return -1;
+        }
+
+        // Splits an option guard into its chance and its condition: "{<expr>}" is condition only,
+        // "{50%}" chance only, and "{50% && <expr>}" is both - the expression gates the option, and
+        // only when it passes is the chance rolled. Like ParseCondition, anything that parses entirely
+        // as a number is a chance and the "%" is just the readable convention - but here the number is
+        // an absolute probability in percent, not a weight normalised across a group.
+        private void ParseOptionGuard(string guardText, out string condition, out float chance)
+        {
+            condition = guardText.Trim();
+            chance = -1.0f;
+
+            int andIdx = condition.IndexOf("&&");
+            string head = (andIdx >= 0) ? (condition.Substring(0, andIdx).Trim()) : (condition);
+            string chanceText = (head.EndsWith("%")) ? (head.Substring(0, head.Length - 1).Trim()) : (head);
+
+            if (float.TryParse(chanceText, System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out var parsedChance))
+            {
+                chance = parsedChance;
+                condition = (andIdx >= 0) ? (condition.Substring(andIdx + 2).Trim()) : ("");
+            }
         }
 
         // Splits a run of statements on ";", ignoring the ones inside a string so Say("a;b") survives.
@@ -803,7 +885,7 @@ namespace UC
         }
 
         // Helper method for option parsing with validation
-        private void ParseOption(string line, DialogueElement currentElement)
+        private void ParseOption(string line, DialogueElement currentElement, string condition, float chance)
         {
             int arrowIdx = line.IndexOf("->");
             if (arrowIdx < 0)
@@ -812,12 +894,12 @@ namespace UC
                 return;
             }
 
-            AddOption(currentElement, line.Substring(1, arrowIdx - 1).Trim(), line.Substring(arrowIdx).Trim(), null);
+            AddOption(currentElement, line.Substring(1, arrowIdx - 1).Trim(), line.Substring(arrowIdx).Trim(), null, condition, chance);
         }
 
         // destination is the "-><key>" part, still with its arrow, because that's what both option forms
         // have in hand at this point
-        private void AddOption(DialogueElement currentElement, string optionText, string destination, List<CodeElem> code)
+        private void AddOption(DialogueElement currentElement, string optionText, string destination, List<CodeElem> code, string condition, float chance)
         {
             if (!destination.StartsWith("->"))
             {
@@ -834,7 +916,7 @@ namespace UC
             }
 
             if (currentElement != null)
-                currentElement.options.Add(new Option { text = optionText, key = destinationKey, code = code });
+                currentElement.options.Add(new Option { text = optionText, key = destinationKey, code = code, condition = condition, chance = chance });
             else
                 Debug.LogWarning($"Option defined without an element context: {optionText} ({SourceRef()})");
         }

@@ -195,14 +195,18 @@ namespace UC
                 optionSeparator.SetActive(true);
                 for (int i = 0; i < currentDialogue.options.Count; i++)
                 {
-                    options[i]?.Show(currentDialogue.options[i].text);
+                    options[i]?.Show(currentDialogue.options[i].text, currentDialogue.options[i].available);
                 }
 
-                selectedOption = 0;
+                // ShowInvalid can leave every option unavailable; the beat then behaves like plain
+                // text, so the continue/done prompt has to stay up instead of a selection
+                selectedOption = NextAvailableOption(-1, 1);
+                if (selectedOption >= 0)
+                {
+                    options[selectedOption]?.Select();
 
-                options[selectedOption]?.Select();
-
-                DisableAllStatus();
+                    DisableAllStatus();
+                }
             }
         }
 
@@ -259,28 +263,36 @@ namespace UC
 
             if (currentDialogue == null) return;
             if (!currentDialogue.hasOptions) return;
+            if (selectedOption < 0) return;
 
-            if (moveVector.y > 0.2f)
+            int direction = 0;
+            if (moveVector.y > 0.2f) direction = -1;
+            else if (moveVector.y < -0.2f) direction = 1;
+            if (direction == 0) return;
+
+            int next = NextAvailableOption(selectedOption, direction);
+            if ((next < 0) || (next == selectedOption)) return;
+
+            options[selectedOption].Deselect();
+            selectedOption = next;
+            options[selectedOption].Select();
+
+            optionCooldownTime = Time.time;
+
+            if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, false, 1.0f, Random.Range(0.9f, 1.1f));
+        }
+
+        // Next available option starting from "from" in "direction", wrapping around; unavailable
+        // (greyed out) options are skipped. -1 if nothing is available at all.
+        int NextAvailableOption(int from, int direction)
+        {
+            int count = currentDialogue.options.Count;
+            for (int i = 1; i <= count; i++)
             {
-                options[selectedOption].Deselect();
-                selectedOption--;
-                if (selectedOption < 0) selectedOption = currentDialogue.options.Count - 1;
-                options[selectedOption].Select();
-
-                optionCooldownTime = Time.time;
-
-                if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, false, 1.0f, Random.Range(0.9f, 1.1f));
+                int index = (((from + i * direction) % count) + count) % count;
+                if (currentDialogue.options[index].available) return index;
             }
-            else if (moveVector.y < -0.2f)
-            {
-                options[selectedOption].Deselect();
-                selectedOption = (selectedOption + 1) % currentDialogue.options.Count;
-                options[selectedOption].Select();
-
-                optionCooldownTime = Time.time;
-
-                if (optionSnd) SoundManager.PlaySound(SoundType.PrimaryFX, optionSnd, false, 1.0f, Random.Range(0.9f, 1.1f));
-            }
+            return -1;
         }
 
         public override int GetSelectedOption() => selectedOption;
