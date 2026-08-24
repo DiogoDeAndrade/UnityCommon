@@ -88,6 +88,19 @@ namespace UC.ED
         /// </summary>
         protected abstract bool perNode { get; }
 
+        /// <summary>
+        /// What the measure has to say about one sample at a state, matching the residual's three
+        /// cases exactly: unchanged, below the floor without turning over, turned over. A sample
+        /// dropped at rest - degenerate, or a stencil with an uninfluenced corner - reads as
+        /// healthy, because the residual never charges it either.
+        /// </summary>
+        public enum SampleState : byte
+        {
+            Healthy  = 0,
+            Squashed = 1,
+            Inverted = 2,
+        }
+
 #if MATH_NET_AVAILABLE
         public abstract class QualityInstance : Instance
         {
@@ -528,9 +541,11 @@ namespace UC.ED
             /// <summary>
             /// The mean square of every row at a state, with what it is made of: how many simplices
             /// have actually turned over and how much measure that is, and how many sit below the
-            /// floor without having turned over. Null when there is nothing to measure.
+            /// floor without having turned over. Null when there is nothing to measure. A caller
+            /// that also wants each simplex's own share hands in an array sized to the simplex
+            /// count - entries the loop skips stay at the zero the allocation gave them.
             /// </summary>
-            private double[] MeasureRows(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices)
+            private double[] MeasureRows(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices, double[] perSimplexContribution = null)
             {
                 invertedSimplices = 0;
                 invertedMeasure = 0.0;
@@ -568,7 +583,11 @@ namespace UC.ED
 
                     if (signed >= 0.0) squashedSimplices++;
 
-                    rowMeanSquare[simplexRow[s]] += Contribution(s, shortfall);
+                    double contribution = Contribution(s, shortfall);
+
+                    if (perSimplexContribution != null) perSimplexContribution[s] = contribution;
+
+                    rowMeanSquare[simplexRow[s]] += contribution;
                 }
 
                 return rowMeanSquare;
@@ -580,9 +599,9 @@ namespace UC.ED
             /// which wants the counts beside the number the energy saw: the inversion count is what
             /// the thesis quotes, and the two have to be read off the same simplices.
             /// </summary>
-            public double MeasureInversion(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices)
+            public double MeasureInversion(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices, double[] perSimplexContribution = null)
             {
-                double[] rowMeanSquare = MeasureRows(state, out invertedSimplices, out invertedMeasure, out squashedSimplices);
+                double[] rowMeanSquare = MeasureRows(state, out invertedSimplices, out invertedMeasure, out squashedSimplices, perSimplexContribution);
 
                 if (rowMeanSquare == null) return 0.0;
 
@@ -599,13 +618,96 @@ namespace UC.ED
             /// </summary>
             public string Describe(EDStateView state)
             {
-                double rms = MeasureInversion(state, out int inverted, out double measure, out int squashed);
+                int count = simplexCount;
 
-                string line = $"inverted {inverted} of {simplexCount} measured {sampleLabel}, {MeasureLabel} {measure:F4} of {restTotalMeasure:F2} at rest, plus {squashed} below the floor without inverting, global RMS {rms:E3}";
+                var contributions = (count > 0) ? (new double[count]) : (null);
+
+                double rms = MeasureInversion(state, out int inverted, out double measure, out int squashed, contributions);
+
+                string line = $"inverted {inverted} of {count} measured {sampleLabel}, {MeasureLabel} {measure:F4} of {restTotalMeasure:F2} at rest, plus {squashed} below the floor without inverting, global RMS {rms:E3}{DescribeConcentration(contributions)}";
 
                 string note = describeNote;
 
                 return (string.IsNullOrEmpty(note)) ? (line) : ($"{line} {note}");
+            }
+
+            /// <summary>
+            /// How much of the mean square the worst one percent of samples carry - the number that
+            /// says whether the energy is measuring the mesh or a handful of catastrophic samples.
+            /// The squared depth has no bound below the floor, so a few simplices turned over and
+            /// stretched can hold nearly all of it, and a solve paid almost entirely to shrink those
+            /// can raise the count of mild ones without the energy noticing - which is what the
+            /// 2026-08-24 tables showed, a four-fold energy drop beside a rising inversion count.
+            /// Read it before and after any change to the loss shape; it is the number that says the
+            /// tail is tamed. The array arrives as each simplex's own share of the mean square and
+            /// leaves sorted, which is fine for the one caller, who allocated it for this.
+            /// </summary>
+            private string DescribeConcentration(double[] contributions)
+            {
+                if (contributions == null) return string.Empty;
+
+                double total = 0.0;
+
+                for (int i = 0; i < contributions.Length; i++) total += contributions[i];
+
+                if (total <= 0.0) return string.Empty;
+
+                Array.Sort(contributions);
+
+                int worst = Math.Max(1, (int)Math.Ceiling(0.01 * contributions.Length));
+
+                double carried = 0.0;
+
+                for (int i = contributions.Length - worst; i < contributions.Length; i++) carried += contributions[i];
+
+                return $", worst 1% ({worst} {sampleLabel}) carry {100.0 * carried / total:F1}% of the mean square";
+            }
+
+            /// <summary>
+            /// The samples at a state, classified exactly as the residual charges them, with the
+            /// deformed positions they were measured at - what the debug displays draw, so the
+            /// picture is the energy's own answer rather than a re-derivation that could drift from
+            /// it. The arity says what came back - three for triangles, four for tetrahedra - and
+            /// the caller decides what it can draw with that. The index array is the instance's own;
+            /// read it, do not write to it.
+            /// </summary>
+            public bool TryClassifySamples(EDStateView state, out Vector3[] deformedPositions, out int[] sampleIndices, out int sampleArity, out SampleState[] states)
+            {
+                deformedPositions = null;
+                sampleIndices = null;
+                sampleArity = 0;
+                states = null;
+
+                if (indices == null) return false;
+
+                FullDeformationField.TransformBlender blender = (throughField) ? (deformation.CreateFieldBlender(state)) : (null);
+
+                var positions = new DVector3[restVertices.Length];
+
+                DeformAll(state, blender, positions);
+
+                int count = indices.Length / arity;
+
+                states = new SampleState[count];
+
+                for (int s = 0; s < count; s++)
+                {
+                    if (restMeasures[s] <= 0.0) continue;
+
+                    double signed = SignedMeasure(s, positions);
+
+                    if (signed < 0.0)                    states[s] = SampleState.Inverted;
+                    else if (Shortfall(s, signed) > 0.0) states[s] = SampleState.Squashed;
+                }
+
+                deformedPositions = new Vector3[positions.Length];
+
+                for (int v = 0; v < positions.Length; v++) deformedPositions[v] = positions[v].ToVector3();
+
+                sampleIndices = indices;
+                sampleArity = arity;
+
+                return true;
             }
 
             /// <summary>
