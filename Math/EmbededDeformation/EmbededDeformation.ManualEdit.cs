@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using UnityEngine;
 using UC.DoubleMath;
 
@@ -12,10 +14,11 @@ namespace UC.ED
     /// <summary>
     /// One term's contribution to the current energy, as a number rather than a log line.
     ///
-    /// LogResidualEnergies already computes all of this and prints it, which is the right shape for
-    /// watching a solve go by and the wrong one for a tool that wants to show the same breakdown in
-    /// an inspector and let it be compared against another. Same quantities, handed back instead of
-    /// formatted.
+    /// The numbers live in the fields; every rendering of them goes through Header/Describe, which
+    /// hand the tracked values back as parallel label and value arrays. The console line, the golden
+    /// harness and a CSV export are then different arrangements of the same strings, so none of them
+    /// can drift from the others - which is the point of the mechanism, since the export exists to
+    /// be graphed against what the console showed.
     /// </summary>
     public readonly struct EDTermEnergy
     {
@@ -38,6 +41,61 @@ namespace UC.ED
             this.energy = energy;
             this.rms = rms;
             this.maxAbs = maxAbs;
+        }
+
+        /// <summary>
+        /// What each entry of <see cref="Describe"/> is, in the same order. The name is not among
+        /// them: it identifies the row, and a consumer pairs it with these values itself.
+        /// </summary>
+        public static string[] Header() => new[] { "rows", "weight", "energy", "rms", "max", "share" };
+
+        /// <summary>
+        /// The tracked values as bare strings, one per <see cref="Header"/> entry, carrying no
+        /// labels of their own - the shape a CSV row or a plot series wants. Invariant culture,
+        /// so a file written here reads the same on any machine.
+        ///
+        /// The share is against the total handed in rather than stored, because it is a fact about
+        /// the whole breakdown and not about this term alone.
+        /// </summary>
+        public string[] Describe(double totalEnergy)
+        {
+            double share = (totalEnergy > 0.0) ? (100.0 * energy / totalEnergy) : (0.0);
+
+            return new[]
+            {
+                rows.ToString(CultureInfo.InvariantCulture),
+                conceptualWeight.ToString("G6", CultureInfo.InvariantCulture),
+                energy.ToString("E6", CultureInfo.InvariantCulture),
+                rms.ToString("E6", CultureInfo.InvariantCulture),
+                maxAbs.ToString("E6", CultureInfo.InvariantCulture),
+                share.ToString("F3", CultureInfo.InvariantCulture) + "%"
+            };
+        }
+
+        // One padding per Describe column, sized so the existing console layout falls out of the
+        // generic renderer unchanged: rows 7 and weight 8 as the old format strings had, 13 for the
+        // three E6 columns (their natural width, so no padding in practice), 8 so the share matches
+        // its old 7-wide number plus the percent sign.
+        private static readonly int[] columnWidths = { 7, 8, 13, 13, 13, 8 };
+
+        /// <summary>
+        /// The console line, assembled from <see cref="Header"/> and <see cref="Describe"/> rather
+        /// than from the fields - so the log and any export are two renderings of the same array,
+        /// and a column added to one cannot be missing from the other.
+        /// </summary>
+        public string DescribeLine(double totalEnergy)
+        {
+            string[] header = Header();
+            string[] values = Describe(totalEnergy);
+
+            var sb = new StringBuilder();
+
+            sb.Append($"{name,-20}");
+
+            for (int i = 0; i < header.Length; i++)
+                sb.Append($" {header[i]}={values[i].PadLeft(columnWidths[i])}");
+
+            return sb.ToString();
         }
     }
 
@@ -280,6 +338,23 @@ namespace UC.ED
 
             Vector<double> f = energy.EvaluateResidual(new EDStateView(currentState));
 
+            return MeasureTermEnergies(f, energy);
+#else
+            return null;
+#endif
+        }
+
+#if MATH_NET_AVAILABLE
+        /// <summary>
+        /// The same breakdown from a residual vector that already exists - the per-iteration case,
+        /// where the solver has just evaluated one and measuring it again would be a second full
+        /// residual pass per iteration. Static because it reads nothing but its arguments; the
+        /// instance method above is this after evaluating the residual at the current state.
+        /// </summary>
+        public static IReadOnlyList<EDTermEnergy> MeasureTermEnergies(Vector<double> f, EDEnergyModel.Instance energy)
+        {
+            if ((f == null) || (energy == null)) return null;
+
             var layout = energy.DescribeLayout();
             var measured = new List<EDTermEnergy>();
 
@@ -310,10 +385,8 @@ namespace UC.ED
             }
 
             return measured;
-#else
-            return null;
-#endif
         }
+#endif
     }
 }
 #endif

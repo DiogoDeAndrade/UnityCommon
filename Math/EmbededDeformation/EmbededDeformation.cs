@@ -1806,39 +1806,6 @@ namespace UC.ED
             return bestIndex;
         }
 
-        private struct EDResidualEnergy
-        {
-            public string name;
-            public int rows;
-            public double energy;
-            public double rms;
-            public double maxAbs;
-        }
-
-        private EDResidualEnergy MeasureResidualBlock(Vector<double> f, ref int row, int count, string name)
-        {
-            double energy = 0.0;
-            double maxAbs = 0.0;
-
-            for (int i = 0; i < count; i++)
-            {
-                double v = f[row + i];
-                energy += v * v;
-                maxAbs = Math.Max(maxAbs, Math.Abs(v));
-            }
-
-            row += count;
-
-            return new EDResidualEnergy
-            {
-                name = name,
-                rows = count,
-                energy = energy,
-                rms = (count > 0) ? Math.Sqrt(energy / count) : 0.0,
-                maxAbs = maxAbs
-            };
-        }
-
         protected void LogResidualEnergies(Vector<double> f, EDEnergyModel.Instance energy, int iteration)
         {
             if (energy == null) return;
@@ -1846,14 +1813,7 @@ namespace UC.ED
             // Reads the layout off the term list rather than a parallel list of block names that had
             // to be kept in step by hand - which is what let three energies go missing from the
             // navmesh layout unnoticed. A term that is not in the model cannot be missing from here.
-            var layout = energy.DescribeLayout();
-
-            int row = 0;
-
-            List<EDResidualEnergy> blocks = new List<EDResidualEnergy>();
-
-            for (int i = 0; i < layout.Count; i++)
-                blocks.Add(MeasureResidualBlock(f, ref row, layout[i].rows, layout[i].name));
+            var blocks = MeasureTermEnergies(f, energy);
 
             double totalEnergy = 0.0;
             for (int i = 0; i < blocks.Count; i++)
@@ -1866,24 +1826,21 @@ namespace UC.ED
             sb.AppendLine($"[ED] Total weighted energy = {totalEnergy:E6}, L2 = {Math.Sqrt(totalEnergy):E6}");
             sb.AppendLine("[ED] Block breakdown:");
 
+            int rowsUsed = 0;
+
             for (int i = 0; i < blocks.Count; i++)
             {
-                var b = blocks[i];
+                rowsUsed += blocks[i].rows;
 
-                if (b.rows <= 0)
+                if (blocks[i].rows <= 0)
                     continue;
 
-                double percent = (totalEnergy > 0.0) ? (100.0 * b.energy / totalEnergy) : 0.0;
-
-                sb.AppendLine(
-                    $"  {b.name,-16} rows={b.rows,6} " +
-                    $"energy={b.energy:E6} rms={b.rms:E6} max={b.maxAbs:E6} " +
-                    $"share={percent,6:F2}%");
+                sb.AppendLine($"  {blocks[i].DescribeLine(totalEnergy)}");
             }
 
-            if (row != f.Count)
+            if (rowsUsed != f.Count)
             {
-                sb.AppendLine($"[ED] WARNING: residual row accounting mismatch. Used={row}, f.Count={f.Count}");
+                sb.AppendLine($"[ED] WARNING: residual row accounting mismatch. Used={rowsUsed}, f.Count={f.Count}");
             }
 
             Debug.Log(sb.ToString());
