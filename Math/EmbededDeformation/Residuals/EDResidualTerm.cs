@@ -116,6 +116,15 @@ namespace UC.ED
             /// </summary>
             protected abstract int ComputeRowCount();
 
+            /// <summary>
+            /// What the term measured at a state, in units a reader can check against the scene -
+            /// the "notes" column of the energy breakdown, empty for the terms whose residual says
+            /// everything. A term that overrides this may re-measure, so callers treat it as a
+            /// residual-evaluation-sized cost, not a getter - it is asked once per breakdown, never
+            /// per iteration.
+            /// </summary>
+            public virtual string DescribeNotes(EDStateView state) => string.Empty;
+
             public abstract void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset);
 
             public abstract void FillJacobian(EDState state, DenseMatrix jacobian, int rowOffset, ref double jacobianNormSq);

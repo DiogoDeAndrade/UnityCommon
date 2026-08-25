@@ -32,8 +32,12 @@ namespace UC.ED
         public readonly double  energy;
         public readonly double  rms;
         public readonly double  maxAbs;
+        /// <summary>What the term itself said about the measured state, or empty - see
+        /// <see cref="EDResidualTerm.Instance.DescribeNotes"/>. A column like the others so every
+        /// row of an export has the same shape, prose or no prose.</summary>
+        public readonly string  notes;
 
-        public EDTermEnergy(string name, int rows, double conceptualWeight, double energy, double rms, double maxAbs)
+        public EDTermEnergy(string name, int rows, double conceptualWeight, double energy, double rms, double maxAbs, string notes = "")
         {
             this.name = name;
             this.rows = rows;
@@ -41,13 +45,14 @@ namespace UC.ED
             this.energy = energy;
             this.rms = rms;
             this.maxAbs = maxAbs;
+            this.notes = notes ?? "";
         }
 
         /// <summary>
         /// What each entry of <see cref="Describe"/> is, in the same order. The name is not among
         /// them: it identifies the row, and a consumer pairs it with these values itself.
         /// </summary>
-        public static string[] Header() => new[] { "rows", "weight", "energy", "rms", "max", "share" };
+        public static string[] Header() => new[] { "rows", "weight", "energy", "rms", "max", "share", "notes" };
 
         /// <summary>
         /// The tracked values as bare strings, one per <see cref="Header"/> entry, carrying no
@@ -68,20 +73,23 @@ namespace UC.ED
                 energy.ToString("E6", CultureInfo.InvariantCulture),
                 rms.ToString("E6", CultureInfo.InvariantCulture),
                 maxAbs.ToString("E6", CultureInfo.InvariantCulture),
-                share.ToString("F3", CultureInfo.InvariantCulture) + "%"
+                share.ToString("F3", CultureInfo.InvariantCulture) + "%",
+                notes
             };
         }
 
         // One padding per Describe column, sized so the existing console layout falls out of the
         // generic renderer unchanged: rows 7 and weight 8 as the old format strings had, 13 for the
         // three E6 columns (their natural width, so no padding in practice), 8 so the share matches
-        // its old 7-wide number plus the percent sign.
-        private static readonly int[] columnWidths = { 7, 8, 13, 13, 13, 8 };
+        // its old 7-wide number plus the percent sign. Notes are free text and get no padding.
+        private static readonly int[] columnWidths = { 7, 8, 13, 13, 13, 8, 0 };
 
         /// <summary>
         /// The console line, assembled from <see cref="Header"/> and <see cref="Describe"/> rather
         /// than from the fields - so the log and any export are two renderings of the same array,
-        /// and a column added to one cannot be missing from the other.
+        /// and a column added to one cannot be missing from the other. An empty value is skipped
+        /// rather than rendered as a bare label, which in practice is the notes column of every
+        /// term that has none - the export keeps the empty cell, the eye is spared it.
         /// </summary>
         public string DescribeLine(double totalEnergy)
         {
@@ -93,7 +101,11 @@ namespace UC.ED
             sb.Append($"{name,-20}");
 
             for (int i = 0; i < header.Length; i++)
+            {
+                if (string.IsNullOrEmpty(values[i])) continue;
+
                 sb.Append($" {header[i]}={values[i].PadLeft(columnWidths[i])}");
+            }
 
             return sb.ToString();
         }
@@ -336,9 +348,11 @@ namespace UC.ED
 
             energy.Resolve();
 
-            Vector<double> f = energy.EvaluateResidual(new EDStateView(currentState));
+            EDStateView stateView = new EDStateView(currentState);
 
-            return MeasureTermEnergies(f, energy);
+            Vector<double> f = energy.EvaluateResidual(stateView);
+
+            return MeasureTermEnergies(f, energy, stateView);
 #else
             return null;
 #endif
@@ -350,8 +364,12 @@ namespace UC.ED
         /// where the solver has just evaluated one and measuring it again would be a second full
         /// residual pass per iteration. Static because it reads nothing but its arguments; the
         /// instance method above is this after evaluating the residual at the current state.
+        ///
+        /// The state is what fills the notes column: a term's DescribeNotes may re-measure at
+        /// residual-evaluation cost, which a breakdown pays once and the per-iteration solver log
+        /// must not pay at all - so the per-iteration caller passes null and its notes stay empty.
         /// </summary>
-        public static IReadOnlyList<EDTermEnergy> MeasureTermEnergies(Vector<double> f, EDEnergyModel.Instance energy)
+        public static IReadOnlyList<EDTermEnergy> MeasureTermEnergies(Vector<double> f, EDEnergyModel.Instance energy, EDStateView? state = null)
         {
             if ((f == null) || (energy == null)) return null;
 
@@ -376,12 +394,19 @@ namespace UC.ED
 
                 double rms = (rows > 0) ? (System.Math.Sqrt(blockEnergy / rows)) : (0.0);
 
+                // The layout is termInstances in order, one entry each, so index i is the term
+                // whose rows these are.
+                string notes = ((state != null) && (rows > 0))
+                               ? (energy.termInstances[i].DescribeNotes(state.Value))
+                               : ("");
+
                 measured.Add(new EDTermEnergy(layout[i].name,
                                               rows,
                                               energy.GetConceptualWeight(layout[i].name),
                                               blockEnergy,
                                               rms,
-                                              maxAbs));
+                                              maxAbs,
+                                              notes));
             }
 
             return measured;

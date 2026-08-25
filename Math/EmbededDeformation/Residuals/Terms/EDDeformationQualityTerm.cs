@@ -613,10 +613,11 @@ namespace UC.ED
             }
 
             /// <summary>
-            /// One line for the console: what the energy measured at a state, in the units a reader
-            /// can check against the scene.
+            /// What the energy measured at a state, in the units a reader can check against the
+            /// scene - the breakdown's notes column. Re-measures the samples, so it costs a
+            /// residual evaluation.
             /// </summary>
-            public string Describe(EDStateView state)
+            public override string DescribeNotes(EDStateView state)
             {
                 int count = simplexCount;
 
