@@ -323,7 +323,16 @@ namespace UC.ED
                 double error = f.L2Norm();
 
                 LogResidualEnergies(f, energy, iter);
-                ReportIteration(f, energy, stateView);
+
+                // The state entering the first iteration of a *continuing* solve is the previous
+                // solve's accepted state, and the export already holds that row - reporting it
+                // again is what made every accepted state appear twice under per-press driving
+                // (Run Iteration), the twin-row pattern of 2026-08-25. A from-reset solve still
+                // reports it: there it is the rest state, which nothing else records. The console
+                // log above is deliberately unconditional - the debug window keeps showing the
+                // entering state either way.
+                if ((iter > 0) || (resetBeforeSolve))
+                    ReportIteration(f, energy, stateView);
 
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
