@@ -75,6 +75,29 @@ namespace UC
         }
 
         /// <summary>
+        /// The rotation by pi about an axis, 2*u*u^T - I: symmetric, orthogonal, determinant +1.
+        /// The closed form, because Rodrigues at exactly pi is the one angle where its sine term
+        /// vanishes and the answer rides entirely on the cancellation-prone cosine half.
+        /// </summary>
+        public static Matrix3x3 HalfTurnAbout(Vector3 axis)
+        {
+            Vector3 u = axis.normalized;
+
+            return new Matrix3x3
+            {
+                m00 = (2.0f * u.x * u.x) - 1.0f,
+                m01 = 2.0f * u.x * u.y,
+                m02 = 2.0f * u.x * u.z,
+                m10 = 2.0f * u.y * u.x,
+                m11 = (2.0f * u.y * u.y) - 1.0f,
+                m12 = 2.0f * u.y * u.z,
+                m20 = 2.0f * u.z * u.x,
+                m21 = 2.0f * u.z * u.y,
+                m22 = (2.0f * u.z * u.z) - 1.0f
+            };
+        }
+
+        /// <summary>
         /// The affine matrix with this linear part and the given translation column.
         /// </summary>
         public Matrix4x4 ToMatrix(Vector3 translation)

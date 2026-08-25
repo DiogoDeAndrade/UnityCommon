@@ -60,12 +60,27 @@ namespace UC.ED
     /// ratio have. It is a margin rather than a scale limit, and it has to stay well below one,
     /// because a terminal asked to scale by a half legitimately halves the area of its triangles.
     ///
+    /// **The orientation reference turns with the map.** A triangle's signed area needs a direction
+    /// to be signed against, and a rest normal frozen in world space reads legitimate rotation as
+    /// damage: past ~72 degrees of local rotation a healthy triangle scores squashed, past 90
+    /// inverted - confirmed by rotating a branch 120 degrees by hand and watching the walls turn
+    /// red while the floors did not. So each triangle's reference is its rest normal turned by the
+    /// rotation of the blend in force at its rest centroid, re-read for every state measured so
+    /// the residual stays a pure function of the state - see TransportNormals. The rotation in the
+    /// *corotational* convention, never the full affine - the full affine follows the map through
+    /// a fold and would detect nothing, and the exact convention matters just as much: see
+    /// EmbededDeformation.TryGetOutputRotation for why the blender's own reflected-polar
+    /// convention hides precisely the in-plane folds this measure exists to catch. Tetrahedra need
+    /// none of this: a signed volume is intrinsic, which is why only the triangle samplers carry a
+    /// reference at all.
+    ///
     /// The derivative is by finite differences, since the samples go through the field's blend and
     /// there is nothing analytic to take. What makes that affordable is sparsity: a sample vertex
     /// depends only on the nodes that influence it, and that set is a fact about its rest position,
     /// so each column re-deforms only the vertices its node reaches and re-measures only the
-    /// simplices those vertices touch, accumulating the change in each row's mean square rather than
-    /// re-summing the whole set. A node none of whose simplices is below the floor at the base state
+    /// simplices those vertices touch - plus, for triangles, the simplices whose centroid the node
+    /// influences, since the reference is read there - accumulating the change in each row's mean
+    /// square rather than re-summing the whole set. A node none of whose simplices is below the floor at the base state
     /// contributes zero columns without being measured at all - the one-sided early-out clearance
     /// uses, and what makes the term cheap on a healthy piece.
     ///
@@ -114,6 +129,8 @@ namespace UC.ED
             private int[]               indices;
             private int                 arity;
             private DVector3[]          restNormals;
+            private Vector3[]           restCentroids;
+            private EDVertexBinding[]   centroidBindings;
             private double[]            restOrientations;
             private double[]            restMeasures;
             private double              restTotalMeasure;
@@ -194,6 +211,8 @@ namespace UC.ED
                 indices = null;
                 arity = 0;
                 restNormals = null;
+                restCentroids = null;
+                centroidBindings = null;
                 restOrientations = null;
                 restMeasures = null;
                 restTotalMeasure = 0.0;
@@ -355,6 +374,72 @@ namespace UC.ED
                     restTotalMeasure += restMeasures[s];
                 }
 
+                // Where the per-node rows ask for their dominant node - and, for triangles, where
+                // the orientation reference is read. Rest positions, because everything the blend
+                // is indexed by is.
+                restCentroids = new Vector3[simplexCount];
+
+                for (int s = 0; s < simplexCount; s++) restCentroids[s] = Centroid(s);
+
+                // On the binding path the centroid's binding is a fact about the mesh, so it is
+                // bound once here rather than on every residual evaluation.
+                if ((arity == 3) && (!throughField))
+                {
+                    centroidBindings = new EDVertexBinding[simplexCount];
+
+                    for (int s = 0; s < simplexCount; s++)
+                        centroidBindings[s] = deformation.BindPoint(restCentroids[s]);
+                }
+
+                // Which simplices each node moves through the orientation reference alone. The
+                // reference rotation is read at the rest centroid, and a triangle spanning a cell
+                // corner can put its centroid in a cell none of its vertices is in - so a node can
+                // turn a triangle's reference while reaching none of its vertices, and its columns
+                // have to re-measure that triangle or the Jacobian silently drops the reference's
+                // own sensitivity. Triangles only; a tetrahedron has no reference to transport.
+                List<int>[] centroidInfluences = null;
+
+                if (arity == 3)
+                {
+                    centroidInfluences = new List<int>[nodeCount];
+
+                    for (int n = 0; n < nodeCount; n++) centroidInfluences[n] = new List<int>();
+
+                    for (int s = 0; s < simplexCount; s++)
+                    {
+                        if (restMeasures[s] <= 0.0) continue;
+
+                        if (throughField)
+                        {
+                            if (!deformation.GetDeformationField().TryGetTrilinearInfluences(restCentroids[s], out int[] nodeIds, out float[] _)) continue;
+
+                            for (int i = 0; i < nodeIds.Length; i++)
+                            {
+                                if ((nodeIds[i] < 0) || (nodeIds[i] >= nodeCount)) continue;
+
+                                if ((centroidInfluences[nodeIds[i]].Count == 0) || (centroidInfluences[nodeIds[i]][centroidInfluences[nodeIds[i]].Count - 1] != s))
+                                    centroidInfluences[nodeIds[i]].Add(s);
+                            }
+                        }
+                        else
+                        {
+                            int[] nodeIndices = centroidBindings[s].nodeIndices;
+                            double[] weights = centroidBindings[s].weights;
+
+                            if (nodeIndices == null) continue;
+
+                            for (int i = 0; i < nodeIndices.Length; i++)
+                            {
+                                if ((nodeIndices[i] < 0) || (nodeIndices[i] >= nodeCount)) continue;
+                                if ((weights != null) && (i < weights.Length) && (weights[i] == 0.0)) continue;
+
+                                if ((centroidInfluences[nodeIndices[i]].Count == 0) || (centroidInfluences[nodeIndices[i]][centroidInfluences[nodeIndices[i]].Count - 1] != s))
+                                    centroidInfluences[nodeIndices[i]].Add(s);
+                            }
+                        }
+                    }
+                }
+
                 // Which row each simplex belongs to.
                 simplexRow = new int[simplexCount];
 
@@ -363,7 +448,7 @@ namespace UC.ED
                     rowCountK = nodeCount;
 
                     for (int s = 0; s < simplexCount; s++)
-                        simplexRow[s] = DominantNodeAt(Centroid(s), nodeCount);
+                        simplexRow[s] = DominantNodeAt(s, nodeCount);
                 }
                 else
                 {
@@ -418,6 +503,24 @@ namespace UC.ED
                         }
                     }
 
+                    // The simplices this node moves only through the orientation reference,
+                    // appended after the vertex-derived ones in ascending simplex order, so the
+                    // list stays deterministic.
+                    if (centroidInfluences != null)
+                    {
+                        List<int> throughCentroid = centroidInfluences[n];
+
+                        for (int k = 0; k < throughCentroid.Count; k++)
+                        {
+                            int s = throughCentroid[k];
+
+                            if (seen[s] == n) continue;
+
+                            seen[s] = n;
+                            reached.Add(s);
+                        }
+                    }
+
                     nodeSimplices[n] = reached.ToArray();
                 }
 
@@ -437,20 +540,20 @@ namespace UC.ED
             }
 
             /// <summary>
-            /// The node carrying the most weight at a point, ties to the lower index - the same rule
-            /// the polar blend and SortInfluences use, so a cluster boundary is a fact about the
-            /// weights and not about array order. A point nothing influences goes to the nearest
-            /// node by rest position, so every simplex has a row and the rows sum to the global
-            /// mean square exactly.
+            /// The node carrying the most weight at a simplex's rest centroid, ties to the lower
+            /// index - the same rule the polar blend and SortInfluences use, so a cluster boundary
+            /// is a fact about the weights and not about array order. A centroid nothing influences
+            /// goes to the nearest node by rest position, so every simplex has a row and the rows
+            /// sum to the global mean square exactly.
             /// </summary>
-            private int DominantNodeAt(Vector3 position, int nodeCount)
+            private int DominantNodeAt(int s, int nodeCount)
             {
                 int best = -1;
                 double bestWeight = 0.0;
 
                 if (throughField)
                 {
-                    if (deformation.GetDeformationField().TryGetTrilinearInfluences(position, out int[] nodeIds, out float[] weights))
+                    if (deformation.GetDeformationField().TryGetTrilinearInfluences(restCentroids[s], out int[] nodeIds, out float[] weights))
                     {
                         for (int i = 0; i < nodeIds.Length; i++)
                         {
@@ -466,7 +569,7 @@ namespace UC.ED
                 }
                 else
                 {
-                    EDVertexBinding binding = deformation.BindPoint(position);
+                    EDVertexBinding binding = (centroidBindings != null) ? (centroidBindings[s]) : (deformation.BindPoint(restCentroids[s]));
 
                     if (binding.nodeIndices != null)
                     {
@@ -486,7 +589,7 @@ namespace UC.ED
                     }
                 }
 
-                if (best < 0) best = Math.Max(0, deformation.GetClosestDebugNodeIndex(position));
+                if (best < 0) best = Math.Max(0, deformation.GetClosestDebugNodeIndex(restCentroids[s]));
 
                 return best;
             }
@@ -566,6 +669,8 @@ namespace UC.ED
 
                 DeformAll(state, blender, positions);
 
+                DVector3[] referenceNormals = TransportNormals(state, blender);
+
                 // Summed serially in simplex order, so the numbers do not depend on how the deform
                 // above was scheduled.
                 var rowMeanSquare = new double[rowCountK];
@@ -576,7 +681,7 @@ namespace UC.ED
                 {
                     if (restMeasures[s] <= 0.0) continue;
 
-                    double signed = SignedMeasure(s, positions);
+                    double signed = SignedMeasure(s, positions, referenceNormals);
 
                     if (signed < 0.0)
                     {
@@ -728,6 +833,8 @@ namespace UC.ED
 
                 DeformAll(state, blender, positions);
 
+                DVector3[] referenceNormals = TransportNormals(state, blender);
+
                 int count = indices.Length / arity;
 
                 states = new SampleState[count];
@@ -736,7 +843,7 @@ namespace UC.ED
                 {
                     if (restMeasures[s] <= 0.0) continue;
 
-                    double signed = SignedMeasure(s, positions);
+                    double signed = SignedMeasure(s, positions, referenceNormals);
 
                     if (signed < 0.0)                    states[s] = SampleState.Inverted;
                     else if (Shortfall(s, signed) > 0.0) states[s] = SampleState.Squashed;
@@ -772,6 +879,56 @@ namespace UC.ED
             }
 
             /// <summary>
+            /// The orientation references for a state: each triangle's rest normal turned by the
+            /// corotational rotation of the blend in force at its rest centroid. Null for tetrahedra,
+            /// whose signed volume needs no reference - a volume is intrinsic where a surface
+            /// orientation is not.
+            ///
+            /// Recomputed for whatever state is being measured, never lagged: the residual stays a
+            /// pure function of the state, which is what lets two states' energies be compared -
+            /// and the finite difference then carries the reference's own sensitivity without any
+            /// special-casing.
+            /// </summary>
+            private DVector3[] TransportNormals(EDStateView state, FullDeformationField.TransformBlender blender)
+            {
+                if (arity != 3) return null;
+
+                var normals = new DVector3[restNormals.Length];
+
+                Parallel.For(0, restNormals.Length, EDDiagnostics.parallelOptions, s =>
+                {
+                    normals[s] = TransportedNormal(s, state, blender);
+                });
+
+                return normals;
+            }
+
+            /// <summary>
+            /// One triangle's reference normal under a state, normalised in double - which forgives
+            /// the rotation being orthonormal only to float precision. A triangle dropped at rest,
+            /// or one whose centroid nothing influences, keeps its rest normal; the latter is
+            /// geometry the output leaves at rest. In a Jacobian column this runs against the
+            /// perturbed state: for a centroid the perturbed node influences, the reference's
+            /// sensitivity belongs in the column, and for any other the blend is unchanged and this
+            /// recomputes the base value bit for bit - spent work, never a wrong number.
+            /// </summary>
+            private DVector3 TransportedNormal(int s, EDStateView state, FullDeformationField.TransformBlender blender)
+            {
+                if (restMeasures[s] <= 0.0) return restNormals[s];
+
+                EDVertexBinding binding = (centroidBindings != null) ? (centroidBindings[s]) : (default);
+
+                if (!deformation.TryGetOutputRotation(restCentroids[s], in binding, state, blender, out Matrix3x3 rotation))
+                    return restNormals[s];
+
+                DVector3 n = restNormals[s];
+
+                return new DVector3((rotation.m00 * n.x) + (rotation.m01 * n.y) + (rotation.m02 * n.z),
+                                    (rotation.m10 * n.x) + (rotation.m11 * n.y) + (rotation.m12 * n.z),
+                                    (rotation.m20 * n.x) + (rotation.m21 * n.y) + (rotation.m22 * n.z)).normalized;
+            }
+
+            /// <summary>
             /// How far a simplex's measure sits below its floor, in measure units: rho times its rest
             /// measure, less its signed measure, when that is positive. At rho = 0 this is simply the
             /// inverted measure.
@@ -792,13 +949,16 @@ namespace UC.ED
                 => ((shortfall > 0.0) && (restMeasures[s] > 0.0)) ? ((shortfall * shortfall) / (restMeasures[s] * restTotalMeasure)) : (0.0);
 
             /// <summary>
-            /// A simplex's deformed measure, signed against its rest orientation: the rest measure at
-            /// rest, zero when squashed flat, negative when it has turned over. A triangle's deformed
-            /// area vector is projected onto its rest normal, so one that has merely tilted keeps a
-            /// positive value; a tetrahedron's signed volume is taken in its own vertex order and
-            /// corrected by the sign that order had at rest.
+            /// A simplex's deformed measure, signed against its rest orientation: the rest measure
+            /// at rest, zero when squashed flat, negative when it has turned over. A triangle's
+            /// deformed area vector is projected onto its *transported* reference - its rest normal
+            /// turned by the corotational rotation of the blend at its centroid, per state, see
+            /// TransportNormals - so legitimate local rotation of any angle reads clean and only a
+            /// genuine fold goes negative. A tetrahedron's signed volume is taken in its own vertex
+            /// order and corrected by the sign that order had at rest, and needs no reference at
+            /// all, which is why the parameter is unused there.
             /// </summary>
-            private double SignedMeasure(int s, DVector3[] positions)
+            private double SignedMeasure(int s, DVector3[] positions, DVector3[] referenceNormals)
             {
                 if (arity == 3)
                 {
@@ -806,7 +966,7 @@ namespace UC.ED
                     DVector3 p1 = positions[indices[3 * s + 1]];
                     DVector3 p2 = positions[indices[3 * s + 2]];
 
-                    return 0.5 * DVector3.Dot(DVector3.Cross(p1 - p0, p2 - p0), restNormals[s]);
+                    return 0.5 * DVector3.Dot(DVector3.Cross(p1 - p0, p2 - p0), referenceNormals[s]);
                 }
                 else
                 {
@@ -820,10 +980,11 @@ namespace UC.ED
             }
 
             /// <summary>
-            /// As above, with the vertices a column has moved read from the worker's scratch and the
-            /// rest from the base pass.
+            /// As above, with the vertices a column has moved read from the worker's scratch, the
+            /// rest from the base pass, and the reference handed in - a column derives it under the
+            /// perturbed state, one triangle at a time.
             /// </summary>
-            private double SignedMeasure(int s, DVector3[] basePositions, ColumnScratch scratch)
+            private double SignedMeasure(int s, DVector3[] basePositions, ColumnScratch scratch, in DVector3 referenceNormal)
             {
                 if (arity == 3)
                 {
@@ -831,7 +992,7 @@ namespace UC.ED
                     DVector3 p1 = scratch.Position(indices[3 * s + 1], basePositions);
                     DVector3 p2 = scratch.Position(indices[3 * s + 2], basePositions);
 
-                    return 0.5 * DVector3.Dot(DVector3.Cross(p1 - p0, p2 - p0), restNormals[s]);
+                    return 0.5 * DVector3.Dot(DVector3.Cross(p1 - p0, p2 - p0), referenceNormal);
                 }
                 else
                 {
@@ -913,9 +1074,11 @@ namespace UC.ED
             ///
             /// The base positions and the base contribution of every simplex are computed once. A
             /// column then re-deforms only the vertices its node reaches and re-measures only the
-            /// simplices those vertices touch, accumulating the *change* in each row's mean square
-            /// rather than re-summing the whole set - so the difference is taken between two small
-            /// numbers rather than between two large ones that agree to most of their digits. The
+            /// simplices those vertices touch - re-deriving each measured triangle's orientation
+            /// reference under the perturbed state on the way - accumulating the *change* in each
+            /// row's mean square rather than re-summing the whole set, so the difference is taken
+            /// between two small numbers rather than between two large ones that agree to most of
+            /// their digits. The
             /// root is taken the same way: r1 - r0 is formed as dQ / (sqrt(Q0 + dQ) + sqrt(Q0)),
             /// never as the difference of two roots.
             ///
@@ -937,6 +1100,8 @@ namespace UC.ED
 
                 DeformAll(baseView, baseBlender, basePositions);
 
+                DVector3[] baseNormals = TransportNormals(baseView, baseBlender);
+
                 int simplexCount = indices.Length / arity;
 
                 var baseContribution = new double[simplexCount];
@@ -948,7 +1113,7 @@ namespace UC.ED
                 {
                     if (restMeasures[s] <= 0.0) continue;
 
-                    baseContribution[s] = Contribution(s, Shortfall(s, SignedMeasure(s, basePositions)));
+                    baseContribution[s] = Contribution(s, Shortfall(s, SignedMeasure(s, basePositions, baseNormals)));
                     baseRowMeanSquare[simplexRow[s]] += baseContribution[s];
                     baseTotal += baseContribution[s];
                 }
@@ -1012,7 +1177,10 @@ namespace UC.ED
                 int[] vertices = nodeVertices[n];
                 int[] reached = nodeSimplices[n];
 
-                if (vertices.Length == 0) return;
+                // On the reached simplices rather than the vertices: a node can move a triangle
+                // through its centroid's orientation reference while influencing none of its
+                // vertices, and such a node still owes columns.
+                if (reached.Length == 0) return;
 
                 // A node whose simplices are all above the floor at the base state gets zero columns
                 // without being measured. A perturbation could in principle take one of them below
@@ -1062,7 +1230,13 @@ namespace UC.ED
 
                             if (restMeasures[s] <= 0.0) continue;
 
-                            double delta = Contribution(s, Shortfall(s, SignedMeasure(s, basePositions, scratch))) - baseContribution[s];
+                            // The reference derived under the perturbed state, not reused from the
+                            // base, so the column carries the reference's own sensitivity - see
+                            // TransportedNormal for why that is safe for a node the centroid does
+                            // not listen to.
+                            DVector3 referenceNormal = (arity == 3) ? (TransportedNormal(s, modifiedState, scratch.blender)) : (default);
+
+                            double delta = Contribution(s, Shortfall(s, SignedMeasure(s, basePositions, scratch, in referenceNormal))) - baseContribution[s];
 
                             if (delta != 0.0) scratch.AddRowDelta(simplexRow[s], delta);
                         }
