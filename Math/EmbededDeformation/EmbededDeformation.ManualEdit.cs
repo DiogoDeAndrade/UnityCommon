@@ -32,12 +32,17 @@ namespace UC.ED
         public readonly double  energy;
         public readonly double  rms;
         public readonly double  maxAbs;
-        /// <summary>What the term itself said about the measured state, or empty - see
-        /// <see cref="EDResidualTerm.Instance.DescribeNotes"/>. A column like the others so every
-        /// row of an export has the same shape, prose or no prose.</summary>
-        public readonly string  notes;
+        /// <summary>Labels of the term's own tracked values, empty for terms that have none - see
+        /// <see cref="EDResidualTerm.Instance.DescribeHeader"/>. Appended to the shared columns so
+        /// a quality term's inverted counts and measures are columns like the others, per term
+        /// rather than one shape for all: a mesh sampler tracks triangles and areas where a field
+        /// sampler tracks tetrahedra and volumes, and a shared schema would blur exactly that.</summary>
+        public readonly string[] extraHeader;
+        /// <summary>The matching values, same length as extraHeader by construction.</summary>
+        public readonly string[] extraValues;
 
-        public EDTermEnergy(string name, int rows, double conceptualWeight, double energy, double rms, double maxAbs, string notes = "")
+        public EDTermEnergy(string name, int rows, double conceptualWeight, double energy, double rms, double maxAbs,
+                            string[] extraHeader = null, string[] extraValues = null)
         {
             this.name = name;
             this.rows = rows;
@@ -45,14 +50,31 @@ namespace UC.ED
             this.energy = energy;
             this.rms = rms;
             this.maxAbs = maxAbs;
-            this.notes = notes ?? "";
+
+            // One empty means both empty: a value without a label has no column to land in, and a
+            // label without a value would shift every column after it.
+            bool paired = (extraHeader != null) && (extraValues != null) && (extraHeader.Length == extraValues.Length);
+
+            this.extraHeader = (paired) ? (extraHeader) : (System.Array.Empty<string>());
+            this.extraValues = (paired) ? (extraValues) : (System.Array.Empty<string>());
         }
 
+        private static readonly string[] commonHeader = { "rows", "weight", "energy", "rms", "max", "share" };
+
         /// <summary>
-        /// What each entry of <see cref="Describe"/> is, in the same order. The name is not among
-        /// them: it identifies the row, and a consumer pairs it with these values itself.
+        /// What each entry of <see cref="Describe"/> is, in the same order: the six columns every
+        /// term shares, then this term's own. The name is not among them: it identifies the row,
+        /// and a consumer pairs it with these values itself.
         /// </summary>
-        public static string[] Header() => new[] { "rows", "weight", "energy", "rms", "max", "share", "notes" };
+        public string[] Header()
+        {
+            var header = new string[commonHeader.Length + extraHeader.Length];
+
+            commonHeader.CopyTo(header, 0);
+            extraHeader.CopyTo(header, commonHeader.Length);
+
+            return header;
+        }
 
         /// <summary>
         /// The tracked values as bare strings, one per <see cref="Header"/> entry, carrying no
@@ -66,30 +88,33 @@ namespace UC.ED
         {
             double share = (totalEnergy > 0.0) ? (100.0 * energy / totalEnergy) : (0.0);
 
-            return new[]
-            {
-                rows.ToString(CultureInfo.InvariantCulture),
-                conceptualWeight.ToString("G6", CultureInfo.InvariantCulture),
-                energy.ToString("E6", CultureInfo.InvariantCulture),
-                rms.ToString("E6", CultureInfo.InvariantCulture),
-                maxAbs.ToString("E6", CultureInfo.InvariantCulture),
-                share.ToString("F3", CultureInfo.InvariantCulture) + "%",
-                notes
-            };
+            var values = new string[commonHeader.Length + extraValues.Length];
+
+            values[0] = rows.ToString(CultureInfo.InvariantCulture);
+            values[1] = conceptualWeight.ToString("G6", CultureInfo.InvariantCulture);
+            values[2] = energy.ToString("E6", CultureInfo.InvariantCulture);
+            values[3] = rms.ToString("E6", CultureInfo.InvariantCulture);
+            values[4] = maxAbs.ToString("E6", CultureInfo.InvariantCulture);
+            values[5] = share.ToString("F3", CultureInfo.InvariantCulture) + "%";
+
+            extraValues.CopyTo(values, commonHeader.Length);
+
+            return values;
         }
 
-        // One padding per Describe column, sized so the existing console layout falls out of the
+        // One padding per shared column, sized so the existing console layout falls out of the
         // generic renderer unchanged: rows 7 and weight 8 as the old format strings had, 13 for the
         // three E6 columns (their natural width, so no padding in practice), 8 so the share matches
-        // its old 7-wide number plus the percent sign. Notes are free text and get no padding.
-        private static readonly int[] columnWidths = { 7, 8, 13, 13, 13, 8, 0 };
+        // its old 7-wide number plus the percent sign. The term's own columns are not padded -
+        // their widths are the term's business and nothing lines up across terms anyway.
+        private static readonly int[] columnWidths = { 7, 8, 13, 13, 13, 8 };
 
         /// <summary>
         /// The console line, assembled from <see cref="Header"/> and <see cref="Describe"/> rather
         /// than from the fields - so the log and any export are two renderings of the same array,
         /// and a column added to one cannot be missing from the other. An empty value is skipped
-        /// rather than rendered as a bare label, which in practice is the notes column of every
-        /// term that has none - the export keeps the empty cell, the eye is spared it.
+        /// rather than rendered as a bare label - a term's absent caveat or unmeasured share is an
+        /// empty cell in the export and nothing at all to the eye.
         /// </summary>
         public string DescribeLine(double totalEnergy)
         {
@@ -104,7 +129,9 @@ namespace UC.ED
             {
                 if (string.IsNullOrEmpty(values[i])) continue;
 
-                sb.Append($" {header[i]}={values[i].PadLeft(columnWidths[i])}");
+                int width = (i < columnWidths.Length) ? (columnWidths[i]) : (0);
+
+                sb.Append($" {header[i]}={values[i].PadLeft(width)}");
             }
 
             return sb.ToString();
@@ -365,9 +392,10 @@ namespace UC.ED
         /// residual pass per iteration. Static because it reads nothing but its arguments; the
         /// instance method above is this after evaluating the residual at the current state.
         ///
-        /// The state is what fills the notes column: a term's DescribeNotes may re-measure at
+        /// The state is what fills the terms' own columns: a term's Describe may re-measure at
         /// residual-evaluation cost, which a breakdown pays once and the per-iteration solver log
-        /// must not pay at all - so the per-iteration caller passes null and its notes stay empty.
+        /// must not pay at all - so the per-iteration caller passes null and only the shared
+        /// columns are filled.
         /// </summary>
         public static IReadOnlyList<EDTermEnergy> MeasureTermEnergies(Vector<double> f, EDEnergyModel.Instance energy, EDStateView? state = null)
         {
@@ -396,9 +424,19 @@ namespace UC.ED
 
                 // The layout is termInstances in order, one entry each, so index i is the term
                 // whose rows these are.
-                string notes = ((state != null) && (rows > 0))
-                               ? (energy.termInstances[i].DescribeNotes(state.Value))
-                               : ("");
+                string[] extraHeader = null;
+                string[] extraValues = null;
+
+                if ((state != null) && (rows > 0))
+                {
+                    var instance = energy.termInstances[i];
+
+                    extraHeader = instance.DescribeHeader();
+                    extraValues = instance.Describe(state.Value);
+
+                    if ((extraHeader != null) && (extraValues != null) && (extraHeader.Length != extraValues.Length))
+                        Debug.LogWarning($"[ED] {layout[i].name}: Describe returned {extraValues.Length} value(s) for {extraHeader.Length} header(s); its columns were dropped.");
+                }
 
                 measured.Add(new EDTermEnergy(layout[i].name,
                                               rows,
@@ -406,7 +444,8 @@ namespace UC.ED
                                               blockEnergy,
                                               rms,
                                               maxAbs,
-                                              notes));
+                                              extraHeader,
+                                              extraValues));
             }
 
             return measured;

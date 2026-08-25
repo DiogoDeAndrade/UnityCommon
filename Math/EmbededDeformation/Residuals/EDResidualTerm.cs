@@ -117,13 +117,23 @@ namespace UC.ED
             protected abstract int ComputeRowCount();
 
             /// <summary>
-            /// What the term measured at a state, in units a reader can check against the scene -
-            /// the "notes" column of the energy breakdown, empty for the terms whose residual says
-            /// everything. A term that overrides this may re-measure, so callers treat it as a
-            /// residual-evaluation-sized cost, not a getter - it is asked once per breakdown, never
-            /// per iteration.
+            /// Labels for the term's own tracked values - the columns this term adds to the energy
+            /// breakdown beyond the shared rows/weight/energy/rms/max/share, so a quality term's
+            /// inverted counts and measures land in a CSV as columns rather than as prose. Empty
+            /// for the terms whose residual says everything, which is most of them. Labels only,
+            /// no measuring - the values half is <see cref="Describe"/>, and the two must return
+            /// arrays of the same length.
             /// </summary>
-            public virtual string DescribeNotes(EDStateView state) => string.Empty;
+            public virtual string[] DescribeHeader() => Array.Empty<string>();
+
+            /// <summary>
+            /// The term's own tracked values at a state, one bare string per
+            /// <see cref="DescribeHeader"/> entry, in units a reader can check against the scene.
+            /// A term that overrides this may re-measure, so callers treat it as a
+            /// residual-evaluation-sized cost, not a getter - it is asked once per breakdown,
+            /// never per iteration.
+            /// </summary>
+            public virtual string[] Describe(EDStateView state) => Array.Empty<string>();
 
             public abstract void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset);
 

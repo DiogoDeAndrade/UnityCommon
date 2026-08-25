@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using UnityEngine;
 using UC.DoubleMath;
@@ -613,11 +614,34 @@ namespace UC.ED
             }
 
             /// <summary>
-            /// What the energy measured at a state, in the units a reader can check against the
-            /// scene - the breakdown's notes column. Re-measures the samples, so it costs a
-            /// residual evaluation.
+            /// The columns this term adds to the breakdown, labelled in its own vocabulary -
+            /// invertedTriangles against invertedTetrahedra, restArea against restVolume - so a CSV
+            /// of one term reads in the units the term measures. The trailing notes column carries
+            /// describeNote, the caveat about how to read the numbers, when the form has one.
             /// </summary>
-            public override string DescribeNotes(EDStateView state)
+            public override string[] DescribeHeader()
+            {
+                string sample = Capitalize(sampleLabel);
+                string measure = Capitalize(MeasureLabel);
+
+                return new[]
+                {
+                    $"inverted{sample}",
+                    $"total{sample}",
+                    $"inverted{measure}",
+                    $"rest{measure}",
+                    "squashed",
+                    "globalRMS",
+                    "worst1%share",
+                    "notes"
+                };
+            }
+
+            /// <summary>
+            /// What the energy measured at a state, one value per DescribeHeader column.
+            /// Re-measures the samples, so it costs a residual evaluation.
+            /// </summary>
+            public override string[] Describe(EDStateView state)
             {
                 int count = simplexCount;
 
@@ -625,12 +649,21 @@ namespace UC.ED
 
                 double rms = MeasureInversion(state, out int inverted, out double measure, out int squashed, contributions);
 
-                string line = $"inverted {inverted} of {count} measured {sampleLabel}, {MeasureLabel} {measure:F4} of {restTotalMeasure:F2} at rest, plus {squashed} below the floor without inverting, global RMS {rms:E3}{DescribeConcentration(contributions)}";
-
-                string note = describeNote;
-
-                return (string.IsNullOrEmpty(note)) ? (line) : ($"{line} {note}");
+                return new[]
+                {
+                    inverted.ToString(CultureInfo.InvariantCulture),
+                    count.ToString(CultureInfo.InvariantCulture),
+                    measure.ToString("F4", CultureInfo.InvariantCulture),
+                    restTotalMeasure.ToString("F2", CultureInfo.InvariantCulture),
+                    squashed.ToString(CultureInfo.InvariantCulture),
+                    rms.ToString("E3", CultureInfo.InvariantCulture),
+                    WorstOnePercentShare(contributions),
+                    describeNote
+                };
             }
+
+            private static string Capitalize(string label)
+                => (string.IsNullOrEmpty(label)) ? (label) : (char.ToUpperInvariant(label[0]) + label.Substring(1));
 
             /// <summary>
             /// How much of the mean square the worst one percent of samples carry - the number that
@@ -640,10 +673,12 @@ namespace UC.ED
             /// can raise the count of mild ones without the energy noticing - which is what the
             /// 2026-08-24 tables showed, a four-fold energy drop beside a rising inversion count.
             /// Read it before and after any change to the loss shape; it is the number that says the
-            /// tail is tamed. The array arrives as each simplex's own share of the mean square and
-            /// leaves sorted, which is fine for the one caller, who allocated it for this.
+            /// tail is tamed. Empty when nothing was charged, which the breakdown renders as an
+            /// absent column and a CSV as an empty cell. The array arrives as each simplex's own
+            /// share of the mean square and leaves sorted, which is fine for the one caller, who
+            /// allocated it for this.
             /// </summary>
-            private string DescribeConcentration(double[] contributions)
+            private static string WorstOnePercentShare(double[] contributions)
             {
                 if (contributions == null) return string.Empty;
 
@@ -661,7 +696,7 @@ namespace UC.ED
 
                 for (int i = contributions.Length - worst; i < contributions.Length; i++) carried += contributions[i];
 
-                return $", worst 1% ({worst} {sampleLabel}) carry {100.0 * carried / total:F1}% of the mean square";
+                return (100.0 * carried / total).ToString("F1", CultureInfo.InvariantCulture) + "%";
             }
 
             /// <summary>
