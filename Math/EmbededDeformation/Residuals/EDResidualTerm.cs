@@ -43,6 +43,15 @@ namespace UC.ED
 
         public float conceptualWeight => weight;
 
+        /// <summary>
+        /// Sets the conceptual weight, exactly as editing the field in the inspector would.
+        /// Instance.Resolve re-reads it on every solve, so the next iteration runs under the new
+        /// value with no rebuild - which is what a continuation schedule is. For experiment
+        /// drivers such as the schedule runner; a solve never writes a term, and nothing here
+        /// should either.
+        /// </summary>
+        public void SetConceptualWeight(float value) => weight = Mathf.Max(0.0f, value);
+
 #if MATH_NET_AVAILABLE
         public abstract Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights);
 
