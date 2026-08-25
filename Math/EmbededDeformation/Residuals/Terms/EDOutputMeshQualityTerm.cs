@@ -58,6 +58,8 @@ namespace UC.ED
 
             public override string sampleLabel => "triangles";
 
+            public override string measureLabel => "area";
+
             protected override string describeNote => "(the inverted count on the generated output should agree when the simplifier is off)";
         }
 #endif

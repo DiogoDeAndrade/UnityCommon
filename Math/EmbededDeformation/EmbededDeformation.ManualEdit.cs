@@ -62,6 +62,13 @@ namespace UC.ED
         private static readonly string[] commonHeader = { "rows", "weight", "energy", "rms", "max", "share" };
 
         /// <summary>
+        /// The six columns every term shares, for a consumer building a schema before any
+        /// measurement exists - a CSV header written at build time names these plus each term's
+        /// own DescribeHeader. A copy, so nothing can edit the template.
+        /// </summary>
+        public static string[] SharedHeader() => (string[])commonHeader.Clone();
+
+        /// <summary>
         /// What each entry of <see cref="Describe"/> is, in the same order: the six columns every
         /// term shares, then this term's own. The name is not among them: it identifies the row,
         /// and a consumer pairs it with these values itself.

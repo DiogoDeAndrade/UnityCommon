@@ -53,6 +53,8 @@ namespace UC.ED
 
                 double error = f.L2Norm();
 
+                ReportIteration(f, energy, stateView);
+
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
                 // Already solved / close enough
@@ -146,6 +148,8 @@ namespace UC.ED
                 var f = energy.EvaluateResidual(stateView);
 
                 double error = f.L2Norm();
+
+                ReportIteration(f, energy, stateView);
 
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
@@ -319,6 +323,7 @@ namespace UC.ED
                 double error = f.L2Norm();
 
                 LogResidualEnergies(f, energy, iter);
+                ReportIteration(f, energy, stateView);
 
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
@@ -468,6 +473,7 @@ namespace UC.ED
             var acceptedResidual = energy.EvaluateResidual(acceptedView);
 
             LogResidualEnergies(acceptedResidual, energy, iter);
+            ReportIteration(acceptedResidual, energy, acceptedView);
 #else
     throw new NotImplementedException();
 #endif

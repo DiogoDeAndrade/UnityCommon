@@ -157,6 +157,13 @@ namespace UC.ED
             /// <summary>"triangles" or "tetrahedra", for the readouts.</summary>
             public abstract string sampleLabel { get; }
 
+            /// <summary>
+            /// "area" or "volume", for the readouts. A fact about the sampler class rather than
+            /// derived from arity, which is data - an instance whose samples have not built yet
+            /// still labels its columns correctly.
+            /// </summary>
+            public abstract string measureLabel { get; }
+
             /// <summary>Anything a sampler wants appended to its readout.</summary>
             protected virtual string describeNote => string.Empty;
 
@@ -414,12 +421,11 @@ namespace UC.ED
                     nodeSimplices[n] = reached.ToArray();
                 }
 
-                Debug.Log($"[ED] {term.name}: {simplexCount} {sampleLabel} over {vertexCount} vertices, rest {MeasureLabel} {restTotalMeasure:F3}, {rowCountK} row(s)" +
+                Debug.Log($"[ED] {term.name}: {simplexCount} {sampleLabel} over {vertexCount} vertices, rest {measureLabel} {restTotalMeasure:F3}, {rowCountK} row(s)" +
                           ((droppedUninfluenced > 0) ? ($", {droppedUninfluenced} dropped for a vertex nothing influences") : ("")) +
                           ((droppedDegenerate > 0) ? ($", {droppedDegenerate} degenerate at rest") : ("")) + ".");
             }
 
-            private string MeasureLabel => (arity == 3) ? ("area") : ("volume");
 
             private Vector3 Centroid(int s)
             {
@@ -622,7 +628,7 @@ namespace UC.ED
             public override string[] DescribeHeader()
             {
                 string sample = Capitalize(sampleLabel);
-                string measure = Capitalize(MeasureLabel);
+                string measure = Capitalize(measureLabel);
 
                 return new[]
                 {

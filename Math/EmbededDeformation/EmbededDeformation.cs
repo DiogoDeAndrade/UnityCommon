@@ -115,6 +115,7 @@ namespace UC.ED
         internal DebugProfiler timeJacobianBuild;
         internal DebugProfiler timeSolve;
         internal DebugProfiler timeUpdateClearance;
+        internal DebugProfiler timeIterationExport;
 
         // Marked by the caller that generates output geometry - the subdivision and simplification
         // are mesh operations it owns, not the deformation's. Reported here so a run is described by
@@ -1580,6 +1581,7 @@ namespace UC.ED
             timeJacobianBuild = new();
             timeSolve = new();
             timeUpdateClearance = new();
+            timeIterationExport = new();
 
             timeFieldRebuild = new();
 
@@ -1667,6 +1669,14 @@ namespace UC.ED
 
             Row("Linear solve", timeSolve, 4);
             Row("Clearance update", timeUpdateClearance, 4);
+
+            // The per-iteration export - measuring the breakdown and whatever the listener writes
+            // with it. It runs inside the solve loop, so its cost is already inside "Solve" above
+            // and deliberately does not sum; the line exists so a reader comparing solve times can
+            // subtract it. Absent when nothing was exported, so the reports the notes quote keep
+            // their shape.
+            if ((timeIterationExport != null) && (timeIterationExport.accumulatedTimeMS > 0.0))
+                Row("Iteration export", timeIterationExport, 4);
 
             if (outputTotal > 0.0)
             {
@@ -1804,6 +1814,40 @@ namespace UC.ED
                 bestIndex = GetClosestNodeIndex(p);
 
             return bestIndex;
+        }
+
+        /// <summary>
+        /// Set by the driver to receive the per-term energy breakdown of every solver iteration -
+        /// the iteration-data export. Null, the default, costs nothing: the terms' own columns are
+        /// only measured when someone is listening, because a quality term's Describe re-measures
+        /// at residual-evaluation cost.
+        ///
+        /// What arrives is one breakdown per residual the solver evaluated as an iteration: each
+        /// loop pass in all three term solvers, plus the accepted final state in the navigation
+        /// solver, which is the only one that re-evaluates it. Candidate states inside LM's damping
+        /// attempts are not iterations and are not reported. The translation-only solver never
+        /// touches the term machinery and reports nothing.
+        ///
+        /// A delegate is not serialized, so a domain reload clears it - the driver re-assigns it on
+        /// every solve rather than trusting what survived.
+        /// </summary>
+        [NonSerialized]
+        public Action<IReadOnlyList<EDTermEnergy>> onIterationMeasured;
+
+        /// <summary>
+        /// Measures one iteration's breakdown for the export listener, timing the measurement and
+        /// the listener's own work into timeIterationExport - so the report can show what the
+        /// export costs, as a line the reader subtracts rather than a number diluted into "Solve".
+        /// </summary>
+        private void ReportIteration(Vector<double> f, EDEnergyModel.Instance energy, EDStateView state)
+        {
+            if (onIterationMeasured == null) return;
+
+            DebugProfiler.DebugMark(timeIterationExport);
+
+            onIterationMeasured(MeasureTermEnergies(f, energy, state));
+
+            DebugProfiler.DebugMark(timeIterationExport);
         }
 
         protected void LogResidualEnergies(Vector<double> f, EDEnergyModel.Instance energy, int iteration)

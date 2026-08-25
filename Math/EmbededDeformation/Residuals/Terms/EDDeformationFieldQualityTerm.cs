@@ -158,6 +158,8 @@ namespace UC.ED
             protected override bool measureUninfluenced => false;
 
             public override string sampleLabel => "tetrahedra";
+
+            public override string measureLabel => "volume";
         }
 #endif
     }
