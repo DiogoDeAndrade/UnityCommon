@@ -316,7 +316,10 @@ namespace UC
                 if (char.IsLetter(c)) // Identifiers or keywords (true/false)
                 {
                     int start = pos;
-                    while (pos < expr.Length && (char.IsLetterOrDigit(expr[pos]) || expr[pos] == '_')) pos++;
+                    // '.' is part of the identifier, so "local.rolled" is one variable name - the
+                    // context decides what a prefixed name means (DefaultExpressionContextEvaluator
+                    // routes "local." to the conversation's DialogueState)
+                    while (pos < expr.Length && (char.IsLetterOrDigit(expr[pos]) || expr[pos] == '_' || expr[pos] == '.')) pos++;
                     TokenValue = expr[start..pos];
                     CurrentToken = TokenValue switch
                     {

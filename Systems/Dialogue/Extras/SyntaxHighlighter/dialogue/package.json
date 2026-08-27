@@ -2,7 +2,7 @@
   "name": "ucdialogue-syntax",
   "displayName": "UCDialogue Syntax Highlighting",
   "description": "Syntax highlighting for Unity Common dialogue format",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "publisher": "diogo-andrade",
   "engines": {
     "vscode": "^1.60.0"

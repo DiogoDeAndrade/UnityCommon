@@ -17,8 +17,27 @@ namespace UC
         protected Dictionary<string, ParamPrefab<GameObject>> cachedPrefabs;
         protected Dictionary<string, object> variables = new();
 
+        const string localVarPrefix = "local.";
+
+        // "local.<name>" doesn't live here at all - it lives in the DialogueState of the current
+        // conversation (the global one when none was passed), so a dialogue started with its own
+        // state gets its own copies. Returns the state to use and the name with the prefix stripped,
+        // or null when the name isn't local.
+        static DialogueState GetLocalVarState(ref string varName)
+        {
+            if (!varName.StartsWith(localVarPrefix)) return null;
+
+            var state = DialogueManager.ActiveOrGlobalState;
+            if (state != null) varName = varName.Substring(localVarPrefix.Length);
+
+            return state;
+        }
+
         public bool GetVarBool(string varName)
         {
+            var localState = GetLocalVarState(ref varName);
+            if (localState != null) return localState.GetVarBool(varName);
+
             if (variables.TryGetValue(varName, out object value))
             {
                 if (value is bool boolValue) return boolValue;
@@ -28,6 +47,9 @@ namespace UC
 
         public float GetVarNumber(string varName)
         {
+            var localState = GetLocalVarState(ref varName);
+            if (localState != null) return localState.GetVarNumber(varName);
+
             if (variables.TryGetValue(varName, out object value))
             {
                 if (value is float floatValue) return floatValue;
@@ -37,6 +59,9 @@ namespace UC
 
         public string GetVarString(string varName)
         {
+            var localState = GetLocalVarState(ref varName);
+            if (localState != null) return localState.GetVarString(varName);
+
             if (variables.TryGetValue(varName, out object value))
             {
                 if (value is string stringValue) return stringValue;
@@ -46,6 +71,9 @@ namespace UC
 
         public Expression.DataType GetVariableDataType(string varName)
         {
+            var localState = GetLocalVarState(ref varName);
+            if (localState != null) return localState.GetVariableDataType(varName);
+
             if (variables.TryGetValue(varName, out object value))
             {
                 if (value is float) return Expression.DataType.Number;
@@ -57,17 +85,49 @@ namespace UC
 
         public void SetVariable(string varName, float value)
         {
+            var localState = GetLocalVarState(ref varName);
+            if (localState != null) { localState.SetVariable(varName, value); return; }
+
             variables[varName] = value;
         }
 
         public void SetVariable(string varName, bool value)
         {
+            var localState = GetLocalVarState(ref varName);
+            if (localState != null) { localState.SetVariable(varName, value); return; }
+
             variables[varName] = value;
         }
 
         public void SetVariable(string varName, string value)
         {
+            var localState = GetLocalVarState(ref varName);
+            if (localState != null) { localState.SetVariable(varName, value); return; }
+
             variables[varName] = value;
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // Dialogue state queries, usable from any dialogue expression or code block. They read the
+        // conversation's DialogueState *and* the global one (a node records in one of the two,
+        // depending on its {Global} tag, so the sum is simply "its count").
+        // -----------------------------------------------------------------------------------------
+
+        // How many times the dialogue node has been entered
+        protected float Visits(string dialogueKey)
+        {
+            return DialogueManager.GetStateCount(dialogueKey);
+        }
+
+        protected bool HasSeen(string dialogueKey)
+        {
+            return Visits(dialogueKey) > 0;
+        }
+
+        // Whether the node's entry code ("{ ... }") has executed at least once
+        protected bool HasRun(string dialogueKey)
+        {
+            return DialogueManager.GetStateCount(dialogueKey + "#code") > 0;
         }
 
         public bool Spawn(string prefabName, string locationTagName = null, string parentObjectTagName = null)

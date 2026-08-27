@@ -25,8 +25,79 @@ namespace UC
         // filtered/rolled by FilterOptions, so this is the only list the display's selection index
         // is valid in - the asset's own element still has every option
         protected DialogueData.DialogueElement currentDisplayedElement = null;
-        protected Dictionary<string, int>   dialogueCount = new();
         protected Dictionary<string, int>   dialogueEvents = new();
+
+        // All the stateful things a dialogue does (one-shots, sticky rolls, visit counts, "local."
+        // variables) live in a DialogueState. There's always this global one; a conversation can be
+        // started with its own instance instead, and then "local" means that instance while "global"
+        // still means this one. Hand it to the save system through GlobalState.
+        protected DialogueState             globalState = new();
+        // The state the current conversation was started with - null when none was passed, in which
+        // case the global one is used for everything
+        protected DialogueState             currentLocalState = null;
+
+        // Where the conversation has been: one entry per node that actually displayed something
+        // (pure redirects don't count - jumping "back" into one would just redirect again), the
+        // current node last. "-> History(-n)" indexes this from the end.
+        protected List<(DialogueData data, DialogueData.Dialogue dialogue)> history = new();
+        // "{Marker=<name>}" nodes, recorded when entered - "-> Marker(<name>)" jumps back to them.
+        // Like the history, this only lives for the duration of the conversation.
+        protected Dictionary<string, (DialogueData data, DialogueData.Dialogue dialogue)> markers = new();
+
+        // The state the current conversation resolves "local" against
+        protected DialogueState activeState => currentLocalState ?? globalState;
+
+        // The DialogueState of whatever conversation is running (the global one when none was
+        // passed, or when nothing is running) - this is what "local.<var>" routes to
+        public static DialogueState ActiveOrGlobalState => (Instance != null) ? (Instance.activeState) : (null);
+
+        // The global DialogueState - the thing to serialize in a save game (DialogueState.SerializeThis /
+        // DeserializeThis), or to replace on load
+        public static DialogueState GlobalState
+        {
+            get => (Instance != null) ? (Instance.globalState) : (null);
+            set { if (Instance != null) Instance.globalState = value ?? new DialogueState(); }
+        }
+
+        // A count summed over the active local state and the global one. Any given key is only ever
+        // recorded in one of the two (which one depends on the node's {Global} tag), so the sum is
+        // simply "the count, wherever it lives".
+        public static int GetStateCount(string stateKey)
+        {
+            if (Instance == null) return 0;
+
+            int count = Instance.globalState.GetCount(stateKey);
+            if (Instance.currentLocalState != null) count += Instance.currentLocalState.GetCount(stateKey);
+
+            return count;
+        }
+
+        // The state a node's stateful bits should use, given its own flags and the conversation's
+        // local state (which may be null - then everything is global anyway)
+        static DialogueState GetScopedState(DialogueData.Dialogue dialogue, DialogueState localState, DialogueState globalState)
+        {
+            bool global = (dialogue.flags & DialogueData.DialogueFlags.Global) != 0;
+            return (global) ? (globalState) : (localState ?? globalState);
+        }
+
+        // Same, for the things that carry their own scope (one-shot options, one-shot code blocks):
+        // an explicit Local/Global on the item wins over the node's default
+        static DialogueState GetScopedState(DialogueData.OneShotScope scope, DialogueData.Dialogue dialogue, DialogueState localState, DialogueState globalState)
+        {
+            switch (scope)
+            {
+                case DialogueData.OneShotScope.Global: return globalState;
+                case DialogueData.OneShotScope.Local: return localState ?? globalState;
+                default: return GetScopedState(dialogue, localState, globalState);
+            }
+        }
+
+        DialogueState ScopedState(DialogueData.Dialogue dialogue) => GetScopedState(dialogue, currentLocalState, globalState);
+        DialogueState ScopedState(DialogueData.OneShotScope scope, DialogueData.Dialogue dialogue) => GetScopedState(scope, dialogue, currentLocalState, globalState);
+
+        // The state EvaluateNext/FilterOptions keep their sticky rolls in - null when the node wants
+        // a fresh roll every time
+        DialogueState RollState(DialogueData.Dialogue dialogue) => (dialogue.alwaysRoll) ? (null) : (ScopedState(dialogue));
 
         (DialogueData, DialogueData.Dialogue) FindDialogue(string dialogueKey)
         {
@@ -35,7 +106,7 @@ namespace UC
                 foreach (var data in dialogueData)
                 {
                     if (data == null) continue;
-                    var d = data.GetDialogue(dialogueKey);
+                    var d = data.FindDialogue(dialogueKey);
                     if (d != null) return (data, d);
                 }
             }
@@ -45,15 +116,31 @@ namespace UC
 
         protected bool _StartConversation(string dialogueKey)
         {
+            // "-> End" is the reserved "we're done here" target: whatever code the option carried has
+            // already run, the conversation just closes. (Which is why no node may be named End.)
+            if (dialogueKey == "End")
+            {
+                EndDialogue();
+                return true;
+            }
+
+            // "History(-1)" / "Marker(name)" aren't keys at all - they resolve against where this
+            // conversation has already been
+            if (TryResolveSpecialTarget(dialogueKey, out var specialData, out var specialDialogue))
+            {
+                if (specialDialogue == null) return false;
+
+                return _StartConversation(specialData, specialDialogue);
+            }
+
+            // Search order: the current file, then whatever it includes (transitively), and only
+            // then the manager's global list - so a file triggered directly doesn't need to be
+            // registered anywhere for its own keys and its includes' keys to work
             DialogueData            dialogueData = null;
             DialogueData.Dialogue   dialogue = null;
             if (currentDialogueData != null)
             {
-                dialogue = currentDialogueData.GetDialogue(dialogueKey);
-                if (dialogue != null)
-                {
-                    dialogueData = currentDialogueData;
-                }
+                (dialogueData, dialogue) = currentDialogueData.FindDialogueInHierarchy(dialogueKey);
             }
             if (dialogue == null)
             {
@@ -62,7 +149,7 @@ namespace UC
             if (dialogue == null)
             {
                 if (currentDialogueData)
-                    Debug.LogWarning($"Can't find dialogue key {dialogueKey} in {currentDialogueData.name} nor in global dialogues!");
+                    Debug.LogWarning($"Can't find dialogue key {dialogueKey} in {currentDialogueData.name}, its includes, nor in global dialogues!");
                 else
                     Debug.LogWarning($"Can't find dialogue key {dialogueKey} in global dialogues!");
                 return false;
@@ -71,23 +158,119 @@ namespace UC
             return _StartConversation(dialogueData, dialogue);
         }
 
+        static readonly Regex historyTargetRegex = new Regex(@"^History\(\s*(-?\d+)\s*\)$", RegexOptions.Compiled);
+        static readonly Regex markerTargetRegex = new Regex(@"^Marker\(\s*([A-Za-z0-9:_-]+)\s*\)$", RegexOptions.Compiled);
+
+        // Recognizes the special jump targets. Returns false when the key is an ordinary key; true
+        // with a null dialogue when it *was* special but couldn't resolve (no such marker, not enough
+        // history), which behaves like jumping to an undefined key.
+        bool TryResolveSpecialTarget(string dialogueKey, out DialogueData data, out DialogueData.Dialogue dialogue)
+        {
+            data = null;
+            dialogue = null;
+
+            var historyMatch = historyTargetRegex.Match(dialogueKey);
+            if (historyMatch.Success)
+            {
+                int offset = int.Parse(historyMatch.Groups[1].Value);
+                if (offset > 0)
+                {
+                    Debug.LogWarning($"History({offset}) - history offsets are zero or negative (History(0) restarts the current node, History(-1) goes back one)!");
+                    return true;
+                }
+
+                // The current node is the last entry, so History(0) is it and History(-n) counts back
+                int index = history.Count - 1 + offset;
+                if (index < 0)
+                {
+                    Debug.LogWarning($"History({offset}) goes back further than this conversation has been ({history.Count} node(s) deep)!");
+                    return true;
+                }
+
+                (data, dialogue) = history[index];
+
+                // Going back rewinds the trail - the nodes we're leaving behind are dropped, so
+                // going back twice keeps going *back*, instead of ping-ponging between two nodes.
+                // The target itself is dropped too: it re-records itself on entry.
+                history.RemoveRange(index, history.Count - index);
+
+                return true;
+            }
+
+            var markerMatch = markerTargetRegex.Match(dialogueKey);
+            if (markerMatch.Success)
+            {
+                string markerName = markerMatch.Groups[1].Value;
+                if (!markers.TryGetValue(markerName, out var entry))
+                {
+                    Debug.LogWarning($"Marker({markerName}) - no node with {{Marker={markerName}}} has been visited in this conversation!");
+                    return true;
+                }
+
+                (data, dialogue) = entry;
+
+                return true;
+            }
+
+            return false;
+        }
+
         protected bool _StartConversation(DialogueData dialogueData, string dialogueKey = "")
         {
-            var dialogue = (dialogueKey == "") ? (dialogueData.GetFirstDialogue()) : (dialogueData.GetDialogue(dialogueKey));
+            if (dialogueKey == "")
+            {
+                return _StartConversation(dialogueData, dialogueData.GetFirstDialogue());
+            }
 
-            return _StartConversation(dialogueData, dialogue);
+            // The key can live in the file itself or in anything it includes
+            var (foundData, dialogue) = dialogueData.FindDialogueInHierarchy(dialogueKey);
+            if (dialogue == null)
+            {
+                Debug.LogWarning($"Can't find dialogue key {dialogueKey} in {dialogueData.name} nor its includes!");
+                return false;
+            }
+
+            return _StartConversation(foundData, dialogue);
+        }
+
+        // The state a node's visit count lives in. Normally the node's default scope ({Global} or
+        // not), but a one-shot flag drags the count into *its* scope - the check and the recording
+        // have to agree on where the count is, or {GlobalOneShot} on an otherwise-local node would
+        // check a count that never gets written.
+        static DialogueState GetVisitState(DialogueData.Dialogue dialogue, DialogueState localState, DialogueState globalState)
+        {
+            if ((dialogue.flags & DialogueData.DialogueFlags.GlobalOneShot) != 0) return globalState;
+            if ((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) return localState ?? globalState;
+
+            return GetScopedState(dialogue, localState, globalState);
+        }
+
+        // True when the node's one-shot has already been spent
+        static bool IsOneShotSpent(DialogueData.Dialogue dialogue, DialogueState localState, DialogueState globalState)
+        {
+            bool oneShot = (dialogue.flags & (DialogueData.DialogueFlags.OneShot | DialogueData.DialogueFlags.GlobalOneShot)) != 0;
+            if (!oneShot) return false;
+
+            return GetVisitState(dialogue, localState, globalState).GetCount(dialogue.name) > 0;
         }
 
         protected bool _StartConversation(DialogueData dialogueData, DialogueData.Dialogue dialogue)
-        { 
+        {
             if (dialogue == null) return false;
 
             var dialogueKey = dialogue.name;
 
-            if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
-                dialogueCount.ContainsKey(dialogueKey))
+            if (IsOneShotSpent(dialogue, currentLocalState, globalState))
             {
                 return false;
+            }
+
+            // First node of a fresh conversation: the entry file is now known, so its markers (and
+            // its includes') can be registered before anything runs
+            if (markersNeedInit)
+            {
+                markersNeedInit = false;
+                PreRegisterMarkers(dialogueData);
             }
 
             if ((currentDialogue != null) && (currentDialogue != dialogue))
@@ -100,10 +283,22 @@ namespace UC
             currentDialogueIndex = -1;
             currentDisplayedElement = null;
 
-            if (dialogueCount.ContainsKey(dialogueKey))
-                dialogueCount[dialogueKey]++;
-            else
-                dialogueCount[dialogueKey] = 1;
+            // The visit count is what one-shots, Visits() and HasSeen() read. Which state it lands in
+            // is the node's call ({Global}, one-shot flags); GetStateCount sums both, so queries
+            // don't care.
+            GetVisitState(dialogue, currentLocalState, globalState).IncrementCount(dialogueKey);
+
+            // Only nodes that show something make it into the history - jumping "back" into a pure
+            // redirect would just redirect again
+            if (!dialogue.isRedirect)
+            {
+                history.Add((dialogueData, dialogue));
+            }
+
+            if (!string.IsNullOrEmpty(dialogue.marker))
+            {
+                markers[dialogue.marker] = (dialogueData, dialogue);
+            }
 
             onDialogueStart?.Invoke(dialogueKey);
 
@@ -154,6 +349,13 @@ namespace UC
                         ExecuteCode(option.code, optionContext);
                     }
 
+                    // A "{OneShot}*" option spends itself on being picked - next time FilterOptions
+                    // sees the recorded pick and drops (or greys) it
+                    if (option.isOneShot)
+                    {
+                        ScopedState(option.oneShot, currentDialogue).IncrementCount(currentDialogue.OptionPickStateKey(option));
+                    }
+
                     _StartConversation(option.key);
                     return;
                 }
@@ -192,7 +394,7 @@ namespace UC
                     // (it used to be, which silently turned every redirect into an end of dialogue).
                     var context = GetComponent<Expression.IContext>();
 
-                    var nextKey = currentDialogue.EvaluateNext(context, (code) => ExecuteCode(code, context));
+                    var nextKey = currentDialogue.EvaluateNext(context, (code) => ExecuteCode(code, context), RollState(currentDialogue));
                     if (!string.IsNullOrEmpty(nextKey))
                     {
                         if (!_StartConversation(nextKey)) EndDialogue();
@@ -204,20 +406,25 @@ namespace UC
             }
         }
 
-        // Applies option guards ("{<expr>}*", "{50%}*", "{50% && <expr>}*"): evaluates each option's
-        // condition and rolls its chance, returning a copy of the element with what survived.
-        // Condition failures are kept - marked unavailable - when the dialogue has the ShowInvalid
-        // flag, so the UI can grey them out; chance failures are always dropped outright, since a
-        // hidden roll is nothing the player can reason about (and is only rolled once the condition
-        // has passed). The roll happens once per display, so the options stay put while the player
-        // picks one. Elements without guarded options pass through untouched.
+        // Applies option guards ("{<expr>}*", "{50%}*", "{OneShot}*" and combinations): evaluates
+        // each option's condition, checks its one-shot, and rolls its chance, returning a copy of the
+        // element with what survived. Condition failures are kept - marked unavailable - when the
+        // dialogue has the ShowInvalid flag, so the UI can grey them out; a spent one-shot vanishes
+        // unless the dialogue has {ShowOneShot}, in which case it is also greyed; chance failures are
+        // always dropped outright, since a hidden roll is nothing the player can reason about (and is
+        // only rolled once the condition has passed). Chance rolls are sticky: the outcome is stored
+        // in the DialogueState the first time and read back afterwards, unless the node has
+        // {AlwaysRoll} - then it's rolled fresh on every display, the old behaviour. Elements without
+        // guarded options pass through untouched.
         DialogueData.DialogueElement FilterOptions(DialogueData.DialogueElement element)
         {
             if (!element.hasOptions) return element;
-            if (!element.options.Exists(o => o.hasCondition || o.hasChance)) return element;
+            if (!element.options.Exists(o => o.hasCondition || o.hasChance || o.isOneShot)) return element;
 
             bool showInvalid = (currentDialogue.flags & DialogueData.DialogueFlags.ShowInvalid) != 0;
+            bool showOneShot = (currentDialogue.flags & DialogueData.DialogueFlags.ShowOneShot) != 0;
             var context = GetComponent<Expression.IContext>();
+            var rollState = RollState(currentDialogue);
 
             var filtered = new DialogueData.DialogueElement
             {
@@ -228,23 +435,56 @@ namespace UC
 
             foreach (var option in element.options)
             {
-                bool available = EvaluateOptionCondition(option, context);
+                bool conditionOk = EvaluateOptionCondition(option, context);
+                bool oneShotSpent = option.isOneShot &&
+                    (ScopedState(option.oneShot, currentDialogue).GetCount(currentDialogue.OptionPickStateKey(option)) > 0);
 
-                if ((!available) && (!showInvalid)) continue;
-                if (available && option.hasChance && (UnityEngine.Random.Range(0.0f, 100.0f) >= option.chance)) continue;
+                // A spent one-shot is gone, full stop, unless {ShowOneShot} keeps it greyed out
+                if (oneShotSpent && (!showOneShot)) continue;
+
+                bool available = conditionOk && (!oneShotSpent);
+                if (!available)
+                {
+                    // Unavailable but possibly still shown: a spent one-shot got here because
+                    // ShowOneShot wants it visible; a failed condition needs ShowInvalid
+                    bool keepVisible = oneShotSpent || ((!conditionOk) && showInvalid);
+                    if (!keepVisible) continue;
+                }
+
+                if (available && option.hasChance && (!RollOptionChance(option, rollState))) continue;
 
                 filtered.options.Add(new DialogueData.Option
                 {
                     text = option.text,
+                    sourceText = option.stateText,
                     key = option.key,
                     code = option.code,
                     condition = option.condition,
                     chance = option.chance,
+                    oneShot = option.oneShot,
                     available = available
                 });
             }
 
             return filtered;
+        }
+
+        // The "{50%}*" roll, made sticky through the DialogueState: once rolled, the same outcome
+        // comes back on every later visit. A null state ({AlwaysRoll}) rolls fresh each time.
+        bool RollOptionChance(DialogueData.Option option, DialogueState rollState)
+        {
+            if (rollState == null)
+            {
+                return UnityEngine.Random.Range(0.0f, 100.0f) < option.chance;
+            }
+
+            var stateKey = currentDialogue.OptionChanceStateKey(option);
+            if (rollState.TryGetChanceRoll(stateKey, out bool stored)) return stored;
+
+            bool passed = UnityEngine.Random.Range(0.0f, 100.0f) < option.chance;
+            rollState.SetChanceRoll(stateKey, passed);
+
+            return passed;
         }
 
         // A condition that can't be evaluated (no context, parse error, unknown function) makes the
@@ -283,12 +523,35 @@ namespace UC
 
         void RunEntryCode()
         {
-            if ((currentDialogue.entryCode == null) ||
-                (currentDialogue.entryCode.Count == 0)) return;
+            if (!currentDialogue.hasEntryCode) return;
 
             var context = GetComponent<Expression.IContext>();
+            bool anyRan = false;
 
-            ExecuteCode(currentDialogue.entryCode, context);
+            for (int i = 0; i < currentDialogue.entryBlocks.Count; i++)
+            {
+                var block = currentDialogue.entryBlocks[i];
+                if ((block.code == null) || (block.code.Count == 0)) continue;
+
+                // A "{OneShot}{" block spends itself on running; a plain "{" block runs every time
+                if (block.oneShot != DialogueData.OneShotScope.None)
+                {
+                    var state = ScopedState(block.oneShot, currentDialogue);
+                    var blockKey = currentDialogue.EntryBlockStateKey(i);
+
+                    if (state.GetCount(blockKey) > 0) continue;
+                    state.IncrementCount(blockKey);
+                }
+
+                ExecuteCode(block.code, context);
+                anyRan = true;
+            }
+
+            // The aggregate HasRun() reads, kept in the node's default scope beside its visit count
+            if (anyRan)
+            {
+                ScopedState(currentDialogue).IncrementCount(currentDialogue.EntryCodeStateKey());
+            }
         }
 
         // Runs the current dialogue's code blocks and throws away wherever it would have redirected to.
@@ -301,7 +564,7 @@ namespace UC
 
             var context = GetComponent<Expression.IContext>();
 
-            currentDialogue.EvaluateNext(context, (code) => ExecuteCode(code, context));
+            currentDialogue.EvaluateNext(context, (code) => ExecuteCode(code, context), RollState(currentDialogue));
         }
 
         private void ExecuteCode(DialogueData.NextKeyOrCode nextKey, Expression.IContext context)
@@ -501,7 +764,7 @@ namespace UC
             {
                 foreach (var option in element.options)
                 {
-                    expanded.options.Add(new DialogueData.Option { text = ExpandText(option.text, context), key = option.key, code = option.code, condition = option.condition, chance = option.chance, available = option.available });
+                    expanded.options.Add(new DialogueData.Option { text = ExpandText(option.text, context), sourceText = option.stateText, key = option.key, code = option.code, condition = option.condition, chance = option.chance, oneShot = option.oneShot, available = option.available });
                 }
             }
             if (element.attributes != null)
@@ -582,6 +845,56 @@ namespace UC
 
                 onDialogueEnd?.Invoke();
             }
+
+            // History and markers only mean anything inside a conversation, and the local state
+            // belongs to whoever passed it - a new conversation brings its own (or none)
+            history.Clear();
+            markers.Clear();
+            currentLocalState = null;
+        }
+
+        // Called by the public entry points when a conversation is started from outside: adopts the
+        // state the caller passed (null = everything global) and forgets the previous conversation's
+        // trail. Node-to-node jumps inside a conversation never come through here.
+        void BeginConversationState(DialogueState state)
+        {
+            currentLocalState = state;
+            history.Clear();
+            markers.Clear();
+            // The actual entry file isn't known until the first node resolves, so the marker
+            // pre-registration waits for it
+            markersNeedInit = true;
+        }
+
+        bool markersNeedInit = false;
+
+        // Markers declared in the conversation's entry file - and in everything it includes - are
+        // available from the start, not only after their node has been visited. That's what lets a
+        // shared file exit "forward" through "-> Marker(name)" into a node of whoever called it: the
+        // caller declares {Marker=name} on its wrap-up node and never has to visit it first. The
+        // entry file's own declarations win over its includes' (so a shared file can carry a
+        // fallback exit and the caller overrides it), and actually visiting a marked node re-points
+        // the marker as usual.
+        void PreRegisterMarkers(DialogueData data, HashSet<DialogueData> visited = null)
+        {
+            if (data == null) return;
+
+            visited ??= new HashSet<DialogueData>();
+            if (!visited.Add(data)) return;
+
+            // Includes first, own declarations last - last write wins
+            for (int i = 0; i < data.IncludeRefs.Count; i++)
+            {
+                PreRegisterMarkers(data.GetResolvedInclude(i), visited);
+            }
+
+            foreach (var dialogue in data.GetAllDialogues())
+            {
+                if (!string.IsNullOrEmpty(dialogue.marker))
+                {
+                    markers[dialogue.marker] = (data, dialogue);
+                }
+            }
         }
 
         private bool _HasDialogueEvent(string dialogueEventName, int frameTolerance)
@@ -623,54 +936,82 @@ namespace UC
 
                 var context = GetComponent<Expression.IContext>();
 
-                return !string.IsNullOrEmpty(currentDialogue.GetNextDialogue(context));
+                var nextKey = currentDialogue.GetNextDialogue(context, RollState(currentDialogue));
+                // A redirect to the reserved End target is a way of stopping, not more text
+                return (!string.IsNullOrEmpty(nextKey)) && (nextKey != "End");
             }
         }
 
-        public static bool HasDialogue(string dialogueKey)
+        // Key lookup the way a running conversation would do it: the given file and its includes
+        // first (when there is one), the manager's global list otherwise
+        (DialogueData, DialogueData.Dialogue) ResolveDialogue(DialogueData data, string dialogueKey)
         {
-            if (Instance)
+            if (data != null)
             {
-                (var dialogueData, var dialogue) = Instance.FindDialogue(dialogueKey);
-                while (dialogue != null)
+                var result = data.FindDialogueInHierarchy(dialogueKey);
+                if (result.dialogue != null) return result;
+            }
+
+            return FindDialogue(dialogueKey);
+        }
+
+        // Whether starting this conversation would actually show something, one-shots included -
+        // checked against the same state the conversation would be started with (null = global, like
+        // StartConversation). Pass the DialogueData to scope the lookup the way
+        // StartConversation(data, ...) would.
+        public static bool HasDialogue(string dialogueKey, DialogueState state = null) => HasDialogue(null, dialogueKey, state);
+
+        public static bool HasDialogue(DialogueData data, string dialogueKey, DialogueState state = null)
+        {
+            if (Instance == null) return false;
+
+            var (dialogueData, dialogue) = Instance.ResolveDialogue(data, dialogueKey);
+            var context = Instance.GetComponent<Expression.IContext>();
+
+            // Follows redirect-only nodes to see whether the chain ends anywhere real. The peek
+            // never rolls or runs code, but it does read sticky outcomes, so a conversation whose
+            // roll was already made answers for the branch it actually took.
+            int guard = 0;
+            while (dialogue != null)
+            {
+                if (++guard > 64)
                 {
-                    if (((dialogue.flags & DialogueData.DialogueFlags.OneShot) != 0) &&
-                        Instance.dialogueCount.ContainsKey(dialogueKey))
-                    {
-                        return false;
-                    }
-
-                    // Check if this is a NULL entry (just a redirect to something)
-                    if (dialogue.isRedirect)
-                    {
-                        var context = Instance.GetComponent<Expression.IContext>();
-
-                        var nextDialogue = dialogue.GetNextDialogue(context);
-                        if (string.IsNullOrEmpty(nextDialogue)) return false;
-
-                        (dialogueData, dialogue) = Instance.FindDialogue(nextDialogue);
-                    }
-                    else
-                    {
-                        return true;
-                    }
+                    Debug.LogWarning($"HasDialogue(\"{dialogueKey}\"): redirect chain never ends!");
+                    return false;
                 }
+
+                if (IsOneShotSpent(dialogue, state, Instance.globalState)) return false;
+
+                if (!dialogue.isRedirect) return true;
+
+                var rollState = (dialogue.alwaysRoll) ? (null) : (GetScopedState(dialogue, state, Instance.globalState));
+                var nextDialogue = dialogue.GetNextDialogue(context, rollState);
+                if (string.IsNullOrEmpty(nextDialogue)) return false;
+
+                (dialogueData, dialogue) = Instance.ResolveDialogue(dialogueData, nextDialogue);
             }
 
             return false;
         }
 
-        public static bool HasSaidDialogue(string dialogueKey)
+        // Whether the node was ever visited. With a state, that state plus the global one are
+        // checked; without one, whatever conversation is running (or just the global state).
+        public static bool HasSaidDialogue(string dialogueKey, DialogueState state = null)
         {
-            if (Instance)
+            if (Instance == null) return false;
+
+            if (state != null)
             {
-                if (Instance.dialogueCount.ContainsKey(dialogueKey)) return true;
+                return (state.GetCount(dialogueKey) + Instance.globalState.GetCount(dialogueKey)) > 0;
             }
 
-            return false;
+            return GetStateCount(dialogueKey) > 0;
         }
 
-        public static bool StartConversation(string dialogueKey)
+        // state is the conversation's DialogueState: one-shots, sticky rolls and "local." variables
+        // resolve against it. Null uses the global state for everything - which is exactly the old
+        // behaviour, so existing callers don't change.
+        public static bool StartConversation(string dialogueKey, DialogueState state = null)
         {
             if (Instance == null)
             {
@@ -678,10 +1019,15 @@ namespace UC
                 return false;
             }
 
-            return Instance._StartConversation(dialogueKey);
+            Instance.BeginConversationState(state);
+
+            bool started = Instance._StartConversation(dialogueKey);
+            if (!started) Instance.currentLocalState = null;
+
+            return started;
         }
 
-        public static bool StartConversation(DialogueData dialogue, string key = "")
+        public static bool StartConversation(DialogueData dialogue, string key = "", DialogueState state = null)
         {
             if (Instance == null)
             {
@@ -689,7 +1035,12 @@ namespace UC
                 return false;
             }
 
-            return Instance._StartConversation(dialogue, key);
+            Instance.BeginConversationState(state);
+
+            bool started = Instance._StartConversation(dialogue, key);
+            if (!started) Instance.currentLocalState = null;
+
+            return started;
         }
 
         public static void Continue()

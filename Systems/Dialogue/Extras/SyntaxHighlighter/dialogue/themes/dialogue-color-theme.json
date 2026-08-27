@@ -60,6 +60,22 @@
         "settings": { "foreground": "#ff9d5c", "fontStyle": "bold" }
       },
       {
+        "scope": "keyword.control.tag.dialogue",
+        "settings": { "foreground": "#B22222", "fontStyle": "bold" }
+      },
+      {
+        "scope": "keyword.control.include.dialogue",
+        "settings": { "foreground": "#B22222", "fontStyle": "bold" }
+      },
+      {
+        "scope": "string.quoted.include.dialogue",
+        "settings": { "foreground": "#ce9178" }
+      },
+      {
+        "scope": "constant.other.target.dialogue",
+        "settings": { "foreground": "#5298c7" }
+      },
+      {
         "scope": "meta.code.dialogue comment",
         "settings": { "foreground": "#56ac61" }
       },

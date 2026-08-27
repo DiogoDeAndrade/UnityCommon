@@ -16,12 +16,31 @@ namespace UC
         public enum DialogueFlags
         {
             None = 0,
+            // The node only plays once, tracked in the conversation's DialogueState (so a POI that
+            // passed its own state gets its own once). GlobalOneShot tracks in the global state
+            // instead - once anywhere is once everywhere.
             OneShot = 1,
             Random = 2,
             // Options whose condition failed are still handed to the display, marked unavailable,
             // instead of being dropped - so the player can see what the choice would have been.
-            ShowInvalid = 4
+            ShowInvalid = 4,
+            GlobalOneShot = 8,
+            // Default scope for everything stateful in this node (rolls, and anything that doesn't
+            // name its own scope): Global stores in the global DialogueState instead of the
+            // conversation's. Local is the default and changes nothing - it exists to be written.
+            Global = 16,
+            Local = 32,
+            // Weighted groups and option chances are normally rolled once and the outcome kept in
+            // the DialogueState; this rolls them fresh on every entry instead.
+            AlwaysRoll = 64,
+            // A spent one-shot option normally vanishes; with this it stays visible, greyed out,
+            // the way ShowInvalid keeps failed conditions visible.
+            ShowOneShot = 128
         };
+
+        // Where a one-shot mark is stored: None = not a one-shot at all; Local = the conversation's
+        // DialogueState (which is the global one when none was passed); Global = always the global one.
+        public enum OneShotScope { None, Local, Global };
 
         [Serializable]
         public class Option
@@ -43,10 +62,21 @@ namespace UC
             // option is picked, before going to key - which is the only way to attach a side effect to
             // one specific choice instead of to the whole beat.
             public List<CodeElem> code;
+            // "{OneShot}*<text>" / "{GlobalOneShot}*<text>": the option can only be picked once,
+            // tracked in the DialogueState by the option's text. Combinable with the other guard
+            // parts: "{OneShot && HasRations(500)}*...".
+            public OneShotScope oneShot = OneShotScope.None;
+
+            // Set by the manager on displayed copies whose text was "${...}"-expanded: the text as
+            // written in the file, which is what state keys are built from - the expanded text can
+            // change between visits, the written one can't.
+            [NonSerialized] public string sourceText;
 
             public bool hasCode => (code != null) && (code.Count > 0);
             public bool hasCondition => !string.IsNullOrEmpty(condition);
             public bool hasChance => chance >= 0.0f;
+            public bool isOneShot => oneShot != OneShotScope.None;
+            public string stateText => string.IsNullOrEmpty(sourceText) ? text : sourceText;
         }
 
         // Free-form metadata attached to an element with "@name=value". The dialogue system doesn't
@@ -136,26 +166,50 @@ namespace UC
             public float weight;
         }
 
+        // One "{ ... }" block, in the order it was written. A block prefixed "{OneShot}{" (or
+        // "{GlobalOneShot}{") only runs the first time, tracked in the DialogueState.
+        [Serializable]
+        public class EntryBlock
+        {
+            public OneShotScope oneShot = OneShotScope.None;
+            public List<CodeElem> code = new();
+        }
+
         [Serializable]
         public class Dialogue
         {
             public string name;
             public DialogueFlags flags;
+            // "{Marker=<name>}": entering this node records it under <name>, and "-> Marker(<name>)"
+            // from anywhere in the conversation - other files included - jumps back to it.
+            public string marker;
             public List<DialogueElement> elems = new();
 
             // new support for conditional next keys
             public List<DialogueCondition> conditionalNext = new();
 
             // Code written as "{ ... }" with no arrow. It runs when the node is entered, before any of
-            // its text is shown - as opposed to "=>{ ... }", which runs on the way out.
-            public List<CodeElem> entryCode = new();
+            // its text is shown - as opposed to "=>{ ... }", which runs on the way out. Kept as
+            // separate blocks because each can carry its own one-shot marker.
+            public List<EntryBlock> entryBlocks = new();
 
             public bool isRedirect => (elems == null) || (elems.Count == 0);
+            public bool hasEntryCode => (entryBlocks != null) && (entryBlocks.Count > 0);
+            public bool alwaysRoll => (flags & DialogueFlags.AlwaysRoll) != 0;
+
+            // State key of the n-th weighted "{25%}=>" group of this node (n in order of appearance)
+            public string GroupStateKey(int groupOrdinal) => $"{name}#group{groupOrdinal}";
+            public string OptionPickStateKey(Option option) => $"{name}#opt:{option.stateText}";
+            public string OptionChanceStateKey(Option option) => $"{name}#chance:{option.stateText}";
+            public string EntryBlockStateKey(int blockIndex) => $"{name}#code{blockIndex}";
+            // Aggregate, bumped whenever any of the node's entry code runs - what HasRun() reads
+            public string EntryCodeStateKey() => $"{name}#code";
 
             // Resolves where this dialogue goes next without causing any side effect: code blocks are
-            // skipped instead of run, and random groups resolve to their first entry instead of rolling.
-            // This is what the "is there anything to say?" queries need.
-            public string GetNextDialogue(Expression.IContext context) => EvaluateNext(context, null);
+            // skipped instead of run, and random groups resolve to their stored sticky outcome when
+            // rollState has one - or to their first entry, never rolling. This is what the "is there
+            // anything to say?" queries need.
+            public string GetNextDialogue(Expression.IContext context, DialogueState rollState = null) => EvaluateNext(context, null, rollState);
 
             // Walks the conditionalNext list in order and returns the key it ends up redirecting to:
             //   - a random group is a run of consecutive "{25%}=>" entries; one of them is picked by
@@ -164,12 +218,17 @@ namespace UC
             //     which is what makes "=>{ ... }" followed by "=>SomeKey" work
             //   - the first entry that resolves to a key wins
             // Passing a null codeExecutor makes this a peek (see GetNextDialogue).
-            public string EvaluateNext(Expression.IContext context, Action<NextKeyOrCode> codeExecutor)
+            // rollState makes weighted groups sticky: the chosen branch is stored in it the first time
+            // and read back afterwards (unless the node has {AlwaysRoll}). Null = roll fresh each time.
+            public string EvaluateNext(Expression.IContext context, Action<NextKeyOrCode> codeExecutor, DialogueState rollState = null)
             {
                 if (conditionalNext == null) return null;
 
                 bool peek = (codeExecutor == null);
                 int index = 0;
+                int groupOrdinal = 0;
+
+                if (alwaysRoll) rollState = null;
 
                 while (index < conditionalNext.Count)
                 {
@@ -180,7 +239,8 @@ namespace UC
                         int groupEnd = index;
                         while ((groupEnd < conditionalNext.Count) && (conditionalNext[groupEnd].isRandom)) groupEnd++;
 
-                        condition = SelectRandom(index, groupEnd, peek);
+                        condition = SelectRandom(index, groupEnd, peek, rollState, GroupStateKey(groupOrdinal));
+                        groupOrdinal++;
                         index = groupEnd;
 
                         if (condition == null) continue;
@@ -222,11 +282,27 @@ namespace UC
                 return null;
             }
 
-            private DialogueCondition SelectRandom(int startIndex, int endIndex, bool peek)
+            private DialogueCondition SelectRandom(int startIndex, int endIndex, bool peek, DialogueState rollState, string stateKey)
             {
+                // A stored outcome wins, for peeks too - so "what would happen" and "what happens"
+                // agree once the roll has been made
+                if ((rollState != null) && (rollState.TryGetGroupRoll(stateKey, out var storedKey)))
+                {
+                    for (int i = startIndex; i < endIndex; i++)
+                    {
+                        if ((conditionalNext[i].nextKey?.nextKey == storedKey) && (conditionalNext[i].weight > 0.0f))
+                            return conditionalNext[i];
+                    }
+
+                    // The stored branch is gone or was weighted out (the file was edited) - roll again
+                    rollState.ClearGroupRoll(stateKey);
+                }
+
                 if (peek)
                 {
-                    // Deterministic stand-in for the roll: the first entry that could actually be picked
+                    // Deterministic stand-in for the roll: the first entry that could actually be
+                    // picked. A peek never rolls, so it also never *stores* - committing an outcome is
+                    // something only actually walking the dialogue may do.
                     for (int i = startIndex; i < endIndex; i++)
                     {
                         if (conditionalNext[i].weight > 0.0f) return conditionalNext[i];
@@ -255,7 +331,15 @@ namespace UC
                     lastValid = conditionalNext[i];
 
                     roll -= entryWeight;
-                    if (roll <= 0.0f) return conditionalNext[i];
+                    if (roll <= 0.0f) break;
+                }
+
+                // Remember the outcome so the next entry takes the same branch. A "{25%}=>{ ... }"
+                // code entry has no key to remember it by, so a group that picked one stays unrolled -
+                // it will roll again next time.
+                if ((rollState != null) && (lastValid != null) && (!string.IsNullOrEmpty(lastValid.nextKey?.nextKey)))
+                {
+                    rollState.SetGroupRoll(stateKey, lastValid.nextKey.nextKey);
                 }
 
                 return lastValid;
@@ -263,6 +347,25 @@ namespace UC
         }
 
         [SerializeField] private List<Dialogue> dialogues = new();
+
+        // 'include("Name")' lines: names always survive the import; refs are the same includes
+        // resolved to actual assets by the importer, so they are pulled into builds and can be
+        // followed without any asset-database lookup. A ref can be null when the other file wasn't
+        // imported yet (fresh project, include cycles) - "Unity Common/Dialogue/Update References"
+        // reimports everything and errors on whatever still doesn't resolve.
+        [SerializeField] private List<string> includeNames = new();
+        [SerializeField] private List<DialogueData> includeRefs = new();
+
+        public IReadOnlyList<string> IncludeNames => includeNames;
+        public IReadOnlyList<DialogueData> IncludeRefs => includeRefs;
+
+        // Importer-only: stores the asset the include resolved to
+        public void SetIncludeRef(int index, DialogueData data)
+        {
+            if ((index >= 0) && (index < includeRefs.Count)) includeRefs[index] = data;
+        }
+
+        public IEnumerable<Dialogue> GetAllDialogues() => dialogues;
 
         // Where the file being parsed came from, and how far into it we are. Only meaningful during an
         // import - neither is serialized, so at runtime SourceRef falls back to a plain line number.
@@ -304,6 +407,8 @@ namespace UC
         void _Import(string filename)
         {
             dialogues.Clear();
+            includeNames.Clear();
+            includeRefs.Clear();
             speakerCache = new();
             dialogueCache = new();
             keys = null;
@@ -339,8 +444,11 @@ namespace UC
             // for the closing "}-><key>" line to become an Option together with it
             string currentOptionCondition = "";
             float currentOptionChance = -1.0f;
-            // Set while the code block being parsed is a "{ ... }" entry block instead of a "=>{ ... }"
+            OneShotScope currentOptionOneShot = OneShotScope.None;
+            // Set while the code block being parsed is a "{ ... }" entry block instead of a "=>{ ... }",
+            // along with the one-shot marker of its "{OneShot}{" prefix, if it had one
             bool isEntryCode = false;
+            OneShotScope entryCodeOneShot = OneShotScope.None;
             string currentCondition = "";
             bool currentIsRandom = false;
             float currentWeight = 0.0f;
@@ -400,15 +508,17 @@ namespace UC
                         if (currentOptionText != null)
                         {
                             // "}-><key>": the code belongs to the option, and so does where it goes next
-                            AddOption(currentElement, currentOptionText, trimmedLine.Substring(1).Trim(), code, currentOptionCondition, currentOptionChance);
+                            AddOption(currentElement, currentOptionText, trimmedLine.Substring(1).Trim(), code, currentOptionCondition, currentOptionChance, currentOptionOneShot);
                             currentOptionText = null;
                             currentOptionCondition = "";
                             currentOptionChance = -1.0f;
+                            currentOptionOneShot = OneShotScope.None;
                         }
                         else if (isEntryCode)
                         {
-                            currentDialogue.entryCode.AddRange(code);
+                            currentDialogue.entryBlocks.Add(new EntryBlock { oneShot = entryCodeOneShot, code = code });
                             isEntryCode = false;
+                            entryCodeOneShot = OneShotScope.None;
                         }
                         else
                         {
@@ -451,6 +561,11 @@ namespace UC
                     continue;
                 }
 
+                if (TryParseInclude(trimmedLine))
+                {
+                    continue;
+                }
+
                 if (trimmedLine.StartsWith("#"))
                 {
                     StoreCurrentElement(ref currentDialogue, ref currentElement, ref currentSpeaker, textBuffer, attributeBuffer);
@@ -476,15 +591,16 @@ namespace UC
                 else if ((trimmedLine.StartsWith("*")) || (GetOptionGuardEnd(trimmedLine) >= 0))
                 {
                     // "*<text>" or "{<guard>}*<text>" - both are options; the guard, when there is
-                    // one, is the option's condition and/or chance
+                    // one, is the option's one-shot marker, condition and/or chance
                     string optionCondition = "";
                     float optionChance = -1.0f;
+                    OneShotScope optionOneShot = OneShotScope.None;
                     string optionLine = trimmedLine;
 
                     int guardEnd = GetOptionGuardEnd(trimmedLine);
                     if (guardEnd >= 0)
                     {
-                        ParseOptionGuard(trimmedLine.Substring(1, guardEnd - 1), out optionCondition, out optionChance);
+                        ParseOptionGuard(trimmedLine.Substring(1, guardEnd - 1), out optionCondition, out optionChance, out optionOneShot);
                         optionLine = trimmedLine.Substring(guardEnd + 1).TrimStart();
                     }
 
@@ -496,16 +612,29 @@ namespace UC
                         currentOptionText = optionLine.Substring(1, codeIdx - 1).Trim();
                         currentOptionCondition = optionCondition;
                         currentOptionChance = optionChance;
+                        currentOptionOneShot = optionOneShot;
                         isParsingCodeBlock = true;
                     }
                     else
                     {
-                        ParseOption(optionLine, currentElement, optionCondition, optionChance);
+                        ParseOption(optionLine, currentElement, optionCondition, optionChance, optionOneShot);
                     }
                 }
                 else if (trimmedLine.StartsWith("{"))
                 {
-                    if (trimmedLine.Contains("}=>{"))
+                    int oneShotBraceIdx = GetEntryOneShotPrefixEnd(trimmedLine, out var oneShotScope);
+                    if (oneShotBraceIdx >= 0)
+                    {
+                        // "{OneShot}{" / "{GlobalOneShot}{": an entry block that only runs the first
+                        // time the node is entered, tracked in the corresponding DialogueState
+                        currentCondition = "";
+                        currentIsRandom = false;
+                        currentWeight = 0.0f;
+                        isEntryCode = true;
+                        entryCodeOneShot = oneShotScope;
+                        isParsingCodeBlock = true;
+                    }
+                    else if (trimmedLine.Contains("}=>{"))
                     {
                         int conditionEnd = trimmedLine.IndexOf("}=>{");
                         ParseCondition(trimmedLine.Substring(1, conditionEnd - 1), out currentCondition, out currentIsRandom, out currentWeight);
@@ -566,10 +695,12 @@ namespace UC
             if (!line.StartsWith("=>{") && !line.StartsWith("{") && !line.StartsWith("*")) return null;
 
             int openIdx = line.IndexOf("=>{");
+            // "{OneShot}{ ... }" opens at the second brace, past the tag
+            int oneShotBraceIdx = GetEntryOneShotPrefixEnd(line, out _);
             // With no arrow the block opens at the "{" itself, which is the entry-code form
-            if ((openIdx < 0) && (!IsEntryCodeBlock(line))) return null;
+            if ((openIdx < 0) && (oneShotBraceIdx < 0) && (!IsEntryCodeBlock(line))) return null;
 
-            int braceIdx = (openIdx >= 0) ? (openIdx + 2) : 0;
+            int braceIdx = (openIdx >= 0) ? (openIdx + 2) : ((oneShotBraceIdx >= 0) ? (oneShotBraceIdx) : 0);
             // The last one, so a "}" inside a string literal isn't mistaken for the end of the block.
             // For "{cond}=>{" this lands on the condition's own brace, which is before the block even
             // opens - i.e. the block is empty here and continues below.
@@ -598,6 +729,40 @@ namespace UC
             return line.Contains(";");
         }
 
+        // "{OneShot}{" / "{GlobalOneShot}{": returns the index of the block's own "{" when the line
+        // starts with a one-shot entry-code prefix, -1 when it is anything else. Only these two tags
+        // are allowed in that position - "{ShowInvalid}{" stays a flags line followed by nonsense,
+        // which the flags parser will complain about.
+        private static int GetEntryOneShotPrefixEnd(string line, out OneShotScope scope)
+        {
+            scope = OneShotScope.None;
+
+            if (!line.StartsWith("{")) return -1;
+
+            int closeIdx = line.IndexOf('}');
+            if (closeIdx < 0) return -1;
+
+            string tag = line.Substring(1, closeIdx - 1).Trim();
+
+            OneShotScope parsed;
+            if (tag == "OneShot") parsed = OneShotScope.Local;
+            else if (tag == "GlobalOneShot") parsed = OneShotScope.Global;
+            else return -1;
+
+            for (int i = closeIdx + 1; i < line.Length; i++)
+            {
+                if (char.IsWhiteSpace(line[i])) continue;
+                if (line[i] == '{')
+                {
+                    scope = parsed;
+                    return i;
+                }
+                return -1;
+            }
+
+            return -1;
+        }
+
         // A line whose "{...}" guard is immediately followed by "*" is a guarded option
         // ("{<expr>}*<text> -> <key>"). Returns the index of the guard's closing brace, or -1 when the
         // line is not that. The first "}" is taken as the guard's end - an expression has no use for
@@ -618,25 +783,50 @@ namespace UC
             return -1;
         }
 
-        // Splits an option guard into its chance and its condition: "{<expr>}" is condition only,
-        // "{50%}" chance only, and "{50% && <expr>}" is both - the expression gates the option, and
-        // only when it passes is the chance rolled. Like ParseCondition, anything that parses entirely
-        // as a number is a chance and the "%" is just the readable convention - but here the number is
-        // an absolute probability in percent, not a weight normalised across a group.
-        private void ParseOptionGuard(string guardText, out string condition, out float chance)
+        // Splits an option guard into its one-shot marker, its chance and its condition: "{<expr>}"
+        // is condition only, "{50%}" chance only, and "{50% && <expr>}" is both - the expression
+        // gates the option, and only when it passes is the chance rolled. "OneShot"/"GlobalOneShot"
+        // written as the first term(s) mark the option as pickable only once ("{OneShot}",
+        // "{OneShot && 50%}", "{OneShot && <expr>}"). Like ParseCondition, anything that parses
+        // entirely as a number is a chance and the "%" is just the readable convention - but here the
+        // number is an absolute probability in percent, not a weight normalised across a group.
+        private void ParseOptionGuard(string guardText, out string condition, out float chance, out OneShotScope oneShot)
         {
             condition = guardText.Trim();
             chance = -1.0f;
+            oneShot = OneShotScope.None;
 
-            int andIdx = condition.IndexOf("&&");
-            string head = (andIdx >= 0) ? (condition.Substring(0, andIdx).Trim()) : (condition);
-            string chanceText = (head.EndsWith("%")) ? (head.Substring(0, head.Length - 1).Trim()) : (head);
+            // One-shot markers only count at the front of the guard, where they read as a tag and
+            // can't be confused with a term of the expression itself
+            bool stripped = true;
+            while (stripped && (condition.Length > 0))
+            {
+                stripped = false;
+
+                int andIdx = condition.IndexOf("&&");
+                string head = (andIdx >= 0) ? (condition.Substring(0, andIdx).Trim()) : (condition);
+
+                OneShotScope scope = OneShotScope.None;
+                if (head == "OneShot") scope = OneShotScope.Local;
+                else if (head == "GlobalOneShot") scope = OneShotScope.Global;
+
+                if (scope != OneShotScope.None)
+                {
+                    oneShot = scope;
+                    condition = (andIdx >= 0) ? (condition.Substring(andIdx + 2).Trim()) : ("");
+                    stripped = true;
+                }
+            }
+
+            int chanceAndIdx = condition.IndexOf("&&");
+            string chanceHead = (chanceAndIdx >= 0) ? (condition.Substring(0, chanceAndIdx).Trim()) : (condition);
+            string chanceText = (chanceHead.EndsWith("%")) ? (chanceHead.Substring(0, chanceHead.Length - 1).Trim()) : (chanceHead);
 
             if (float.TryParse(chanceText, System.Globalization.NumberStyles.Float,
                                System.Globalization.CultureInfo.InvariantCulture, out var parsedChance))
             {
                 chance = parsedChance;
-                condition = (andIdx >= 0) ? (condition.Substring(andIdx + 2).Trim()) : ("");
+                condition = (chanceAndIdx >= 0) ? (condition.Substring(chanceAndIdx + 2).Trim()) : ("");
             }
         }
 
@@ -840,6 +1030,37 @@ namespace UC
             attributeBuffer.Add(new Attribute { name = name, value = value });
         }
 
+        // 'include("Name")' (a trailing ';' is tolerated): a reference to another dialogue file, so
+        // keys that aren't found in this one are also looked up there. Only the name is stored here;
+        // the importer resolves it to the actual asset.
+        private static readonly System.Text.RegularExpressions.Regex includeRegex =
+            new(@"^include\s*\(\s*""([^""]+)""\s*\)\s*;?\s*$");
+
+        private bool TryParseInclude(string line)
+        {
+            if (!line.StartsWith("include")) return false;
+
+            var match = includeRegex.Match(line);
+            if (!match.Success)
+            {
+                Debug.LogWarning($"Malformed include - expected include(\"Name\"): {line} ({SourceRef()})");
+                // Still claimed as an include so it doesn't end up as dialogue text
+                return true;
+            }
+
+            string includeName = match.Groups[1].Value.Trim();
+            if (includeNames.Contains(includeName))
+            {
+                Debug.LogWarning($"Duplicate include \"{includeName}\" ({SourceRef()})");
+                return true;
+            }
+
+            includeNames.Add(includeName);
+            includeRefs.Add(null);
+
+            return true;
+        }
+
         // Helper method to tell an expression condition apart from a random weight ("25%")
         private void ParseCondition(string conditionText, out string condition, out bool isRandom, out float weight)
         {
@@ -863,47 +1084,67 @@ namespace UC
             }
         }
 
-        // Helper method to parse flags safely
+        // Helper method to parse flags safely. Flags accumulate, so "{ShowInvalid}" and "{Marker=x}"
+        // can be written on separate lines. Besides the DialogueFlags names, "Marker=<name>" is
+        // accepted and names the node for "-> Marker(<name>)" jumps.
         private void ParseDialogueFlags(string line, Dialogue currentDialogue)
         {
+            if (currentDialogue == null)
+            {
+                Debug.LogWarning($"Tag line outside of any dialogue: {line} ({SourceRef()})");
+                return;
+            }
+
             string data = line.Substring(1, line.Length - 2);  // Remove curly brackets
             var splitData = data.Split(',');
-
-            DialogueFlags flags = DialogueFlags.None;
 
             foreach (var entry in splitData)
             {
                 string trimmedEntry = entry.Trim();
 
-                if (Enum.TryParse(trimmedEntry, out DialogueFlags parsedFlag))
-                    flags |= parsedFlag;
-                else
-                    Debug.LogWarning($"Unknown DialogueFlag: {trimmedEntry} ({SourceRef()})");
-            }
+                int equalsIdx = trimmedEntry.IndexOf('=');
+                if (equalsIdx >= 0)
+                {
+                    string tagName = trimmedEntry.Substring(0, equalsIdx).Trim();
+                    string tagValue = trimmedEntry.Substring(equalsIdx + 1).Trim();
 
-            currentDialogue.flags = flags;
+                    if (string.Equals(tagName, "Marker", StringComparison.OrdinalIgnoreCase) && (!string.IsNullOrEmpty(tagValue)))
+                        currentDialogue.marker = tagValue;
+                    else
+                        Debug.LogWarning($"Unknown dialogue tag: {trimmedEntry} ({SourceRef()})");
+                }
+                // Enum.TryParse happily parses a bare number as a flags value, which nobody means
+                else if ((!float.TryParse(trimmedEntry, out _)) && Enum.TryParse(trimmedEntry, out DialogueFlags parsedFlag))
+                {
+                    currentDialogue.flags |= parsedFlag;
+                }
+                else
+                {
+                    Debug.LogWarning($"Unknown DialogueFlag: {trimmedEntry} ({SourceRef()})");
+                }
+            }
         }
 
         // Helper method for option parsing with validation
-        private void ParseOption(string line, DialogueElement currentElement, string condition, float chance)
+        private void ParseOption(string line, DialogueElement currentElement, string condition, float chance, OneShotScope oneShot)
         {
             int arrowIdx = line.IndexOf("->");
             if (arrowIdx < 0)
             {
-                Debug.LogWarning($"Malformed option detected: {line} ({SourceRef()})");
+                Debug.LogWarning($"Option \"{line}\" has no destination - every option needs \"-><key>\" (use \"-> End\" to end the conversation)! ({SourceRef()})");
                 return;
             }
 
-            AddOption(currentElement, line.Substring(1, arrowIdx - 1).Trim(), line.Substring(arrowIdx).Trim(), null, condition, chance);
+            AddOption(currentElement, line.Substring(1, arrowIdx - 1).Trim(), line.Substring(arrowIdx).Trim(), null, condition, chance, oneShot);
         }
 
         // destination is the "-><key>" part, still with its arrow, because that's what both option forms
         // have in hand at this point
-        private void AddOption(DialogueElement currentElement, string optionText, string destination, List<CodeElem> code, string condition, float chance)
+        private void AddOption(DialogueElement currentElement, string optionText, string destination, List<CodeElem> code, string condition, float chance, OneShotScope oneShot)
         {
             if (!destination.StartsWith("->"))
             {
-                Debug.LogWarning($"Option \"{optionText}\" doesn't say where it goes (expected \"-><key>\", got \"{destination}\")! ({SourceRef()})");
+                Debug.LogWarning($"Option \"{optionText}\" doesn't say where it goes (expected \"-><key>\", got \"{destination}\") - use \"-> End\" to end the conversation! ({SourceRef()})");
                 return;
             }
 
@@ -916,7 +1157,7 @@ namespace UC
             }
 
             if (currentElement != null)
-                currentElement.options.Add(new Option { text = optionText, key = destinationKey, code = code, condition = condition, chance = chance });
+                currentElement.options.Add(new Option { text = optionText, key = destinationKey, code = code, condition = condition, chance = chance, oneShot = oneShot });
             else
                 Debug.LogWarning($"Option defined without an element context: {optionText} ({SourceRef()})");
         }
@@ -962,7 +1203,7 @@ namespace UC
 
         public bool HasDialogue(string dialogueKey)
         {
-            return GetDialogue(dialogueKey) != null;
+            return FindDialogue(dialogueKey) != null;
         }
 
         public Dialogue GetFirstDialogue()
@@ -974,24 +1215,97 @@ namespace UC
 
         public Dialogue GetDialogue(string dialogueKey)
         {
+            var dialogue = FindDialogue(dialogueKey);
+
+            if (dialogue == null)
+            {
+                Debug.LogWarning($"Dialogue '{dialogueKey}' not found!");
+            }
+
+            return dialogue;
+        }
+
+        // Like GetDialogue, but not finding the key is a normal outcome and stays quiet - search
+        // chains (current file -> includes -> globals) probe with this so a miss in one place isn't
+        // reported before the others have been tried
+        public Dialogue FindDialogue(string dialogueKey)
+        {
             if (dialogueCache.TryGetValue(dialogueKey, out var dialogue))
             {
                 return dialogue;
             }
 
-            // Placeholder function for finding a speaker (replace with actual implementation)
             dialogue = dialogues.Find(s => s.name == dialogueKey);
 
             if (dialogue != null)
             {
                 dialogueCache[dialogueKey] = dialogue;
-                return dialogue;
             }
 
-            Debug.LogWarning($"Dialogue '{dialogueKey}' not found!");
+            return dialogue;
+        }
+
+        // Searches this file and then everything it includes, transitively - an included file's own
+        // includes count too. Returns the file the key was found in along with the dialogue itself,
+        // so a conversation that follows the key can move its notion of "current file" there and
+        // resolve that file's local keys from then on.
+        public (DialogueData data, Dialogue dialogue) FindDialogueInHierarchy(string dialogueKey)
+        {
+            return FindDialogueInHierarchy(dialogueKey, new HashSet<DialogueData>());
+        }
+
+        private (DialogueData data, Dialogue dialogue) FindDialogueInHierarchy(string dialogueKey, HashSet<DialogueData> visited)
+        {
+            // Includes can be circular (the girl file including the event that includes it back) -
+            // that's fine for lookups, each file is just searched once
+            if (!visited.Add(this)) return (null, null);
+
+            var dialogue = FindDialogue(dialogueKey);
+            if (dialogue != null) return (this, dialogue);
+
+            for (int i = 0; i < includeRefs.Count; i++)
+            {
+                var include = GetResolvedInclude(i);
+                if (include == null) continue;
+
+                var result = include.FindDialogueInHierarchy(dialogueKey, visited);
+                if (result.dialogue != null) return result;
+            }
+
+            return (null, null);
+        }
+
+        // Follows an include: normally the hard reference baked in by the importer. When that is
+        // missing (the other file wasn't imported yet when this one was), the editor falls back to
+        // searching the asset database so iteration keeps working; a build can't search, so there the
+        // include is simply reported - "Unity Common/Dialogue/Update References" exists to make sure
+        // a build never gets to that point.
+        public DialogueData GetResolvedInclude(int index)
+        {
+            if ((index < 0) || (index >= includeRefs.Count)) return null;
+            if (includeRefs[index] != null) return includeRefs[index];
+
+#if UNITY_EDITOR
+            foreach (var candidate in AssetUtils.GetAll<DialogueData>())
+            {
+                if ((candidate != null) && (candidate != this) && (candidate.name == includeNames[index]))
+                {
+                    includeRefs[index] = candidate;
+                    return candidate;
+                }
+            }
+#endif
+
+            if (!warnedUnresolvedIncludes)
+            {
+                warnedUnresolvedIncludes = true;
+                Debug.LogError($"Dialogue file \"{name}\" includes \"{includeNames[index]}\", which isn't resolved - run Unity Common/Dialogue/Update References!");
+            }
 
             return null;
         }
+
+        private bool warnedUnresolvedIncludes = false;
 
         public List<string> GetKeys()
         {
