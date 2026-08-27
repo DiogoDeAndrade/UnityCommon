@@ -1,0 +1,22 @@
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SampleShared - a dialogue meant to be reused from other files.
+//
+// Sample.dialogue pulls this in with include("SampleShared") and jumps here from MarkerSample.
+// Nothing in this file knows who called it: it exits through "-> Marker(return)", which goes back
+// to whichever node most recently declared {Marker=return}. That's the whole trick that lets one
+// side-conversation be dropped into any number of events without duplicating it.
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+# SampleShared:Stranger
+[TestSpeaker]: The stranger looks up from the fire.
+{OneShot}*Where are you headed? -> SampleShared:Stranger:Headed
+{OneShot}*Got anything to trade? -> SampleShared:Stranger:Trade
+*Step away -> Marker(return)
+
+# SampleShared:Stranger:Headed
+[TestSpeaker]: Nowhere. Everywhere. Same thing, these days.
+=>SampleShared:Stranger
+
+# SampleShared:Stranger:Trade
+[TestSpeaker]: Only stories, and those I give away for free.
+=>SampleShared:Stranger

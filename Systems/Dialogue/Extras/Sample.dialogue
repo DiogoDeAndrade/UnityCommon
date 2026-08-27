@@ -1,11 +1,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// This is the sample dialogue file
+// This is the sample dialogue file - see DialogueFormat.md (same folder) for the full guide.
 //
 //
 
 /*************************************************
 Comments can be used
 */
+
+// include("Name") references another dialogue file: keys that aren't found in this file are also
+// searched there (and in whatever it includes). SampleShared.dialogue lives in this same folder.
+// Run "Unity Common/Dialogue/Update References" after adding/renaming files - it re-links all
+// includes and validates every jump in the project.
+include("SampleShared")
 
 // This defines a named dialogue (Tutorial in this case)
 # Tutorial
@@ -108,3 +114,119 @@ Now, grab that shovel over there, we're going to do something really neat!
     survivorCount = 3;
 }
 [TestSpeaker]: Of the ${sentCount} who left, ${survivorCount} came back. We lost ${sentCount - survivorCount}.
+
+// ---------------------------------------------------------------------------------------------------
+// STATE: one-shots, sticky rolls, local variables
+//
+// Everything a dialogue "remembers" lives in a DialogueState. The game can pass one per thing that
+// starts a conversation (a point of interest, say) - then all of this is per-instance: two copies
+// of the same event each roll their own rolls and spend their own one-shots. With no state passed,
+// the global one is used and everything below still works, there's just a single memory.
+// ---------------------------------------------------------------------------------------------------
+
+// A question hub: {OneShot}* options can only be picked once each. {ShowOneShot} keeps the spent
+// ones visible but greyed out (without it they just vanish). {ShowInvalid} does the same for options
+// whose condition fails. A {GlobalOneShot}* option is spent across every instance of the event.
+# HubSample
+{ShowOneShot, ShowInvalid}
+[TestSpeaker]: Ask me anything.
+{OneShot}*Who are you? -> HubSample:Who
+{OneShot}*What is this place? -> HubSample:Where
+{OneShot && TutorialStage >= 2}*What was that seed about? -> HubSample:Seed
+{GlobalOneShot}*Take the one coin she offers -> HubSample:Coin
+*That's all -> HubSample:Done
+
+# HubSample:Who
+[TestSpeaker]: Nobody in particular.
+=>HubSample
+
+# HubSample:Where
+[TestSpeaker]: The space between two better places.
+=>HubSample
+
+# HubSample:Seed
+[TestSpeaker]: You'll see.
+=>HubSample
+
+# HubSample:Coin
+[TestSpeaker]: There's only one, so make it count.
+=>HubSample
+
+# HubSample:Done
+[TestSpeaker]: Safe travels.
+
+// Entry code prefixed {OneShot}{ only runs the first time the node is entered - so this +1000 can
+// be looped back to safely. A plain "{ ... }" block runs on every entry; a {GlobalOneShot}{ block
+// runs once across every instance. Visits/HasSeen/HasRun (usable in any condition) read the same
+// memory: Visits("Key") counts entries, HasSeen("Key") is Visits > 0, HasRun("Key") is whether the
+// node's entry code ever executed.
+# RewardSample
+[TestSpeaker]: Here, take these supplies. (+1000 supplies)
+{OneShot}{
+    SupplyCount = 1000;
+}
+*Thanks -> RewardSample:After
+
+# RewardSample:After
+{HasSeen("HubSample")}=>RewardSample:KnownFace
+[TestSpeaker]: Don't mention it.
+=>RewardSample:Loop
+
+# RewardSample:KnownFace
+[TestSpeaker]: You again! Don't mention it.
+=>RewardSample:Loop
+
+// Coming back through here does NOT hand out another 1000 - the {OneShot}{ block is spent
+# RewardSample:Loop
+{Visits("RewardSample") < 3}=>RewardSample
+=>HubSample:Done
+
+// Weighted rolls are sticky by default: once this node has decided, it stays decided for that
+// instance (a save file literally records which branch was taken). {AlwaysRoll} would make it roll
+// fresh on every entry - and also applies to "{50%}*" option chances on the node.
+# StickyRollSample
+{25%}=>StickyRollSample:Rare
+{75%}=>StickyRollSample:Common
+
+# StickyRollSample:Rare
+[TestSpeaker]: (You found the rare branch - this instance will always land here now.)
+
+# StickyRollSample:Common
+[TestSpeaker]: (The common branch - and this instance is stuck with it, which is usually what an
+event wants. Add {AlwaysRoll} to the rolling node when it isn't.)
+
+// "local." variables belong to the DialogueState of the conversation, so each instance of an event
+// tracks its own - a plain variable is shared by the whole game. Tags on the node can also move the
+// whole node's memory: {Global} makes everything stateful in it game-wide, {Local} (the default)
+// keeps it per-instance.
+# LocalVarSample
+{
+    local.timesGreeted = local.timesGreeted + 1;
+}
+[TestSpeaker]: Hello! I've greeted you ${local.timesGreeted} time(s) - though another copy of me
+would start counting from zero.
+
+// ---------------------------------------------------------------------------------------------------
+// MARKERS AND HISTORY
+//
+// {Marker=name} names a spot; "-> Marker(name)" jumps to it. Markers declared in the file the
+// conversation STARTED in (and its includes) are known from the start, so a shared file (see
+// SampleShared.dialogue) can hand control to whoever called it without knowing who that was - even
+// "forward", to a node not visited yet. Visiting a marked node re-points the marker, which is what
+// makes "go back to where we were" work. "-> History(-1)" instead goes back one step in what the
+// player actually saw (History(0) restarts the current node); going back also rewinds the trail.
+// Prefer markers for "return to a known place" - History(-n) with n > 1 depends on the path the
+// player happened to take. "-> End" is the reserved way for an option to close the conversation.
+// ---------------------------------------------------------------------------------------------------
+# MarkerSample
+{Marker=return}
+[TestSpeaker]: There's a stranger by the fire. Talk to them?
+*Approach the stranger -> SampleShared:Stranger
+*Peek at the previous page -> HistorySample
+*Leave -> HubSample:Done
+
+# HistorySample
+[TestSpeaker]: Changed your mind?
+*Yes, go back -> History(-1)
+*Start this line over -> History(0)
+*Actually, stop talking -> End

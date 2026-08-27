@@ -12,6 +12,16 @@
 		"name": "comment.line.dialogue"
 	  },
 	  {
+		"comment": "include(\"Name\") - a reference to another dialogue file",
+		"match": "^\\s*(include)\\s*(\\()\\s*(\"[^\"]*\")\\s*(\\))\\s*;?\\s*$",
+		"captures": {
+		  "1": { "name": "keyword.control.include.dialogue" },
+		  "2": { "name": "punctuation.definition.include.dialogue" },
+		  "3": { "name": "string.quoted.include.dialogue" },
+		  "4": { "name": "punctuation.definition.include.dialogue" }
+		}
+	  },
+	  {
 		"match": "^(#\\s*[A-Za-z0-9:_-]+)",
 		"name": "entity.name.title.dialogue"
 	  },
@@ -38,12 +48,41 @@
 		}
 	  },
 	  {
+		"comment": "-> History(-1) / -> Marker(name) special jump targets",
+		"match": "(?<=->|=>)\\s*(History|Marker)\\s*(\\()\\s*([A-Za-z0-9:_-]+)\\s*(\\))",
+		"captures": {
+		  "1": { "name": "keyword.control.tag.dialogue" },
+		  "2": { "name": "punctuation.definition.target.dialogue" },
+		  "3": { "name": "constant.other.target.dialogue" },
+		  "4": { "name": "punctuation.definition.target.dialogue" }
+		}
+	  },
+	  {
+		"comment": "-> End: the reserved end-the-conversation target",
+		"match": "(?<=->|=>)\\s*(End)\\s*$",
+		"captures": {
+		  "1": { "name": "keyword.control.tag.dialogue" }
+		}
+	  },
+	  {
 		"match": "=>|->",
 		"name": "keyword.operator.redirect.dialogue"
 	  },
 	  {
 		"match": "^\\s*\\{\\s*[0-9]+(?:\\.[0-9]+)?\\s*%?\\s*\\}",
 		"name": "constant.numeric.weight.dialogue"
+	  },
+	  {
+		"comment": "Tag line: {OneShot}, {ShowInvalid, Random}, {Marker=xpto}... - a whole line of flags/tags",
+		"match": "^\\s*\\{\\s*[A-Za-z_][A-Za-z0-9_]*(\\s*=\\s*[^},;]+)?(\\s*,\\s*[A-Za-z_][A-Za-z0-9_]*(\\s*=\\s*[^},;]+)?)*\\s*\\}\\s*$",
+		"name": "keyword.control.tag.dialogue"
+	  },
+	  {
+		"comment": "{OneShot}{ / {GlobalOneShot}{ - a one-shot marker prefixing an entry code block",
+		"match": "^\\s*(\\{\\s*(?:OneShot|GlobalOneShot)\\s*\\})(?=\\s*\\{)",
+		"captures": {
+		  "1": { "name": "keyword.control.tag.dialogue" }
+		}
 	  },
 	  {
 		"begin": "(\\{)",
@@ -56,6 +95,11 @@
 		  "1": { "name": "punctuation.section.code.end.dialogue" }
 		},
 		"patterns": [
+		  {
+			"comment": "One-shot markers inside option guards: {OneShot && HasRations(500)}*...",
+			"match": "\\b(OneShot|GlobalOneShot)\\b",
+			"name": "keyword.control.tag.dialogue"
+		  },
 		  {
 			"include": "source.cs"
 		  }
