@@ -864,7 +864,7 @@ namespace UC.ED
 
             InitMathNet();
 
-            double constraintWeight = (energy != null) ? (energy.GetConceptualWeight("constraint")) : (0.0);
+            double constraintWeight = (energy != null) ? (energy.GetConceptualWeight("terminalPosition")) : (0.0);
 
 #if MATH_NET_AVAILABLE
             if ((nodes == null) || (nodes.Count == 0))

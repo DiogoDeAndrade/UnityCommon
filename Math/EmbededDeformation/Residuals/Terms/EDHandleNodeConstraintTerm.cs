@@ -24,10 +24,14 @@ namespace UC.ED
     /// graph, which is exactly the kind of quiet coupling the row count should not have.
     /// </summary>
     [Serializable]
-    [PolymorphicName("Handle Constraint (Structure)")]
+    [PolymorphicName("Terminal Position (Structure Nodes)")]
     public class EDHandleNodeConstraintTerm : EDResidualTerm
     {
-        public override string name => "constraint";
+        // Renamed from "constraint" on 2026-08-27, in step with the navmesh form - the two
+        // share the name because they are the same row in the two layouts. The class name
+        // deliberately did not move: [SerializeReference] persists it, and a renamed class
+        // detaches every energy asset that carries the term.
+        public override string name => "terminalPosition";
 
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)

@@ -23,10 +23,14 @@ namespace UC.ED
     /// being dropped, which keeps the row count a plain three per constraint.
     /// </summary>
     [Serializable]
-    [PolymorphicName("Vertex Constraint (NavMesh)")]
+    [PolymorphicName("Terminal Position (NavMesh Vertices)")]
     public class EDVertexConstraintTerm : EDResidualTerm
     {
-        public override string name => "constraint";
+        // Renamed from "constraint" on 2026-08-27, so the dumps and CSVs group it with
+        // terminalOrientation and terminalScale - the three are one question about the
+        // terminals. The class name deliberately did not move: [SerializeReference] persists
+        // it, and a renamed class detaches every energy asset that carries the term.
+        public override string name => "terminalPosition";
 
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
