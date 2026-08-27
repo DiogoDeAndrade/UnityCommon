@@ -171,7 +171,8 @@ namespace UC.ED
     [PolymorphicName("Global Deformation Field Quality")]
     public class EDGlobalDeformationFieldQualityTerm : EDDeformationFieldQualityTerm
     {
-        public override string name => "globalDeformationFieldQuality";
+        // Renamed from "globalDeformationFieldQuality" on 2026-08-27 - see the mesh term's note.
+        public override string name => "glFieldQuality";
 
         protected override bool perNode => false;
     }
@@ -184,7 +185,7 @@ namespace UC.ED
     [PolymorphicName("Per-Node Deformation Field Quality")]
     public class EDPerNodeDeformationFieldQualityTerm : EDDeformationFieldQualityTerm
     {
-        public override string name => "perNodeDeformationFieldQuality";
+        public override string name => "pnFieldQuality";
 
         protected override bool perNode => true;
     }

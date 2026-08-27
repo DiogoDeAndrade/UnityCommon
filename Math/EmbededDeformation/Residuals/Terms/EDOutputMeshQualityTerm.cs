@@ -72,7 +72,11 @@ namespace UC.ED
     [PolymorphicName("Global Output Mesh Quality")]
     public class EDGlobalOutputMeshQualityTerm : EDOutputMeshQualityTerm
     {
-        public override string name => "globalOutputMeshQuality";
+        // Renamed from "globalOutputMeshQuality" on 2026-08-27, with its three siblings - the
+        // short forms line the CSV columns up. No golden carries a quality term (grep-verified
+        // again at the rename), so nothing re-captures; the class name stays for the same
+        // [SerializeReference] reason the terminalPosition classes kept theirs.
+        public override string name => "glMeshQuality";
 
         protected override bool perNode => false;
     }
@@ -85,7 +89,7 @@ namespace UC.ED
     [PolymorphicName("Per-Node Output Mesh Quality")]
     public class EDPerNodeOutputMeshQualityTerm : EDOutputMeshQualityTerm
     {
-        public override string name => "perNodeOutputMeshQuality";
+        public override string name => "pnMeshQuality";
 
         protected override bool perNode => true;
     }
