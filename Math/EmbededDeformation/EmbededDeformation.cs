@@ -1828,11 +1828,16 @@ namespace UC.ED
         /// attempts are not iterations and are not reported. The translation-only solver never
         /// touches the term machinery and reports nothing.
         ///
+        /// The state the breakdown was measured at rides along, so a listener can measure columns
+        /// of its own - the export's debug measures - against exactly the state the numbers
+        /// describe, rather than against whatever the deformation happens to hold mid-solve. Valid
+        /// only for the duration of the call.
+        ///
         /// A delegate is not serialized, so a domain reload clears it - the driver re-assigns it on
         /// every solve rather than trusting what survived.
         /// </summary>
         [NonSerialized]
-        public Action<IReadOnlyList<EDTermEnergy>> onIterationMeasured;
+        public Action<IReadOnlyList<EDTermEnergy>, EDStateView> onIterationMeasured;
 
         /// <summary>
         /// Measures one iteration's breakdown for the export listener, timing the measurement and
@@ -1845,7 +1850,7 @@ namespace UC.ED
 
             DebugProfiler.DebugMark(timeIterationExport);
 
-            onIterationMeasured(MeasureTermEnergies(f, energy, state));
+            onIterationMeasured(MeasureTermEnergies(f, energy, state), state);
 
             DebugProfiler.DebugMark(timeIterationExport);
         }
