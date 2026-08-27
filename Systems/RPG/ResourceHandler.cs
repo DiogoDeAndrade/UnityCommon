@@ -86,7 +86,13 @@ namespace UC.RPG
 
         void Start()
         {
-            if (!_fromInstance) ResetResource();
+            if (!_fromInstance)
+            {
+                using (CombatTextManager.Suppress())
+                {
+                    ResetResource();
+                }
+            }
         }
 
         private void ResourceInstance_onResourceNotEmpty(ResourceInstance resource, GameObject healSource)
