@@ -19,11 +19,39 @@ namespace UC.ED
     public partial class EmbededDeformation
     {
         #region Solver
+
+#if MATH_NET_AVAILABLE
+        /// <summary>
+        /// The DeltaEnergy stop: true once the relative improvement of the total energy - the
+        /// squared residual norm, the quantity the export's total column carries - has stayed
+        /// below the threshold for two consecutive iterations. Two rather than one because a
+        /// single near-flat iteration mid-descent exists in the sweep data and a repeated one
+        /// never resumed (2026-08-27, zero resume events over 26 runs). A threshold of zero
+        /// disables the check entirely, which is the MaxIterations criteria and the default -
+        /// the path every golden runs.
+        /// </summary>
+        private static bool ShouldStopOnDeltaEnergy(double threshold, double previousError, double error, ref int flatIterations)
+        {
+            if ((threshold <= 0.0) || (!double.IsFinite(previousError))) return false;
+
+            double before = previousError * previousError;
+            double after = error * error;
+
+            double improvement = (before > 0.0) ? ((before - after) / before) : (0.0);
+
+            if (improvement < threshold) flatIterations++;
+            else flatIterations = 0;
+
+            return flatIterations >= 2;
+        }
+#endif
+
         public void SolveED_GN(int maxIterations, EDEnergyModel.Instance energy,
                                double damping = 1.0,
                                double residualTolerance = 1e-5,
                                double stepTolerance = 1e-6,
-                               bool resetBeforeSolve = true)
+                               bool resetBeforeSolve = true,
+                               double relativeEnergyStop = 0.0)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -42,6 +70,9 @@ namespace UC.ED
             TraceResidualLayout(energy);
 
             DebugProfiler.DebugMark(timeIteration);
+
+            double previousError = double.NaN;
+            int flatIterations = 0;
 
             for (int iter = 0; iter < maxIterations; iter++)
             {
@@ -62,6 +93,15 @@ namespace UC.ED
                 {
                     break;
                 }
+
+                // Checked at entry, before the Jacobian - the expensive half of an iteration that
+                // would improve nothing.
+                if (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations))
+                {
+                    break;
+                }
+
+                previousError = error;
 
                 var J = energy.BuildJacobian(currentState, out double jNorm);
 
@@ -117,7 +157,8 @@ namespace UC.ED
                                double residualTolerance = 1e-5,
                                double stepTolerance = 1e-6,
                                bool resetBeforeSolve = true,
-                               bool adaptiveLambda = true)
+                               bool adaptiveLambda = true,
+                               double relativeEnergyStop = 0.0)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -138,6 +179,9 @@ namespace UC.ED
             TraceResidualLayout(energy);
 
             DebugProfiler.DebugMark(timeIteration);
+
+            double previousError = double.NaN;
+            int flatIterations = 0;
 
             for (int iter = 0; iter < maxIterations; iter++)
             {
@@ -161,6 +205,13 @@ namespace UC.ED
 
                 if (error < residualTolerance)
                     break;
+
+                // Checked at entry, before the Jacobian - the expensive half of an iteration that
+                // would improve nothing.
+                if (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations))
+                    break;
+
+                previousError = error;
 
                 var J = energy.BuildJacobian(currentState, out double jNorm);
 
@@ -286,7 +337,8 @@ namespace UC.ED
                                 double stepTolerance = 1e-6,
                                 bool resetBeforeSolve = true,
                                 bool adaptiveLambda = true,
-                                bool choleskyFactorization = false)
+                                bool choleskyFactorization = false,
+                                double relativeEnergyStop = 0.0)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -311,6 +363,9 @@ namespace UC.ED
             int iter = 0;
 
             DebugProfiler.DebugMark(timeIteration);
+
+            double previousError = double.NaN;
+            int flatIterations = 0;
 
             for (iter = 0; iter < maxIterations; iter++)
             {
@@ -346,6 +401,15 @@ namespace UC.ED
                 {
                     break;
                 }
+
+                // Checked at entry, before the Jacobian - the expensive half of an iteration that
+                // would improve nothing.
+                if (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations))
+                {
+                    break;
+                }
+
+                previousError = error;
 
                 var J = energy.BuildJacobian(currentState, out double jNorm);
 

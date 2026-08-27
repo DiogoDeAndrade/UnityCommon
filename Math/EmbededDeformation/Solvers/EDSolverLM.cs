@@ -47,7 +47,8 @@ namespace UC.ED
                                        def.residualTolerance,
                                        def.stepTolerance,
                                        resetBeforeSolve,
-                                       def.adaptive);
+                                       def.adaptive,
+                                       def.relativeEnergyStop);
             }
         }
     }

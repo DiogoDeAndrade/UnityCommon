@@ -4,6 +4,17 @@ using UnityEngine;
 namespace UC.ED
 {
     /// <summary>
+    /// When a multi-iteration solve stops: at the iteration budget, or as soon as the total energy
+    /// has stopped improving. DeltaEnergy is still bounded by the budget - it can only stop
+    /// earlier, never run longer.
+    /// </summary>
+    public enum EDStopCriteria
+    {
+        MaxIterations,
+        DeltaEnergy,
+    }
+
+    /// <summary>
     /// A way of driving the deformation towards its constraints, and the parameters that way needs.
     ///
     /// The asset is the definition: shared, and never written to while solving. Each owner asks for
@@ -16,7 +27,19 @@ namespace UC.ED
         [SerializeField, Min(1)]
         protected int maxIterations = 10;
 
+        [SerializeField, Tooltip("MaxIterations runs the full budget. DeltaEnergy stops early once the relative energy improvement stays below the threshold for two consecutive iterations - two rather than one because a single near-flat iteration mid-descent exists in the data and a repeated one never resumes (2026-08-27 sweep). Term solvers only; the translation-only solver has no energy to watch.")]
+        protected EDStopCriteria stopCriteria = EDStopCriteria.MaxIterations;
+
+        [SerializeField, Range(0.0f, 1.0f), Tooltip("The relative energy improvement per iteration below which DeltaEnergy stops, as a fraction - 0.01 is 1%. Measured on the total energy (the squared residual norm), the same quantity the iteration export's total column carries.")]
+        protected float deltaEnergyThreshold = 0.01f;
+
         public int defaultIterationCount => maxIterations;
+
+        /// <summary>
+        /// The relative-improvement threshold a solve should stop at, or zero when the criteria is
+        /// MaxIterations - one number, so the solve loops need no knowledge of the enum.
+        /// </summary>
+        public double relativeEnergyStop => (stopCriteria == EDStopCriteria.DeltaEnergy) ? (deltaEnergyThreshold) : (0.0);
 
         /// <summary>
         /// Short name for this solver in diagnostic dumps.

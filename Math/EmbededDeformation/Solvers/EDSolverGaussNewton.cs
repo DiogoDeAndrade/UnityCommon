@@ -42,7 +42,8 @@ namespace UC.ED
                                        def.stepDamping,
                                        def.residualTolerance,
                                        def.stepTolerance,
-                                       resetBeforeSolve);
+                                       resetBeforeSolve,
+                                       def.relativeEnergyStop);
             }
         }
     }

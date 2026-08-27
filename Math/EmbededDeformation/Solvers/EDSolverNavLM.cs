@@ -45,7 +45,8 @@ namespace UC.ED
                                         def.stepTolerance,
                                         resetBeforeSolve,
                                         def.adaptive,
-                                        def.cholesky);
+                                        def.cholesky,
+                                        def.relativeEnergyStop);
             }
         }
     }
