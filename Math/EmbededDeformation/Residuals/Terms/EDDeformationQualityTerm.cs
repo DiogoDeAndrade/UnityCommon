@@ -98,6 +98,14 @@ namespace UC.ED
         private float minRatio = 0.0f;
 
         /// <summary>
+        /// Sets the floor, exactly as editing the field in the inspector would - the companion of
+        /// SetConceptualWeight, for experiment drivers and for the export's debug measures, which
+        /// host a term of their own and need its floor to match their setting. Read per
+        /// measurement, so it takes effect immediately; the sample set does not depend on it.
+        /// </summary>
+        public void SetMinRatio(float value) => minRatio = Mathf.Clamp01(value);
+
+        /// <summary>
         /// One row over every sample, or one row per deformation node over the samples whose
         /// centroid that node dominates. A fact about the concrete term rather than a setting, so
         /// the two forms are two entries in the energy model and two lines in the dump.
