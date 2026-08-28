@@ -259,6 +259,21 @@ namespace UC
             return false;
         }
 
+        public static T Clone<T>(T src) where T : ModularScriptableObject
+        {
+            var newSO = Instantiate(src);
+
+            if (newSO._modules != null)
+            {
+                foreach (var modules in newSO._modules)
+                {
+                    modules.SetOwner(newSO);
+                }
+            }
+
+            return newSO;
+        }
+
         protected virtual void OnValidate()
         {
             if (_modules == null) return;
