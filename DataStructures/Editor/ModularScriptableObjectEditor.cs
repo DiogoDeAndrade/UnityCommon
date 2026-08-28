@@ -3,9 +3,10 @@ using UnityEditor;
 using UnityEngine;
 using UC;
 using UC.Interaction.Editor;
+using NaughtyAttributes.Editor;
 
 [CustomEditor(typeof(ModularScriptableObject), true)]
-public class ModularScriptableObjectEditor : Editor
+public class ModularScriptableObjectEditor : NaughtyInspector
 {
     // "Clipboard" for modules (JSON + type name)
     public static string s_ModuleClipboardJson;
@@ -16,8 +17,9 @@ public class ModularScriptableObjectEditor : Editor
     private SerializedProperty _parentsProp;
     private SerializedProperty _modulesProp;
 
-    private void OnEnable()
+    protected override void OnEnable()
     {
+        base.OnEnable();
         _parentsProp = serializedObject.FindProperty("_parents");
         _modulesProp = serializedObject.FindProperty("_modules");
     }
@@ -41,6 +43,10 @@ public class ModularScriptableObjectEditor : Editor
         DrawModulesSection(mso);
 
         serializedObject.ApplyModifiedProperties();
+
+        // NaughtyAttributes [Button] methods
+        EditorGUILayout.Space();
+        DrawButtons();
     }
 
     private new void DrawHeader()
