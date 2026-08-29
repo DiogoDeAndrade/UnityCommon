@@ -9,6 +9,7 @@ namespace UC
     public class FullscreenFader : MonoBehaviour
     {
         [SerializeField] private Color faderColor;
+        [SerializeField] private bool useUnscaledTime = false;
         [SerializeField] private bool startFaded;
         [ShowIf("startFaded")]
         [SerializeField] private bool autoFadeIn;
@@ -23,6 +24,8 @@ namespace UC
         System.Action callback;
 
         static FullscreenFader fsFader;
+
+        float deltaTime => (useUnscaledTime) ? Time.unscaledDeltaTime : Time.deltaTime;
 
         void Awake()
         {
@@ -54,7 +57,7 @@ namespace UC
         {
             if (fadeInc != 0.0f)
             {
-                currentT += fadeInc * Time.deltaTime;
+                currentT += fadeInc * deltaTime;
 
                 fader.color = Color.Lerp(startColor, targetColor, currentT);
 
