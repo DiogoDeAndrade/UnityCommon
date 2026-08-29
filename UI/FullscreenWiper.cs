@@ -8,6 +8,7 @@ namespace UC
     public class FullscreenWiper : MonoBehaviour
     {
         [SerializeField] private Color wiperColor = Color.black;
+        [SerializeField] private bool useUnscaledTime = false;
         [SerializeField] private bool startWiped;
         [ShowIf("startWiped")]
         [SerializeField] private bool autoWipeIn;
@@ -20,6 +21,8 @@ namespace UC
         float target;
         float wipeInc;
         System.Action callback;
+
+        float deltaTime => (useUnscaledTime) ? Time.unscaledDeltaTime : Time.deltaTime;
 
         static FullscreenWiper fsWiper;
 
@@ -54,7 +57,7 @@ namespace UC
         {
             if (wipeInc != 0.0f)
             {
-                wiper.open = wiper.open + wipeInc * Time.deltaTime;
+                wiper.open = wiper.open + wipeInc * deltaTime;
 
                 if (((wipeInc > 0.0f) && (wiper.open >= target)) ||
                     ((wipeInc < 0.0f) && (wiper.open <= target)))
