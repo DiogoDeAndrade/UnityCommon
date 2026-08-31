@@ -22,7 +22,7 @@ namespace UC
         float wipeInc;
         System.Action callback;
 
-        float deltaTime => (useUnscaledTime) ? Time.unscaledDeltaTime : Time.deltaTime;
+        float deltaTime => (useUnscaledTime) ? Mathf.Min(Time.unscaledDeltaTime, Time.maximumDeltaTime) : Time.deltaTime;
 
         static FullscreenWiper fsWiper;
 
