@@ -420,6 +420,23 @@ namespace UC.ED
             }
 
             /// <summary>
+            /// The shortest structure segment's rest length, or -1 with no structure to measure -
+            /// the node spacing along the skeleton, which is what the distance field has to
+            /// resolve for the weights to tell neighbouring nodes apart.
+            /// </summary>
+            private static double ShortestStructureSegment(List<NavEDSegments> structure)
+            {
+                if ((structure == null) || (structure.Count == 0)) return -1.0;
+
+                double min = double.MaxValue;
+
+                foreach (NavEDSegments segment in structure)
+                    min = System.Math.Min(min, (segment.p2 - segment.p1).magnitude);
+
+                return min;
+            }
+
+            /// <summary>
             /// Voxelizes the source geometry and seeds it with the graph nodes, so that a point
             /// anywhere in the solid is carried by geodesic distance through the volume rather than
             /// by straight-line distance through whatever wall happens to be between it and a node.
@@ -495,6 +512,23 @@ namespace UC.ED
 
                 float safeDensity = Mathf.Max(def.fieldVoxelDensity, 1e-5f);
                 float voxelSize = maxSize * safeDensity;
+
+                // The denser-graph experiments push structureMaxSegmentLength down while the
+                // voxel is stated only indirectly (voxel = density x largest bound), so nothing
+                // said when the subdivision outran the field's resolution. Two nodes closer than
+                // one voxel sit in the same cell of the distance field - their distances are
+                // identical everywhere and no weighting can separate them - and spacing under a
+                // couple of voxels quantizes every node-to-node distance to a step or two.
+                // Checked here because this is the first place both numbers exist.
+                double minSegmentLength = ShortestStructureSegment(deformation.structure);
+
+                if (minSegmentLength > 0.0)
+                {
+                    if (minSegmentLength < voxelSize)
+                        Debug.LogError($"Structure subdivision finer than the deformation field: the shortest segment is {minSegmentLength:F4} against a voxel of {voxelSize:F4}, so adjacent nodes share a cell and the field cannot tell them apart. Raise structureMaxSegmentLength, or lower the field voxel density (voxel = density x largest bound).");
+                    else if (minSegmentLength < 2.0 * voxelSize)
+                        Debug.LogWarning($"Structure subdivision close to the deformation field's resolution: the shortest segment is {minSegmentLength:F4} against a voxel of {voxelSize:F4} ({minSegmentLength / voxelSize:F2} voxels), so neighbouring nodes' distances quantize to a step or two and the weights separate them poorly. Raise structureMaxSegmentLength, or lower the field voxel density (voxel = density x largest bound).");
+                }
 
                 // Storage is clamped from below by the weight count, since storing fewer than are
                 // weighted is meaningless, and from above by the node count, past which there is
@@ -577,6 +611,7 @@ namespace UC.ED
                     $"  Meshes={sourceGeometry.Count}\n " +
                     $"  Nodes={nodes.Count}\n" +
                     $"  VoxelSize={voxelSize:F4}\n" +
+                    ((minSegmentLength > 0.0) ? ($"  MinSegment={minSegmentLength:F4} ({minSegmentLength / voxelSize:F2} voxels)\n") : ("")) +
                     $"  MaxWeights={safeMaxWeights}\n" +
                     $"  Bounds={bounds.size}\n" +
                     $"  Grid Size={field.gridSize}\n" +
