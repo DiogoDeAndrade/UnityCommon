@@ -63,12 +63,12 @@ namespace UC
                     return SampleTriangular(min, max, Mathf.Clamp(mean, min, max), Next01());
                 case Mode.GaussianClamped:
                     if (range <= 0f) return mean;
-                    return SampleGaussianClamped(mean, min, max, range * gaussianSigmaFrac, Next01);
+                    return MathUtils.SampleGaussianClamped(mean, min, max, range * gaussianSigmaFrac, Next01);
                 case Mode.BiasedUniform:
                     if (range <= 0f) return mean;
                     // Remap uniform through an exponent to bias towards ends.
                     // bias=0.5 -> uniform. bias<0.5 -> towards min. bias>0.5 -> towards max.
-                    return SampleBiasedUniform(min, max, bias, Next01());
+                    return MathUtils.SampleBiasedUniform(min, max, bias, Next01());
                 default:
                     return mean;
             }
@@ -253,48 +253,7 @@ namespace UC
                 return min + Mathf.Sqrt(u * (max - min) * (mode - min));
             else
                 return max - Mathf.Sqrt((1f - u) * (max - min) * (max - mode));
-        }
-
-        static float SampleGaussianClamped(float mean, float min, float max, float sigma, Func<float> next01)
-        {
-            // Box-Muller. We generate one normal sample and clamp.
-            // If sigma == 0 (or tiny), it collapses to mean.
-            if (sigma <= 1e-6f) return Mathf.Clamp(mean, min, max);
-
-            float z = SampleStandardNormal(next01);
-            float v = mean + z * sigma;
-            return Mathf.Clamp(v, min, max);
-        }
-
-        static float SampleStandardNormal(Func<float> next01)
-        {
-            // Box-Muller transform
-            // Ensure u1 not 0 to avoid log(0)
-            float u1 = Mathf.Max(1e-7f, next01());
-            float u2 = next01();
-
-            float r = Mathf.Sqrt(-2f * Mathf.Log(u1));
-            float theta = 2f * Mathf.PI * u2;
-            return r * Mathf.Cos(theta);
-        }
-
-        static float SampleBiasedUniform(float min, float max, float bias01, float u)
-        {
-            // Simple, intuitive bias mapping:
-            // Convert bias in [0,1] to an exponent k in [0.25, 4] around 1.
-            // bias=0.5 => k=1 (uniform)
-            // bias<0.5 => k>1 (push towards min)
-            // bias>0.5 => k<1 (push towards max)
-            // This is monotonic and easy to tune without extra params.
-            const float kMin = 0.25f;
-            const float kMax = 4.0f;
-
-            float t = Mathf.Clamp01(bias01);
-            float k = (t < 0.5f) ? Mathf.Lerp(1f, kMax, (0.5f - t) / 0.5f) : Mathf.Lerp(1f, kMin, (t - 0.5f) / 0.5f);
-
-            float shaped = Mathf.Pow(u, k);
-            return Mathf.Lerp(min, max, shaped);
-        }
+        }        
 
     }
 }
