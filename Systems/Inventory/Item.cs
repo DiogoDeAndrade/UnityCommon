@@ -39,5 +39,7 @@ namespace UC
 
             return false;
         }
+
+        public GameObject GetScenePrefab() => scenePrefab;
     }
 }
