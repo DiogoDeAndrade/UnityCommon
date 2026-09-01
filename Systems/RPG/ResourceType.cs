@@ -6,7 +6,7 @@ namespace UC.RPG
 {
 
     [CreateAssetMenu(fileName = "ResourceType", menuName = "Unity Common/RPG/Resource Type")]
-    public class ResourceType : ScriptableObject
+    public class ResourceType : ModularScriptableObject
     {
         public string displayName;
         public Color displaySpriteColor = Color.white;
