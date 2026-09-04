@@ -12,7 +12,7 @@ namespace UC
             get
             {
                 if (_instance) return _instance;
-                _instance = FindFirstObjectByType<T>();
+                _instance = FindAnyObjectByType<T>();
                 return _instance;
             }
         }

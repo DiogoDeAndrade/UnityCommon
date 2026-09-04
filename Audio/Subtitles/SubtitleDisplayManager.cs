@@ -32,7 +32,7 @@ public class SubtitleDisplayManager : MonoBehaviour
         {
             if (_instance == null)
             {
-                _instance = FindFirstObjectByType<SubtitleDisplayManager>();
+                _instance = FindAnyObjectByType<SubtitleDisplayManager>();
             }
             return _instance;
         }

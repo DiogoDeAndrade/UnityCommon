@@ -90,7 +90,7 @@ namespace UC.RPG
             var ret = source.GetComponent<ActionRunner>();
             if (ret) return ret;
 
-            ret = GameObject.FindFirstObjectByType<ActionRunner>();
+            ret = GameObject.FindAnyObjectByType<ActionRunner>();
 
             return ret;
         }

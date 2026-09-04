@@ -7,7 +7,7 @@ namespace UC
     {
         public static Tweener.BaseInterpolator TweenProperty(this Material material, GameObject ownerGameObject, string propertyName, float endValue, float duration)
         {
-            string animName = $"Tween{propertyName}{material.GetInstanceID()}";
+            string animName = $"Tween{propertyName}{material.GetEntityId()}";
 
             ownerGameObject.Tween().Stop(animName, Tweener.StopBehaviour.SkipToEnd);
 
@@ -21,7 +21,7 @@ namespace UC
 
         public static Tweener.BaseInterpolator TweenProperty(this Material material, GameObject ownerGameObject, string propertyName, Color endColor, float duration)
         {
-            string animName = $"Tween{propertyName}{material.GetInstanceID()}";
+            string animName = $"Tween{propertyName}{material.GetEntityId()}";
 
             ownerGameObject.Tween().Stop(animName, Tweener.StopBehaviour.SkipToEnd);
 

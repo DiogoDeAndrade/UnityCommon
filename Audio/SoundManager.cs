@@ -81,7 +81,7 @@ namespace UC
             {
                 if (_instance == null)
                 {
-                    _instance = FindFirstObjectByType<SoundManager>();
+                    _instance = FindAnyObjectByType<SoundManager>();
                 }
                 return _instance;
             }

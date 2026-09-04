@@ -9,6 +9,7 @@ namespace UC.RPG
     [PolymorphicName("RPG/Item/Armour")]
     public class RPGItemArmour : SOModule
     {
+        [Serializable]
         struct ArmourSubModule
         {
             public DamageType           damageType;

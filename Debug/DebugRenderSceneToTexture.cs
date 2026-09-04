@@ -149,7 +149,7 @@ public class DebugRenderSceneToTexture : MonoBehaviour
         switch (renderTargetType)
         {
             case RenderTarget.Scene:
-                ret.AddRange(FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None));
+                ret.AddRange(FindObjectsByType<MeshRenderer>());
                 break;
             case RenderTarget.Object:
                 {

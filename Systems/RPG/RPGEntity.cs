@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace UC.RPG
 {
+    [Serializable]
     public class RPGEntity : IRPGOwner
     {
         public int          level;

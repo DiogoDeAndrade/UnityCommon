@@ -58,7 +58,7 @@ namespace UC
             var types = _interfaceToImplementors[interfaceType];
             foreach (var type in types)
             {
-                var ret = GameObject.FindFirstObjectByType(type) as T;
+                var ret = GameObject.FindAnyObjectByType(type) as T;
                 if (ret != null) return ret;
             }
 

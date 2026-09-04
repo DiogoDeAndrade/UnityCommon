@@ -81,7 +81,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+                var editorL = FindObjectsByType<HypertaggedObject>();
                 foreach (var obj in editorL)
                 {
                     if (!obj.isActiveAndEnabled) continue;
@@ -106,7 +106,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+                var editorL = FindObjectsByType<HypertaggedObject>();
                 foreach (var obj in editorL)
                 {
                     if (!obj.isActiveAndEnabled) continue;
@@ -146,7 +146,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+                var editorL = FindObjectsByType<HypertaggedObject>();
                 foreach (var obj in editorL)
                 {
                     if (obj.hypertag != tag) continue;
@@ -185,7 +185,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+                var editorL = FindObjectsByType<HypertaggedObject>();
                 foreach (var obj in editorL)
                 {
                     if (obj.hypertag != tag) continue;
@@ -217,7 +217,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+                var editorL = FindObjectsByType<HypertaggedObject>();
                 foreach (var obj in editorL)
                 {
                     if (obj.hypertag != tag) continue;
@@ -248,7 +248,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+                var editorL = FindObjectsByType<HypertaggedObject>();
                 foreach (var obj in editorL)
                 {
                     if (!obj.HasAnyHypertag(tags)) continue;
@@ -283,7 +283,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var editorL = FindObjectsByType<HypertaggedObject>(FindObjectsSortMode.None);
+                var editorL = FindObjectsByType<HypertaggedObject>();
                 foreach (var obj in editorL)
                 {
                     if (!obj.HasAnyHypertag(tags)) continue;

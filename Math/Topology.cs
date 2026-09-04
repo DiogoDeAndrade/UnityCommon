@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -8,6 +9,7 @@ namespace UC
     [System.Serializable]
     public class Topology
     {
+        [Serializable]
         public class Edge
         {
             public int id;
@@ -59,6 +61,7 @@ namespace UC
             }
         }
 
+        [Serializable]
         public class Triangle
         {
             public int id;
@@ -83,9 +86,11 @@ namespace UC
         }
 
         public List<Vector3> vertices;
+        [NonSerialized]
         public List<List<int>> vertexNeighbour;
         public int nEdges;
         public List<Edge> edges;
+        [NonSerialized]
         public Dictionary<(int, int), int> edgesDictionary;
         public int nTriangles;
         public List<Triangle> triangles;
