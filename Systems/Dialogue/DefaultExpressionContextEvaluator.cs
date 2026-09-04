@@ -265,13 +265,7 @@ namespace UC
 
         public T EvaluateFunction<T>(string functionName, List<Expression> args)
         {
-            var type = GetType();
-            var methodInfo = type.GetPrivateMethod(functionName);
-
-            if (methodInfo == null)
-            {
-                throw new Expression.ErrorException($"Method \"{functionName}\" not found in context!");
-            }
+            var methodInfo = FindFunction(functionName, args.Count);
 
             // Check parameters, check parameter types
             List<object> funcArgs = new();
@@ -343,15 +337,85 @@ namespace UC
             }
         }
 
+        // Resolves a function name to the single method a call with this many arguments means.
+        //
+        // Reflection's GetMethod throws AmbiguousMatchException the moment a name is overloaded, and
+        // the exception doesn't say which name it choked on. Doing the picking here keeps the name
+        // (and the candidate signatures) in the message, and lets overloads work at all: an overload
+        // taking types no expression can produce - a ResourceType, an Item - is not callable from a
+        // dialogue and never competes with the string/number one an author actually wrote.
+        MethodInfo FindFunction(string functionName, int argCount)
+        {
+            var candidates = GetCallableFunctions(functionName);
+            if (candidates.Count == 0)
+            {
+                var declared = GetType().GetPrivateMethods(functionName);
+                if (declared.Count > 0)
+                {
+                    throw new Expression.ErrorException($"Method \"{functionName}\" can't be called from an expression - {TypeExtensions.DescribeMethods(declared)} takes types an expression can't produce!");
+                }
+                throw new Expression.ErrorException($"Method \"{functionName}\" not found in context!");
+            }
+            if (candidates.Count == 1) return candidates[0];
+
+            MethodInfo match = null;
+            foreach (var candidate in candidates)
+            {
+                if (candidate.GetParameters().Length != argCount) continue;
+                if (match != null)
+                {
+                    throw new Expression.ErrorException($"Call to \"{functionName}\" with {argCount} argument(s) is ambiguous - {TypeExtensions.DescribeMethods(candidates)} can't be told apart by argument count, so one of them has to be renamed!");
+                }
+                match = candidate;
+            }
+
+            if (match == null)
+            {
+                throw new Expression.ErrorException($"No overload of \"{functionName}\" takes {argCount} argument(s): {TypeExtensions.DescribeMethods(candidates)}!");
+            }
+
+            return match;
+        }
+
+        // The overloads of <functionName> an expression could actually call: every parameter has to
+        // be one of the types EvaluateFunction knows how to marshal
+        List<MethodInfo> GetCallableFunctions(string functionName)
+        {
+            var candidates = GetType().GetPrivateMethods(functionName);
+
+            for (int i = candidates.Count - 1; i >= 0; i--)
+            {
+                foreach (var parameter in candidates[i].GetParameters())
+                {
+                    var parameterType = parameter.ParameterType;
+                    if ((parameterType == typeof(bool)) || (parameterType == typeof(float)) ||
+                        (parameterType == typeof(int)) || (parameterType == typeof(string))) continue;
+
+                    candidates.RemoveAt(i);
+                    break;
+                }
+            }
+
+            return candidates;
+        }
+
         public Expression.DataType GetFunctionType(string functionName)
         {
-            var type = GetType();
-            var methodInfo = type.GetMethod(functionName,
-                                            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-            if (methodInfo == null)
+            // The expression only wants to know the type this call produces, so it doesn't matter
+            // which overload ends up being called - as long as they agree on what they return
+            var candidates = GetCallableFunctions(functionName);
+            if (candidates.Count == 0)
             {
                 throw new Expression.ErrorException($"Function {functionName} not found!");
+            }
+
+            var methodInfo = candidates[0];
+            for (int i = 1; i < candidates.Count; i++)
+            {
+                if (candidates[i].ReturnType != methodInfo.ReturnType)
+                {
+                    throw new Expression.ErrorException($"Overloads of {functionName} don't all return the same type: {TypeExtensions.DescribeMethods(candidates)}!");
+                }
             }
 
             if (methodInfo.ReturnType == typeof(bool)) return Expression.DataType.Bool;

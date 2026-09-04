@@ -149,7 +149,7 @@ namespace UC.RPG
         public InventoryRPGInstance GetInventory() => _rpgEntity.inventory;
         public EquipmentRPGInstance GetEquipment() => _rpgEntity.equipment;
 
-        public bool RunAction(Interactable interactable)
+        public bool RunAction(UC.Interaction.Interactable interactable)
         {
             var context = new ActionContext
             {

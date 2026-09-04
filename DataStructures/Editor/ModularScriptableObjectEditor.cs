@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UC;
 using UC.Interaction.Editor;
+using NaughtyAttributes;
 using NaughtyAttributes.Editor;
 
 [CustomEditor(typeof(ModularScriptableObject), true)]
@@ -14,8 +17,13 @@ public class ModularScriptableObjectEditor : NaughtyInspector
 
     public static bool HasClipboard => (!string.IsNullOrEmpty(s_ModuleClipboardJson)) && (!string.IsNullOrEmpty(s_ModuleClipboardTypeName));
 
+    // Parents and modules get their own sections, and the script reference is not worth a line.
+    private static readonly string[] ownPropertyExclusions = { "m_Script", "_parents", "_modules" };
+
     private SerializedProperty _parentsProp;
     private SerializedProperty _modulesProp;
+
+    private List<SerializedProperty> _ownProperties = new();
 
     protected override void OnEnable()
     {
@@ -37,15 +45,17 @@ public class ModularScriptableObjectEditor : NaughtyInspector
         EditorGUILayout.Space();
 
         // Draw all other fields except parents/modules + script
-        DrawPropertiesExcluding(serializedObject, "_parents", "_modules", "m_Script");
+        DrawOwnProperties();
         EditorGUILayout.Space();
 
         DrawModulesSection(mso);
 
         serializedObject.ApplyModifiedProperties();
 
-        // NaughtyAttributes [Button] methods
+        // NaughtyAttributes [ShowNonSerializedField] / [ShowNativeProperty] / [Button] members
         EditorGUILayout.Space();
+        DrawNonSerializedFields();
+        DrawNativeProperties();
         DrawButtons();
     }
 
@@ -56,6 +66,65 @@ public class ModularScriptableObjectEditor : NaughtyInspector
     private void DrawParentsSection()
     {
         EditorGUILayout.PropertyField(_parentsProp, includeChildren: true);
+    }
+
+    // Mirrors NaughtyInspector.DrawSerializedProperties, minus the properties that have their own
+    // sections. Going through NaughtyEditorGUI rather than DrawPropertiesExcluding is what keeps the
+    // meta attributes (ShowIf, EnableIf, groups, ...) working on the object's own fields.
+    private void DrawOwnProperties()
+    {
+        GetSerializedProperties(ref _ownProperties);
+
+        _ownProperties.RemoveAll(p => Array.IndexOf(ownPropertyExclusions, p.name) >= 0);
+
+        // Ungrouped
+        foreach (var property in _ownProperties.Where(p => PropertyUtility.GetAttribute<IGroupAttribute>(p) == null))
+        {
+            NaughtyEditorGUI.PropertyField_Layout(property, includeChildren: true);
+        }
+
+        // Box groups
+        foreach (var group in _ownProperties
+                     .Where(p => PropertyUtility.GetAttribute<BoxGroupAttribute>(p) != null)
+                     .GroupBy(p => PropertyUtility.GetAttribute<BoxGroupAttribute>(p).Name))
+        {
+            var visibleProperties = group.Where(p => PropertyUtility.IsVisible(p)).ToList();
+            if (visibleProperties.Count == 0)
+                continue;
+
+            NaughtyEditorGUI.BeginBoxGroup_Layout(group.Key);
+
+            foreach (var property in visibleProperties)
+            {
+                NaughtyEditorGUI.PropertyField_Layout(property, includeChildren: true);
+            }
+
+            NaughtyEditorGUI.EndBoxGroup_Layout();
+        }
+
+        // Foldouts
+        foreach (var group in _ownProperties
+                     .Where(p => PropertyUtility.GetAttribute<FoldoutAttribute>(p) != null)
+                     .GroupBy(p => PropertyUtility.GetAttribute<FoldoutAttribute>(p).Name))
+        {
+            var visibleProperties = group.Where(p => PropertyUtility.IsVisible(p)).ToList();
+            if (visibleProperties.Count == 0)
+                continue;
+
+            // NaughtyAttributes keeps this state in an internal SavedBool, so mirror its EditorPrefs key.
+            string foldoutKey = $"{target.GetInstanceID()}.{group.Key}";
+
+            bool expanded = EditorGUILayout.Foldout(EditorPrefs.GetBool(foldoutKey, false), group.Key, true);
+            EditorPrefs.SetBool(foldoutKey, expanded);
+
+            if (!expanded)
+                continue;
+
+            foreach (var property in visibleProperties)
+            {
+                NaughtyEditorGUI.PropertyField_Layout(property, includeChildren: true);
+            }
+        }
     }
 
     private void DrawModulesSection(ModularScriptableObject mso)
