@@ -255,7 +255,7 @@ namespace UC
 
         BaseUIControl GetControlOnPointer()
         {
-            var screenPos = InputControl.GetScreenMousePosition();
+            var screenPos = InputControl.GetMousePixelPosition();
 
             raycasterResults.Clear();
             var data = new PointerEventData(EventSystem.current) { position = screenPos };

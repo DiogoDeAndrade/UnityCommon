@@ -5,13 +5,11 @@ using UnityEngine;
 
 namespace UC
 {
-    public class ScreenshotRuntimeRunner : MonoBehaviour
+    public class ScreenshotRuntimeRunner : Singleton<ScreenshotRuntimeRunner>
     {
-        static ScreenshotRuntimeRunner _instance;
-
         public static void EnsureExists()
         {
-            if (_instance != null) return;
+            if (Instance != null) return;
 
             var go = new GameObject("[UnityCommon] ScreenshotRuntimeRunner");
             _instance = go.AddComponent<ScreenshotRuntimeRunner>();

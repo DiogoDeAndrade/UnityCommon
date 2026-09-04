@@ -17,7 +17,7 @@ namespace UC
     {
         // Basically, we can define different scan areas, with different FOV and ranges. It can also scan different layers for interesting objects.
         [System.Serializable]
-        struct ScanParameters
+        protected struct ScanParameters
         {
             public float fov;
             public float minRange;
@@ -27,41 +27,41 @@ namespace UC
         }
 
         [SerializeField, Tooltip("What layer to target with this IK.\nSet -1 for any")]
-        int animationLayer = -1;
+        protected int animationLayer = -1;
         [SerializeField, Tooltip("If we want the humanoid to turn the body towards the POI - 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit.")]
-        float maxWeightBody = 0.0f;     
+        protected float maxWeightBody = 0.0f;     
         [SerializeField, Tooltip("Should it turn the head towards the POI? 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit.")]
-        float maxWeightHead = 1.0f;
+        protected float maxWeightHead = 1.0f;
         [SerializeField, Tooltip("Should it turn the eyes towards the POI? 0 means it won't, 1 means it will turn fully, 0.5 means it will turn a bit. This requires the humanoid rig to have the eyes bones set up correctly in the animator.")]
-        float maxWeightEyes = 1.0f;
+        protected float maxWeightEyes = 1.0f;
         [SerializeField, Tooltip("Time to reset the look at position and weights when the target is lost or changed.")]
-        float timeToRest = 0.1f;
+        protected float timeToRest = 0.1f;
         [SerializeField, Tooltip("When tracking a target, how fast do we follow it?")]
-        float maxSpeedToTarget = 100.0f;
+        protected float maxSpeedToTarget = 100.0f;
         [SerializeField, Tooltip("When wandering with the gaze, how fast do we move around?")]
-        float maxSpeedToWander = 10.0f;
+        protected float maxSpeedToWander = 10.0f;
         [SerializeField, Tooltip("Should we check for LoS when tracking a POI?")]
-        bool checkLOS = true;
+        protected bool checkLOS = true;
         [SerializeField, MinMaxSlider(0.0f, 1.0f), ShowIf(nameof(checkLOS)), Tooltip("What is the normalized range of the LoS check?\nIf set to 0 and 1, it's the normal, if it's set to 0.1 to 0.9, it will only track obstacles from 10% to 90% of the way towards the POI.")]
-        Vector2 LOSNormalizedRange = new Vector2(0.0f, 1.0f);
+        protected Vector2 LOSNormalizedRange = new Vector2(0.0f, 1.0f);
         [SerializeField, ShowIf(nameof(checkLOS)), Tooltip("Obstacle layers for LoS check")]
-        LayerMask obstacleLayers = ~0;
+        protected LayerMask obstacleLayers = ~0;
         [SerializeField, Tooltip("If there's no POI, should the view wander?")]
-        bool autoWander = false;
+        protected bool autoWander = false;
         [SerializeField, ShowIf(nameof(autoWander)), MinMaxSlider(0.5f, 5.0f), Tooltip("How long between wander transitions?")]
-        Vector2 wanderChangeTime = new Vector2(1.0f, 3.0f);
+        protected Vector2 wanderChangeTime = new Vector2(1.0f, 3.0f);
         [SerializeField, ShowIf(nameof(autoWander)), MinMaxSlider(0.0f, 90.0f), Tooltip("How much to wander, in degrees?")]
-        Vector2 wanderAngularRange = new Vector2(0.0f, 20.0f);
+        protected Vector2 wanderAngularRange = new Vector2(0.0f, 20.0f);
         [SerializeField, Tooltip("Both on POI or wandering, should we use noise to do a kind of 'subwandering'?")]
-        bool useNoise = false;
+        protected bool useNoise = false;
         [SerializeField, ShowIf(nameof(needNoiseParams)), Tooltip("Noise frequency")]
-        Vector3 noiseFrequency = Vector3.one;
+        protected Vector3 noiseFrequency = Vector3.one;
         [SerializeField, ShowIf(nameof(needNoiseParams)), Tooltip("Noise amplitude")]
-        float noiseAmplitude = 2.0f;
+        protected float noiseAmplitude = 2.0f;
         [SerializeField, Tooltip("Scan parameters, ideally define 3 levels")]
-        ScanParameters[] scanParameters;
+        protected ScanParameters[] scanParameters;
         [SerializeField, Tooltip("Should the gizmos be displayed?")]
-        bool displayGizmos = true;
+        protected bool displayGizmos = true;
 
         bool needNoiseParams => useNoise;
 

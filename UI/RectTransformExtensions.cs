@@ -12,7 +12,7 @@ namespace UC
             if (rt == null) return false;
 
             // 1) Get cursor position in screen space
-            Vector2 screenPos = InputControl.GetScreenMousePosition();
+            Vector2 screenPos = InputControl.GetMousePixelPosition();
 
             // 2) Convert screen point to local point in the RectTransform
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, screenPos, eventCamera, out var local))

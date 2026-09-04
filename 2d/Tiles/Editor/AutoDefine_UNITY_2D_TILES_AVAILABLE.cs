@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEngine.Assemblies;
 
 [InitializeOnLoad]
 public static class OptionalTilesDefine
@@ -16,8 +17,7 @@ public static class OptionalTilesDefine
 
     private static void UpdateDefineForActiveTarget()
     {
-        bool hasTiles = AppDomain.CurrentDomain.GetAssemblies()
-            .Any(a => a.GetName().Name.IndexOf("Unity.2D.Tilemap.Extras.Editor", StringComparison.OrdinalIgnoreCase) >= 0);
+        bool hasTiles = CurrentAssemblies.GetLoadedAssemblies().Any(a => a.GetName().Name.IndexOf("Unity.2D.Tilemap.Extras.Editor", StringComparison.OrdinalIgnoreCase) >= 0);
 
         var nbt = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
 

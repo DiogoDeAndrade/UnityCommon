@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEngine.Assemblies;
 
 [InitializeOnLoad]
 public static class OptionalGltfDefine
@@ -16,8 +17,7 @@ public static class OptionalGltfDefine
 
     private static void UpdateDefineForActiveTarget()
     {
-        bool hasGltf = AppDomain.CurrentDomain.GetAssemblies()
-            .Any(a => a.GetName().Name.IndexOf("UnityGLTF", StringComparison.OrdinalIgnoreCase) >= 0);
+        bool hasGltf = CurrentAssemblies.GetLoadedAssemblies().Any(a => a.GetName().Name.IndexOf("UnityGLTF", StringComparison.OrdinalIgnoreCase) >= 0);
 
         var nbt = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
 

@@ -2,8 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using NaughtyAttributes;
 using System;
-
-
+using Unity.Scripting.LifecycleManagement;
 
 
 #if UNITY_EDITOR
@@ -12,7 +11,7 @@ using UnityEditor;
 
 namespace UC
 {
-    public class NavMeshAgent2d : MonoBehaviour
+    public partial class NavMeshAgent2d : MonoBehaviour
     {
         private enum PathFollowMode { FollowDirect, FollowPursuit };
 
@@ -75,7 +74,7 @@ namespace UC
         bool needAvoidance => avoidanceEnabled;
 
         // Registry of live agents, scanned for avoidance neighbours.
-        static readonly List<NavMeshAgent2d>    gAgents = new();
+        [AutoStaticsCleanup] static readonly List<NavMeshAgent2d>    gAgents = new();
         readonly List<NavMeshAgent2d>           _neighbours = new();
         const float                             AvoidanceWeight = 2.0f;
 

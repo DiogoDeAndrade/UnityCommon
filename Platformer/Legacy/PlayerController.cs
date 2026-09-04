@@ -238,7 +238,7 @@ namespace UC.Legacy
             if (isDead) return;
 
             if ((movementEnable) && (enableControls))
-                movementDir.x = Input.GetAxis(xAxis);
+                movementDir.x = InputControl.GetAxis(xAxis);
             else
                 movementDir.x = 0.0f;
 
@@ -249,7 +249,7 @@ namespace UC.Legacy
                 gravity = 1.0f;
             }
 
-            if ((Input.GetButtonDown(jumpButton)) && (movementEnable) && (enableControls))
+            if ((InputControl.GetButtonDown(jumpButton)) && (movementEnable) && (enableControls))
             {
                 if (Mathf.Abs(currentVelocity.y) < 0.01f)
                 {
@@ -271,7 +271,7 @@ namespace UC.Legacy
                 }
 
             }
-            else if (Input.GetButton(jumpButton))
+            else if (InputControl.GetButton(jumpButton))
             {
                 jumpPress = true;
             }
@@ -297,7 +297,7 @@ namespace UC.Legacy
             }
 
             // Interaction
-            if ((Input.GetButtonDown(interact)) && (enableControls))
+            if ((InputControl.GetButtonDown(interact)) && (enableControls))
             {
                 var colliders = Physics2D.OverlapCircleAll(transform.position, interactionRadius, interactionMask);
 

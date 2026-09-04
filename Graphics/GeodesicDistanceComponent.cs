@@ -21,9 +21,9 @@ namespace UC
         [SerializeField, ShowIf(nameof(testPoint))]
         private Transform testPosition;
         [SerializeField]
-        private bool interaction = false;
+        protected bool interaction = false;
         [SerializeField, ShowIf("interaction")]
-        private bool showPath = false;
+        protected bool showPath = false;
 
         [SerializeField, HideInInspector]
         GeodesicDistance _geodesicDistance;

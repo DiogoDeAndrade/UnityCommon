@@ -5,7 +5,6 @@ using UnityEngine.InputSystem;
 
 public class UIRaycastDebugger : MonoBehaviour
 {
-    [SerializeField] private bool useNewInputSystem = true;
     [SerializeField] private bool fullStack = false;
 
     List<RaycastResult> _results = new List<RaycastResult>();
@@ -22,10 +21,7 @@ public class UIRaycastDebugger : MonoBehaviour
         if (EventSystem.current == null || _eventData == null)
             return;
 
-        if (useNewInputSystem)
-            _eventData.position = Mouse.current.position.ReadValue();
-        else
-            _eventData.position = Input.mousePosition;
+        _eventData.position = UC.InputControl.GetMousePixelPosition();
         _results.Clear();
         EventSystem.current.RaycastAll(_eventData, _results);
 

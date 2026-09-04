@@ -2,11 +2,12 @@ using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
 using UC.Interaction;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC.RPG
 {
-    public abstract class UnityRPGEntity : ActionRunner
+    public abstract partial class UnityRPGEntity : ActionRunner
     {
         public delegate void OnActionPerformed(UnityRPGEntity entity);
         public event OnActionPerformed onActionPerformed;
@@ -237,8 +238,8 @@ namespace UC.RPG
 
         #region Static management of UnityRPGEntity
 
-        private static RPGEntity masterEntity = new();
-        private static Dictionary<RPGEntity, UnityRPGEntity> entityCache = new();
+        [AutoStaticsCleanup] private static RPGEntity masterEntity = new();
+        [AutoStaticsCleanup] private static Dictionary<RPGEntity, UnityRPGEntity> entityCache = new();
 
         public static void Register(RPGEntity entity, UnityRPGEntity unity)
         {

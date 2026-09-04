@@ -1,8 +1,9 @@
 using UC;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Scripting.LifecycleManagement;
 
-public class DistortionRipple : MonoBehaviour
+public partial class DistortionRipple : MonoBehaviour
 {
     private float                   duration;
     private SpriteRenderer          spriteRenderer;
@@ -101,7 +102,7 @@ public class DistortionRipple : MonoBehaviour
         return Vector3.one;
     }
 
-    static List<DistortionRipple> ripplesPool = new();
+    [AutoStaticsCleanup] static List<DistortionRipple> ripplesPool = new();
 
     static public DistortionRipple Spawn(Transform parent, bool localSpace, bool turnToMovement, int rippleLayer, Vector2 dir, 
                                          Sprite rippleSprite, int spriteSortingLayer, int spriteOrderInLayer, Material rippleMaterial,

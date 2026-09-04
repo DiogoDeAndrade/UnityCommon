@@ -1,31 +1,21 @@
 using UnityEngine;
 
-public abstract class TurnManager : MonoBehaviour
+namespace UC
 {
-    private static TurnManager instance;
 
-    void Awake()
+    public abstract class TurnManager : Singleton<TurnManager>
     {
-        if (instance != null)
+        public abstract void _StartTurns();
+        public abstract void _StopTurns();
+
+        public static void StartTurns()
         {
-            Debug.LogError("Something wrong, it seems there's more than one TurnManager!");
+            Instance?._StartTurns();
         }
-        else
+
+        public static void StopTurns()
         {
-            instance = this;
+            Instance?._StopTurns();
         }
-    }
-
-    public abstract void _StartTurns();
-    public abstract void _StopTurns();
-
-    public static void StartTurns()
-    {
-        instance?._StartTurns();
-    }
-
-    public static void StopTurns()
-    {
-        instance?._StopTurns();
     }
 }

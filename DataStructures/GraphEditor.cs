@@ -11,7 +11,7 @@ namespace UC
     [ExecuteAlways]
     public class GraphEditor : MonoBehaviour
     {
-        [SerializeField] private float radiusScale = 1.0f;
+        [SerializeField] protected float radiusScale = 1.0f;
         
         [SerializeField, Tooltip("Radius for newly created nodes")]
         private float defaultRadius = 0.1f;

@@ -38,9 +38,9 @@ namespace UC
             if (requiredMouseButton == -1) dragging = true;
             else
             {
-                if (Input.GetMouseButtonDown(requiredMouseButton)) buttonDown = Time.time;
+                if (InputControl.GetMouseButtonDown(requiredMouseButton)) buttonDown = Time.time;
 
-                if ((requiredMouseButton >= 0) && (Input.GetMouseButton(requiredMouseButton)))
+                if ((requiredMouseButton >= 0) && (InputControl.GetMouseButton(requiredMouseButton)))
                 {
                     if ((Time.time - buttonDown) >= minHoldTime)
                     {
@@ -53,20 +53,20 @@ namespace UC
             {
                 if (Mathf.Abs(mouseAxisY) > 0)
                 {
-                    float incY = -Input.GetAxis("Mouse X") * mouseAxisY;
+                    float incY = -InputControl.GetAxis("Mouse X") * mouseAxisY;
                     radialCamera.angleY += incY; while (radialCamera.angleY > 360) radialCamera.angleY -= 360;
                 }
 
                 if (Mathf.Abs(mouseAxisX) > 0)
                 {
-                    float incX = Input.GetAxis("Mouse Y") * mouseAxisX;
+                    float incX = InputControl.GetAxis("Mouse Y") * mouseAxisX;
                     radialCamera.angleX = Mathf.Clamp(radialCamera.angleX + incX, 0, 90);
                 }
             }
 
             if (mouseZoomSpeed > 0)
             {
-                float incZoom = -Input.mouseScrollDelta.y * mouseZoomSpeed;
+                float incZoom = -InputControl.GetMouseScrollDelta().y * mouseZoomSpeed;
                 radialCamera.distance = Mathf.Clamp(radialCamera.distance + incZoom, zoomLimits.x, zoomLimits.y);
             }
         }

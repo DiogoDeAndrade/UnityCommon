@@ -26,6 +26,7 @@ SOFTWARE.
 
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Scripting.LifecycleManagement;
 
 namespace UnityMeshSimplifier.Internal
 {
@@ -44,6 +45,7 @@ namespace UnityMeshSimplifier.Internal
 
     internal class BorderVertexComparer : IComparer<BorderVertex>
     {
+        [NoAutoStaticsCleanup]
         public static readonly BorderVertexComparer instance = new BorderVertexComparer();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

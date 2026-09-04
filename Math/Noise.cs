@@ -1,3 +1,4 @@
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC
@@ -5,10 +6,11 @@ namespace UC
 
     public static class Noise
     {
+        [NoAutoStaticsCleanup]
         static PerlinNoise3D[] perlinNoise3D = new[] {
-            new PerlinNoise3D(0),
+            new PerlinNoise3D(3),
             new PerlinNoise3D(101),
-            new PerlinNoise3D(202)
+            new PerlinNoise3D(207)
         };
 
         public static float Perlin3d(Vector3 p) => Perlin3d(p.x, p.y, p.z);

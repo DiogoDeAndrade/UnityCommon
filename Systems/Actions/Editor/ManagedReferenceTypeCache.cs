@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Scripting.LifecycleManagement;
 using UnityEditor;
 
 namespace UC.Interaction.Editor
@@ -9,6 +10,7 @@ namespace UC.Interaction.Editor
 
     public static class ManagedReferenceTypeCache
     {
+        [NoAutoStaticsCleanup]
         private static readonly Dictionary<Type, List<(string displayName, Type type)>> _cache = new();
 
         public static IReadOnlyList<(string displayName, Type type)> GetAssignableConcreteTypes(Type baseType)

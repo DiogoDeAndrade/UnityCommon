@@ -6,7 +6,7 @@ using UC;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class SubtitleDisplayManager : MonoBehaviour
+public class SubtitleDisplayManager : Singleton<SubtitleDisplayManager>
 {
     [SerializeField] 
     private TextMeshProUGUI    speakerNameText;
@@ -23,21 +23,6 @@ public class SubtitleDisplayManager : MonoBehaviour
     [SerializeField] 
     private bool               enableSpeakerFontColor;
 
-
-    private static SubtitleDisplayManager _instance;
-
-    public static SubtitleDisplayManager Instance
-    {
-        get
-        {
-            if (_instance == null)
-            {
-                _instance = FindAnyObjectByType<SubtitleDisplayManager>();
-            }
-            return _instance;
-        }
-    }
-
     struct DefaultTextData
     {
         public float size;
@@ -52,16 +37,6 @@ public class SubtitleDisplayManager : MonoBehaviour
 
     void Start()
     {
-        if ((_instance == null) || (_instance == this))
-        {
-            _instance = this;
-        }
-        else
-        {
-            Destroy(gameObject);
-            return;
-        }
-
         defaultTextData = new();
         foreach (var l in subtitleLines)
         {

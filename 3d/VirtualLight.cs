@@ -1,11 +1,12 @@
-using UnityEngine;
-using System.Collections.Generic;
 using NaughtyAttributes;
+using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
+using UnityEngine;
 
 namespace UC
 {
 
-    public class VirtualLight : MonoBehaviour
+    public partial class VirtualLight : MonoBehaviour
     {
         private enum ShapeType { Box, Sphere };
 
@@ -31,7 +32,7 @@ namespace UC
         bool isSphere => shape == ShapeType.Sphere;
         bool isBox => shape == ShapeType.Box;
 
-        static List<VirtualLight> virtualLights;
+        [AutoStaticsCleanup] static List<VirtualLight> virtualLights;
 
         void OnEnable()
         {

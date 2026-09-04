@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Assemblies;
 
 namespace UC
 {
@@ -184,7 +185,7 @@ namespace UC
             if (type != null) return type;
 
             // Try loaded assemblies
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var assemblies = CurrentAssemblies.GetLoadedAssemblies();
             foreach (var asm in assemblies)
             {
                 type = asm.GetType(fullName);

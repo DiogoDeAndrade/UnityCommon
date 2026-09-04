@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
-using static UC.SimpleOutline3d;
 
 [ExecuteAlways]
 [DisallowMultipleComponent]

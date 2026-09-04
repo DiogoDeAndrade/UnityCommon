@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEngine.Assemblies;
 
 [InitializeOnLoad]
 public static class OptionalMathNetDefine
@@ -16,8 +17,7 @@ public static class OptionalMathNetDefine
 
     private static void UpdateDefineForActiveTarget()
     {
-        bool hasMathNet = AppDomain.CurrentDomain.GetAssemblies()
-            .Any(a => a.GetName().Name.IndexOf("MathNet.Numerics", StringComparison.OrdinalIgnoreCase) >= 0);
+        bool hasMathNet = CurrentAssemblies.GetLoadedAssemblies().Any(a => a.GetName().Name.IndexOf("MathNet.Numerics", StringComparison.OrdinalIgnoreCase) >= 0);
 
         var nbt = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
 

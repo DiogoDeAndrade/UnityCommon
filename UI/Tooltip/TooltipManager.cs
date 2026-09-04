@@ -1,6 +1,7 @@
 using NaughtyAttributes;
 using System;
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -8,9 +9,9 @@ using UnityEngine.UI;
 
 namespace UC
 {
-    public class TooltipManager : MonoBehaviour
+    public partial class TooltipManager : MonoBehaviour
     {
-        static public event Func<bool> isTooltipEnabled;
+        [AutoStaticsCleanup] static public event Func<bool> isTooltipEnabled;
 
         [Flags]
         public enum Target

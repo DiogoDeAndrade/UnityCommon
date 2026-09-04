@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +39,9 @@ namespace UC
 #endif
 
         Animator animator;
+        [NoAutoStaticsCleanup]
         static int leftFootHash = Animator.StringToHash("LeftFoot");
+        [NoAutoStaticsCleanup]
         static int rightFootHash = Animator.StringToHash("RightFoot");
 
         void Start()

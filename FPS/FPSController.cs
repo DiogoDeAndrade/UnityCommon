@@ -76,8 +76,8 @@ namespace UC
         private void HandleMouseLook()
         {
             // Get mouse input
-            float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-            float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+            float mouseX = InputControl.GetAxis("Mouse X") * mouseSensitivity;
+            float mouseY = InputControl.GetAxis("Mouse Y") * mouseSensitivity;
 
             // Horizontal rotation (yaw) is applied to the body (transform)
             yaw += mouseX;
@@ -92,8 +92,8 @@ namespace UC
         private void HandleMovement()
         {
             // Get movement input (WASD)
-            float moveX = Input.GetAxis("Horizontal"); // A/D movement (strafe)
-            float moveZ = Input.GetAxis("Vertical");   // W/S movement (forward/backward)
+            float moveX = InputControl.GetAxis("Horizontal"); // A/D movement (strafe)
+            float moveZ = InputControl.GetAxis("Vertical");   // W/S movement (forward/backward)
 
             // Create movement vector
             Vector3 moveDirection = transform.right * moveX + transform.forward * moveZ;

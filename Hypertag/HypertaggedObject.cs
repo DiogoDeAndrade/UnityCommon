@@ -1,11 +1,12 @@
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEditor;
 using UnityEngine;
 
 namespace UC
 {
 
-    public class HypertaggedObject : MonoBehaviour
+    public partial class HypertaggedObject : MonoBehaviour
     {
         [SerializeField]
         protected Hypertag hypertag;
@@ -51,7 +52,7 @@ namespace UC
 
         public bool IsNullHypertag() => (this.hypertag == null);
 
-        static Dictionary<Hypertag, List<HypertaggedObject>> allHypertagObjects = new();
+        [AutoStaticsCleanup] static Dictionary<Hypertag, List<HypertaggedObject>> allHypertagObjects = new();
 
         static void AddToHypertagList(HypertaggedObject obj)
         {

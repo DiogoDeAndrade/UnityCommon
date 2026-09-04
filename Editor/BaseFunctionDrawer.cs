@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using Unity.Scripting.LifecycleManagement;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,7 +12,9 @@ namespace UC.Editor
 {
     public class BaseFunctionDrawer<T> : PropertyDrawer
     {
+        [NoAutoStaticsCleanup]
         private static Type[]   _types;
+        [NoAutoStaticsCleanup]
         private static string[] _displayNames;
 
         static BaseFunctionDrawer()

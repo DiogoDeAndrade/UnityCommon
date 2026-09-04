@@ -4,6 +4,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Unity.Scripting.LifecycleManagement;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -11,22 +13,22 @@ using UnityEditor;
 
 namespace UC
 {
-    public class NavMesh2d : MonoBehaviour
+    public partial class NavMesh2d : MonoBehaviour
     {
         private enum SimplificationAlgorithm { None, GreedyVertexDecimation, RamerDouglasPeucker };
         private enum PathMode { MidEdge };
         public enum PathState { Thinking, NoPath, Partial, Full };
 
         [SerializeField] 
-        private int                        setCellSize;
+        private int                         setCellSize;
         [SerializeField] 
-        private NavMeshAgentType2d                  agentType;
+        private NavMeshAgentType2d          agentType;
         [SerializeField] 
-        private LayerMask                  obstacleMask;
+        private LayerMask                   obstacleMask;
         [SerializeField] 
-        private SimplificationAlgorithm    simplificationAlgorithm = SimplificationAlgorithm.RamerDouglasPeucker;
+        private SimplificationAlgorithm     simplificationAlgorithm = SimplificationAlgorithm.RamerDouglasPeucker;
         [SerializeField, ShowIf(nameof(needSimplificationMaxDistance))] 
-        private float                      simplificationMaxDistance = 10.0f;
+        private float                       simplificationMaxDistance = 10.0f;
         [SerializeField]
         private PathMode                    pathMode = PathMode.MidEdge;
         [SerializeField]
@@ -436,7 +438,7 @@ namespace UC
         public bool IsRebuilding => _isBaking;
 
         // Active navmesh instances (runtime), so obstacles can notify the ones they affect.
-        static readonly HashSet<NavMesh2d>      s_NavMeshes = new();
+        [AutoStaticsCleanup] static readonly HashSet<NavMesh2d>      s_NavMeshes = new();
 
         bool hasValidGrid => (QGrid != null) && (QGrid.Length == QGridSize.x * QGridSize.y);
         bool hasValidRegions => (QRegionData != null) && (QRegionData.Count > 0);
@@ -1629,8 +1631,8 @@ namespace UC
         // Links register themselves here; each navmesh selects the links whose agent type resolves
         // (via Get) to itself. A version counter lets every navmesh rebuild its adjacency lazily
         // when links are added, removed or moved.
-        static readonly List<NavMeshLink2d>     s_Links = new();
-        static int                              s_LinksVersion = 0;
+        [AutoStaticsCleanup] static readonly List<NavMeshLink2d>     s_Links = new();
+        [AutoStaticsCleanup] static int                              s_LinksVersion = 0;
 
         public static void RegisterLink(NavMeshLink2d link)
         {
@@ -2310,7 +2312,7 @@ namespace UC
         #endregion
 
         #region NavMesh2d management
-        static Dictionary<NavMeshAgentType2d, NavMesh2d> NavigationMeshes;
+        [AutoStaticsCleanup] static Dictionary<NavMeshAgentType2d, NavMesh2d> NavigationMeshes;
 
         public static NavMesh2d Get(NavMeshAgentType2d agentType)
         {

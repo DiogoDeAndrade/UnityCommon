@@ -28,7 +28,7 @@ namespace UC
         [SerializeField]
         protected bool dynamicUpdate = false;
 
-        bool dirty = false;
+        protected bool dirty = false;
 
         bool needColorOffset => (colorMode == ColorMode.Outer) || (colorMode == ColorMode.OuterAndColor) || (colorMode == ColorMode.OuterAndInner);
         bool needsColor => (colorMode == ColorMode.Single) || (colorMode == ColorMode.OuterAndColor);

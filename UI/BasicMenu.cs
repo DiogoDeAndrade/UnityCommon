@@ -40,7 +40,7 @@ namespace UC
         {
             if (inCredits)
             {
-                if (Input.anyKeyDown)
+                if (InputControl.isAnyInputPressed)
                 {
                     EndCredits();
                 }

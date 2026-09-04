@@ -19,7 +19,7 @@ namespace UC
         [SerializeField]
         private bool                debugEnabled;
         [SerializeField, ShowIf(nameof(debugEnabled)), Tooltip("If set, debug gizmos render even when this object is not selected (OnDrawGizmos). If clear, they only render while it is selected (OnDrawGizmosSelected).")]
-        private bool                debugWhenNotSelected = true;
+        protected bool              debugWhenNotSelected = true;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool                debugGrid;
         [SerializeField, ShowIf(nameof(debugGridEnabled))]
@@ -29,7 +29,7 @@ namespace UC
         [SerializeField, ShowIf(nameof(debugGridEnabled))]
         private bool                costLabel;
         [SerializeField, ShowIf(nameof(needCostLabelScale))]
-        private float               costLabelScale = 1.0f;
+        protected float             costLabelScale = 1.0f;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool                debugContours;
         [SerializeField, ShowIf(nameof(debugEnabled))]
@@ -41,7 +41,7 @@ namespace UC
         [SerializeField, ShowIf(nameof(debugPolygonsEnabled))]
         private bool                polygonCostLabel;
         [SerializeField, ShowIf(nameof(needPolygonCostLabelScale))]
-        private float               polygonCostLabelScale = 1.0f;
+        protected float             polygonCostLabelScale = 1.0f;
         [SerializeField, ShowIf(nameof(debugEnabled))]
         private bool                debugTestNearPoint;
         [SerializeField, ShowIf(nameof(debugEnabled))]

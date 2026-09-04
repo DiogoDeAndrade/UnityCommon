@@ -1,5 +1,6 @@
 using NaughtyAttributes;
 using System;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
@@ -9,7 +10,7 @@ namespace UC
 {
 
     [Serializable]
-    public class InputControl
+    public partial class InputControl
     {
         public enum InputType { Axis = 0, Button = 1, Key = 2, NewInput = 3, AnyInputEvent = 4, MousePosition = 5, None = 6 };
 
@@ -35,7 +36,7 @@ namespace UC
         float prevValue;
 
 
-        private static bool _gamepadCursorMovedThisFrame;
+        [AutoStaticsCleanup] private static bool _gamepadCursorMovedThisFrame;
         public static void SetGamepadCursorMoved() => _gamepadCursorMovedThisFrame = true;
         public static void ClearGamepadCursorMoved() => _gamepadCursorMovedThisFrame = false;
 
@@ -49,15 +50,15 @@ namespace UC
             switch (type)
             {
                 case InputType.Axis:
-                    v = Input.GetAxis(axis);
+                    v = GetAxis(axis);
                     break;
                 case InputType.Button:
-                    if ((!string.IsNullOrEmpty(buttonPositive)) && (Input.GetButton(buttonPositive))) v += 1.0f;
-                    if ((!string.IsNullOrEmpty(buttonNegative)) && (Input.GetButton(buttonNegative))) v -= 1.0f;
+                    if ((!string.IsNullOrEmpty(buttonPositive)) && (GetButton(buttonPositive))) v += 1.0f;
+                    if ((!string.IsNullOrEmpty(buttonNegative)) && (GetButton(buttonNegative))) v -= 1.0f;
                     break;
                 case InputType.Key:
-                    if ((keyPositive != KeyCode.None) && (Input.GetKey(keyPositive))) v += 1.0f;
-                    if ((keyNegative != KeyCode.None) && (Input.GetKey(keyNegative))) v -= 1.0f;
+                    if ((keyPositive != KeyCode.None) && (GetKey(keyPositive))) v += 1.0f;
+                    if ((keyNegative != KeyCode.None) && (GetKey(keyNegative))) v -= 1.0f;
                     break;
                 case InputType.NewInput:
                     if (action == null) RefreshAction();
@@ -118,7 +119,7 @@ namespace UC
                     }
                     break;
                 case InputType.MousePosition:
-                    return Input.mousePosition;
+                    return GetMousePixelPosition();
                 default:
                     break;
             }
@@ -133,13 +134,13 @@ namespace UC
             switch (type)
             {
                 case InputType.Axis:
-                    ret = Mathf.Abs(Input.GetAxis(axis)) > 0.5f;
+                    ret = Mathf.Abs(GetAxis(axis)) > 0.5f;
                     break;
                 case InputType.Button:
-                    if (!string.IsNullOrEmpty(buttonPositive)) ret = Input.GetButton(buttonPositive);
+                    if (!string.IsNullOrEmpty(buttonPositive)) ret = GetButton(buttonPositive);
                     break;
                 case InputType.Key:
-                    if (keyPositive != KeyCode.None) ret = Input.GetKey(keyPositive);
+                    if (keyPositive != KeyCode.None) ret = GetKey(keyPositive);
                     break;
                 case InputType.NewInput:
                     if (action == null) RefreshAction();
@@ -171,10 +172,10 @@ namespace UC
                     ret = false;
                     break;
                 case InputType.Button:
-                    if (!string.IsNullOrEmpty(buttonPositive)) ret = Input.GetButtonDown(buttonPositive);
+                    if (!string.IsNullOrEmpty(buttonPositive)) ret = GetButtonDown(buttonPositive);
                     break;
                 case InputType.Key:
-                    if (keyPositive != KeyCode.None) ret = Input.GetKeyDown(keyPositive);
+                    if (keyPositive != KeyCode.None) ret = GetKeyDown(keyPositive);
                     break;
                 case InputType.NewInput:
                     if (action == null) RefreshAction();
@@ -203,10 +204,10 @@ namespace UC
                     ret = false;
                     break;
                 case InputType.Button:
-                    if (!string.IsNullOrEmpty(buttonPositive)) ret = Input.GetButtonUp(buttonPositive);
+                    if (!string.IsNullOrEmpty(buttonPositive)) ret = GetButtonUp(buttonPositive);
                     break;
                 case InputType.Key:
-                    if (keyPositive != KeyCode.None) ret = Input.GetKeyUp(keyPositive);
+                    if (keyPositive != KeyCode.None) ret = GetKeyUp(keyPositive);
                     break;
                 case InputType.NewInput:
                     if (action == null) RefreshAction();
@@ -352,6 +353,7 @@ namespace UC
                 || device is Pointer;
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
         public static bool isAnyInputPressed
         {
             get
@@ -375,7 +377,18 @@ namespace UC
             }
         }
 
-        public static Vector2 GetScreenMousePosition()
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static float GetAxis(string axisName)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetAxis(axisName);
+#else
+            throw new NotImplementedException("InputControl.GetAxis not implemented if legacy input manager is turned off!");
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static Vector2 GetMousePixelPosition()
         {
 #if ENABLE_LEGACY_INPUT_MANAGER
             Vector3 p = Input.mousePosition;
@@ -394,6 +407,7 @@ namespace UC
 #endif
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
         public static bool HasMouseMovedThisFrame()
         {
             // This is for gamepad-based movement (triggered from CursorManager)
@@ -410,6 +424,125 @@ namespace UC
 
             // delta is reset every frame
             return mouse.delta.ReadValue() != Vector2.zero;
+#else
+        return false;
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static Vector2 GetMouseScrollDelta()
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.mouseScrollDelta;
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetMouseScrollDelta not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetKey(KeyCode keyCode)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetKey(keyCode);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetKey not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetKeyUp(KeyCode keyCode)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetKeyUp(keyCode);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetKeyUp not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetKeyDown(KeyCode keyCode)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetKeyDown(keyCode);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetKeyDown not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetMouseButton(int mouseButton)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetMouseButton(mouseButton);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetMouseButton not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetMouseButtonDown(int mouseButton)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetMouseButtonDown(mouseButton);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetMouseButtonDown not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetMouseButtonUp(int mouseButton)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetMouseButtonUp(mouseButton);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetMouseButtonUp not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetButton(string buttonName)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetButton(buttonName);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetButton not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetButtonUp(string buttonName)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetButtonUp(buttonName);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetButtonUp not implemented if legacy input manager is turned off!");
+#else
+        return false;
+#endif
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0027", Justification = "InputControl deliberately supports the legacy Input Manager")]
+        public static bool GetButtonDown(string buttonName)
+        {
+#if ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetButtonDown(buttonName);
+#elif ENABLE_INPUT_SYSTEM
+            throw new NotImplementedException("InputControl.GetButtonDown not implemented if legacy input manager is turned off!");
 #else
         return false;
 #endif

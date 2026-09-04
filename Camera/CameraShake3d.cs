@@ -4,7 +4,7 @@ using UnityEngine;
 namespace UC
 {
 
-    public class CameraShake3d : MonoBehaviour
+    public class CameraShake3d : Singleton<CameraShake3d>
     {
         class ShakeElem
         {
@@ -21,14 +21,10 @@ namespace UC
         Vector3         prevDelta;
         Vector3         currentNoiseIndex;
 
-        static CameraShake3d instance;
-
-        void Awake()
+        protected override void Awake()
         {
-            if (instance == null)
-            {
-                instance = this;
-            }
+            base.Awake();
+            if (Instance != this) return;
 
             prevDelta = Vector3.zero;
             currentNoiseIndex = new Vector3(Random.Range(-1.0f, 1.0f), Random.Range(-1.0f, 1.0f), Random.Range(-1.0f, 1.0f));
@@ -77,10 +73,7 @@ namespace UC
 
         public static void Shake(float str, float t)
         {
-            if (instance)
-            {
-                instance.AddShake(str, t);
-            }
+            Instance?.AddShake(str, t);
         }
     }
 }

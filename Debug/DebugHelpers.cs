@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System;
-
+using Unity.Scripting.LifecycleManagement;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -10,27 +10,12 @@ using UnityEditor;
 namespace UC
 {
 
-    public static class DebugHelpers
+    public static partial class DebugHelpers
     {
+        [NoAutoStaticsCleanup]
         static Material triangleMaterial;
 
-#if UNITY_EDITOR
-        static DebugHelpers()
-        {
-            AssemblyReloadEvents.beforeAssemblyReload += Cleanup;
-            EditorApplication.quitting += Cleanup;
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-        }
-
-        static void OnPlayModeStateChanged(PlayModeStateChange state)
-        {
-            if (state == PlayModeStateChange.ExitingEditMode ||
-                state == PlayModeStateChange.ExitingPlayMode)
-            {
-                Cleanup();
-            }
-        }
-
+        [OnCodeDeinitializing]
         static void Cleanup()
         {
             if (triangleMaterial != null)
@@ -39,7 +24,6 @@ namespace UC
                 triangleMaterial = null;
             }
         }
-#endif
 
         public static void DrawArrow(Vector3 position, Vector3 dir, float length, float arrowHeadLength, float arrowHeadAngle)
         {
