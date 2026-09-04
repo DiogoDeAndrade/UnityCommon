@@ -60,6 +60,7 @@ Material:
     - _EnableExternalAlpha: 0
     - _ZWrite: 0
     m_Colors:
+    - White: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissiveColor: {r: 2.6390157, g: 2.6390157, b: 2.6390157, a: 1}
     - _RendererColor: {r: 1, g: 1, b: 1, a: 1}
