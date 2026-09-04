@@ -140,6 +140,7 @@ namespace UC
         }
     }
 
+    [Serializable]
     public class VoxelDataFloat : VoxelData<float>
     {
         // 2x2x2 box filter (average of the 8-corner block), centered at (sx,sy,sz) with offsets {0,1}.

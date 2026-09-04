@@ -112,7 +112,7 @@ public class ModularScriptableObjectEditor : NaughtyInspector
                 continue;
 
             // NaughtyAttributes keeps this state in an internal SavedBool, so mirror its EditorPrefs key.
-            string foldoutKey = $"{target.GetInstanceID()}.{group.Key}";
+            string foldoutKey = $"{target.GetEntityId()}.{group.Key}";
 
             bool expanded = EditorGUILayout.Foldout(EditorPrefs.GetBool(foldoutKey, false), group.Key, true);
             EditorPrefs.SetBool(foldoutKey, expanded);

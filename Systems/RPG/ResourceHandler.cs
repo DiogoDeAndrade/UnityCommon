@@ -159,7 +159,7 @@ namespace UC.RPG
 
         public static List<ResourceHandler> FindAllByType(ResourceType type)
         {
-            var allObjects = FindObjectsByType<ResourceHandler>(FindObjectsSortMode.None);
+            var allObjects = FindObjectsByType<ResourceHandler>();
             var ret = new List<ResourceHandler>();
             foreach (var obj in allObjects)
             {
@@ -172,7 +172,7 @@ namespace UC.RPG
         public static List<ResourceHandler> FindAllInRadius(ResourceType type, Vector3 pos, float range)
         {
             List<ResourceHandler> ret = new();
-            var resHandlers = FindObjectsByType<ResourceHandler>(FindObjectsSortMode.None);
+            var resHandlers = FindObjectsByType<ResourceHandler>();
             foreach (var h in resHandlers)
             {
                 if ((h.type == type) && (Vector3.Distance(h.transform.position, pos) < range))

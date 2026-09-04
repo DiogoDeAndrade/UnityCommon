@@ -11,7 +11,7 @@ namespace UC
 
         public static void ExecuteAllTurns()
         {
-            var allMonoBehaviours = GameObject.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var allMonoBehaviours = GameObject.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude);
             var turnExecutors = new List<ITurnExecute>();
 
             // Collect all ITurnExecute instances

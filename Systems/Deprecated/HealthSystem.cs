@@ -174,13 +174,13 @@ namespace UC.Deprecated
 
         public static HealthSystem[] FindAll()
         {
-            return FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
+            return FindObjectsByType<HealthSystem>();
         }
 
         public static HealthSystem[] FindAll(Vector3 pos, float range)
         {
             List<HealthSystem> ret = new List<HealthSystem>();
-            var healthSystems = FindObjectsByType<HealthSystem>(FindObjectsSortMode.None);
+            var healthSystems = FindObjectsByType<HealthSystem>();
             foreach (var h in healthSystems)
             {
                 if (Vector3.Distance(h.transform.position, pos) < range)

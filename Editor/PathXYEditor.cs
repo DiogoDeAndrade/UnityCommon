@@ -38,7 +38,7 @@ namespace UC.Editor
 
             if ((e.type == EventType.MouseDown) && (e.button == 0))
             {
-                var paths = FindObjectsByType<PathXY>(FindObjectsSortMode.None);
+                var paths = FindObjectsByType<PathXY>();
                 Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
 
                 foreach (var path in paths)

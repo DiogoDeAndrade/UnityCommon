@@ -34,7 +34,7 @@ namespace UC
             var box = (BoxCollider)command.context;
             var rootTransform = box.transform;
 
-            var renderers = GameObject.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            var renderers = GameObject.FindObjectsByType<Renderer>();
 
             if (renderers.Length == 0)
             {

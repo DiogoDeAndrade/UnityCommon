@@ -71,7 +71,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
     }
 
     // We track per-camera whether originals were forced off, so we can restore safely.
-    private readonly Dictionary<int, List<Renderer>> _disabledThisCamera = new();
+    private readonly Dictionary<EntityId, List<Renderer>> _disabledThisCamera = new();
 
     public bool EnabledOverride
     {
@@ -337,7 +337,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
 
     private void TemporarilyDisableOriginalsForCamera(Camera cam)
     {
-        int id = cam.GetInstanceID();
+        var id = cam.GetEntityId();
         if (_disabledThisCamera.ContainsKey(id)) return; // already done this camera this frame
 
         var list = new List<Renderer>(_entries.Count);
@@ -359,7 +359,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
 
     private void RestoreTemporarilyDisabledForCamera(Camera cam)
     {
-        int id = cam.GetInstanceID();
+        var id = cam.GetEntityId();
         if (!_disabledThisCamera.TryGetValue(id, out var list)) return;
 
         for (int i = 0; i < list.Count; i++)

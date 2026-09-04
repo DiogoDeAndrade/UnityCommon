@@ -22,7 +22,7 @@ namespace UC
             {
                 if (_Instance == null)
                 {
-                    _Instance = FindFirstObjectByType<MasterInputManager>();
+                    _Instance = FindAnyObjectByType<MasterInputManager>();
                     _Instance._RefreshInput();
                 }
                 return _Instance;

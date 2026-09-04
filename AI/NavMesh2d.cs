@@ -686,7 +686,7 @@ namespace UC
             var bounds = new Bounds(Vector3.zero, Vector3.zero);
             bool hasBounds = false;
 
-            foreach (var collider in FindObjectsByType<Collider2D>(FindObjectsSortMode.None))
+            foreach (var collider in FindObjectsByType<Collider2D>())
             {
                 if (!collider.gameObject.isStatic) continue;
                 if (((1 << collider.gameObject.layer) & obstacleMask.value) == 0) continue;
@@ -865,7 +865,7 @@ namespace UC
             terrainType = new NavMeshTerrainType2d[gridSize.x * gridSize.y];
             costRange = Vector2.one;
 
-            var modifiers = new List<NavMeshModifier2d>(FindObjectsByType<NavMeshModifier2d>(FindObjectsSortMode.None));
+            var modifiers = new List<NavMeshModifier2d>(FindObjectsByType<NavMeshModifier2d>());
             modifiers.Sort((m1, m2) => m2.priority.CompareTo(m1.priority));
 
             int index = 0;
@@ -1691,7 +1691,7 @@ namespace UC
         {
 #if UNITY_EDITOR
             if (!Application.isPlaying)
-                return FindObjectsByType<NavMeshLink2d>(FindObjectsSortMode.None);
+                return FindObjectsByType<NavMeshLink2d>();
 #endif
             return s_Links;
         }
@@ -2265,7 +2265,7 @@ namespace UC
         List<NavMeshObstacle2d> GatherObstacles()
         {
             var result = new List<NavMeshObstacle2d>();
-            foreach (var o in FindObjectsByType<NavMeshObstacle2d>(FindObjectsSortMode.None))
+            foreach (var o in FindObjectsByType<NavMeshObstacle2d>())
             {
                 if (o == null || !o.isActiveAndEnabled) continue;
                 if (!AppliesObstacle(o)) continue;
@@ -2327,7 +2327,7 @@ namespace UC
 #if UNITY_EDITOR
             if (!EditorApplication.isPlaying)
             {
-                var navMeshes = FindObjectsByType<NavMesh2d>(FindObjectsSortMode.None);
+                var navMeshes = FindObjectsByType<NavMesh2d>();
                 foreach (var nm in navMeshes)
                 {
                     if (nm.agentType == agentType) return nm;

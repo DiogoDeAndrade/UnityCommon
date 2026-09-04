@@ -44,13 +44,13 @@ namespace UC
             }
         }
 
-        public static GameObject FindByInstanceID(this GameObject go, int instanceID)
+        public static GameObject FindByInstanceID(this GameObject go, EntityId instanceID)
         {
             // Get all subobjects
             var allTransforms = go.GetComponentsInChildren<Transform>();
             foreach (var transform in allTransforms)
             {
-                if (transform.gameObject.GetInstanceID() == instanceID)
+                if (transform.gameObject.GetEntityId() == instanceID)
                 {
                     return transform.gameObject;
                 }
@@ -173,7 +173,7 @@ namespace UC
         public static T[] FindAllInRadius<T>(this GameObject gameObject, Vector3 pos, float range) where T : Component
         {
             // Get all objects of type T in the scene
-            T[] allObjects = Object.FindObjectsByType<T>(FindObjectsSortMode.None);
+            T[] allObjects = Object.FindObjectsByType<T>();
 
             // List to store objects within the range
             List<(T component, float distance)> objectsInRange = new List<(T, float)>();

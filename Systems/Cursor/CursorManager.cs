@@ -110,7 +110,7 @@ namespace UC
             }
 
             if (((returnAttachedObjectControl.needPlayerInput) || ((gamepadCursor) && (gamepadCursorControl.needPlayerInput))) && (playerInput == null))
-                playerInput = FindFirstObjectByType<PlayerInput>();
+                playerInput = FindAnyObjectByType<PlayerInput>();
 
             returnAttachedObjectControl.playerInput = playerInput;
             gamepadCursorControl.playerInput = playerInput;
@@ -265,7 +265,7 @@ namespace UC
                 allUIGroupsRefreshTimer -= Time.unscaledDeltaTime;
                 if (allUIGroupsRefreshTimer <= 0)
                 {
-                    allUIGroups = new(FindObjectsByType<UIGroup>(FindObjectsSortMode.None));
+                    allUIGroups = new(FindObjectsByType<UIGroup>());
                     allUIGroupsRefreshTimer = 2.0f;
                 }
 

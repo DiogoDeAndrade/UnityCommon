@@ -29,7 +29,7 @@ namespace UC
                 volume = GetComponent<Volume>();
                 if (volume == null)
                 {
-                    volume = FindFirstObjectByType<Volume>();
+                    volume = FindAnyObjectByType<Volume>();
                 }
             }
             // Check if the Volume has a profile and if it contains a ColorAdjustments override

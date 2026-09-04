@@ -63,7 +63,7 @@ namespace UC
             _gridSystem = GetComponentInParent<GridSystem>();
             if (_gridSystem == null)
             {
-                _gridSystem = FindFirstObjectByType<GridSystem>();
+                _gridSystem = FindAnyObjectByType<GridSystem>();
                 transform.SetParent(_gridSystem.transform);
             }
             _gridSystem?.Register(this);

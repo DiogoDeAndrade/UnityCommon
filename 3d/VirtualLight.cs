@@ -136,7 +136,7 @@ namespace UC
         public static VirtualLight GetLight(Vector3 position)
         {
 #if UNITY_EDITOR
-            if (virtualLights == null) virtualLights = new(FindObjectsByType<VirtualLight>(FindObjectsSortMode.None));
+            if (virtualLights == null) virtualLights = new(FindObjectsByType<VirtualLight>());
 #endif
 
             VirtualLight light = null;

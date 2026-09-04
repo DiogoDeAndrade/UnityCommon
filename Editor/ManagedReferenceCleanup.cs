@@ -103,7 +103,7 @@ namespace UC
         private static List<Object> GetSelectedHosts()
         {
             var result = new List<Object>();
-            var ids = new HashSet<int>();
+            var ids = new HashSet<EntityId>();
 
             void AddHost(Object obj)
             {
@@ -114,7 +114,7 @@ namespace UC
                     (obj is not ScriptableObject))
                     return;
 
-                if (ids.Add(obj.GetInstanceID()))
+                if (ids.Add(obj.GetEntityId()))
                     result.Add(obj);
             }
 

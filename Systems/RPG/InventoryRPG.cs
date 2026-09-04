@@ -59,7 +59,7 @@ namespace UC.RPG
         {
             if (enableInput)
             {
-                inventoryDisplay = FindFirstObjectByType<InventoryDisplay>();
+                inventoryDisplay = FindAnyObjectByType<InventoryDisplay>();
                 inventoryButton.playerInput = playerInput;
             }
         }
