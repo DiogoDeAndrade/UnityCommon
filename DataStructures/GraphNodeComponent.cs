@@ -9,10 +9,10 @@ namespace UC
 
     public class GraphNodeComponent : MonoBehaviour, IEquatable<GraphNodeComponent>
     {
-        [SerializeField] private int _id;
-        [SerializeField] private float _radius = 0.1f;
-        [SerializeField] private bool weightIsDistance = false;
-        [SerializeField] private GraphNodeComponent[] links;
+        [SerializeField] private    int                     _id;
+        [SerializeField] private    float                   _radius = 0.1f;
+        [SerializeField] protected  bool                    weightIsDistance = false;
+        [SerializeField] private    GraphNodeComponent[]    links;
 
         public int id { get { return _id; } set { _id = value; } }
         public float radius

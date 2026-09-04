@@ -1,5 +1,5 @@
 using NaughtyAttributes;
-using Unity.VisualScripting;
+using Unity.Scripting.LifecycleManagement;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -10,30 +10,30 @@ namespace UC
 {
 
     [ExecuteInEditMode]
-    public class TopologyComponent : MonoBehaviour
+    public partial class TopologyComponent : MonoBehaviour
     {
         [SerializeField, HideInInspector]
         TopologyStatic _topology;
         [SerializeField]
-        bool interaction;
+        protected bool interaction;
         [SerializeField]
-        bool displayVertex;
+        protected bool displayVertex;
         [SerializeField, ShowIf(nameof(displayVertex))]
-        bool displayVertexLabel = false;
+        protected bool displayVertexLabel = false;
         [SerializeField, ShowIf(nameof(displayVertex))]
-        Color vertexColor = Color.green;
+        protected Color vertexColor = Color.green;
         [SerializeField, ShowIf(nameof(displayVertex))]
-        float vertexRadius = 0.1f;
+        protected float vertexRadius = 0.1f;
         [SerializeField, ShowIf(nameof(interaction))]
-        bool displayEdges;
+        protected bool displayEdges;
         [SerializeField, ShowIf(EConditionOperator.And, nameof(displayEdges), nameof(interaction))]
-        Color edgeColor = Color.yellow;
+        protected Color edgeColor = Color.yellow;
         [SerializeField, ShowIf(nameof(interaction))]
-        bool displayTriangles;
+        protected bool displayTriangles;
         [SerializeField, ShowIf(nameof(interaction))]
-        bool displayTrianglesLabel;
+        protected bool displayTrianglesLabel;
         [SerializeField, ShowIf(EConditionOperator.And, nameof(displayTriangles), nameof(interaction))]
-        Color triangleColor = Color.red;
+        protected Color triangleColor = Color.red;
 
         public delegate Color CustomColorFunction(int index, TopologyStatic.TVertex vertex, Color originalColor);
         public TopologyStatic topology => _topology;
@@ -57,29 +57,10 @@ namespace UC
         }
 
 #if UNITY_EDITOR
+        [NoAutoStaticsCleanup]
         static private Material gizmoMaterial;
-        [InitializeOnLoadMethod]
-        private static void RegisterEditorCleanup()
-        {
-            AssemblyReloadEvents.beforeAssemblyReload -= CleanupGizmoMaterial;
-            AssemblyReloadEvents.beforeAssemblyReload += CleanupGizmoMaterial;
 
-            EditorApplication.quitting -= CleanupGizmoMaterial;
-            EditorApplication.quitting += CleanupGizmoMaterial;
-
-            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-        }
-
-        private static void OnPlayModeStateChanged(PlayModeStateChange state)
-        {
-            if (state == PlayModeStateChange.ExitingEditMode ||
-                state == PlayModeStateChange.ExitingPlayMode)
-            {
-                CleanupGizmoMaterial();
-            }
-        }
-
+        [OnCodeDeinitializing]
         private static void CleanupGizmoMaterial()
         {
             if (gizmoMaterial)

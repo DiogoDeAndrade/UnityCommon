@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
@@ -6,7 +7,7 @@ using UnityEngine;
 namespace UC.Editor
 {
     [CustomEditor(typeof(NavMeshLink2d))]
-    public class NavMeshLink2dEditor : UnityEditor.Editor
+    public partial class NavMeshLink2dEditor : UnityEditor.Editor
     {
         SerializedProperty propAgentType;
         SerializedProperty propStart;
@@ -15,6 +16,7 @@ namespace UC.Editor
         SerializedProperty propBidir;
         SerializedProperty propCost;
 
+        [AutoStaticsCleanup]
         // Which endpoint (0 = A, 1 = B) is currently selected for moving, per link.
         static readonly Dictionary<NavMeshLink2d, int> editPointPerLink = new();
 

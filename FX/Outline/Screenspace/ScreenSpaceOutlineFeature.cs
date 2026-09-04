@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
@@ -457,6 +458,7 @@ namespace UC
                 public float            depthBias;
             }
 
+            [NoAutoStaticsCleanup]
             static readonly MaterialPropertyBlock propertyBlock = new();
 
             Material    material;

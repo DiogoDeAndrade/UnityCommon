@@ -1,4 +1,5 @@
 ﻿using NaughtyAttributes;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,7 +67,9 @@ namespace UC
 
         bool canAim => (aimEnable) && (target != null) && (weaponGrip != null);
 
+        [NoAutoStaticsCleanup]
         static int aimHash = Animator.StringToHash("Aim");
+        [NoAutoStaticsCleanup]
         static int aimRifleHash = Animator.StringToHash("RifleAim");
 
         void Start()

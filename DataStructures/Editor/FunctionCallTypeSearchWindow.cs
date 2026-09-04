@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Assemblies;
 
 namespace UC.Editor
 {
@@ -26,7 +27,7 @@ namespace UC.Editor
         void InitTypes()
         {
             _allTypes = new List<Type>();
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var assemblies = CurrentAssemblies.GetLoadedAssemblies();
 
             foreach (var asm in assemblies)
             {

@@ -6,7 +6,7 @@ using System;
 namespace UC
 {
 
-    public class FullscreenFader : MonoBehaviour
+    public class FullscreenFader : Singleton<FullscreenFader>
     {
         [SerializeField] private Color faderColor;
         [SerializeField] private bool useUnscaledTime = false;
@@ -23,21 +23,12 @@ namespace UC
         float fadeInc;
         System.Action callback;
 
-        static FullscreenFader fsFader;
-
         float deltaTime => (useUnscaledTime) ? Time.unscaledDeltaTime : Time.deltaTime;
 
-        void Awake()
+        protected override void Awake()
         {
-            if (fsFader == null)
-            {
-                fsFader = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
+            base.Awake();
+            if (Instance != this) return;
 
             fader = GetComponentInChildren<Image>();
 
@@ -90,35 +81,35 @@ namespace UC
 
         public static void FadeIn(float time)
         {
-            fsFader._Fade(0.0f, time, fsFader.fader.color, null);
+            Instance?._Fade(0.0f, time, Instance?.fader.color ?? Color.black, null);
         }
 
         public static void FadeIn(float time, Color color)
         {
-            fsFader._Fade(0.0f, time, color, null);
+            Instance?._Fade(0.0f, time, color, null);
         }
 
         public static void FadeIn(float time, Color color, System.Action action)
         {
-            fsFader._Fade(0.0f, time, color, action);
+            Instance?._Fade(0.0f, time, color, action);
         }
 
         public static void FadeOut(float time)
         {
-            fsFader._Fade(1.0f, time, fsFader.fader.color, null);
+            Instance?._Fade(1.0f, time, Instance?.fader.color ?? Color.black, null);
         }
 
         public static void FadeOut(float time, Color color)
         {
-            fsFader._Fade(1.0f, time, color, null);
+            Instance?._Fade(1.0f, time, color, null);
         }
 
         public static void FadeOut(float time, Color color, System.Action action)
         {
-            fsFader._Fade(1.0f, time, color, action);
+            Instance?._Fade(1.0f, time, color, action);
         }
 
-        public static bool hasFader => fsFader != null;
+        public static bool hasFader => Instance != null;
 
     }
 }

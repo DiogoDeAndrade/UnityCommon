@@ -1,9 +1,10 @@
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC.Deprecated
 {
 
-    public class TooltipManager : MonoBehaviour
+    public partial class TooltipManager : MonoBehaviour
     {
         [SerializeField] private Tooltip        tooltipPrefab;
         [SerializeField] private RectTransform  tooltipParent;
@@ -13,6 +14,7 @@ namespace UC.Deprecated
         protected Canvas    _parentCanvas;
         protected Tooltip   lastTooltip;
 
+        [AutoStaticsCleanup]
         static TooltipManager instance;
 
         private void Awake()

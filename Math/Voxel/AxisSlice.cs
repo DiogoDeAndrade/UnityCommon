@@ -2,35 +2,24 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Unity.Scripting.LifecycleManagement;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
 namespace UC.VoxelizerHelpers
 {
-    class AxisSlice : IDisposable
+    partial class AxisSlice : IDisposable
     {
         // This handles materials for the render functions below
+        [NoAutoStaticsCleanup]
         static Material backfacesWhiteMat;
+        [NoAutoStaticsCleanup]
         static Material frontfacesBlackMat;
-#if UNITY_EDITOR
-        static AxisSlice()
-        {
-            AssemblyReloadEvents.beforeAssemblyReload += CleanupMaterials;
-            EditorApplication.quitting += CleanupMaterials;
-            EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
-        }
 
-        private static void EditorApplication_playModeStateChanged(PlayModeStateChange state)
-        {
-            if (state == PlayModeStateChange.ExitingEditMode ||
-                state == PlayModeStateChange.ExitingPlayMode)
-            {
-                CleanupMaterials();
-            }
-        }
-#endif
 
+        [OnCodeDeinitializing]
         static void CleanupMaterials()
         {
             if (frontfacesBlackMat)

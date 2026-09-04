@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Assemblies;
 
 namespace UC
 {
@@ -97,7 +98,7 @@ namespace UC
             // 2. Search all loaded assemblies for a simple type name
             typeName = typeName.Trim();
 
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var assemblies = CurrentAssemblies.GetLoadedAssemblies();
 
             foreach (var asm in assemblies)
             {

@@ -1,5 +1,6 @@
 using System;
 using UC.Interaction;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC.RPG
@@ -14,6 +15,7 @@ namespace UC.RPG
         [SerializeField]
         private UnityRPGEntity  unityEntity;
 
+        [NoAutoStaticsCleanup]
         public static RPGTarget TriggerEntity = new RPGTarget
         {
             type = Type.TriggerEntity,

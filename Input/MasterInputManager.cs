@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 namespace UC
 {
 
-    public class MasterInputManager : MonoBehaviour
+    public class MasterInputManager : Singleton<MasterInputManager>
     {
         [SerializeField] private int maxPlayers = 2;
 
@@ -15,31 +15,10 @@ namespace UC
         Dictionary<int, PlayerInput> playerInputs = new();
         int lastUpdateFrame = -1;
 
-        static MasterInputManager _Instance;
-        static MasterInputManager Instance
+        protected override void Awake()
         {
-            get
-            {
-                if (_Instance == null)
-                {
-                    _Instance = FindAnyObjectByType<MasterInputManager>();
-                    _Instance._RefreshInput();
-                }
-                return _Instance;
-            }
-        }
-
-        private void Awake()
-        {
-            if (_Instance == null)
-            {
-                _Instance = this;
-            }
-            else if (_Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
+            base.Awake();
+            if (Instance != this) return;
 
             _RefreshInput();
         }

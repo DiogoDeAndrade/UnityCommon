@@ -5,7 +5,7 @@ using System;
 namespace UC
 {
 
-    public class FullscreenWiper : MonoBehaviour
+    public class FullscreenWiper : Singleton<FullscreenWiper>
     {
         [SerializeField] private Color wiperColor = Color.black;
         [SerializeField] private bool useUnscaledTime = false;
@@ -18,26 +18,15 @@ namespace UC
         [SerializeField] private WipeType wipeInType = WipeType.Random;
 
         WipeGraphic wiper;
-        float target;
-        float wipeInc;
-        System.Action callback;
+        float       target;
+        float       wipeInc;
+        Action      callback;
 
         float deltaTime => (useUnscaledTime) ? Mathf.Min(Time.unscaledDeltaTime, Time.maximumDeltaTime) : Time.deltaTime;
 
-        static FullscreenWiper fsWiper;
-
-        void Awake()
+        protected override void Awake()
         {
-            if (fsWiper == null)
-            {
-                fsWiper = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
-
+            if (Instance != this) return;
             wiper = GetComponentInChildren<WipeGraphic>();
 
             wiper.color = wiperColor;
@@ -111,37 +100,37 @@ namespace UC
 
         public static void WipeIn(float time)
         {
-            fsWiper._Wipe(1.0f, time, WipeType.Random, null);
+            Instance?._Wipe(1.0f, time, WipeType.Random, null);
         }
 
         public static void WipeIn(float time, WipeType type)
         {
-            fsWiper._Wipe(1.0f, time, type, null);
+            Instance?._Wipe(1.0f, time, type, null);
         }
 
         public static void WipeIn(float time, WipeType type, System.Action action)
         {
-            fsWiper._Wipe(1.0f, time, type, action);
+            Instance?._Wipe(1.0f, time, type, action);
         }
 
         public static void WipeOut(float time)
         {
-            fsWiper._Wipe(0.0f, time, WipeType.Random, null);
+            Instance?._Wipe(0.0f, time, WipeType.Random, null);
         }
 
         public static void WipeOut(float time, WipeType type)
         {
-            fsWiper._Wipe(0.0f, time, type, null);
+            Instance?._Wipe(0.0f, time, type, null);
         }
 
         public static void WipeOut(float time, WipeType type, System.Action action)
         {
-            fsWiper._Wipe(0.0f, time, type, action);
+            Instance?._Wipe(0.0f, time, type, action);
         }
 
-        public static bool hasWiper => fsWiper != null;
+        public static bool hasWiper => Instance != null;
 
-        public static bool isWiping => (fsWiper != null) && (fsWiper.wipeInc != 0.0f);
+        public static bool isWiping => hasWiper && (Instance?.wipeInc != 0.0f);
 
     }
 }

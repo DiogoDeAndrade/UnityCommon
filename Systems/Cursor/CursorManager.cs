@@ -7,7 +7,7 @@ using UnityEngine.UI;
 
 namespace UC
 {
-    public class CursorManager : MonoBehaviour
+    public class CursorManager : Singleton<CursorManager>
     {
         public interface ICursorGrabData
         {
@@ -64,25 +64,10 @@ namespace UC
         List<UIGroup>   allUIGroups;
         float           allUIGroupsRefreshTimer;
 
-        static CursorManager _instance;
-
         public ICursorGrabData cursorGrabData
         {
             get { return _cursorGrabData; }
             set { _cursorGrabData = value; }
-        }
-
-        void Awake()
-        {
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else 
-            { 
-                Destroy(gameObject);
-                return;
-            }
         }
 
         void Start()
@@ -292,12 +277,12 @@ namespace UC
                 {
                     Camera c = (topLevelCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? (null) : (topLevelCanvas.worldCamera);
                     Vector2 cursorPos;
-                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, InputControl.GetScreenMousePosition(), c, out cursorPos);
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, InputControl.GetMousePixelPosition(), c, out cursorPos);
                     currentAttachedObject.transform.localPosition = cursorPos;
                 }
                 else
                 {
-                    var pt = uiCamera.ScreenToWorldPoint(InputControl.GetScreenMousePosition());
+                    var pt = uiCamera.ScreenToWorldPoint(InputControl.GetMousePixelPosition());
                     currentAttachedObject.transform.position = new Vector3(pt.x, pt.y, currentAttachedObject.transform.position.z);
                 }
             }
@@ -308,12 +293,12 @@ namespace UC
                 {
                     Camera c = (topLevelCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? (null) : (topLevelCanvas.worldCamera);
                     Vector2 cursorPos;
-                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, InputControl.GetScreenMousePosition(), c, out cursorPos);
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform.parent as RectTransform, InputControl.GetMousePixelPosition(), c, out cursorPos);
                     softCursor.transform.localPosition = cursorPos;
                 }
                 else
                 {
-                    var pt = uiCamera.ScreenToWorldPoint(InputControl.GetScreenMousePosition());
+                    var pt = uiCamera.ScreenToWorldPoint(InputControl.GetMousePixelPosition());
                     softCursor.transform.position = new Vector3(pt.x, pt.y, softCursor.transform.position.z);
                 }
             }
@@ -344,7 +329,7 @@ namespace UC
 
             // Initialize tracked position from actual mouse on first use
             if (!gamepadCursorPosition.HasValue)
-                gamepadCursorPosition = InputControl.GetScreenMousePosition();
+                gamepadCursorPosition = InputControl.GetMousePixelPosition();
 
             // Snap velocity to zero when reversing direction
             if (Mathf.Abs(input.x) > 0.01f)
@@ -395,7 +380,7 @@ namespace UC
 
             // Sync tracked position if real mouse moves
             if (InputControl.HasMouseMovedThisFrame())
-                gamepadCursorPosition = InputControl.GetScreenMousePosition();
+                gamepadCursorPosition = InputControl.GetMousePixelPosition();
         }
 
         public static CursorManager instance

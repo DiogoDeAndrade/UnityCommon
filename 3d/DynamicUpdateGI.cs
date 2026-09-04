@@ -3,25 +3,11 @@ using NaughtyAttributes;
 
 namespace UC
 {
-    public class DynamicUpdateGI : MonoBehaviour
+    public class DynamicUpdateGI : Singleton<DynamicUpdateGI>
     {
         [SerializeField] private bool updateAllFrames = true;
         [SerializeField] private bool updateReflectionProbes = true;
         [SerializeField, ShowIf(nameof(updateReflectionProbes))] private ReflectionProbe[] reflectionProbes;
-
-        static DynamicUpdateGI Instance;
-
-        private void Awake()
-        {
-            if (Instance == null)
-            {
-                Instance = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-            }
-        }
 
         void Update()
         {

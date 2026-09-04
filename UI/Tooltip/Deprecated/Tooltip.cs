@@ -51,7 +51,7 @@ namespace UC.Deprecated
             var canvas = TooltipManager.parentCanvas;
             var parentRect = rectTransform.parent as RectTransform;
 
-            Vector2 mousePosition = InputControl.GetScreenMousePosition();
+            Vector2 mousePosition = InputControl.GetMousePixelPosition();
 
             Vector2 localPoint;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, mousePosition, canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera, out localPoint);

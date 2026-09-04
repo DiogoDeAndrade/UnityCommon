@@ -1,13 +1,16 @@
 using NaughtyAttributes;
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC
 {
 
-    public class SimpleOutline3d : MonoBehaviour
+    public partial class SimpleOutline3d : MonoBehaviour
     {
         public enum Channel { UV0 = 0, UV1 = 1, UV2 = 2, UV3 = 3, UV4 = 4, UV5 = 5, UV6 = 6, UV7 = 7, Normal = 8 };
+        
+        [AutoStaticsCleanup]
         private static readonly string[] kDirKeywords =
         {
             "_DIRSOURCE_UV0","_DIRSOURCE_UV1","_DIRSOURCE_UV2","_DIRSOURCE_UV3",
@@ -16,6 +19,7 @@ namespace UC
         };
         
         public enum Space { Object, World, Clip }
+        [AutoStaticsCleanup]
         static readonly string[] kSpaceKeywords =
         {
           "_EXTRUDESPACE_OBJECT","_EXTRUDESPACE_WORLD","_EXTRUDESPACE_CLIP"
@@ -156,12 +160,15 @@ namespace UC
             }
         }
 
+        [NoAutoStaticsCleanup]
         private static Shader outlineShader;
 
         private static Shader GetOutlineShader()
         {
             if (!outlineShader)
+            {
                 outlineShader = Shader.Find("Unity Common/Effects/Outline (Backface Extrude)");
+            }
 
             return outlineShader;
         }

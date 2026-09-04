@@ -3,14 +3,17 @@ using UnityEditor;
 using UnityEngine;
 using System.Reflection;
 using System.Collections;
+using Unity.Scripting.LifecycleManagement;
 
 namespace UC
 {
 
     [CustomPropertyDrawer(typeof(ParamPrefabBase), true)]
-    public class ParamPrefabDrawer : PropertyDrawer
+    public partial class ParamPrefabDrawer : PropertyDrawer
     {
+        [AutoStaticsCleanup]
         public static bool SuppressPrefabField = false;
+        [AutoStaticsCleanup]
         public static bool SuppressOptions = false;
 
         private UnityEngine.Object previousPrefab;

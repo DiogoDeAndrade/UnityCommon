@@ -111,7 +111,7 @@ public class UIList : BaseUIControl
         if ((hasMouseControl) && (parentGroup.uiEnable))
         {
             // Only scroll when the cursor is actually over our viewport.
-            Vector2 mousePos = UC.InputControl.GetScreenMousePosition();
+            Vector2 mousePos = UC.InputControl.GetMousePixelPosition();
             var canvas = GetComponentInParent<Canvas>();
             Camera cam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay) ? canvas.worldCamera : null;
             if (!RectTransformUtility.RectangleContainsScreenPoint(rectTransform, mousePos, cam))

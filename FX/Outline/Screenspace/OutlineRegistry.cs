@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC
@@ -43,8 +44,9 @@ namespace UC
     /// The list of things currently outlined. Registration is explicit (no scene scanning), so the render
     /// feature costs nothing at all when nothing is registered.
     /// </summary>
-    public static class OutlineRegistry
+    public static partial class OutlineRegistry
     {
+        [AutoStaticsCleanup]
         static readonly List<OutlineTarget> targets = new();
 
         public static int count => targets.Count;
@@ -68,15 +70,6 @@ namespace UC
         }
 
         public static void Clear()
-        {
-            targets.Clear();
-        }
-
-        /// <summary>Static state survives leaving play mode when domain reload is disabled, and a target
-        /// registered by a scene object would then point at a dead renderer. Clear on subsystem
-        /// registration, which runs before any scene loads.</summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetState()
         {
             targets.Clear();
         }

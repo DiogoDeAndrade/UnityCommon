@@ -130,7 +130,7 @@ public class NameEntryElement : MonoBehaviour
     private void Update()
     {
 #if ENABLE_LEGACY_INPUT_MANAGER
-        if (upArrow.enabled && Input.anyKeyDown)
+        if ((upArrow.enabled) && (InputControl.anyKeyDown))
         {
             foreach (var entry in allowed)
             {
@@ -145,7 +145,7 @@ public class NameEntryElement : MonoBehaviour
                     // Try letters
                     if (char.IsLetter(c))
                     {
-                        if (Enum.TryParse(c.ToString().ToUpper(), out key) && Input.GetKeyDown(key))
+                        if (Enum.TryParse(c.ToString().ToUpper(), out key) && InputControl.GetKeyDown(key))
                         {
                             index = allowed.IndexOf(entry);
                             letterText.text = allowed[index];
@@ -159,7 +159,7 @@ public class NameEntryElement : MonoBehaviour
                     else if (char.IsDigit(c))
                     {
                         string name = "Alpha" + c;
-                        if (Enum.TryParse(name, out key) && Input.GetKeyDown(key))
+                        if (Enum.TryParse(name, out key) && InputControl.GetKeyDown(key))
                         {
                             index = allowed.IndexOf(entry);
                             letterText.text = allowed[index];
@@ -170,7 +170,7 @@ public class NameEntryElement : MonoBehaviour
                     }
 
                     // Handle space
-                    else if (c == ' ' && Input.GetKeyDown(KeyCode.Space))
+                    else if ((c == ' ') && (InputControl.GetKeyDown(KeyCode.Space)))
                     {
                         index = allowed.IndexOf(entry);
                         letterText.text = allowed[index];
@@ -181,7 +181,7 @@ public class NameEntryElement : MonoBehaviour
                 }
 
                 // Handle OK or special cases
-                if (entry == "OK" && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
+                if ((entry == "OK") && (InputControl.GetKeyDown(KeyCode.Return) || InputControl.GetKeyDown(KeyCode.KeypadEnter)))
                 {
                     index = allowed.IndexOf(entry);
                     letterText.text = allowed[index];
@@ -190,7 +190,7 @@ public class NameEntryElement : MonoBehaviour
                     break;
                 }
 
-                if (entry == "\u2190" && Input.GetKeyDown(KeyCode.Backspace))
+                if ((entry == "\u2190") && (InputControl.GetKeyDown(KeyCode.Backspace)))
                 {
                     index = allowed.IndexOf(entry);
                     letterText.text = allowed[index];

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC
@@ -18,6 +19,7 @@ namespace UC
 
         Dictionary<Shader, Material> shaderMap = new Dictionary<Shader, Material>();
 
+        [NoAutoStaticsCleanup]
         private static SpriteEffectConfig _instance;
 
         public static SpriteEffectConfig Instance

@@ -1,6 +1,7 @@
 using NaughtyAttributes;
 using UnityEngine;
 using UC.RPG;
+using Unity.Scripting.LifecycleManagement;
 
 namespace UC
 {
@@ -26,17 +27,17 @@ namespace UC
         protected TextTooltip _textTooltip;
 
 
-        public static LayerMask obstacleMask => instanceBase?._obstacleMask ?? ~0;
-        public static LayerMask groundMask => instanceBase?._groundMask ?? ~0;
-        public static ResourceType healthResource => instanceBase?._healthResource ?? null;
-        public static Hypertag defaultWeaponSlot => instanceBase._weaponSlot;
+        public static LayerMask obstacleMask => (instanceBase != null) ? (instanceBase._obstacleMask) : ~0;
+        public static LayerMask groundMask => (instanceBase != null) ? (instanceBase._groundMask) : ~0;
+        public static ResourceType healthResource => (instanceBase != null) ? (instanceBase._healthResource) : null;
+        public static Hypertag defaultWeaponSlot => (instanceBase != null) ? (instanceBase._weaponSlot) : null;
+        public static SoundDef uiMoveSnd => (instanceBase != null) ? (instanceBase._uiMoveSnd) : null;
+        public static SoundDef uiSelectSnd => (instanceBase != null) ? (instanceBase._uiSelectSnd) : null;
+        public static SoundDef uiChangeValueSnd => (instanceBase != null) ? (instanceBase._uiChangeValueSnd) : null;
+        public static TextTooltip textTooltip => (instanceBase != null) ? (instanceBase._textTooltip) : null;
 
-        public static SoundDef uiMoveSnd => instanceBase._uiMoveSnd;
-        public static SoundDef uiSelectSnd => instanceBase._uiSelectSnd;
-        public static SoundDef uiChangeValueSnd => instanceBase._uiChangeValueSnd;
-        public static TextTooltip textTooltip => instanceBase._textTooltip;
 
-
+        [NoAutoStaticsCleanup]
         protected static GlobalsBase _instanceBase = null;
 
         public static T GetInstanceBase<T>() where T : GlobalsBase

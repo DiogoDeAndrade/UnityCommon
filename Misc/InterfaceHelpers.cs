@@ -1,7 +1,9 @@
-using System.Collections.Generic;
 using System;
-using UnityEngine;
+using System.Collections.Generic;
 using System.Linq;
+using Unity.Scripting.LifecycleManagement;
+using UnityEngine;
+using UnityEngine.Assemblies;
 
 namespace UC
 {
@@ -20,7 +22,7 @@ namespace UC
             }
 
             // Get all loaded assemblies in the current AppDomain
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var assemblies = CurrentAssemblies.GetLoadedAssemblies();
 
             // Find all MonoBehaviours implementing the specified interface
             var result = new List<Type>();
@@ -43,6 +45,7 @@ namespace UC
             return result;
         }
 
+        [NoAutoStaticsCleanup]
         private static Dictionary<Type, List<Type>> _interfaceToImplementors = new();
 
         public static T GetFirstInterfaceComponent<T>() where T : class
@@ -70,8 +73,7 @@ namespace UC
             Type interfaceType = typeof(T);
             var implementingTypes = new List<Type>();
 
-            foreach (Type type in AppDomain.CurrentDomain.GetAssemblies()
-                         .SelectMany(assembly => assembly.GetTypes()))
+            foreach (Type type in CurrentAssemblies.GetLoadedAssemblies().SelectMany(assembly => assembly.GetTypes()))
             {
                 if (interfaceType.IsAssignableFrom(type) && type.IsClass && !type.IsAbstract && typeof(MonoBehaviour).IsAssignableFrom(type))
                 {

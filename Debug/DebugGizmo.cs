@@ -5,26 +5,12 @@ using NaughtyAttributes;
 namespace UC
 {
 
-    public class DebugGizmo : MonoBehaviour
+    public class DebugGizmo : Singleton<DebugGizmo>
     {
         public const uint MeshDrawWire = 1;
         public const uint MeshDrawSolid = 2;
 
         public enum InteractionMode { None, Triangle, Sphere };
-
-        private static DebugGizmo _instance;
-        private static DebugGizmo instance
-        {
-            get
-            {
-                if (_instance) return _instance;
-
-                _instance = FindAnyObjectByType<DebugGizmo>();
-
-                return _instance;
-
-            }
-        }
 
         public bool filter = true;
         [ShowIf("filter"), TextArea]
@@ -167,27 +153,6 @@ namespace UC
         List<DebugObject> debugObjects;
         List<DebugObject> highlightObjects;
 
-        private void Awake()
-        {
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
-        }
-
-        private void OnDestroy()
-        {
-            if (_instance == this)
-            {
-                _instance = null;
-            }
-        }
-
         [Button("Clear")]
         void _Clear()
         {
@@ -209,8 +174,7 @@ namespace UC
 
         public static void AddSphere(string identifier, Vector3 pos, float radius, Color color)
         {
-            if (instance == null) return;
-            instance.AddObject(new DebugSphere()
+            Instance?.AddObject(new DebugSphere()
             {
                 identifier = identifier,
                 position = pos,
@@ -221,8 +185,7 @@ namespace UC
 
         public static void AddSphere(string identifier, Vector3 pos, float radius, Color color, Matrix4x4 matrix)
         {
-            if (instance == null) return;
-            instance.AddObject(new DebugSphere()
+            Instance?.AddObject(new DebugSphere()
             {
                 identifier = identifier,
                 position = matrix * new Vector4(pos.x, pos.y, pos.z, 1),
@@ -233,8 +196,7 @@ namespace UC
 
         public static void AddLine(string identifier, Vector3 p1, Vector3 p2, Color color)
         {
-            if (instance == null) return;
-            instance.AddObject(new DebugLine()
+            Instance?.AddObject(new DebugLine()
             {
                 identifier = identifier,
                 p1 = p1,
@@ -245,8 +207,7 @@ namespace UC
 
         public static void AddTriangle(string identifier, Triangle triangle, Color color)
         {
-            if (instance == null) return;
-            instance.AddObject(new DebugWireTriangle()
+            Instance?.AddObject(new DebugWireTriangle()
             {
                 identifier = identifier,
                 triangle = triangle,
@@ -256,8 +217,7 @@ namespace UC
 
         public static void AddTriangle(string identifier, Triangle triangle, Color color, Matrix4x4 matrix)
         {
-            if (instance == null) return;
-            instance.AddObject(new DebugWireTriangle()
+            Instance?.AddObject(new DebugWireTriangle()
             {
                 identifier = identifier,
                 triangle = triangle * matrix,
@@ -272,9 +232,7 @@ namespace UC
 
         public static void AddWireOBB(string identifier, OBB obb, Color color, Matrix4x4 matrix)
         {
-            if (instance == null) return;
-
-            instance.AddObject(new DebugWireOBB()
+            Instance?.AddObject(new DebugWireOBB()
             {
                 identifier = identifier,
                 obb = obb,
@@ -285,8 +243,7 @@ namespace UC
 
         public static void AddLine(string identifier, Vector3 p1, Vector3 p2, Color color, Matrix4x4 matrix)
         {
-            if (instance == null) return;
-            instance.AddObject(new DebugLine()
+            Instance?.AddObject(new DebugLine()
             {
                 identifier = identifier,
                 p1 = matrix * new Vector4(p1.x, p1.y, p1.z, 1),
@@ -302,8 +259,7 @@ namespace UC
 
         public static void AddMesh(string identifier, Mesh mesh, Color color, Matrix4x4 matrix, uint flags = MeshDrawSolid)
         {
-            if (instance == null) return;
-            instance.AddObject(new DebugMesh()
+            Instance?.AddObject(new DebugMesh()
             {
                 identifier = identifier,
                 color = color,
@@ -315,19 +271,15 @@ namespace UC
 
         public static void Clear()
         {
-            if (instance == null) return;
-
-            instance._Clear();
+            Instance?._Clear();
         }
 
         public static void Clear(string identifier)
         {
-            if (instance == null) return;
-
-            instance._Clear(identifier);
+            Instance?._Clear(identifier);
         }
 
-        public static bool isAvailable => (instance != null);
+        public static bool isAvailable => (Instance != null);
 
 #if UNITY_EDITOR
         private void OnDrawGizmos()

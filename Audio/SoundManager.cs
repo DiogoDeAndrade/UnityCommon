@@ -9,7 +9,7 @@ namespace UC
 
     public enum SoundType { Music = 0, PrimaryFX = 1, SecondaryFX = 2, Background = 3, Voice = 4, Movies = 5 };
 
-    public class SoundManager : MonoBehaviour
+    public class SoundManager : Singleton<SoundManager>
     {
         [Serializable]
         class SoundsPerCategoryElem
@@ -30,8 +30,6 @@ namespace UC
             public SoundsPerCategoryElem    parameters;
         }
         
-        private static SoundManager _instance;
-
         [SerializeField] private bool dontDestroyOnLoad = false;
         [SerializeField] private AudioMixerGroup defaultMixerOutput;
         [SerializeField] private AudioMixerGroup musicMixerGroup;
@@ -75,33 +73,15 @@ namespace UC
 
         List<PauseStruct> pauseStack = new();
 
-        public static SoundManager instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = FindAnyObjectByType<SoundManager>();
-                }
-                return _instance;
-            }
-        }
-
         // Start is called before the first frame update
-        void Awake()
+        protected override void Awake()
         {
-            if (_instance == null)
+            base.Awake();
+            if (Instance != this) return;
+
+            if (dontDestroyOnLoad)
             {
-                _instance = this;
-                if (dontDestroyOnLoad)
-                {
-                    DontDestroyOnLoad(gameObject);
-                }
-            }
-            else
-            {
-                Destroy(gameObject);
-                return;
+                DontDestroyOnLoad(gameObject);
             }
 
             // Find all audio sources

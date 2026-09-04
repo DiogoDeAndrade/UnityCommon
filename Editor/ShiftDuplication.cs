@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 
+using Unity.Scripting.LifecycleManagement;
 using UnityEditor;
 using UnityEngine;
 
@@ -7,8 +8,9 @@ namespace UC
 {
 
     [InitializeOnLoad]
-    static class ShiftDuplicate
+    static partial class ShiftDuplicate
     {
+        [AutoStaticsCleanup]
         private static bool _isDragging;
 
         static ShiftDuplicate()

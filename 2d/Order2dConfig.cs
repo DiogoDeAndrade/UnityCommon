@@ -1,3 +1,4 @@
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC
@@ -18,13 +19,14 @@ namespace UC
         [SerializeField]
         private float _orderMaxZ = 5.0f;
 
-        public static OrderMode orderMode => instance?._orderMode ?? OrderMode.Z;
-        public static float orderScaleY => instance?._orderScaleY ?? 0.0001f;
-        public static int orderMin => instance?._orderMin ?? -1000;
-        public static int orderMax => instance?._orderMax ?? 1000;
-        public static float orderMinZ => instance?._orderMinZ ?? -5.0f;
-        public static float orderMaxZ => instance?._orderMaxZ ?? 5.0f;
+        public static OrderMode orderMode => (instance != null) ? (instance._orderMode) : (OrderMode.Z);
+        public static float orderScaleY => (instance != null) ? (instance._orderScaleY) : 0.0001f;
+        public static int orderMin => (instance != null) ? (instance._orderMin) : -1000;
+        public static int orderMax => (instance != null) ? (instance._orderMax) : 1000;
+        public static float orderMinZ => (instance != null) ? (instance._orderMinZ) : -5.0f;
+        public static float orderMaxZ => (instance != null) ? (instance._orderMaxZ) : 5.0f;
 
+        [NoAutoStaticsCleanup]
         static Order2dConfig _instance = null;
 
         public static Order2dConfig instance

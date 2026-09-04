@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace UC.RPG
 {
     [Serializable]
-    public class RPGEntity : IRPGOwner
+    public partial class RPGEntity : IRPGOwner
     {
         public int          level;
         public Archetype    archetype;
@@ -381,7 +382,7 @@ namespace UC.RPG
 
         #region Static management of UnityRPGEntity
 
-        private static Dictionary<Guid, RPGEntity> entities = new();
+        [AutoStaticsCleanup] private static Dictionary<Guid, RPGEntity> entities = new();
 
         public static void Register(RPGEntity entity)
         {

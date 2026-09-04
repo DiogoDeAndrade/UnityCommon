@@ -89,10 +89,8 @@ namespace UC
         }
     }
 
-    public class CombatTextManager : MonoBehaviour
+    public class CombatTextManager : Singleton<CombatTextManager>
     {
-        static CombatTextManager instance;
-
         class TextElem
         {
             public CombatTextDef    def;
@@ -129,17 +127,11 @@ namespace UC
         Vector2 screenToCanvasSizes;
         CanvasScaler canvasScaler;
 
-        static int suppressCount;
+        int suppressCount;
 
-        void Awake()
+        protected override void Awake()
         {
-            if (instance != null)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            instance = this;
+            if (Instance != this) return;
 
             textList = new List<TextElem>();
             canvas = GetComponentInParent<Canvas>();
@@ -158,14 +150,15 @@ namespace UC
             screenToCanvasSizes.y = canvasScaler.referenceResolution.y / Screen.height;
         }
 
-        void OnDestroy()
+        protected override void OnDestroy()
         {
-            if (instance == this)
+            if (Instance == this)
             {
-                instance = null;
                 // Anything mid-suppression has no manager left to un-suppress it on the way out.
                 suppressCount = 0;
             }
+
+            base.OnDestroy();
         }
 
         void Update()
@@ -310,29 +303,29 @@ namespace UC
         public static void SpawnText(GameObject ownerObject, string text, CombatTextDef def)
         {
             if (!CanSpawn(ownerObject)) return;
-            instance._SpawnText(ownerObject, Vector2.zero, text, def);
+            Instance._SpawnText(ownerObject, Vector2.zero, text, def);
         }
         public static void SpawnText(GameObject ownerObject, Vector2 offset, string text, CombatTextDef def)
         {
             if (!CanSpawn(ownerObject)) return;
-            instance._SpawnText(ownerObject, offset, text, def);
+            Instance._SpawnText(ownerObject, offset, text, def);
         }
 
         public static void SpawnText(GameObject ownerObject, float value, string text, CombatTextDef def)
         {
             if (!CanSpawn(ownerObject)) return;
-            instance._SpawnText(ownerObject, Vector2.zero, value, text, def);
+            Instance._SpawnText(ownerObject, Vector2.zero, value, text, def);
         }
 
         public static void SpawnText(GameObject ownerObject, Vector2 offset, float value, string text, CombatTextDef def)
         {
             if (!CanSpawn(ownerObject)) return;
-            instance._SpawnText(ownerObject, offset, value, text, def);
+            Instance._SpawnText(ownerObject, offset, value, text, def);
         }
 
-        static bool CanSpawn(GameObject ownerObject) => (instance != null) && (ownerObject != null) && (suppressCount == 0);
+        static bool CanSpawn(GameObject ownerObject) => (Instance != null) && (ownerObject != null) && (Instance.suppressCount == 0);
 
-        public static float defaultTime => instance?._defaultTime ?? 1.0f;
+        public static float defaultTime => Instance?._defaultTime ?? 1.0f;
 
         // Mute combat text for a stretch of code that moves resources around for bookkeeping rather than for something that happened in the fiction - spawning a unit,
         // restoring a save. Prefer the Suppress() scope; the explicit pair is here for when the block is not a lexical one.
@@ -342,11 +335,11 @@ namespace UC
         //      healthHandler?.SetMaxResource(maxHealth);
         //      healthHandler?.ResetResource();
         // }
-        public static bool isSuppressed => suppressCount > 0;
+        public static bool isSuppressed => Instance.suppressCount > 0;
 
-        public static void BeginSuppress() => suppressCount++;
+        public static void BeginSuppress() => Instance.suppressCount++;
 
-        public static void EndSuppress() => suppressCount = Mathf.Max(0, suppressCount - 1);
+        public static void EndSuppress() => Instance.suppressCount = Mathf.Max(0, Instance.suppressCount - 1);
 
         public static SuppressScope Suppress()
         {

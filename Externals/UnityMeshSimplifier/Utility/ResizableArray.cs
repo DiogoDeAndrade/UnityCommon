@@ -26,6 +26,7 @@ SOFTWARE.
 
 using System;
 using System.Runtime.CompilerServices;
+using Unity.Scripting.LifecycleManagement;
 
 namespace UnityMeshSimplifier
 {
@@ -39,6 +40,7 @@ namespace UnityMeshSimplifier
         private T[] items = null;
         private int length = 0;
 
+        [NoAutoStaticsCleanup]
         private static T[] emptyArr = new T[0];
         #endregion
 

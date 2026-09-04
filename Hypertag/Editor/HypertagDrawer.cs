@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Unity.Scripting.LifecycleManagement;
 using UnityEditor;
 using UnityEngine;
 
@@ -10,10 +11,13 @@ namespace UC.Editor
     [InitializeOnLoad]
     internal static class HypertagCache
     {
+        [NoAutoStaticsCleanup]
         private static bool _dirty = true;
-
+        [NoAutoStaticsCleanup]
         private static string[] _paths = Array.Empty<string>();
+        [NoAutoStaticsCleanup]
         private static string[] _guids = Array.Empty<string>();
+        [NoAutoStaticsCleanup]
         private static Dictionary<UnityEngine.Object, int> _indexByObject = new();
 
         static HypertagCache()
