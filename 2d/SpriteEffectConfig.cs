@@ -31,7 +31,7 @@ namespace UC
                     _instance = Resources.Load<SpriteEffectConfig>("SpriteEffectConfig");
                     if (_instance == null)
                     {
-                        Debug.LogError("SpriteEffectConfig instance not found. Make sure it is located in a 'Resources' folder and named 'SpriteEffectConfig'.");
+                        DebugHelpers.LogError("SpriteEffectConfig instance not found. Make sure it is located in a 'Resources' folder and named 'SpriteEffectConfig'.");
                     }
                 }
                 return _instance;

@@ -74,7 +74,7 @@ public class AnimationRunEvent : StateMachineBehaviour
         GameObject gameObject = GetObject(animator);
         if (gameObject == null)
         {
-            Debug.LogWarning($"[AnimationRunEvent] No receiver for animation event {type} (object {targetType}/{hypertag} not found on animator {animator.name})", animator);
+            DebugHelpers.LogWarning($"[AnimationRunEvent] No receiver for animation event {type} (object {targetType}/{hypertag} not found on animator {animator.name})", animator);
             return;
         }
 

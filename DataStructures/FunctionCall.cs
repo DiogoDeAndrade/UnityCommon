@@ -14,9 +14,81 @@ namespace UC
         public string functionName;
         public string[] parameters;
 
+        // Runtime binding cache. Never serialized: FunctionCall is [Serializable] and
+        // these are reflection handles bound to a specific component instance.
+        [NonSerialized] Type        _componentType;   // from componentName, resolved once
+        [NonSerialized] Component   _boundComponent;  // instance the method/delegate below belong to
+        [NonSerialized] MethodInfo  _boundMethod;
+        [NonSerialized] Delegate    _boundDelegate;   // typed fast path; null when binding failed
+
         public void Invoke(GameObject go)
         {
             Invoke(go, null);
+        }
+
+        public void Invoke<T1, T2, T3>(GameObject go, T1 a, T2 b, T3 c)
+        {
+            // Serialized parameters mean some arguments must be parsed from strings;
+            // that is the reflection path's job.
+            if (parameters != null && parameters.Length > 0) { Invoke(go, a, b, c); return; }
+
+            var component = ResolveComponent(go);
+            if (component == null) { Invoke(go, a, b, c); return; }   // reuse its warnings
+
+            if (!ReferenceEquals(component, _boundComponent))
+            {
+                _boundComponent = component;
+                _boundMethod = ResolveMethod(component.GetType(), functionName,
+                                                new[] { typeof(T1), typeof(T2), typeof(T3) });
+                _boundDelegate = TryBind<Action<T1, T2, T3>>(component, _boundMethod);
+            }
+
+            if (_boundDelegate is Action<T1, T2, T3> call) call(a, b, c);
+            else Invoke(go, a, b, c);
+        }
+
+        Component ResolveComponent(GameObject go)
+        {
+            if ((go == null) || (string.IsNullOrEmpty(componentName))) return null;
+
+            _componentType ??= GetTypeFromString(componentName);
+            if (_componentType == null) return null;
+
+            // Cheap when it's the same object as last time; GetComponent otherwise.
+            if ((_boundComponent != null) && (ReferenceEquals(_boundComponent.gameObject, go)))
+                return _boundComponent;
+
+            return go.GetComponent(_componentType);
+        }
+
+        static MethodInfo ResolveMethod(Type type, string methodName, Type[] argTypes)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+            MethodInfo byCount = null;
+            foreach (var m in type.GetMethods(flags))
+            {
+                if (m.Name != methodName) continue;
+
+                var ps = m.GetParameters();
+                if (ps.Length != argTypes.Length) continue;
+
+                byCount ??= m;
+
+                bool exact = true;
+                for (int i = 0; i < ps.Length; i++)
+                {
+                    if (!ps[i].ParameterType.IsAssignableFrom(argTypes[i])) { exact = false; break; }
+                }
+                if (exact) return m;
+            }
+            return byCount;
+        }
+
+        static TDelegate TryBind<TDelegate>(Component target, MethodInfo method) where TDelegate : Delegate
+        {
+            if ((target == null) || (method == null)) return null;
+            return Delegate.CreateDelegate(typeof(TDelegate), target, method, throwOnBindFailure: false) as TDelegate;
         }
 
         // New entry point: allows runtime overrides
@@ -24,26 +96,26 @@ namespace UC
         {
             if (go == null)
             {
-                Debug.LogWarning("[FunctionCall] Target GameObject is null");
+                DebugHelpers.LogWarning("[FunctionCall] Target GameObject is null");
                 return;
             }
 
             if (string.IsNullOrEmpty(componentName))
             {
-                Debug.LogWarning($"[FunctionCall] componentName is empty on {go.name}");
+                DebugHelpers.LogWarning($"[FunctionCall] componentName is empty on {go.name}");
                 return;
             }
 
             if (string.IsNullOrEmpty(functionName))
             {
-                Debug.LogWarning($"[FunctionCall] functionName is empty on {go.name}");
+                DebugHelpers.LogWarning($"[FunctionCall] functionName is empty on {go.name}");
                 return;
             }
 
             var component = FindComponent(go, componentName);
             if (component == null)
             {
-                Debug.LogWarning($"[FunctionCall] Component '{componentName}' not found on {go.name}");
+                DebugHelpers.LogWarning($"[FunctionCall] Component '{componentName}' not found on {go.name}");
                 return;
             }
 
@@ -52,8 +124,7 @@ namespace UC
 
             if (method == null)
             {
-                Debug.LogWarning($"[FunctionCall] Method '{functionName}' with {parameters?.Length ?? 0} params " +
-                                 $"not found on component {compType.Name} on {go.name}");
+                DebugHelpers.LogWarning($"[FunctionCall] Method '{functionName}' with {parameters?.Length ?? 0} params not found on component {compType.Name} on {go.name}");
                 return;
             }
 
@@ -95,10 +166,7 @@ namespace UC
                             }
                             catch
                             {
-                                Debug.LogWarning(
-                                    $"[FunctionCall] Cannot convert runtime parameter {i} ({o.GetType().Name}) " +
-                                    $"to {pType.Name}; using default."
-                                );
+                                DebugHelpers.LogWarning($"[FunctionCall] Cannot convert runtime parameter {i} ({o.GetType().Name}) to {pType.Name}; using default.");
                                 string stored = (parameters != null && i < parameters.Length) ? parameters[i] : null;
                                 args[i] = ConvertParameter(stored, pType);
                             }
@@ -119,11 +187,11 @@ namespace UC
             }
             catch (TargetInvocationException tie)
             {
-                Debug.LogException(tie.InnerException ?? tie);
+                DebugHelpers.LogException(tie.InnerException ?? tie);
             }
             catch (Exception ex)
             {
-                Debug.LogException(ex);
+                DebugHelpers.LogException(ex);
             }
         }
 
@@ -212,7 +280,7 @@ namespace UC
         }
 
         // ---- basic string -> type converters ----
-
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0002", Justification = "Returns object by contract: it feeds reflection, which only takes boxed values")]
         static object ConvertParameter(string value, Type targetType)
         {
             if (targetType == typeof(string))
@@ -263,7 +331,7 @@ namespace UC
             }
             catch
             {
-                Debug.LogWarning($"[FunctionCall] Could not convert '{value}' to {targetType}");
+                DebugHelpers.LogWarning($"[FunctionCall] Could not convert '{value}' to {targetType}");
                 return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
             }
         }

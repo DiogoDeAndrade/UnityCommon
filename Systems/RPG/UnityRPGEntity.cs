@@ -96,7 +96,7 @@ namespace UC.RPG
         {
             if (!data)
             {
-                Debug.Log($"Can't setup entity {name}: No archetype or item defined!");
+                DebugHelpers.Log($"Can't setup entity {name}: No archetype or item defined!");
                 return;
             }
 

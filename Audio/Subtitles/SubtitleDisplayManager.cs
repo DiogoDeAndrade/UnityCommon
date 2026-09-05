@@ -209,7 +209,7 @@ public class SubtitleDisplayManager : Singleton<SubtitleDisplayManager>
             }
         }
 
-        Debug.LogWarning($"Can't find speaker '{name}' for text '{(currentAudio ? currentAudio.name : "UnknownAudio")}'!");
+        DebugHelpers.LogWarning($"Can't find speaker '{name}' for text '{(currentAudio ? currentAudio.name : "UnknownAudio")}'!");
         return currentTrack.speaker;
     }
 

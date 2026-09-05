@@ -30,7 +30,7 @@ namespace UC
 
             float lRef = Mathf.Clamp(l, 0, geodesicDistance.GetMaxDistance());
 
-            /*Debug.Log("Forcing vertex 73 distance");
+            /*DebugHelpers.Log("Forcing vertex 73 distance");
             lRef = geodesicDistance.GetDistance(73);*/
 
             triIndices = new();

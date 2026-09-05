@@ -46,14 +46,14 @@ public class RPGModuleOverride : MonoBehaviour
     {
         if ((moduleType == null) || (!typeof(SOModule).IsAssignableFrom(moduleType)))
         {
-            Debug.LogError($"Invalid module type: {moduleType}");
+            DebugHelpers.LogError($"Invalid module type: {moduleType}");
             return null;
         }
 
         var module = Activator.CreateInstance(moduleType) as SOModule;
         if (module == null)
         {
-            Debug.LogError($"Could not create SOModule of type {moduleType}");
+            DebugHelpers.LogError($"Could not create SOModule of type {moduleType}");
             return null;
         }
 

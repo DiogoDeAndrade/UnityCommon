@@ -290,7 +290,7 @@ namespace UC
             catch (System.Exception ex)
             {
                 _lastStatus  = $"Error: {ex.Message}";
-                Debug.LogException(ex);
+                DebugHelpers.LogException(ex);
             }
         }
 

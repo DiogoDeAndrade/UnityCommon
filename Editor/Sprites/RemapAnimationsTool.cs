@@ -116,14 +116,14 @@ namespace UC
             if (modify)
             {
                 // Save the modified AnimationClip
-                Debug.Log($"Updated clip {animationClip.name}!");
+                DebugHelpers.Log($"Updated clip {animationClip.name}!");
 
                 EditorUtility.SetDirty(animationClip);
                 AssetDatabase.SaveAssets();
             }
             else
             {
-                Debug.Log($"Clip {animationClip.name} was not updated!");
+                DebugHelpers.Log($"Clip {animationClip.name} was not updated!");
             }
         }
 
@@ -178,7 +178,7 @@ namespace UC
                 return AssetDatabase.LoadAssetAtPath<Sprite>(relativePath);
             }
 
-            Debug.LogWarning($"No replacement sprite found for: {originalSprite.name}");
+            DebugHelpers.LogWarning($"No replacement sprite found for: {originalSprite.name}");
             return null; // No replacement found or selected
         }
 

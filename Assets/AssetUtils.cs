@@ -28,7 +28,7 @@ namespace UC
 
             return existingAsset;
 #else
-        Debug.LogError("CreateOrReplaceAsset not available in runtime!");
+        DebugHelpers.LogError("CreateOrReplaceAsset not available in runtime!");
         return null;
 #endif
         }
@@ -39,7 +39,7 @@ namespace UC
             string path = AssetDatabase.GetAssetPath(oldAsset);
             if (path == "")
             {
-                Debug.LogError("Can't find path for asset!");
+                DebugHelpers.LogError("Can't find path for asset!");
                 return null;
             }
 
@@ -57,7 +57,7 @@ namespace UC
 
             return existingAsset;
 #else
-        Debug.LogError("CreateOrReplaceAsset not available in runtime!");
+        DebugHelpers.LogError("CreateOrReplaceAsset not available in runtime!");
         return null;
 #endif
         }
@@ -109,7 +109,7 @@ namespace UC
 
             return null;
 #else
-            Debug.LogError("CreateOrReplaceAsset not available in runtime!");
+            DebugHelpers.LogError("CreateOrReplaceAsset not available in runtime!");
             return null;
 #endif
 

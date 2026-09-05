@@ -64,7 +64,7 @@ namespace UC
                     Shader shader = Shader.Find("Universal Render Pipeline/Lit");
                     if (!shader)
                     {
-                        Debug.LogWarning("Could not find URP Lit shader.");
+                        DebugHelpers.LogWarning("Could not find URP Lit shader.");
                         return;
                     }
 

@@ -68,7 +68,7 @@ namespace UC
                 string shaderName = material.shader.name;
                 if (shaderName.IndexOf("Effect", StringComparison.InvariantCultureIgnoreCase) == -1)
                 {
-                    Debug.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
+                    DebugHelpers.LogWarning($"Shader doesn't seem to be an effect shader, effects won't work (object = {gameObject.name})!");
                 }
             }
 
@@ -160,7 +160,7 @@ namespace UC
 
             if (!sourceMaterial)
             {
-                Debug.LogWarning($"No material found on {gameObject.name}");
+                DebugHelpers.LogWarning($"No material found on {gameObject.name}");
                 return;
             }
 

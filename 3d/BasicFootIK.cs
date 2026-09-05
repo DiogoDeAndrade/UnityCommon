@@ -50,11 +50,11 @@ namespace UC
 #if UNITY_EDITOR
             if (!animator.HasParameter("LeftFoot"))
             {
-                Debug.LogError($"Animator should have parameter called LeftFoot that defines if the left foot should be up (1) or down (0)");
+                DebugHelpers.LogError($"Animator should have parameter called LeftFoot that defines if the left foot should be up (1) or down (0)");
             }
             if (!animator.HasParameter("RightFoot"))
             {
-                Debug.LogError($"Animator should have parameter called RightFoot that defines if the left foot should be up (1) or down (0)");
+                DebugHelpers.LogError($"Animator should have parameter called RightFoot that defines if the left foot should be up (1) or down (0)");
             }
 
             var controller = animator.runtimeAnimatorController as UnityEditor.Animations.AnimatorController;
@@ -68,7 +68,7 @@ namespace UC
                 }
                 if (!anyIKPass)
                 {
-                    Debug.LogError($"No IK Pass is detected on animator! Foot IK will not work.");
+                    DebugHelpers.LogError($"No IK Pass is detected on animator! Foot IK will not work.");
                 }
             }
 

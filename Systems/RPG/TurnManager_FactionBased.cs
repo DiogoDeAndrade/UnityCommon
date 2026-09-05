@@ -86,7 +86,7 @@ namespace UC
                 }
             }
             
-            Debug.LogError("No entities found for any faction. TurnManager_FactionBased is stuck.");
+            DebugHelpers.LogError("No entities found for any faction. TurnManager_FactionBased is stuck.");
         }
 
         void RunTurn(List<UnityRPGEntity> entities)

@@ -40,7 +40,7 @@ namespace UC.RPG.Actions
             }
 
 
-            Debug.LogWarning("No target object, can't destroy entity!");
+            DebugHelpers.LogWarning("No target object, can't destroy entity!");
             yield break;
         }
     }

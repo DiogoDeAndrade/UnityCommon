@@ -451,7 +451,7 @@ namespace UC
         {
             if (ownerGameObject == null)
             {
-                Debug.LogWarning($"No owner object on SDFExtrusion {name}, cannot draw gizmos.");
+                DebugHelpers.LogWarning($"No owner object on SDFExtrusion {name}, cannot draw gizmos.");
                 return;
             }
 

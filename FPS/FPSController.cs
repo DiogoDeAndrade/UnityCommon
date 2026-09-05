@@ -33,7 +33,7 @@ namespace UC
             characterController = GetComponent<CharacterController>();
             if (headTransform == null)
             {
-                Debug.LogError("Head Transform is not assigned!");
+                DebugHelpers.LogError("Head Transform is not assigned!");
             }
 
             // Lock and hide the cursor

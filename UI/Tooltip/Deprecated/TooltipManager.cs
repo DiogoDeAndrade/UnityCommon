@@ -39,7 +39,7 @@ namespace UC.Deprecated
                 if ((_parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ||
                     (_parentCanvas.worldCamera == null))
                 {
-                    Debug.LogWarning("Tooltip won't work correctly if using overlay mode on canvas, or if camera is not set");
+                    DebugHelpers.LogWarning("Tooltip won't work correctly if using overlay mode on canvas, or if camera is not set");
                 }
             }
 

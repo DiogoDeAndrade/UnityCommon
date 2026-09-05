@@ -99,7 +99,7 @@ namespace UC
                     var topology = new Topology(mesh, Matrix4x4.identity);
                     var boundary = topology.GetBoundaries();
 
-                    Debug.LogError("Ear clipping simplification not implemented!");
+                    DebugHelpers.LogError("Ear clipping simplification not implemented!");
 
                     //                mesh = MeshTools.TriangulateEarClipping(boundary.Get(0));
                 }

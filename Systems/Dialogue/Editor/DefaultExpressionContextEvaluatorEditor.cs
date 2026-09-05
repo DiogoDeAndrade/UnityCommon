@@ -81,7 +81,7 @@ namespace UC.Editor
                 }
                 else
                 {
-                    Debug.LogError("Method AddAllTags() not found on this object.");
+                    DebugHelpers.LogError("Method AddAllTags() not found on this object.");
                 }
             }
             if (GUILayout.Button("Add All Items"))
@@ -93,7 +93,7 @@ namespace UC.Editor
                 }
                 else
                 {
-                    Debug.LogError("Method AddAllItems() not found on this object.");
+                    DebugHelpers.LogError("Method AddAllItems() not found on this object.");
                 }
             }
         }

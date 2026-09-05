@@ -603,7 +603,7 @@ namespace UC.ED
         {
             if (topology == null)
             {
-                Debug.LogError("BuildDeformationGraph failed: topology is null.");
+                DebugHelpers.LogError("BuildDeformationGraph failed: topology is null.");
                 return;
             }
 
@@ -644,7 +644,7 @@ namespace UC.ED
 
             if (minDistance <= 0.0f)
             {
-                Debug.LogWarning("BuildDeformationGraph: minDistance <= 0, clamping to a small value.");
+                DebugHelpers.LogWarning("BuildDeformationGraph: minDistance <= 0, clamping to a small value.");
                 minDistance = 0.001f;
             }
 
@@ -703,7 +703,7 @@ namespace UC.ED
             // Fallback safety
             if ((nodes.Count == 0) && (topology.vertexCount > 0))
             {
-                Debug.LogError("Failed to generate ED deformation graph: no nodes were sampled.");
+                DebugHelpers.LogError("Failed to generate ED deformation graph: no nodes were sampled.");
                 return;
             }
 
@@ -733,7 +733,7 @@ namespace UC.ED
             currentState = new EDState(nodes.Count);
             restState = new EDState(nodes.Count);
 
-            Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}, Edges={deformGraphEdgeCount}");
+            DebugHelpers.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={nodes.Count}, Edges={deformGraphEdgeCount}");
         }
 
         public void BuildDeformationGraphFromStructure(TopologyStatic topology,
@@ -751,13 +751,13 @@ namespace UC.ED
 
             if (topology == null)
             {
-                Debug.LogError("BuildDeformationGraphFromStructure failed: topology is null.");
+                DebugHelpers.LogError("BuildDeformationGraphFromStructure failed: topology is null.");
                 return;
             }
 
             if ((structure == null) || (structure.Count == 0))
             {
-                Debug.LogError("BuildDeformationGraphFromStructure failed: structure is null or empty.");
+                DebugHelpers.LogError("BuildDeformationGraphFromStructure failed: structure is null or empty.");
                 return;
             }
 
@@ -799,7 +799,7 @@ namespace UC.ED
 
             if (nodes.Count == 0)
             {
-                Debug.LogError("BuildDeformationGraphFromStructure failed: no nodes were created.");
+                DebugHelpers.LogError("BuildDeformationGraphFromStructure failed: no nodes were created.");
                 return;
             }
 
@@ -811,7 +811,7 @@ namespace UC.ED
             currentState = new EDState(nodes.Count);
             restState = new EDState(nodes.Count);
 
-            Debug.Log($"ED structure-only graph built. " +
+            DebugHelpers.Log($"ED structure-only graph built. " +
                       $"Vertices={topology.vertexCount}, " +
                       $"Triangles={topology.triangleCount}, " +
                       $"StructureSegments={structure.Count}, " +
@@ -1007,7 +1007,7 @@ namespace UC.ED
 
             if (maxBindDistance <= 0.0)
             {
-                Debug.LogWarning("BuildGraphDirectionAware: maxBindDistance must be > 0.");
+                DebugHelpers.LogWarning("BuildGraphDirectionAware: maxBindDistance must be > 0.");
                 return;
             }
 
@@ -1175,13 +1175,13 @@ namespace UC.ED
         {
             if (topology == null)
             {
-                Debug.LogError("BuildBindings failed: topology is null.");
+                DebugHelpers.LogError("BuildBindings failed: topology is null.");
                 return;
             }
 
             if ((nodes == null) || (nodes.Count == 0))
             {
-                Debug.LogError("BuildBindings failed: no ED nodes exist.");
+                DebugHelpers.LogError("BuildBindings failed: no ED nodes exist.");
                 return;
             }
 
@@ -1257,7 +1257,7 @@ namespace UC.ED
                     }
                     break;
                 default:
-                    Debug.LogWarning($"BuildBindings: unsupported link mode {bindMode}.");
+                    DebugHelpers.LogWarning($"BuildBindings: unsupported link mode {bindMode}.");
                     break;
             }
 
@@ -1369,7 +1369,7 @@ namespace UC.ED
         {
             if (bindings == null || bindings.Length == 0)
             {
-                Debug.LogWarning("BuildGraphFromBindings: no bindings available.");
+                DebugHelpers.LogWarning("BuildGraphFromBindings: no bindings available.");
                 return;
             }
 
@@ -1406,7 +1406,7 @@ namespace UC.ED
         {
             if (bindings == null || bindings.Length == 0)
             {
-                Debug.LogWarning("BuildGraphFromPartitionAdjacency: no bindings available.");
+                DebugHelpers.LogWarning("BuildGraphFromPartitionAdjacency: no bindings available.");
                 return;
             }
 
@@ -1500,7 +1500,7 @@ namespace UC.ED
 
             /*foreach (EDTerminalConstraint terminal in terminalConstraints)
             {
-                Debug.Log(
+                DebugHelpers.Log(
                     $"Terminal node {terminal.nodeIndex}: " +
                     $"scale={terminal.targetScale:F3}, " +
                     $"right={terminal.targetRight}, " +
@@ -1570,7 +1570,7 @@ namespace UC.ED
                 }
             }
 
-            Debug.Log($"Built {linkAngleConstraints.Count} structure link-angle constraints.");
+            DebugHelpers.Log($"Built {linkAngleConstraints.Count} structure link-angle constraints.");
         }
 
         public void ResetDeformation()
@@ -1646,13 +1646,13 @@ namespace UC.ED
 #if MATH_NET_AVAILABLE
             if ((nodes == null) || (nodes.Count == 0))
             {
-                Debug.LogError("SolveTranslationsOnly failed: no nodes.");
+                DebugHelpers.LogError("SolveTranslationsOnly failed: no nodes.");
                 return false;
             }
 
             if ((bindings == null) || (bindings.Length != restVertices.Length))
             {
-                Debug.LogError("SolveTranslationsOnly failed: bindings are missing or invalid.");
+                DebugHelpers.LogError("SolveTranslationsOnly failed: bindings are missing or invalid.");
                 return false;
             }
 
@@ -1674,7 +1674,7 @@ namespace UC.ED
 
             if (rowCount == 0)
             {
-                Debug.LogWarning("SolveTranslationsOnly: system has zero rows.");
+                DebugHelpers.LogWarning("SolveTranslationsOnly: system has zero rows.");
                 return false;
             }
 
@@ -1751,7 +1751,7 @@ namespace UC.ED
             }
             catch (Exception ex)
             {
-                Debug.LogError($"SolveTranslationsOnly failed while solving: {ex.Message}");
+                DebugHelpers.LogError($"SolveTranslationsOnly failed while solving: {ex.Message}");
                 return false;
             }
 
@@ -2809,12 +2809,12 @@ namespace UC.ED
                     rank++;
             }
 
-            Debug.Log($"[ED] J rows = {J.RowCount}, cols = {J.ColumnCount}");
-            Debug.Log($"[ED] Rank \u2245 {rank}/{J.ColumnCount}");
-            Debug.Log($"[ED] Nullity \u2245 {J.ColumnCount - rank}");
-            Debug.Log($"[ED] sigmaMax = {sigmaMax}");
-            Debug.Log($"[ED] sigmaMin = {sigmaMin}");
-            Debug.Log($"[ED] Condition \u2245 {sigmaMax / Math.Max(sigmaMin, 1e-300)}");
+            DebugHelpers.Log($"[ED] J rows = {J.RowCount}, cols = {J.ColumnCount}");
+            DebugHelpers.Log($"[ED] Rank \u2245 {rank}/{J.ColumnCount}");
+            DebugHelpers.Log($"[ED] Nullity \u2245 {J.ColumnCount - rank}");
+            DebugHelpers.Log($"[ED] sigmaMax = {sigmaMax}");
+            DebugHelpers.Log($"[ED] sigmaMin = {sigmaMin}");
+            DebugHelpers.Log($"[ED] Condition \u2245 {sigmaMax / Math.Max(sigmaMin, 1e-300)}");
 
             // Math.NET returns VT, so the smallest right singular vector is the last row of VT
             var vt = svd.VT;
@@ -2852,7 +2852,7 @@ namespace UC.ED
                     $"  #{i + 1}: global={idx}, node={nodeIndex}, param={ParamName(localParam)}, value={val}");
             }
 
-            Debug.Log(sb.ToString());
+            DebugHelpers.Log(sb.ToString());
 
             // Optional summary per node
             StringBuilder sbNode = new StringBuilder();
@@ -2883,7 +2883,7 @@ namespace UC.ED
                     $"  node {n}: total={blockNorm}, matrix={matrixNorm}, translation={translationNorm}");
             }
 
-            Debug.Log(sbNode.ToString());
+            DebugHelpers.Log(sbNode.ToString());
         }
 
         private string ParamName(int localParam)
@@ -3544,7 +3544,7 @@ namespace UC.ED
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"SolveED failed: {ex.Message}");
+                    DebugHelpers.LogError($"SolveED failed: {ex.Message}");
                     return;
                 }
 
@@ -3552,7 +3552,7 @@ namespace UC.ED
 
                 if (!double.IsFinite(stepNorm))
                 {
-                    Debug.LogError("[ED] SolveED produced non-finite delta.");
+                    DebugHelpers.LogError("[ED] SolveED produced non-finite delta.");
                     return;
                 }
 
@@ -3598,7 +3598,7 @@ namespace UC.ED
 
                 if (!double.IsFinite(error))
                 {
-                    Debug.LogError("[ED] Residual became non-finite.");
+                    DebugHelpers.LogError("[ED] Residual became non-finite.");
                     return;
                 }
 
@@ -3694,7 +3694,7 @@ namespace UC.ED
 
                 if (!solved)
                 {
-                    Debug.LogWarning("[ED] LM could not find an improving step.");
+                    DebugHelpers.LogWarning("[ED] LM could not find an improving step.");
                     break;
                 }
 
@@ -3725,15 +3725,15 @@ namespace UC.ED
                 if (!nativeOk)
                     Control.UseMultiThreading();
 
-                Debug.Log($"Math.NET native provider active: {nativeOk}");
-                Debug.Log(Control.Describe());
+                DebugHelpers.Log($"Math.NET native provider active: {nativeOk}");
+                DebugHelpers.Log(Control.Describe());
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"Math.NET native provider failed: {e.Message}");
+                DebugHelpers.LogWarning($"Math.NET native provider failed: {e.Message}");
 
                 Control.UseMultiThreading();
-                Debug.Log(Control.Describe());
+                DebugHelpers.Log(Control.Describe());
             }
         }
 
@@ -3778,7 +3778,7 @@ namespace UC.ED
 
                 if (!double.IsFinite(error))
                 {
-                    Debug.LogError($"[ED] Residual became non-finite after {iter} iterations.");
+                    DebugHelpers.LogError($"[ED] Residual became non-finite after {iter} iterations.");
                     DebugProfiler.DebugMark(timeIteration);
                     return;
                 }
@@ -3803,7 +3803,7 @@ namespace UC.ED
                     }
                 }
 
-                Debug.Log($"Jacobian density (iteration {iter}): {(100.0 * nonZero / total):F2}% ({nonZero}/{total})");*/
+                DebugHelpers.Log($"Jacobian density (iteration {iter}): {(100.0 * nonZero / total):F2}% ({nonZero}/{total})");*/
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                 {
@@ -3908,7 +3908,7 @@ namespace UC.ED
 
                             DebugProfiler.DebugMark(timeIteration);
 
-                            Debug.Log($"Ran {iter} iterations...");
+                            DebugHelpers.Log($"Ran {iter} iterations...");
                             LogTimerReport();
 
                             return;
@@ -3922,7 +3922,7 @@ namespace UC.ED
 
                 if (!solved)
                 {
-                    Debug.LogWarning("[ED] LM could not find an improving step.");
+                    DebugHelpers.LogWarning("[ED] LM could not find an improving step.");
                     DebugProfiler.DebugMark(timeIteration);
                     break;
                 }
@@ -4222,7 +4222,7 @@ namespace UC.ED
             sb += $"Max Shrinkage = {maxShrinkage:P2} (Segment {maxShrinkageIndex})\n";
             sb += $"Invalid segments = {invalidSegments}\n";
 
-            Debug.Log(sb);
+            DebugHelpers.Log(sb);
         }
 
         private bool UseDeformationFieldForClearance => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField != null);
@@ -4841,7 +4841,7 @@ namespace UC.ED
             sb += $"    Solve time: {timeSolve.accumulatedTimeMS:F6} ms\n";
             sb += $"    Apply parameters: {timeApplyParameters.accumulatedTimeMS:F6} ms\n";
             sb += $"    Clearance calculation: {timeUpdateClearance.accumulatedTimeMS:F6} ms\n";
-            Debug.Log(sb);
+            DebugHelpers.Log(sb);
         }
 
         public Vector3 GetDebugNodePosition(int nodeIndex)
@@ -5033,7 +5033,7 @@ namespace UC.ED
                 sb.AppendLine($"[ED] WARNING: residual row accounting mismatch. Used={row}, f.Count={f.Count}");
             }
 
-            Debug.Log(sb.ToString());
+            DebugHelpers.Log(sb.ToString());
         }
 
         void BuildDeformationField(float density = 0.05f, int maxWeights = 4)
@@ -5044,7 +5044,7 @@ namespace UC.ED
 
             if ((sourceGeometry == null) || (sourceGeometry.Count == 0))
             {
-                Debug.LogWarning("BuildDeformationField failed: no source geometry was provided.");
+                DebugHelpers.LogWarning("BuildDeformationField failed: no source geometry was provided.");
                 deformationField = null;
 
                 timeDeformationFieldGeneration.Mark();
@@ -5053,7 +5053,7 @@ namespace UC.ED
 
             if ((nodes == null) || (nodes.Count == 0))
             {
-                Debug.LogWarning("BuildDeformationField failed: no deformation graph nodes exist.");
+                DebugHelpers.LogWarning("BuildDeformationField failed: no deformation graph nodes exist.");
                 deformationField = null;
 
                 timeDeformationFieldGeneration.Mark();
@@ -5086,7 +5086,7 @@ namespace UC.ED
 
             if (!hasBounds)
             {
-                Debug.LogWarning("BuildDeformationField failed: source geometry has no valid meshes.");
+                DebugHelpers.LogWarning("BuildDeformationField failed: source geometry has no valid meshes.");
                 deformationField = null;
 
                 timeDeformationFieldGeneration.Mark();
@@ -5103,7 +5103,7 @@ namespace UC.ED
 
             if (maxSize <= 1e-6f)
             {
-                Debug.LogWarning("BuildDeformationField failed: source geometry bounds are degenerate.");
+                DebugHelpers.LogWarning("BuildDeformationField failed: source geometry bounds are degenerate.");
                 deformationField = null;
 
                 timeDeformationFieldGeneration.Mark();
@@ -5164,7 +5164,7 @@ namespace UC.ED
 
             timeDeformationFieldGeneration.Mark();
 
-            Debug.Log(
+            DebugHelpers.Log(
                 $"Deformation field built:\n" +
                 $"  Meshes={sourceGeometry.Count}\n " +
                 $"  Nodes={nodes.Count}\n" +
@@ -5182,28 +5182,28 @@ namespace UC.ED
         {
             if (srcMesh == null)
             {
-                Debug.LogError("DeformMesh failed: source mesh is null.");
+                DebugHelpers.LogError("DeformMesh failed: source mesh is null.");
 
                 return null;
             }
 
             if (!srcMesh.isReadable)
             {
-                Debug.LogError($"DeformMesh failed: mesh '{srcMesh.name}' is not readable. Enable Read/Write in its import settings.");
+                DebugHelpers.LogError($"DeformMesh failed: mesh '{srcMesh.name}' is not readable. Enable Read/Write in its import settings.");
 
                 return null;
             }
 
             if (deformationField == null)
             {
-                Debug.LogError($"DeformMesh failed for '{srcMesh.name}': the deformation field has not been built.");
+                DebugHelpers.LogError($"DeformMesh failed for '{srcMesh.name}': the deformation field has not been built.");
 
                 return null;
             }
 
             if (currentState == null)
             {
-                Debug.LogError($"DeformMesh failed for '{srcMesh.name}': there is no current deformation state.");
+                DebugHelpers.LogError($"DeformMesh failed for '{srcMesh.name}': there is no current deformation state.");
 
                 return null;
             }
@@ -5227,12 +5227,12 @@ namespace UC.ED
 
             if ((!rebuildNormals) && (!transformNormals))
             {
-                Debug.LogWarning($"Mesh '{srcMesh.name}' does not contain a valid normal for every vertex. Existing normals cannot be transformed.");
+                DebugHelpers.LogWarning($"Mesh '{srcMesh.name}' does not contain a valid normal for every vertex. Existing normals cannot be transformed.");
             }
 
             if ((!rebuildTangents) && (!transformTangents))
             {
-                Debug.LogWarning($"Mesh '{srcMesh.name}' does not contain a valid tangent for every vertex. Existing tangents cannot be transformed.");
+                DebugHelpers.LogWarning($"Mesh '{srcMesh.name}' does not contain a valid tangent for every vertex. Existing tangents cannot be transformed.");
             }
 
             EDStateView state = new EDStateView(currentState);
@@ -5301,7 +5301,7 @@ namespace UC.ED
             {
                 if (outputMesh.normals.Length != outputMesh.vertexCount)
                 {
-                    Debug.LogWarning($"Mesh '{srcMesh.name}' has no valid normals. Normals will be rebuilt before rebuilding tangents.");
+                    DebugHelpers.LogWarning($"Mesh '{srcMesh.name}' has no valid normals. Normals will be rebuilt before rebuilding tangents.");
 
                     outputMesh.RecalculateNormals();
                 }

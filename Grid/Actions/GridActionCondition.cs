@@ -67,7 +67,7 @@ namespace UC
                         }
                         else
                         {
-                            Debug.LogWarning($"Failed to parse expression {expression}!");
+                            DebugHelpers.LogWarning($"Failed to parse expression {expression}!");
                         }
                     }
                     break;

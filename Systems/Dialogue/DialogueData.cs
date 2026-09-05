@@ -254,7 +254,7 @@ namespace UC
                         {
                             if (context == null)
                             {
-                                Debug.LogWarning($"Can't evaluate \"{condition.condition}\" in dialogue \"{name}\" - no context!");
+                                DebugHelpers.LogWarning($"Can't evaluate \"{condition.condition}\" in dialogue \"{name}\" - no context!");
                                 continue;
                             }
 
@@ -264,7 +264,7 @@ namespace UC
                             }
                             else
                             {
-                                Debug.LogWarning($"Can't parse expression \"{condition.condition}\"!");
+                                DebugHelpers.LogWarning($"Can't parse expression \"{condition.condition}\"!");
                                 continue;
                             }
                         }
@@ -315,7 +315,7 @@ namespace UC
 
                 if (totalWeight <= 0.0f)
                 {
-                    Debug.LogWarning($"Random group in dialogue \"{name}\" has no positive weight!");
+                    DebugHelpers.LogWarning($"Random group in dialogue \"{name}\" has no positive weight!");
                     return null;
                 }
 
@@ -397,7 +397,7 @@ namespace UC
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to load {SourceRef(filename, 1)}: {e.Message}");
+                DebugHelpers.LogError($"Failed to load {SourceRef(filename, 1)}: {e.Message}");
                 return null;
             }
 
@@ -898,7 +898,7 @@ namespace UC
                 // Verify each statement ends with a semicolon
                 if (!statementLine.EndsWith(";"))
                 {
-                    Debug.LogError($"Syntax Error: Missing ';' at end of statement '{statementLine}' ({SourceRef()})");
+                    DebugHelpers.LogError($"Syntax Error: Missing ';' at end of statement '{statementLine}' ({SourceRef()})");
                     continue; // or optionally throw an exception here if strict behavior desired
                 }
 
@@ -911,7 +911,7 @@ namespace UC
 
                     if (splitAssignment.Length != 2)
                     {
-                        Debug.LogError($"Invalid assignment syntax: {statementLine} ({SourceRef()})");
+                        DebugHelpers.LogError($"Invalid assignment syntax: {statementLine} ({SourceRef()})");
                         continue;
                     }
 
@@ -929,7 +929,7 @@ namespace UC
 
                     if (openParenIdx < 0 || closeParenIdx < 0 || closeParenIdx <= openParenIdx)
                     {
-                        Debug.LogError($"Malformed function call detected: {statementLine} ({SourceRef()})");
+                        DebugHelpers.LogError($"Malformed function call detected: {statementLine} ({SourceRef()})");
                         continue;
                     }
 
@@ -1023,7 +1023,7 @@ namespace UC
 
             if (string.IsNullOrEmpty(name))
             {
-                Debug.LogWarning($"Malformed attribute detected: {line} ({SourceRef()})");
+                DebugHelpers.LogWarning($"Malformed attribute detected: {line} ({SourceRef()})");
                 return;
             }
 
@@ -1043,7 +1043,7 @@ namespace UC
             var match = includeRegex.Match(line);
             if (!match.Success)
             {
-                Debug.LogWarning($"Malformed include - expected include(\"Name\"): {line} ({SourceRef()})");
+                DebugHelpers.LogWarning($"Malformed include - expected include(\"Name\"): {line} ({SourceRef()})");
                 // Still claimed as an include so it doesn't end up as dialogue text
                 return true;
             }
@@ -1051,7 +1051,7 @@ namespace UC
             string includeName = match.Groups[1].Value.Trim();
             if (includeNames.Contains(includeName))
             {
-                Debug.LogWarning($"Duplicate include \"{includeName}\" ({SourceRef()})");
+                DebugHelpers.LogWarning($"Duplicate include \"{includeName}\" ({SourceRef()})");
                 return true;
             }
 
@@ -1091,7 +1091,7 @@ namespace UC
         {
             if (currentDialogue == null)
             {
-                Debug.LogWarning($"Tag line outside of any dialogue: {line} ({SourceRef()})");
+                DebugHelpers.LogWarning($"Tag line outside of any dialogue: {line} ({SourceRef()})");
                 return;
             }
 
@@ -1111,7 +1111,7 @@ namespace UC
                     if (string.Equals(tagName, "Marker", StringComparison.OrdinalIgnoreCase) && (!string.IsNullOrEmpty(tagValue)))
                         currentDialogue.marker = tagValue;
                     else
-                        Debug.LogWarning($"Unknown dialogue tag: {trimmedEntry} ({SourceRef()})");
+                        DebugHelpers.LogWarning($"Unknown dialogue tag: {trimmedEntry} ({SourceRef()})");
                 }
                 // Enum.TryParse happily parses a bare number as a flags value, which nobody means
                 else if ((!float.TryParse(trimmedEntry, out _)) && Enum.TryParse(trimmedEntry, out DialogueFlags parsedFlag))
@@ -1120,7 +1120,7 @@ namespace UC
                 }
                 else
                 {
-                    Debug.LogWarning($"Unknown DialogueFlag: {trimmedEntry} ({SourceRef()})");
+                    DebugHelpers.LogWarning($"Unknown DialogueFlag: {trimmedEntry} ({SourceRef()})");
                 }
             }
         }
@@ -1131,7 +1131,7 @@ namespace UC
             int arrowIdx = line.IndexOf("->");
             if (arrowIdx < 0)
             {
-                Debug.LogWarning($"Option \"{line}\" has no destination - every option needs \"-><key>\" (use \"-> End\" to end the conversation)! ({SourceRef()})");
+                DebugHelpers.LogWarning($"Option \"{line}\" has no destination - every option needs \"-><key>\" (use \"-> End\" to end the conversation)! ({SourceRef()})");
                 return;
             }
 
@@ -1144,7 +1144,7 @@ namespace UC
         {
             if (!destination.StartsWith("->"))
             {
-                Debug.LogWarning($"Option \"{optionText}\" doesn't say where it goes (expected \"-><key>\", got \"{destination}\") - use \"-> End\" to end the conversation! ({SourceRef()})");
+                DebugHelpers.LogWarning($"Option \"{optionText}\" doesn't say where it goes (expected \"-><key>\", got \"{destination}\") - use \"-> End\" to end the conversation! ({SourceRef()})");
                 return;
             }
 
@@ -1152,14 +1152,14 @@ namespace UC
 
             if (string.IsNullOrEmpty(optionText) || string.IsNullOrEmpty(destinationKey))
             {
-                Debug.LogWarning($"Incomplete option detected: {optionText} -> {destinationKey} ({SourceRef()})");
+                DebugHelpers.LogWarning($"Incomplete option detected: {optionText} -> {destinationKey} ({SourceRef()})");
                 return;
             }
 
             if (currentElement != null)
                 currentElement.options.Add(new Option { text = optionText, key = destinationKey, code = code, condition = condition, chance = chance, oneShot = oneShot });
             else
-                Debug.LogWarning($"Option defined without an element context: {optionText} ({SourceRef()})");
+                DebugHelpers.LogWarning($"Option defined without an element context: {optionText} ({SourceRef()})");
         }
 
         private void ParseConditionalNext(string line, Dialogue currentDialogue)
@@ -1197,7 +1197,7 @@ namespace UC
                 return speaker;
             }
 
-            Debug.LogWarning($"Speaker '{name}' not found! ({SourceRef()})");
+            DebugHelpers.LogWarning($"Speaker '{name}' not found! ({SourceRef()})");
             return null;
         }
 
@@ -1219,7 +1219,7 @@ namespace UC
 
             if (dialogue == null)
             {
-                Debug.LogWarning($"Dialogue '{dialogueKey}' not found!");
+                DebugHelpers.LogWarning($"Dialogue '{dialogueKey}' not found!");
             }
 
             return dialogue;
@@ -1299,7 +1299,7 @@ namespace UC
             if (!warnedUnresolvedIncludes)
             {
                 warnedUnresolvedIncludes = true;
-                Debug.LogError($"Dialogue file \"{name}\" includes \"{includeNames[index]}\", which isn't resolved - run Unity Common/Dialogue/Update References!");
+                DebugHelpers.LogError($"Dialogue file \"{name}\" includes \"{includeNames[index]}\", which isn't resolved - run Unity Common/Dialogue/Update References!");
             }
 
             return null;

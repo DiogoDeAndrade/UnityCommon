@@ -229,19 +229,19 @@ namespace UC
         {
             if (_type != InputType.NewInput) return;
 
-            if (_playerInput == null) Debug.LogWarning($"Trying to fetch axis {inputAction}, but player input is not set!");
+            if (_playerInput == null) DebugHelpers.LogWarning($"Trying to fetch axis {inputAction}, but player input is not set!");
             else
             {
                 if (playerInput.actions == null)
                 {
-                    Debug.LogWarning($"Player input has no control set!");
+                    DebugHelpers.LogWarning($"Player input has no control set!");
                 }
                 else
                 {
                     action = playerInput.actions.FindAction(inputAction);
                     if (action == null)
                     {
-                        Debug.LogWarning($"Action '{inputAction}' not found in PlayerInput's InputActionAsset {playerInput.actions.name}.");
+                        DebugHelpers.LogWarning($"Action '{inputAction}' not found in PlayerInput's InputActionAsset {playerInput.actions.name}.");
                     }
                     else
                     {

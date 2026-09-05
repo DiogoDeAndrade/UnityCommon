@@ -91,7 +91,7 @@ namespace UC
 
                     if (assetPath == "")
                     {
-                        Debug.LogWarning("Can't delete object, can't find asset path!");
+                        DebugHelpers.LogWarning("Can't delete object, can't find asset path!");
                         return;
                     }
 

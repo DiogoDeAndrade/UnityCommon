@@ -133,7 +133,7 @@ namespace UC
             Vector2Int res = settings.resolution;
             if (res.x <= 0 || res.y <= 0)
             {
-                Debug.LogError("Screenshot resolution must be > 0.");
+                DebugHelpers.LogError("Screenshot resolution must be > 0.");
                 return;
             }
 
@@ -167,19 +167,19 @@ namespace UC
                     if (!Application.isPlaying)
                     {
                         EditorUtility.DisplayDialog("Take Screenshot", "No Camera is set.\n\nGameView screenshots require Play Mode.\n\n" + "Either enter Play Mode or assign a Camera in Screenshot Options.", "OK");
-                        Debug.LogError("GameView screenshot requires Play Mode when no camera is assigned.");
+                        DebugHelpers.LogError("GameView screenshot requires Play Mode when no camera is assigned.");
                         return;
                     }
 
                     ScreenshotRuntimeRunner.RequestGameViewCapture(res.x, res.y, path, ext, settings.exportAlpha);
                 }
 
-                Debug.Log($"Screenshot saved: {path}");
+                DebugHelpers.Log($"Screenshot saved: {path}");
                 // EditorUtility.RevealInFinder(path);
             }
             catch (Exception e)
             {
-                Debug.LogException(e);
+                DebugHelpers.LogException(e);
             }
         }
 

@@ -149,9 +149,9 @@ namespace UC
             if (dialogue == null)
             {
                 if (currentDialogueData)
-                    Debug.LogWarning($"Can't find dialogue key {dialogueKey} in {currentDialogueData.name}, its includes, nor in global dialogues!");
+                    DebugHelpers.LogWarning($"Can't find dialogue key {dialogueKey} in {currentDialogueData.name}, its includes, nor in global dialogues!");
                 else
-                    Debug.LogWarning($"Can't find dialogue key {dialogueKey} in global dialogues!");
+                    DebugHelpers.LogWarning($"Can't find dialogue key {dialogueKey} in global dialogues!");
                 return false;
             }
 
@@ -175,7 +175,7 @@ namespace UC
                 int offset = int.Parse(historyMatch.Groups[1].Value);
                 if (offset > 0)
                 {
-                    Debug.LogWarning($"History({offset}) - history offsets are zero or negative (History(0) restarts the current node, History(-1) goes back one)!");
+                    DebugHelpers.LogWarning($"History({offset}) - history offsets are zero or negative (History(0) restarts the current node, History(-1) goes back one)!");
                     return true;
                 }
 
@@ -183,7 +183,7 @@ namespace UC
                 int index = history.Count - 1 + offset;
                 if (index < 0)
                 {
-                    Debug.LogWarning($"History({offset}) goes back further than this conversation has been ({history.Count} node(s) deep)!");
+                    DebugHelpers.LogWarning($"History({offset}) goes back further than this conversation has been ({history.Count} node(s) deep)!");
                     return true;
                 }
 
@@ -203,7 +203,7 @@ namespace UC
                 string markerName = markerMatch.Groups[1].Value;
                 if (!markers.TryGetValue(markerName, out var entry))
                 {
-                    Debug.LogWarning($"Marker({markerName}) - no node with {{Marker={markerName}}} has been visited in this conversation!");
+                    DebugHelpers.LogWarning($"Marker({markerName}) - no node with {{Marker={markerName}}} has been visited in this conversation!");
                     return true;
                 }
 
@@ -226,7 +226,7 @@ namespace UC
             var (foundData, dialogue) = dialogueData.FindDialogueInHierarchy(dialogueKey);
             if (dialogue == null)
             {
-                Debug.LogWarning($"Can't find dialogue key {dialogueKey} in {dialogueData.name} nor its includes!");
+                DebugHelpers.LogWarning($"Can't find dialogue key {dialogueKey} in {dialogueData.name} nor its includes!");
                 return false;
             }
 
@@ -332,7 +332,7 @@ namespace UC
                     if ((selectedOption < 0) || (selectedOption >= displayedElement.options.Count) ||
                         (!displayedElement.options[selectedOption].available))
                     {
-                        Debug.LogWarning($"Selected option {selectedOption} isn't an available option of dialogue \"{currentDialogue.name}\"!");
+                        DebugHelpers.LogWarning($"Selected option {selectedOption} isn't an available option of dialogue \"{currentDialogue.name}\"!");
                         return;
                     }
                     var option = displayedElement.options[selectedOption];
@@ -495,13 +495,13 @@ namespace UC
 
             if (context == null)
             {
-                Debug.LogWarning($"Can't evaluate option condition \"{option.condition}\" in dialogue \"{currentDialogue.name}\" - no context!");
+                DebugHelpers.LogWarning($"Can't evaluate option condition \"{option.condition}\" in dialogue \"{currentDialogue.name}\" - no context!");
                 return true;
             }
 
             if (!Expression.TryParse(option.condition, out var expression))
             {
-                Debug.LogWarning($"Can't parse option condition \"{option.condition}\"!");
+                DebugHelpers.LogWarning($"Can't parse option condition \"{option.condition}\"!");
                 return true;
             }
 
@@ -511,7 +511,7 @@ namespace UC
             }
             catch (Expression.ErrorException e)
             {
-                Debug.LogWarning($"Option condition \"{option.condition}\" in dialogue \"{currentDialogue.name}\": {e.Message}");
+                DebugHelpers.LogWarning($"Option condition \"{option.condition}\" in dialogue \"{currentDialogue.name}\": {e.Message}");
                 return true;
             }
         }
@@ -580,7 +580,7 @@ namespace UC
 
             if (context == null)
             {
-                Debug.LogError($"Dialogue \"{currentDialogue?.name}\" has code to run, but there's no Expression.IContext component on {gameObject.name}!");
+                DebugHelpers.LogError($"Dialogue \"{currentDialogue?.name}\" has code to run, but there's no Expression.IContext component on {gameObject.name}!");
                 return;
             }
 
@@ -606,7 +606,7 @@ namespace UC
                     }
                     else
                     {
-                        Debug.LogWarning($"Can't parse expression \"{c.expressions[0]}\"!");
+                        DebugHelpers.LogWarning($"Can't parse expression \"{c.expressions[0]}\"!");
                     }
                 }
             }
@@ -620,7 +620,7 @@ namespace UC
 
             if (methodInfo == null)
             {
-                Debug.LogError($"Method \"{code.functionOrVarName}\" not found in context!");
+                DebugHelpers.LogError($"Method \"{code.functionOrVarName}\" not found in context!");
                 return;
             }
 
@@ -641,7 +641,7 @@ namespace UC
 
             if (mandatoryParameters > code.expressions.Count)
             {
-                Debug.LogError($"Invalid number of argument for \"{code.functionOrVarName}\": expected {mandatoryParameters}, received {code.expressions.Count}!");
+                DebugHelpers.LogError($"Invalid number of argument for \"{code.functionOrVarName}\": expected {mandatoryParameters}, received {code.expressions.Count}!");
             }
             else
             {
@@ -668,7 +668,7 @@ namespace UC
                             }
                             else
                             {
-                                Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} ({code.expressions[index]})!");
+                                DebugHelpers.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} ({code.expressions[index]})!");
                             }
                         }
                         else if (paramType == typeof(float))
@@ -680,7 +680,7 @@ namespace UC
                             }
                             else
                             {
-                                Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} (\"{code.expressions[index]}\")!");
+                                DebugHelpers.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} (\"{code.expressions[index]}\")!");
                             }
                         }
                         else if (paramType == typeof(int))
@@ -692,7 +692,7 @@ namespace UC
                             }
                             else
                             {
-                                Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} (\"{code.expressions[index]}\")!");
+                                DebugHelpers.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} (\"{code.expressions[index]}\")!");
                             }
                         }
                         else if (paramType == typeof(string))
@@ -704,17 +704,17 @@ namespace UC
                             }
                             else
                             {
-                                Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} ({code.expressions[index]})!");
+                                DebugHelpers.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\", received {pType} ({code.expressions[index]})!");
                             }
                         }
                         else
                         {
-                            Debug.LogError($"Unsupported type {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\"!");
+                            DebugHelpers.LogError($"Unsupported type {paramType} for argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\"!");
                         }
                     }
                     else
                     {
-                        Debug.LogError($"Failed to parse argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\" ({code.expressions[index]})!");
+                        DebugHelpers.LogError($"Failed to parse argument #{index} ({param.Name}) for call to \"{code.functionOrVarName}\" ({code.expressions[index]})!");
                         continue;
                     }
                 }
@@ -724,7 +724,7 @@ namespace UC
                 }
                 else
                 {
-                    Debug.LogError($"Failed to call method {code.functionOrVarName}!");
+                    DebugHelpers.LogError($"Failed to call method {code.functionOrVarName}!");
                 }
             }
         }
@@ -751,7 +751,7 @@ namespace UC
             var context = GetComponent<Expression.IContext>();
             if (context == null)
             {
-                Debug.LogWarning($"Dialogue \"{currentDialogue?.name}\" has ${{...}} in its text, but there's no Expression.IContext component on {gameObject.name} to evaluate it with!");
+                DebugHelpers.LogWarning($"Dialogue \"{currentDialogue?.name}\" has ${{...}} in its text, but there's no Expression.IContext component on {gameObject.name} to evaluate it with!");
                 return element;
             }
 
@@ -818,13 +818,13 @@ namespace UC
                         case Expression.DataType.Bool: return (expression.EvaluateBool(context)) ? ("true") : ("false");
                         case Expression.DataType.String: return expression.EvaluateString(context);
                         default:
-                            Debug.LogWarning($"Dialogue text expression \"{source}\" has no value - is the variable set on the context?");
+                            DebugHelpers.LogWarning($"Dialogue text expression \"{source}\" has no value - is the variable set on the context?");
                             return match.Value;
                     }
                 }
                 catch (Expression.ErrorException e)
                 {
-                    Debug.LogWarning($"Dialogue text expression \"{source}\": {e.Message}");
+                    DebugHelpers.LogWarning($"Dialogue text expression \"{source}\": {e.Message}");
                     return match.Value;
                 }
             });
@@ -976,7 +976,7 @@ namespace UC
             {
                 if (++guard > 64)
                 {
-                    Debug.LogWarning($"HasDialogue(\"{dialogueKey}\"): redirect chain never ends!");
+                    DebugHelpers.LogWarning($"HasDialogue(\"{dialogueKey}\"): redirect chain never ends!");
                     return false;
                 }
 
@@ -1015,7 +1015,7 @@ namespace UC
         {
             if (Instance == null)
             {
-                Debug.LogError($"Can't start conversation {dialogueKey} - No DialogueManager present!");
+                DebugHelpers.LogError($"Can't start conversation {dialogueKey} - No DialogueManager present!");
                 return false;
             }
 
@@ -1031,7 +1031,7 @@ namespace UC
         {
             if (Instance == null)
             {
-                Debug.LogError($"Can't start conversation {dialogue.name} - No DialogueManager present!");
+                DebugHelpers.LogError($"Can't start conversation {dialogue.name} - No DialogueManager present!");
                 return false;
             }
 

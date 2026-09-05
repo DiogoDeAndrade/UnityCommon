@@ -116,7 +116,7 @@ namespace UC
                 float vin = ComputeVertexIndexNumber(vIndex);
                 if (vin == 1.0f)
                 {
-                    Debug.Log($"Local minimum (disappear contour) at {d[vIndex]}");
+                    DebugHelpers.Log($"Local minimum (disappear contour) at {d[vIndex]}");
                     // Insert line (CT[c(v)], v) into Ts(P) with v as a leaf
                     // Check if previous is too close
                     if ((_contoursLRef.Count == 0) ||
@@ -128,7 +128,7 @@ namespace UC
                     int vc = vertexContour[vIndex];
                     if ((vc < 0) || (vc >= _contourList.Count))
                     {
-                        Debug.LogError("Something went wrong computing the LSD...");
+                        DebugHelpers.LogError("Something went wrong computing the LSD...");
                     }
                     var parent = _contourList[vc];
                     _contourList[vc] = new SingleContour
@@ -142,7 +142,7 @@ namespace UC
                 }
                 else if (vin < 0.0f)
                 {
-                    Debug.Log($"Split at {d[vIndex]}");
+                    DebugHelpers.Log($"Split at {d[vIndex]}");
 
                     // Insert line (CT[c(v)], v) into Ts(P)
                     if ((_contoursLRef.Count == 0) ||
@@ -207,7 +207,7 @@ namespace UC
                         int newC = (i == 0) ? vc : (currentContourCount + i - 1);
                         if ((newC < 0) || (newC >= _contourList.Count))
                         {
-                            Debug.LogError("Something went wrong computing the LSD...");
+                            DebugHelpers.LogError("Something went wrong computing the LSD...");
                         }
 
                         var tl = triangleListsPerContour[i];

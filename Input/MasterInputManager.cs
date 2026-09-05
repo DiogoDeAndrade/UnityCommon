@@ -69,10 +69,10 @@ namespace UC
                         }
                         break;
                     case InputDeviceChange.Reconnected:
-                        //Debug.Log($"Gamepad reconnected: {device.displayName}");
+                        //DebugHelpers.Log($"Gamepad reconnected: {device.displayName}");
                         break;
                     default:
-                        //Debug.Log($"Gamepad state changed: {change}");
+                        //DebugHelpers.Log($"Gamepad state changed: {change}");
                         break;
                 }
             }
@@ -83,7 +83,7 @@ namespace UC
             if (lastUpdateFrame == Time.frameCount) return;
             lastUpdateFrame = Time.frameCount;
 
-            Debug.Log("Refreshing input systems...");
+            DebugHelpers.Log("Refreshing input systems...");
 
             playerDevices = new();
 
@@ -154,17 +154,17 @@ namespace UC
                         if (device != null)
                         {
                             playerInput.SwitchCurrentControlScheme("Gamepad", device);
-                            Debug.Log($"Assigned gamepad {device.displayName} (ID = {deviceId}) to player {playerId}");
+                            DebugHelpers.Log($"Assigned gamepad {device.displayName} (ID = {deviceId}) to player {playerId}");
                         }
                         else
                         {
-                            Debug.Log($"Could not assign device to player {playerId} - device not found!");
+                            DebugHelpers.Log($"Could not assign device to player {playerId} - device not found!");
                         }
                     }
                     else
                     {
                         playerInput.SwitchCurrentControlScheme("Keyboard&Mouse", GetKBAndMouseDevices());
-                        Debug.Log($"Assigned keyboard & mouse to player {playerId}");
+                        DebugHelpers.Log($"Assigned keyboard & mouse to player {playerId}");
                     }
 
                     playerInputs[playerId] = playerInput;
@@ -172,7 +172,7 @@ namespace UC
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to setup input for player {playerId}, device = {deviceId}: {e.Message}");
+                DebugHelpers.LogError($"Failed to setup input for player {playerId}, device = {deviceId}: {e.Message}");
                 return false;
             }
 

@@ -36,11 +36,11 @@ namespace UC
             // Check if the Volume has a profile and if it contains a ColorAdjustments override
             if (volume != null && volume.profile.TryGet<ColorAdjustments>(out colorAdjustments))
             {
-                Debug.Log("ColorAdjustments found in Volume Profile!");
+                DebugHelpers.Log("ColorAdjustments found in Volume Profile!");
             }
             else
             {
-                Debug.LogError("No ColorAdjustments override found in the Volume Profile!");
+                DebugHelpers.LogError("No ColorAdjustments override found in the Volume Profile!");
             }
 
             UpdateValues();

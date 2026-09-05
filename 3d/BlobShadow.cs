@@ -35,7 +35,7 @@ namespace UC
         {
             if ((meshRenderer.gameObject == gameObject) && (rotateToGround))
             {
-                Debug.LogWarning("It is not advisable to have the meshRenderer on the same object as the BlobShadow controller, since the raycast is cast from it and with the rotation we'll move the position in unexpected ways which may make the shadow run away.");
+                DebugHelpers.LogWarning("It is not advisable to have the meshRenderer on the same object as the BlobShadow controller, since the raycast is cast from it and with the rotation we'll move the position in unexpected ways which may make the shadow run away.");
             }
 
             if (meshRenderer)
@@ -44,7 +44,7 @@ namespace UC
 
                 if (!sourceMaterial)
                 {
-                    Debug.LogWarning($"No material found on {gameObject.name}.");
+                    DebugHelpers.LogWarning($"No material found on {gameObject.name}.");
                     return;
                 }
 
@@ -58,7 +58,7 @@ namespace UC
 
                 if (material.shader.name != "Unity Common/Blob Shadow")
                 {
-                    Debug.LogWarning("Only Unity Common/Blob Shadow shader supported!");
+                    DebugHelpers.LogWarning("Only Unity Common/Blob Shadow shader supported!");
                 }
             }
         }

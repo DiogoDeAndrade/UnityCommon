@@ -20,7 +20,7 @@ namespace UC.RPG.Actions
 
             if (inventoryInstance == null)
             {
-                Debug.LogWarning("No inventory on action object, can't add item!");
+                DebugHelpers.LogWarning("No inventory on action object, can't add item!");
                 yield break;
             }
 
@@ -28,7 +28,7 @@ namespace UC.RPG.Actions
             var item = itemTarget.GetEntity(context);
             if (item == null)
             {
-                Debug.LogWarning("No item on target entity, can't add item!");
+                DebugHelpers.LogWarning("No item on target entity, can't add item!");
                 yield break;
             }
 

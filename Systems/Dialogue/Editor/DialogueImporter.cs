@@ -53,7 +53,7 @@ namespace UC
 
                 if (includePath == null)
                 {
-                    Debug.LogWarning($"Include \"{includeNames[i]}\" in {ctx.assetPath} not found - keeping a soft reference. Run Unity Common/Dialogue/Update References once the file exists.");
+                    DebugHelpers.LogWarning($"Include \"{includeNames[i]}\" in {ctx.assetPath} not found - keeping a soft reference. Run Unity Common/Dialogue/Update References once the file exists.");
                     continue;
                 }
 
@@ -66,7 +66,7 @@ namespace UC
                 {
                     // The file exists but its artifact isn't available yet (import order) - the
                     // runtime editor fallback and Update References cover this
-                    Debug.LogWarning($"Include \"{includeNames[i]}\" in {ctx.assetPath} isn't imported yet - run Unity Common/Dialogue/Update References.");
+                    DebugHelpers.LogWarning($"Include \"{includeNames[i]}\" in {ctx.assetPath} isn't imported yet - run Unity Common/Dialogue/Update References.");
                     continue;
                 }
 

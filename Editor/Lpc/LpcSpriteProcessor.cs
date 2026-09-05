@@ -70,7 +70,7 @@ namespace UC
 			if (texture == null)
 			{
 				var assetType = AssetDatabase.GetMainAssetTypeAtPath(assetPath);
-				Debug.LogError("Not a texture (" + assetType + ") [" + assetPath + "]");
+				DebugHelpers.LogError("Not a texture (" + assetType + ") [" + assetPath + "]");
 				return;
 			}
 			if (!IsLpcSpriteSheet(texture))
@@ -99,7 +99,7 @@ namespace UC
 			if (!IsLpcSpriteSheet(texture))
 				return;
 
-			Debug.Log("Importing LPC Character Sheet");
+			DebugHelpers.Log("Importing LPC Character Sheet");
 			List<SpriteMetaData> metas = new List<SpriteMetaData>();
 			for (int row = 0; row < m_RowCount; ++row)
 			{
@@ -213,7 +213,7 @@ namespace UC
 			case(20):
 				return LpcAnimationState.Spellcast;
 			default:
-				Debug.LogError ("GetAnimationState unknown row: " + row);
+				DebugHelpers.LogError ("GetAnimationState unknown row: " + row);
 				return 0;
 			}
 		}
@@ -264,7 +264,7 @@ namespace UC
 			case(20):
 				return "CastN_";
 			default:
-				Debug.LogError ("ResolveLpcNamePrefix unknown row: " + row);
+				DebugHelpers.LogError ("ResolveLpcNamePrefix unknown row: " + row);
 				return "";
 			}
 		}

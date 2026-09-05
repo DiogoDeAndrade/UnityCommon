@@ -46,6 +46,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityMeshSimplifier.Internal;
+using UC;
 using UMSTriangle = UnityMeshSimplifier.Internal.Triangle;
 
 namespace UnityMeshSimplifier
@@ -433,7 +434,7 @@ namespace UnityMeshSimplifier
             {
                 if (attributeValues != null && attributeValues.Length > 0)
                 {
-                    Debug.LogErrorFormat("Failed to set vertex attribute '{0}' with {1} length of array, when {2} was needed.", attributeName, attributeValues.Length, vertices.Length);
+                    DebugHelpers.LogErrorFormat("Failed to set vertex attribute '{0}' with {1} length of array, when {2} was needed.", attributeName, attributeValues.Length, vertices.Length);
                 }
                 attributeArray = null;
             }
@@ -2114,7 +2115,7 @@ namespace UnityMeshSimplifier
 
                 if (verbose)
                 {
-                    Debug.LogFormat("iteration {0} - triangles {1} threshold {2}", iteration, (startTrisCount - deletedTris), threshold);
+                    DebugHelpers.LogFormat("iteration {0} - triangles {1} threshold {2}", iteration, (startTrisCount - deletedTris), threshold);
                 }
 
                 // Remove vertices & mark deleted triangles
@@ -2125,7 +2126,7 @@ namespace UnityMeshSimplifier
 
             if (verbose)
             {
-                Debug.LogFormat("Finished simplification with triangle count {0}", this.triangles.Length);
+                DebugHelpers.LogFormat("Finished simplification with triangle count {0}", this.triangles.Length);
             }
         }
 
@@ -2164,7 +2165,7 @@ namespace UnityMeshSimplifier
 
                 if (verbose)
                 {
-                    Debug.LogFormat("Lossless iteration {0} - triangles {1}", iteration, triangleCount);
+                    DebugHelpers.LogFormat("Lossless iteration {0} - triangles {1}", iteration, triangleCount);
                 }
 
                 // Remove vertices & mark deleted triangles
@@ -2180,7 +2181,7 @@ namespace UnityMeshSimplifier
 
             if (verbose)
             {
-                Debug.LogFormat("Finished simplification with triangle count {0}", this.triangles.Length);
+                DebugHelpers.LogFormat("Finished simplification with triangle count {0}", this.triangles.Length);
             }
         }
         #endregion

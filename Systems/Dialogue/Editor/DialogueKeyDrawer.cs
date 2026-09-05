@@ -113,12 +113,12 @@ namespace UC
             var sibling = property.serializedObject.FindProperty(siblingPath);
             if (sibling == null)
             {
-                Debug.LogWarning($"[DialogueKey] {property.serializedObject.targetObject.name}: no field \"{fieldName}\" next to \"{property.name}\"");
+                DebugHelpers.LogWarning($"[DialogueKey] {property.serializedObject.targetObject.name}: no field \"{fieldName}\" next to \"{property.name}\"");
                 return null;
             }
             if (sibling.propertyType != SerializedPropertyType.ObjectReference)
             {
-                Debug.LogWarning($"[DialogueKey] {property.serializedObject.targetObject.name}: \"{fieldName}\" is not a DialogueData reference");
+                DebugHelpers.LogWarning($"[DialogueKey] {property.serializedObject.targetObject.name}: \"{fieldName}\" is not a DialogueData reference");
                 return null;
             }
 

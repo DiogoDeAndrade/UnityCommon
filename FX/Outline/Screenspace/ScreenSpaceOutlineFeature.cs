@@ -137,7 +137,7 @@ namespace UC
                 var shader = Shader.Find(kMaskShaderName);
                 if (!shader)
                 {
-                    Debug.LogWarning($"Can't find shader \"{kMaskShaderName}\" - screen space outlines are disabled.");
+                    DebugHelpers.LogWarning($"Can't find shader \"{kMaskShaderName}\" - screen space outlines are disabled.");
                     return false;
                 }
                 maskMaterial = CoreUtils.CreateEngineMaterial(shader);
@@ -148,7 +148,7 @@ namespace UC
                 var shader = Shader.Find(kResolveShaderName);
                 if (!shader)
                 {
-                    Debug.LogWarning($"Can't find shader \"{kResolveShaderName}\" - screen space outlines are disabled.");
+                    DebugHelpers.LogWarning($"Can't find shader \"{kResolveShaderName}\" - screen space outlines are disabled.");
                     return false;
                 }
                 resolveMaterial = CoreUtils.CreateEngineMaterial(shader);

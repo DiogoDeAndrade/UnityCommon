@@ -139,7 +139,7 @@ namespace UC
                     string[] guids = Selection.assetGUIDs;
                     if (guids.Length == 0)
                     {
-                        Debug.LogError("No asset selected");
+                        DebugHelpers.LogError("No asset selected");
                         return;
                     }
 
@@ -247,7 +247,7 @@ namespace UC
                     }
                     catch (System.Exception e)
                     {
-                        Debug.LogError($"Failed to process texture {assetPath}: {e.Message}");
+                        DebugHelpers.LogError($"Failed to process texture {assetPath}: {e.Message}");
                     }
                 }
             }
@@ -327,7 +327,7 @@ namespace UC
             if ((originalImporter.textureType == TextureImporterType.Sprite) &&
                 (originalImporter.spriteImportMode != SpriteImportMode.Single))
             {
-                Debug.LogError("Probably need to implement this, the tool doesn't support copying Sprite atlas currently.");
+                DebugHelpers.LogError("Probably need to implement this, the tool doesn't support copying Sprite atlas currently.");
             }
         }
 
@@ -524,7 +524,7 @@ namespace UC
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error reading texture {srcTexture.name}: {e.Message}");
+                DebugHelpers.LogError($"Error reading texture {srcTexture.name}: {e.Message}");
             }
 
             return null;

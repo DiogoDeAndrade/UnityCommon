@@ -56,7 +56,7 @@ namespace UC
                 {
                     if (_voxelData.data.Length != _voxelData.gridSize.x * _voxelData.gridSize.y * _voxelData.gridSize.z)
                     {
-                        Debug.LogWarning("Voxel grid size incompatible with provided data: set grid size first!");
+                        DebugHelpers.LogWarning("Voxel grid size incompatible with provided data: set grid size first!");
                     }
                 }
                 _mesh = null;

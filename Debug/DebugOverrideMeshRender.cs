@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UC;
 
 [ExecuteAlways]
 [DisallowMultipleComponent]
@@ -443,7 +444,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
                 entry.dirty = true;
                 break;
             default:
-                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set colors on component {component}!");
+                DebugHelpers.LogWarning($"DebugOverrideMeshDraw: Can't set colors on component {component}!");
                 break;
         }
     }
@@ -488,7 +489,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
                 entry.dirty = true;
                 break;
             default:
-                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set Vector2 on component {component}!");
+                DebugHelpers.LogWarning($"DebugOverrideMeshDraw: Can't set Vector2 on component {component}!");
                 break;
         }
     }
@@ -541,7 +542,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
                 entry.dirty = true;
                 break;
             default:
-                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set Vector3 on component {component}!");
+                DebugHelpers.LogWarning($"DebugOverrideMeshDraw: Can't set Vector3 on component {component}!");
                 break;
         }
     }
@@ -590,7 +591,7 @@ public sealed class DebugOverrideMeshDraw : MonoBehaviour
                 entry.dirty = true;
                 break;
             default:
-                Debug.LogWarning($"DebugOverrideMeshDraw: Can't set Vector4 on component {component}!");
+                DebugHelpers.LogWarning($"DebugOverrideMeshDraw: Can't set Vector4 on component {component}!");
                 break;
         }
     }
