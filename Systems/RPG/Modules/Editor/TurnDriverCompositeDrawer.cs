@@ -121,7 +121,7 @@ namespace UC.RPG.Editor
         private static ReorderableList GetOrCreateList(SerializedProperty ownerProp, SerializedProperty driversProp)
         {
             // Use property path to keep one list per instance in the inspector
-            string key = ownerProp.serializedObject.targetObject.GetEntityId().ToString() + "|" + ownerProp.propertyPath;
+            string key = ownerProp.serializedObject.targetObject.GetEntityId() + "|" + ownerProp.propertyPath;
 
             if (s_lists.TryGetValue(key, out var list))
             {
