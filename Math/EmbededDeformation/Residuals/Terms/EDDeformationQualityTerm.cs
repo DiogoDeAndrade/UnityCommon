@@ -195,6 +195,22 @@ namespace UC.ED
             public int simplexCount => (indices != null) ? (indices.Length / Math.Max(1, arity)) : (0);
             public int vertexCount => (restVertices != null) ? (restVertices.Length) : (0);
 
+            /// <summary>
+            /// The sample set at rest - the same vertex array TryClassifySamples deforms, in the same
+            /// order, and the same index array. For an instrument that needs a rest baseline of its
+            /// own (the self-intersection measure subtracts the contacts the rest mesh already has)
+            /// and must be sure it is comparing the geometry this sampler measures. Read-only: the
+            /// arrays are the instance's, do not write to them.
+            /// </summary>
+            public bool TryGetRestSamples(out Vector3[] vertices, out int[] sampleIndices, out int sampleArity)
+            {
+                vertices = restVertices;
+                sampleIndices = indices;
+                sampleArity = arity;
+
+                return (indices != null);
+            }
+
             /// <summary>The measure of the whole sample set at rest, which weights each simplex's share of a row.</summary>
             public double restMeasure => restTotalMeasure;
 
