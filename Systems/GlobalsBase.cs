@@ -44,12 +44,12 @@ namespace UC
         {
             if (_instanceBase) return (T)_instanceBase;
 
-            Debug.Log("Globals not loaded, loading...");
+            DebugHelpers.Log("Globals not loaded, loading...");
 
             var allConfigs = Resources.LoadAll<T>("");
             if (allConfigs.Length == 0)
             {
-                Debug.LogError("Globals not available - create a globals object!");
+                DebugHelpers.LogError("Globals not available - create a globals object!");
             }
             else if (allConfigs.Length == 1)
             {

@@ -28,7 +28,7 @@ namespace UC
 
             if (!sourceMesh.isReadable)
             {
-                Debug.LogError($"Cannot simplify mesh '{sourceMesh.name}': the mesh is not readable.");
+                DebugHelpers.LogError($"Cannot simplify mesh '{sourceMesh.name}': the mesh is not readable.");
 
                 return null;
             }

@@ -109,7 +109,7 @@ namespace UC
             {
                 if ((force3d) || (prsObject != null))
                 {
-                    Debug.LogWarning("Positional music is not supported...");
+                    DebugHelpers.LogWarning("Positional music is not supported...");
                 }
 
                 ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), crossfadeTime, defaultTag);

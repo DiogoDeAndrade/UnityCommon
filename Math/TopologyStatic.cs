@@ -106,7 +106,7 @@ namespace UC
                 if ((vertices.i3 != i1) && (vertices.i3 != i2)) return vertices.i3;
 
                 // Some sort of degenerate triangle
-                Debug.LogWarning("Degenerate triangle found!");
+                DebugHelpers.LogWarning("Degenerate triangle found!");
                 return -1;
             }
         }

@@ -21,7 +21,7 @@ namespace UC.RPG.Editor
 
             // Unique key per instance + property
             var so = actionsProp.serializedObject;
-            string key = so.targetObject.GetEntityId() + "/" + actionsProp.propertyPath;
+            string key = so.targetObject.GetEntityId().ToString() + "/" + actionsProp.propertyPath;
 
             if ((_actionsLists.TryGetValue(key, out var list)) && (list != null))
                 return list;
@@ -41,7 +41,7 @@ namespace UC.RPG.Editor
 
             // Unique key per instance + property
             var so = conditionsProp.serializedObject;
-            string key = so.targetObject.GetEntityId() + "/" + conditionsProp.propertyPath;
+            string key = so.targetObject.GetEntityId().ToString() + "/" + conditionsProp.propertyPath;
 
             if ((_conditionsLists.TryGetValue(key, out var list)) && (list != null))
                 return list;

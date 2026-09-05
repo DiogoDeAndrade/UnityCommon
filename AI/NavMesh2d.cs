@@ -448,7 +448,7 @@ namespace UC
             if (NavigationMeshes == null) NavigationMeshes = new();
             if (NavigationMeshes.ContainsKey(agentType))
             {
-                Debug.LogError($"More than one navigation mesh for agent type {agentType.name}!");
+                DebugHelpers.LogError($"More than one navigation mesh for agent type {agentType.name}!");
             }
             else
             {
@@ -724,7 +724,7 @@ namespace UC
 
             if (!hasBounds)
             {
-                Debug.LogWarning("No static colliders found in obstacle mask.");
+                DebugHelpers.LogWarning("No static colliders found in obstacle mask.");
                 gridSize = Vector2Int.zero;
                 gridOffset = Vector2.zero;
                 return;
@@ -824,7 +824,7 @@ namespace UC
 
                     if (currentRegion == byte.MaxValue)
                     {
-                        Debug.LogWarning("Exceeded max number of regions (255).");
+                        DebugHelpers.LogWarning("Exceeded max number of regions (255).");
                         return;
                     }
                 }
@@ -1554,7 +1554,7 @@ namespace UC
             {
                 if (!GetPointOnNavMesh(start, regionId, out startPolygonId, out startOnNavmesh))
                 {
-                    Debug.LogWarning("Can't find start point on navmesh!");
+                    DebugHelpers.LogWarning("Can't find start point on navmesh!");
                     return PathState.NoPath;
                 }
                 startRegionId = regionId;
@@ -1563,7 +1563,7 @@ namespace UC
             {
                 if (!GetPointOnNavMesh(start, out startRegionId, out startPolygonId, out startOnNavmesh))
                 {
-                    Debug.LogWarning("Can't find start point on navmesh!");
+                    DebugHelpers.LogWarning("Can't find start point on navmesh!");
                     return PathState.NoPath;
                 }
             }
@@ -1571,7 +1571,7 @@ namespace UC
             // The end may now live in a different region, reachable through a NavMeshLink2d.
             if (!GetPointOnNavMesh(end, out endRegionId, out endPolygonId, out endOnNavmesh))
             {
-                Debug.LogWarning("Can't find end point on navmesh!");
+                DebugHelpers.LogWarning("Can't find end point on navmesh!");
                 return PathState.NoPath;
             }
 

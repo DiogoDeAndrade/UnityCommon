@@ -70,7 +70,7 @@ namespace UC
 #if UNITY_EDITOR
                 if (!animator.HasParameter(foot.footAnimatorHash))
                 {
-                    Debug.LogError($"Animator should have parameter called {foot.foot.name} that defines if that foot should be up (1) or down (0)");
+                    DebugHelpers.LogError($"Animator should have parameter called {foot.foot.name} that defines if that foot should be up (1) or down (0)");
                     foot.footAnimatorHash = 0;
                 }
 #endif

@@ -48,7 +48,7 @@ public class UIList : BaseUIControl
         provider = GetComponent<UIListProvider>();
         if (provider == null)
         {
-            Debug.LogError($"UIList on '{name}' requires a component implementing UIListProvider.", this);
+            DebugHelpers.LogError($"UIList on '{name}' requires a component implementing UIListProvider.", this);
             return;
         }
 

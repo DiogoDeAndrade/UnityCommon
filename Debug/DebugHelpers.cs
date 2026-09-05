@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System;
 using Unity.Scripting.LifecycleManagement;
+using System.Diagnostics;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -365,6 +366,62 @@ namespace UC
                     }
                 }
             }
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0011", Justification = "I want these log to exist, even in normal builds, I'm careful enough to not call these in an update...")]
+        public static void Log(string message)
+        {
+            UnityEngine.Debug.Log(message);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0011", Justification = "I want these log to exist, even in normal builds, I'm careful enough to not call these in an update...")]
+        public static void Log(string message, UnityEngine.Object context)
+        {
+            UnityEngine.Debug.Log(message, context);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0012", Justification = "I want these log to exist, even in normal builds, I'm careful enough to not call these in an update...")]
+        public static void LogWarning(string message)
+        {
+            UnityEngine.Debug.LogWarning(message);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0012", Justification = "I want these log to exist, even in normal builds, I'm careful enough to not call these in an update...")]
+        public static void LogWarning(string message, UnityEngine.Object context)
+        {
+            UnityEngine.Debug.LogWarning(message, context);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0013", Justification = "I want these log to exist, even in normal builds, I'm careful enough to not call these in an update...")]
+        public static void LogError(string message)
+        {
+            UnityEngine.Debug.LogError(message);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ProjectAuditor", "PAR0013", Justification = "I want these log to exist, even in normal builds, I'm careful enough to not call these in an update...")]
+        public static void LogError(string message, UnityEngine.Object context)
+        {
+            UnityEngine.Debug.LogError(message, context);
+        }
+
+        public static void LogFormat(string format, params object[] p)
+        {
+            UnityEngine.Debug.LogFormat(format, p);
+        }
+
+        public static void LogWarningFormat(string format, params object[] p)
+        {
+            UnityEngine.Debug.LogWarningFormat(format, p);
+        }
+
+        public static void LogErrorFormat(string format, params object[] p)
+        {
+            UnityEngine.Debug.LogErrorFormat(format, p);
+        }
+
+        public static void LogException(Exception exception)
+        {
+            UnityEngine.Debug.LogException(exception);
         }
     }
 }

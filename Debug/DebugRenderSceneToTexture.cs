@@ -84,7 +84,7 @@ public class DebugRenderSceneToTexture : MonoBehaviour
             Matrix4x4 viewMatrixCam = camera.worldToCameraMatrix;
             Matrix4x4 projMatrixCam = camera.projectionMatrix;
 
-            //Debug.Log($"ViewMatrix =\n{viewMatrix}\nProjMatrix =\n{projMatrix}\nCamera (Correct):\nViewMatrix =\n{viewMatrixCam}\nProjMatrix =\n{projMatrixCam}");
+            //DebugHelpers.Log($"ViewMatrix =\n{viewMatrix}\nProjMatrix =\n{projMatrix}\nCamera (Correct):\nViewMatrix =\n{viewMatrixCam}\nProjMatrix =\n{projMatrixCam}");
         }*/
 
         Color c = (randomColor) ? (ColorExtensions.RandomRGB()) : (clearColor);

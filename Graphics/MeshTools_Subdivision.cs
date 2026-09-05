@@ -217,7 +217,7 @@ namespace UC
             mesh.RecalculateNormals();
             mesh.name = sourceMesh.name.Contains("Subdivide") ? sourceMesh.name : sourceMesh.name + " Subdivided";
 
-            Debug.Log($"Ran {numSplits} splits...");
+            DebugHelpers.Log($"Ran {numSplits} splits...");
 
             // Final cleanup / weld
             var topology = new TopologyStatic(mesh, Matrix4x4.identity, true);
@@ -395,7 +395,7 @@ namespace UC
 
             if (!sourceMesh.isReadable)
             {
-                Debug.LogError($"Cannot subdivide mesh '{sourceMesh.name}': the mesh is not readable.");
+                DebugHelpers.LogError($"Cannot subdivide mesh '{sourceMesh.name}': the mesh is not readable.");
 
                 return null;
             }

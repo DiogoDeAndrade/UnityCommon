@@ -68,7 +68,7 @@ public class NameEntry : MonoBehaviour
 
     void OnEnable()
     {
-        Debug.Log("Registering text input callback");
+        DebugHelpers.Log("Registering text input callback");
 #if !ENABLE_LEGACY_INPUT_MANAGER
         Keyboard.current.onTextInput += OnTextInput;
 #endif
@@ -76,7 +76,7 @@ public class NameEntry : MonoBehaviour
 
     void OnDisable()
     {
-        Debug.Log("Removing text input callback");
+        DebugHelpers.Log("Removing text input callback");
 
 #if !ENABLE_LEGACY_INPUT_MANAGER
         Keyboard.current.onTextInput -= OnTextInput;

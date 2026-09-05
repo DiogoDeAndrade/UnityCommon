@@ -31,10 +31,10 @@ namespace UC
 
                     if (_instance == null)
                     {
-                        Debug.LogError("UnityCommonEditorConfig instance not found. Ensure it's correctly created.");
+                        DebugHelpers.LogError("UnityCommonEditorConfig instance not found. Ensure it's correctly created.");
                     }
 #else
-                Debug.LogError("UnityCommonEditorConfig should only be accessed in the Editor.");
+                DebugHelpers.LogError("UnityCommonEditorConfig should only be accessed in the Editor.");
 #endif
                 }
                 return _instance;

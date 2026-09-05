@@ -287,7 +287,7 @@ namespace UC
             int frameCount = Mathf.RoundToInt(clip.length * clip.frameRate) + 1;
             if ((frame < 0) || (frame >= frameCount))
             {
-                Debug.LogWarning($"Can't set frame to frame {frame} (animation {clip.name} only has {frameCount} frames)!");
+                DebugHelpers.LogWarning($"Can't set frame to frame {frame} (animation {clip.name} only has {frameCount} frames)!");
                 return;
             }
 

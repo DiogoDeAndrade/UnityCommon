@@ -95,7 +95,7 @@ namespace UC
 
             if (texture == null)
             {
-                Debug.LogWarning("Texture not selected!");
+                DebugHelpers.LogWarning("Texture not selected!");
                 return;
             }
 

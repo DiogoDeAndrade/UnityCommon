@@ -226,7 +226,7 @@ namespace UC
             PlayerSettings.bundleVersion = buildDefs.version;
             SaveBuildDefs();
 
-            UnityEngine.Debug.Log("New Version: " + buildDefs.version);
+            DebugHelpers.Log("New Version: " + buildDefs.version);
         }
 
         private void GetCurrentVersionFromPlayerSettings()
@@ -234,7 +234,7 @@ namespace UC
             buildDefs.version = PlayerSettings.bundleVersion;
             SaveBuildDefs();
             Repaint();
-            UnityEngine.Debug.Log("Fetched version from Player Settings: " + buildDefs.version);
+            DebugHelpers.Log("Fetched version from Player Settings: " + buildDefs.version);
         }
 
         void UpdateBuildTimestamp()
@@ -465,7 +465,7 @@ namespace UC
 
             buildLogScroll.y = float.MaxValue;
 
-            UnityEngine.Debug.Log(message);
+            DebugHelpers.Log(message);
             Repaint();
         }
 

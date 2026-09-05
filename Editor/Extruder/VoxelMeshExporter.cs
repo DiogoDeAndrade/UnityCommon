@@ -43,8 +43,8 @@ namespace UC
             string meshPath = $"{outputDir}/{baseName}_model.asset";
             SaveOrReplaceMesh(mesh, meshPath);
 
-            Debug.Log($"[VoxelExtrude] Saved mesh    -> {meshPath}");
-            Debug.Log($"[VoxelExtrude] Saved palette -> {texPath}");
+            DebugHelpers.Log($"[VoxelExtrude] Saved mesh    -> {meshPath}");
+            DebugHelpers.Log($"[VoxelExtrude] Saved palette -> {texPath}");
 
             // 5. Optional material
             if (generateMaterial)
@@ -73,7 +73,7 @@ namespace UC
             string meshPath = $"{outputDir}/{baseName}_model.asset";
             SaveOrReplaceMesh(mesh, meshPath);
 
-            Debug.Log($"[VoxelExtrude] Saved vertex-colour mesh -> {meshPath}");
+            DebugHelpers.Log($"[VoxelExtrude] Saved vertex-colour mesh -> {meshPath}");
 
             if (generateMaterial)
                 SaveMaterial(baseName, outputDir, tex: null, isVertexColor: true);
@@ -334,7 +334,7 @@ namespace UC
 
             if (shader == null)
             {
-                Debug.LogWarning("[VoxelExtrude] Could not find a suitable shader for the material.");
+                DebugHelpers.LogWarning("[VoxelExtrude] Could not find a suitable shader for the material.");
                 return;
             }
 
@@ -364,7 +364,7 @@ namespace UC
                 AssetDatabase.CreateAsset(mat, matPath);
             }
 
-            Debug.Log($"[VoxelExtrude] Saved material -> {matPath}");
+            DebugHelpers.Log($"[VoxelExtrude] Saved material -> {matPath}");
         }
 
         // ---------------------------------------------------------------------

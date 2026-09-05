@@ -472,7 +472,7 @@ namespace UC
 
                     if ((edgeLoop.Count == 0) && (nextVertex == -1))
                     {
-                        Debug.LogWarning("Couldn't find edge loop for edge " + e1.i1 + "=>" + e1.i2);
+                        DebugHelpers.LogWarning("Couldn't find edge loop for edge " + e1.i1 + "=>" + e1.i2);
                         break;
                     }
                 }
@@ -557,7 +557,7 @@ namespace UC
             // the inside)
             //t0 = stopwatch.ElapsedMilliseconds;
             var pinnedVertex = GetBoundaryVertices();
-            //Debug.Log("Get boundary = " + (stopwatch.ElapsedMilliseconds - t0));
+            //DebugHelpers.Log("Get boundary = " + (stopwatch.ElapsedMilliseconds - t0));
 
             // Collapse interior edges
             bool exit = false;

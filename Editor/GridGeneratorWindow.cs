@@ -185,7 +185,7 @@ namespace UC
 
                 if (selectedObject == null)
                 {
-                    Debug.LogWarning("Use Selected Object As Prefab is enabled, but no object is selected.");
+                    DebugHelpers.LogWarning("Use Selected Object As Prefab is enabled, but no object is selected.");
                     return;
                 }
 
@@ -197,7 +197,7 @@ namespace UC
 
                 if (validPrefabs.Count == 0)
                 {
-                    Debug.LogWarning("No prefabs assigned.");
+                    DebugHelpers.LogWarning("No prefabs assigned.");
                     return;
                 }
             }
@@ -234,7 +234,7 @@ namespace UC
                     }
                     else
                     {
-                        Debug.LogWarning("Use Selected Object As Parent is enabled, but no object is selected.");
+                        DebugHelpers.LogWarning("Use Selected Object As Parent is enabled, but no object is selected.");
                         return;
                     }
                 }

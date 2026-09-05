@@ -20,7 +20,7 @@ namespace UC
 
             if (colors == null || colors.Count == 0)
             {
-                Debug.LogError($"ASE Swatch Importer: Failed to parse ASE file: {path}");
+                DebugHelpers.LogError($"ASE Swatch Importer: Failed to parse ASE file: {path}");
                 return;
             }
 
@@ -75,7 +75,7 @@ namespace UC
                     string signature = new string(reader.ReadChars(4));
                     if (signature != "ASEF")
                     {
-                        Debug.LogError("ASE Swatch Importer: Invalid ASE file format.");
+                        DebugHelpers.LogError("ASE Swatch Importer: Invalid ASE file format.");
                         return null;
                     }
 
@@ -114,14 +114,14 @@ namespace UC
                             }
                             else
                             {
-                                Debug.LogError($"ASE Swatch Importer: No support for colorspace {colorSpace}!");
+                                DebugHelpers.LogError($"ASE Swatch Importer: No support for colorspace {colorSpace}!");
                                 return null;
                             }
 
                             int endOfDataMarker = SwapUInt16(reader.ReadUInt16());
                             if ((endOfDataMarker != 0x0000) && (endOfDataMarker != 0x0002))
                             {
-                                Debug.LogError($"ASE Swatch Importer: Format error - invalid end of data marker [{endOfDataMarker}]!");
+                                DebugHelpers.LogError($"ASE Swatch Importer: Format error - invalid end of data marker [{endOfDataMarker}]!");
                                 return null;
                             }
                         }
@@ -135,13 +135,13 @@ namespace UC
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"ASE Swatch Importer: Failed to parse ASE file: {ex.Message}");
+                DebugHelpers.LogError($"ASE Swatch Importer: Failed to parse ASE file: {ex.Message}");
                 return null;
             }
 
             if (colors.Count == 0)
             {
-                Debug.LogError("ASE Swatch Importer: No colors found!");
+                DebugHelpers.LogError("ASE Swatch Importer: No colors found!");
             }
 
             return colors;

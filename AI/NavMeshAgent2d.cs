@@ -138,7 +138,7 @@ namespace UC
             navMesh = NavMesh2d.Get(agentType);
             if (navMesh == null)
             {
-                Debug.LogWarning($"Navmesh not found for agent of type {agentType.name}!");
+                DebugHelpers.LogWarning($"Navmesh not found for agent of type {agentType.name}!");
             }
             else
             {
@@ -813,7 +813,7 @@ namespace UC
 
             if (handler == null)
             {
-                Debug.LogWarning($"NavMeshAgent2d '{name}' reached manual link '{link.name}' but no INavMeshLinkTraversal on this GameObject can handle it.");
+                DebugHelpers.LogWarning($"NavMeshAgent2d '{name}' reached manual link '{link.name}' but no INavMeshLinkTraversal on this GameObject can handle it.");
                 _pendingPath = null;
                 ForceStop();
                 return;

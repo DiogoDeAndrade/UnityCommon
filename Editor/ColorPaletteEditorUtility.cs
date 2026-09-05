@@ -12,7 +12,7 @@ namespace UC
             var selectedObject = Selection.activeObject as ColorPalette;
             if (selectedObject == null)
             {
-                Debug.LogError("No ColorPalette asset selected.");
+                DebugHelpers.LogError("No ColorPalette asset selected.");
                 return;
             }
 
@@ -39,7 +39,7 @@ namespace UC
             EditorUtility.FocusProjectWindow();
             Selection.activeObject = editableCopy;
 
-            Debug.Log($"Created editable copy of palette at: {newPath}");
+            DebugHelpers.Log($"Created editable copy of palette at: {newPath}");
         }
 
         [MenuItem("Assets/Unity Common Tools/Palette/Create Editable Palette", true)]

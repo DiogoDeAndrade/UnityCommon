@@ -402,31 +402,31 @@ namespace UC
                 if (((n_vertex > 0) && (srcVertex.Length == 0)) ||
                     ((n_vertex == 0) && (srcVertex.Length > 0)))
                 {
-                    Debug.Log("Meshes can't be merged (one has positions, the other doesn't)");
+                    DebugHelpers.Log("Meshes can't be merged (one has positions, the other doesn't)");
                     return;
                 }
                 if (((n_normals > 0) && (srcNormals.Length == 0)) ||
                     ((n_normals == 0) && (srcNormals.Length > 0)))
                 {
-                    Debug.Log("Meshes can't be merged (one has normals, the other doesn't)");
+                    DebugHelpers.Log("Meshes can't be merged (one has normals, the other doesn't)");
                     return;
                 }
                 if (((n_uvs > 0) && (srcUvs.Length == 0)) ||
                     ((n_uvs == 0) && (srcUvs.Length > 0)))
                 {
-                    Debug.Log("Meshes can't be merged (one has UVs, the other doesn't)");
+                    DebugHelpers.Log("Meshes can't be merged (one has UVs, the other doesn't)");
                     return;
                 }
                 if (((n_colors > 0) && (srcColors.Length == 0)) ||
                     ((n_colors == 0) && (srcColors.Length > 0)))
                 {
-                    Debug.Log("Meshes can't be merged (one has color0, the other doesn't)");
+                    DebugHelpers.Log("Meshes can't be merged (one has color0, the other doesn't)");
                     return;
                 }
                 if (((n_tangents > 0) && (srcTangents.Length == 0)) ||
                     ((n_tangents == 0) && (srcTangents.Length > 0)))
                 {
-                    Debug.Log("Meshes can't be merged (one has tangents, the other doesn't)");
+                    DebugHelpers.Log("Meshes can't be merged (one has tangents, the other doesn't)");
                     return;
                 }
             }
@@ -561,13 +561,13 @@ namespace UC
                 (sourceMesh.uv3.Length > 0) ||
                 (sourceMesh.uv4.Length > 0))
             {
-                Debug.LogWarning("ExtrudeMesh doesn't support meshes with other attributes beyond positions: need to implement!");
+                DebugHelpers.LogWarning("ExtrudeMesh doesn't support meshes with other attributes beyond positions: need to implement!");
                 return null;
             }
 
             if (sourceMesh.subMeshCount > 1)
             {
-                Debug.LogWarning("ExtrudeMesh doesn't support meshes with more than one submesh: need to implement!");
+                DebugHelpers.LogWarning("ExtrudeMesh doesn't support meshes with more than one submesh: need to implement!");
                 return null;
             }
 
@@ -735,7 +735,7 @@ namespace UC
             {
                 if (normals[i] != newNormals[i])                
                 {
-                    Debug.Log("Normals are different");
+                    DebugHelpers.Log("Normals are different");
                 }
             }
         }

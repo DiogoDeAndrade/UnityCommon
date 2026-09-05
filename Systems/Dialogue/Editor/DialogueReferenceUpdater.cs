@@ -65,7 +65,7 @@ namespace UC
                 var data = AssetDatabase.LoadAssetAtPath<DialogueData>(path);
                 if (data == null)
                 {
-                    Debug.LogError($"Dialogue file failed to import: {path}");
+                    DebugHelpers.LogError($"Dialogue file failed to import: {path}");
                     continue;
                 }
                 all.Add((path, data));
@@ -93,13 +93,13 @@ namespace UC
             {
                 if (owners.Count > 1)
                 {
-                    Debug.LogWarning($"Dialogue key \"{key}\" is defined in more than one file ({string.Join(", ", owners)}) - lookups will silently take the first one found!");
+                    DebugHelpers.LogWarning($"Dialogue key \"{key}\" is defined in more than one file ({string.Join(", ", owners)}) - lookups will silently take the first one found!");
                     warnings++;
                 }
 
                 if (key == "End")
                 {
-                    Debug.LogWarning($"A dialogue is named \"End\" ({string.Join(", ", owners)}) - that name is reserved for the \"-> End\" target and the node can never be reached!");
+                    DebugHelpers.LogWarning($"A dialogue is named \"End\" ({string.Join(", ", owners)}) - that name is reserved for the \"-> End\" target and the node can never be reached!");
                     warnings++;
                 }
             }
@@ -111,7 +111,7 @@ namespace UC
                 {
                     if (data.IncludeRefs[i] == null)
                     {
-                        Debug.LogError($"{path}: include \"{data.IncludeNames[i]}\" can't be resolved - no .dialogue file with that name exists!");
+                        DebugHelpers.LogError($"{path}: include \"{data.IncludeNames[i]}\" can't be resolved - no .dialogue file with that name exists!");
                         errors++;
                     }
                 }
@@ -142,9 +142,9 @@ namespace UC
             }
 
             if (errors > 0)
-                Debug.LogError($"Dialogue references: {errors} error(s), {warnings} warning(s) in {all.Count} file(s). See above.");
+                DebugHelpers.LogError($"Dialogue references: {errors} error(s), {warnings} warning(s) in {all.Count} file(s). See above.");
             else
-                Debug.Log($"Dialogue references OK: {all.Count} file(s) checked, {warnings} warning(s).");
+                DebugHelpers.Log($"Dialogue references OK: {all.Count} file(s) checked, {warnings} warning(s).");
         }
 
         // True when the target is fine (or merely warned about); false is an error the caller counts
@@ -159,7 +159,7 @@ namespace UC
             {
                 if (int.Parse(historyMatch.Groups[1].Value) > 0)
                 {
-                    Debug.LogWarning($"{path}: \"{fromKey}\" jumps to {target} - history offsets are zero or negative (History(-1) goes back one)!");
+                    DebugHelpers.LogWarning($"{path}: \"{fromKey}\" jumps to {target} - history offsets are zero or negative (History(-1) goes back one)!");
                     warnings++;
                 }
                 return true;
@@ -174,12 +174,12 @@ namespace UC
 
             if (keyOwners.TryGetValue(target, out var owners))
             {
-                Debug.LogWarning($"{path}: \"{fromKey}\" jumps to \"{target}\", which only exists in {string.Join(", ", owners)} - that works only if the file is registered in the DialogueManager's global list. Consider an include(\"...\").");
+                DebugHelpers.LogWarning($"{path}: \"{fromKey}\" jumps to \"{target}\", which only exists in {string.Join(", ", owners)} - that works only if the file is registered in the DialogueManager's global list. Consider an include(\"...\").");
                 warnings++;
                 return true;
             }
 
-            Debug.LogError($"{path}: \"{fromKey}\" jumps to \"{target}\", which doesn't exist anywhere!");
+            DebugHelpers.LogError($"{path}: \"{fromKey}\" jumps to \"{target}\", which doesn't exist anywhere!");
             return false;
         }
     }

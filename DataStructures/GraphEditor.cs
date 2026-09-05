@@ -99,7 +99,7 @@ namespace UC
             var graphComponent = GetComponent<GraphComponent>();
             if (graphComponent == null)
             {
-                Debug.LogWarning("GraphComponent not found on this GameObject.");
+                DebugHelpers.LogWarning("GraphComponent not found on this GameObject.");
                 return;
             }
 

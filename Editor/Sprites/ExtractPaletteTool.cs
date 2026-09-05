@@ -153,7 +153,7 @@ namespace UC
                     string[] guids = Selection.assetGUIDs;
                     if (guids.Length == 0)
                     {
-                        Debug.LogError("No asset selected");
+                        DebugHelpers.LogError("No asset selected");
                         return;
                     }
 
@@ -349,7 +349,7 @@ namespace UC
                     }
                     catch (System.Exception e)
                     {
-                        Debug.LogError($"Failed to process texture {assetPath}: {e.Message}");
+                        DebugHelpers.LogError($"Failed to process texture {assetPath}: {e.Message}");
                     }
                 }
             }
@@ -399,7 +399,7 @@ namespace UC
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"Error reading texture {texture.name}: {e.Message}");
+                DebugHelpers.LogError($"Error reading texture {texture.name}: {e.Message}");
             }
         }
 

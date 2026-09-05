@@ -15,7 +15,7 @@ namespace UC
 
             if (renderers.Length == 0)
             {
-                Debug.LogWarning($"No renderers found under {rootTransform.name}.", box);
+                DebugHelpers.LogWarning($"No renderers found under {rootTransform.name}.", box);
                 return;
             }
 
@@ -38,7 +38,7 @@ namespace UC
 
             if (renderers.Length == 0)
             {
-                Debug.LogWarning($"No renderers found.", box);
+                DebugHelpers.LogWarning($"No renderers found.", box);
                 return;
             }
 
@@ -99,7 +99,7 @@ namespace UC
 
             if (!hasBounds)
             {
-                Debug.LogWarning($"No enabled renderers found.", box);
+                DebugHelpers.LogWarning($"No enabled renderers found.", box);
                 return;
             }
 

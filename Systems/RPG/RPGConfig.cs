@@ -49,7 +49,7 @@ namespace UC
             {
                 if (_instanceBase) return _instanceBase;
 
-                Debug.Log("RPGConfig not loaded, loading...");
+                DebugHelpers.Log("RPGConfig not loaded, loading...");
 
                 var allConfigs = Resources.LoadAll<RPGConfig>("");
                 if (allConfigs.Length == 1)

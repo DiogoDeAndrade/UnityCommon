@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
+using UC;
 
 public class UIRaycastDebugger : MonoBehaviour
 {
@@ -28,12 +28,12 @@ public class UIRaycastDebugger : MonoBehaviour
         if (_results.Count > 0)
         {
             // Topmost hit
-            Debug.Log("Top UI under cursor: " + _results[0].gameObject.name);
+            DebugHelpers.Log("Top UI under cursor: " + _results[0].gameObject.name);
 
             if (fullStack)
             {
                 foreach (var r in _results)
-                    Debug.Log(" - " + r.gameObject.name);
+                    DebugHelpers.Log(" - " + r.gameObject.name);
             }
         }
     }

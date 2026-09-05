@@ -206,7 +206,7 @@ namespace UC
             if (selectedObject == null) return false;
             if (selectedObject.GetType() != typeof(Texture2D))
             {
-                Debug.LogWarning("Can only create LPC animations from texture!");
+                DebugHelpers.LogWarning("Can only create LPC animations from texture!");
                 return false;
             }
 
@@ -216,7 +216,7 @@ namespace UC
 
             if (texture.name.Substring(0,4) != "LPC_")
             {
-                Debug.LogWarning("Texture name needs to start with LPC_!");
+                DebugHelpers.LogWarning("Texture name needs to start with LPC_!");
                 return false;
             }
 

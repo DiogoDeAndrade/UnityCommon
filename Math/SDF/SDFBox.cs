@@ -68,7 +68,7 @@ namespace UC
         {
             if (ownerGameObject == null)
             {
-                Debug.LogWarning($"No owner object on SDFBox {name}, cannot draw gizmos.");
+                DebugHelpers.LogWarning($"No owner object on SDFBox {name}, cannot draw gizmos.");
                 return;
             }
             Gizmos.matrix = ownerGameObject.transform.localToWorldMatrix * Matrix4x4.TRS(offset, rotation, Vector3.one);

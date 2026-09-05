@@ -426,19 +426,19 @@ namespace UC
                 {
                     // Write the PNG to the specified path
                     System.IO.File.WriteAllBytes(texturePath, pngData);
-                    Debug.Log($"Texture exported to: {texturePath}");
+                    DebugHelpers.Log($"Texture exported to: {texturePath}");
 
                     // Refresh the AssetDatabase to make the new texture visible in the Editor
                     AssetDatabase.Refresh();
                 }
                 else
                 {
-                    Debug.LogError("Failed to encode texture to PNG.");
+                    DebugHelpers.LogError("Failed to encode texture to PNG.");
                 }
             }
             else
             {
-                Debug.LogError("Failed to determine ScriptableObject path.");
+                DebugHelpers.LogError("Failed to determine ScriptableObject path.");
             }
         }
 #endif

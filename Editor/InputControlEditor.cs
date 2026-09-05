@@ -239,7 +239,7 @@ namespace UC
             {
                 if (!alreadyWarned)
                 {
-                    Debug.LogWarning($"Field '{playerInputFieldName}' not found on {targetObject.GetType().Name}");
+                    DebugHelpers.LogWarning($"Field '{playerInputFieldName}' not found on {targetObject.GetType().Name}");
                     alreadyWarned = true;
                 }
             }

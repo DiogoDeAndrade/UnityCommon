@@ -15,7 +15,7 @@ namespace UC
 
             if (hosts.Count == 0)
             {
-                Debug.LogWarning(
+                DebugHelpers.LogWarning(
                     "Selection contains no MonoBehaviour or ScriptableObject hosts.");
                 return;
             }
@@ -39,7 +39,7 @@ namespace UC
                         ? reference.className
                         : $"{reference.namespaceName}.{reference.className}";
 
-                    Debug.LogWarning(
+                    DebugHelpers.LogWarning(
                         $"Missing managed reference on '{host.name}':\n" +
                         $"  Host: {host.GetType().FullName}\n" +
                         $"  Reference ID: {reference.referenceId}\n" +
@@ -51,9 +51,9 @@ namespace UC
             }
 
             if (total == 0)
-                Debug.Log("No missing managed references found.");
+                DebugHelpers.Log("No missing managed references found.");
             else
-                Debug.Log($"Found {total} missing managed reference(s).");
+                DebugHelpers.Log($"Found {total} missing managed reference(s).");
         }
 
         [MenuItem("Unity Common/Tools/Clear Missing Managed References")]
@@ -63,7 +63,7 @@ namespace UC
 
             if (hosts.Count == 0)
             {
-                Debug.LogWarning(
+                DebugHelpers.LogWarning(
                     "Selection contains no MonoBehaviour or ScriptableObject hosts.");
                 return;
             }
@@ -82,7 +82,7 @@ namespace UC
                     EditorUtility.SetDirty(host);
                     clearedHosts++;
 
-                    Debug.Log(
+                    DebugHelpers.Log(
                         $"Cleared missing managed references from '{host.name}' " +
                         $"({host.GetType().FullName}).",
                         host);
@@ -92,11 +92,11 @@ namespace UC
             if (clearedHosts > 0)
             {
                 AssetDatabase.SaveAssets();
-                Debug.Log($"Cleaned {clearedHosts} serialization host(s).");
+                DebugHelpers.Log($"Cleaned {clearedHosts} serialization host(s).");
             }
             else
             {
-                Debug.Log("No missing managed references found.");
+                DebugHelpers.Log("No missing managed references found.");
             }
         }
 
@@ -192,7 +192,7 @@ namespace UC
                 }
             }
 
-            Debug.Log((total == 0) ? ("No missing managed references found in project assets.") : ($"Found {total} missing managed reference(s)."));
+            DebugHelpers.Log((total == 0) ? ("No missing managed references found in project assets.") : ($"Found {total} missing managed reference(s)."));
         }
 
         private static int ReportMissingReferences(Object host, string path)
@@ -213,7 +213,7 @@ namespace UC
                         ? reference.className
                         : $"{reference.namespaceName}.{reference.className}";
 
-                Debug.LogWarning(
+                DebugHelpers.LogWarning(
                     $"Missing managed reference:\n" +
                     $"  Asset: {path}\n" +
                     $"  Host: {host.name}\n" +
@@ -265,7 +265,7 @@ namespace UC
                 EditorSceneManager.RestoreSceneManagerSetup(originalSetup);
             }
 
-            Debug.Log(
+            DebugHelpers.Log(
                 total == 0
                     ? "No missing managed references found in scenes."
                     : $"Found {total} missing managed reference(s) in scenes.");

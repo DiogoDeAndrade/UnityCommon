@@ -61,7 +61,7 @@ namespace UC
             if (methods.Count == 1) return methods[0];
             if (methods.Count > 1)
             {
-                Debug.LogError($"\"{name}\" is ambiguous in {type.Name} - {DescribeMethods(methods)}; a method looked up by name alone can't be overloaded!");
+                DebugHelpers.LogError($"\"{name}\" is ambiguous in {type.Name} - {DescribeMethods(methods)}; a method looked up by name alone can't be overloaded!");
             }
 
             return null;

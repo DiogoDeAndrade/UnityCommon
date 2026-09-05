@@ -35,7 +35,7 @@ namespace UC
             {
                 if (_instance) return _instance;
 
-                Debug.Log("Order2d Config not loaded, loading...");
+                DebugHelpers.Log("Order2d Config not loaded, loading...");
 
                 var allConfigs = Resources.LoadAll<Order2dConfig>("");
                 if (allConfigs.Length == 1)

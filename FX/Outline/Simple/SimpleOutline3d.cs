@@ -85,7 +85,7 @@ namespace UC
                         var shader = GetOutlineShader();
                         if (!shader)
                         {
-                            Debug.LogWarning("Outline shader not found.");
+                            DebugHelpers.LogWarning("Outline shader not found.");
                             return;
                         }
 

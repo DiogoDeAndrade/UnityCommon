@@ -38,7 +38,7 @@ namespace UC
             }
             else
             {
-                Debug.LogError("No LiftGammaGain override found in the Volume Profile!");
+                DebugHelpers.LogError("No LiftGammaGain override found in the Volume Profile!");
             }
 
             UpdateValues();

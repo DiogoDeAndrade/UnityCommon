@@ -104,7 +104,7 @@ namespace UC
         {
             if (_sdf == null)
             {
-                Debug.LogWarning("No SDF assigned to SDFMarchingCubesMesher.");
+                DebugHelpers.LogWarning("No SDF assigned to SDFMarchingCubesMesher.");
                 return;
             }
             // Create the voxel field
@@ -677,16 +677,16 @@ namespace UC
                 if (_sdf != null)
                 {
                     float v = _sdf.Sample(debugPoint.position);
-                    Debug.Log($"SDF at {debugPoint.position} = {v}");
+                    DebugHelpers.Log($"SDF at {debugPoint.position} = {v}");
                 }
                 else
                 {
-                    Debug.LogWarning("No SDF assigned to SDFMarchingCubesMesher.");
+                    DebugHelpers.LogWarning("No SDF assigned to SDFMarchingCubesMesher.");
                 }
             }
             else
             {
-                Debug.LogWarning("No debug point assigned to SDFMarchingCubesMesher.");
+                DebugHelpers.LogWarning("No debug point assigned to SDFMarchingCubesMesher.");
             }
         }
 

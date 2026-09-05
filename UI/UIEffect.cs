@@ -136,7 +136,7 @@ namespace UC
 
             if (!src)
             {
-                Debug.LogWarning($"No source material found on {gameObject.name}");
+                DebugHelpers.LogWarning($"No source material found on {gameObject.name}");
                 return;
             }
 

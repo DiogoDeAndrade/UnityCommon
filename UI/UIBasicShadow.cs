@@ -93,7 +93,7 @@ namespace UC
 
             if (transform.parent == null)
             {
-                Debug.LogError("UIBasicShader component has to be placed on a child object of the object you want to shadow");
+                DebugHelpers.LogError("UIBasicShader component has to be placed on a child object of the object you want to shadow");
                 return;
             }
 
@@ -103,7 +103,7 @@ namespace UC
                 parentText = transform.parent.GetComponent<TextMeshProUGUI>();
                 if (parentText == null)
                 {
-                    Debug.LogError("UIBasicShader only supports shadows on UI.Image or TMPro objects!");
+                    DebugHelpers.LogError("UIBasicShader only supports shadows on UI.Image or TMPro objects!");
                     return;
                 }
                 else

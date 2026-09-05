@@ -21,7 +21,7 @@ namespace UC
 
             if (string.IsNullOrEmpty(asepriteFilePath))
             {
-                UnityEngine.Debug.LogError("Invalid Aseprite file selection.");
+                DebugHelpers.LogError("Invalid Aseprite file selection.");
                 return;
             }
 
@@ -38,7 +38,7 @@ namespace UC
 
             if (originalTexture == null)
             {
-                UnityEngine.Debug.LogError("No texture found in the selected Aseprite file.");
+                DebugHelpers.LogError("No texture found in the selected Aseprite file.");
                 return;
             }
 
@@ -60,13 +60,13 @@ namespace UC
             byte[] pngData = readableTexture.EncodeToPNG();
             if (pngData == null)
             {
-                UnityEngine.Debug.LogError("Failed to encode texture to PNG.");
+                DebugHelpers.LogError("Failed to encode texture to PNG.");
                 return;
             }
 
             // Write PNG file to disk
             File.WriteAllBytes(outputPath, pngData);
-            UnityEngine.Debug.Log($"Texture exported as PNG: {outputPath}");
+            DebugHelpers.Log($"Texture exported as PNG: {outputPath}");
 
             // Refresh the asset database so Unity detects the new file
             AssetDatabase.Refresh();

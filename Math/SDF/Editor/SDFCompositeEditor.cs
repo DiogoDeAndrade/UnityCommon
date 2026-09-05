@@ -59,7 +59,7 @@ namespace UC.Editor
                 {
                     if (sdf.ownerGameObject == null)
                     {
-                        Debug.LogWarning("No owner game object for SDF scriptable object!");
+                        DebugHelpers.LogWarning("No owner game object for SDF scriptable object!");
                     }
                     else
                     {

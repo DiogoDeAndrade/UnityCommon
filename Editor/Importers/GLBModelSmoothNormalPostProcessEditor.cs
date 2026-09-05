@@ -30,7 +30,7 @@ namespace UC
                 // 2) Fallback to the generic ScriptedImporter editor if needed
                 if (builtInType == null)
                 {
-                    Debug.LogWarning("GLTFImporterInspector not found. Falling back to ScriptedImporterEditor.");
+                    DebugHelpers.LogWarning("GLTFImporterInspector not found. Falling back to ScriptedImporterEditor.");
                     builtInType = Type.GetType("UnityEditor.AssetImporters.ScriptedImporterEditor, UnityEditor");
                 }
 

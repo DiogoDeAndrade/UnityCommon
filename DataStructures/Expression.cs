@@ -275,7 +275,7 @@ namespace UC
             }
             catch (Exception e)
             {
-                Debug.LogError(e.Message);
+                DebugHelpers.LogError(e.Message);
                 expression = null;
                 return false;
             }

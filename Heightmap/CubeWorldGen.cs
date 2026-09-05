@@ -50,7 +50,7 @@ namespace UC
             if (((heightmap.sizeX % sectionSizeX) != 0) ||
                 ((heightmap.sizeY % sectionSizeY) != 0))
             {
-                Debug.LogError("Section size must be divider of heightmap size!");
+                DebugHelpers.LogError("Section size must be divider of heightmap size!");
                 return;
             }
 

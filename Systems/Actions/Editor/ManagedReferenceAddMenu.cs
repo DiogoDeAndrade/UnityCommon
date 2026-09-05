@@ -29,7 +29,7 @@ namespace UC.Interaction.Editor
                         }
                         catch (Exception e)
                         {
-                            Debug.LogException(e);
+                            DebugHelpers.LogException(e);
                         }
                     });
                 }

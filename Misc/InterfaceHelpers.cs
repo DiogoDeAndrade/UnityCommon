@@ -17,7 +17,7 @@ namespace UC
             // Validate that the provided type is an interface
             if (!interfaceType.IsInterface)
             {
-                Debug.LogError($"{interfaceType.Name} is not an interface.");
+                DebugHelpers.LogError($"{interfaceType.Name} is not an interface.");
                 return new List<Type>();
             }
 

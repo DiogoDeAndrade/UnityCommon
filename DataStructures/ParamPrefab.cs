@@ -26,7 +26,7 @@ namespace UC
                 SetValue(t, null);
             }
 
-            Debug.LogWarning($"Unsupported type for ParamPrefab ParamValue ({t})!");
+            DebugHelpers.LogWarning($"Unsupported type for ParamPrefab ParamValue ({t})!");
         }
         public ParamValue(int v) { SetValue(v); }
         public ParamValue(float v) { SetValue(v); }
@@ -207,7 +207,7 @@ namespace UC
 
             if (baseGameObject == null)
             {
-                Debug.LogWarning($"ApplyProperties: Unsupported object type ({typeof(T)})");
+                DebugHelpers.LogWarning($"ApplyProperties: Unsupported object type ({typeof(T)})");
                 return;
             }
 
@@ -237,7 +237,7 @@ namespace UC
                                 }
                                 catch (Exception ex)
                                 {
-                                    Debug.LogWarning($"ApplyProperties: Failed to apply param '{paramName}': {ex.Message}");
+                                    DebugHelpers.LogWarning($"ApplyProperties: Failed to apply param '{paramName}': {ex.Message}");
                                 }
                             }
                         }
@@ -263,7 +263,7 @@ namespace UC
                 }
                 else
                 {
-                    Debug.LogWarning($"PrefabParam: Unsupported prefab type ({prefabObject.GetType()})!");
+                    DebugHelpers.LogWarning($"PrefabParam: Unsupported prefab type ({prefabObject.GetType()})!");
                     return;
                 }
             }

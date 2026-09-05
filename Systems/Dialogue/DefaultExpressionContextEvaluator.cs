@@ -148,7 +148,7 @@ namespace UC
                 var target = Hypertag.FindFirstObjectWithHypertag<Transform>(targetTag);
                 if (target == null)
                 {
-                    Debug.LogError($"Can't find parent object tagged with {parentObjectTagName}");
+                    DebugHelpers.LogError($"Can't find parent object tagged with {parentObjectTagName}");
                     return false;
                 }
                 newObject.transform.SetParent(target);
@@ -163,7 +163,7 @@ namespace UC
                 var target = Hypertag.FindFirstObjectWithHypertag<Transform>(targetTag);
                 if (target == null)
                 {
-                    Debug.LogError($"Can't find target tagged with {locationTagName}");
+                    DebugHelpers.LogError($"Can't find target tagged with {locationTagName}");
                     return false;
                 }
                 newObject.transform.position = target.position;
@@ -189,7 +189,7 @@ namespace UC
             var inventory = Hypertag.FindFirstObjectWithHypertag<Inventory>(targetTag);
             if (inventory == null)
             {
-                Debug.LogError($"Can't find inventory tagged with {targetTagName}");
+                DebugHelpers.LogError($"Can't find inventory tagged with {targetTagName}");
                 return false;
             }
             return inventory.Add(item, quantity) == quantity;
@@ -210,7 +210,7 @@ namespace UC
             var inventory = Hypertag.FindFirstObjectWithHypertag<Inventory>(targetTag);
             if (inventory == null)
             {
-                Debug.LogError($"Can't find inventory tagged with {targetTagName}");
+                DebugHelpers.LogError($"Can't find inventory tagged with {targetTagName}");
                 return false;
             }
             return inventory.Remove(item, quantity) == quantity;
@@ -233,7 +233,7 @@ namespace UC
             var inventory = Hypertag.FindFirstObjectWithHypertag<Inventory>(targetTag);
             if (inventory == null)
             {
-                Debug.LogError($"Can't find inventory tagged with {targetTagName}");
+                DebugHelpers.LogError($"Can't find inventory tagged with {targetTagName}");
                 return false;
             }
             return inventory.GetItemCount(item) >= quantity;
@@ -249,7 +249,7 @@ namespace UC
             var obj = Hypertag.FindFirstObjectWithHypertag<Transform>(targetTag);
             if (obj == null)
             {
-                Debug.LogError($"Can't find object tagged with {targetTagName}");
+                DebugHelpers.LogError($"Can't find object tagged with {targetTagName}");
                 return false;
             }
 
@@ -293,7 +293,7 @@ namespace UC
                         }
                         else
                         {
-                            Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\", received {pType}!");
+                            DebugHelpers.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\", received {pType}!");
                         }
                     }
                     else if ((paramType == typeof(float)) ||
@@ -306,7 +306,7 @@ namespace UC
                         }
                         else
                         {
-                            Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\", received {pType}!");
+                            DebugHelpers.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\", received {pType}!");
                         }
                     }
                     else if (paramType == typeof(string))
@@ -318,12 +318,12 @@ namespace UC
                         }
                         else
                         {
-                            Debug.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\", received {pType}!");
+                            DebugHelpers.LogError($"Expected {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\", received {pType}!");
                         }
                     }
                     else
                     {
-                        Debug.LogError($"Unsupported type {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\"!");
+                        DebugHelpers.LogError($"Unsupported type {paramType} for argument #{index} ({param.Name}) for call to \"{functionName}\"!");
                     }
                 }
                 if (funcArgs.Count == parameters.Length)
@@ -437,7 +437,7 @@ namespace UC
             if (cachedTags.TryGetValue(name, out var tag))
                 return tag;
 
-            Debug.LogError($"Can't find tag {name}!");
+            DebugHelpers.LogError($"Can't find tag {name}!");
             return null;
         }
         protected ParamPrefab<GameObject> GetPrefabByName(string name)
@@ -457,7 +457,7 @@ namespace UC
                 return prefab;
             }
 
-            Debug.LogError($"Can't find prefab {name}!");
+            DebugHelpers.LogError($"Can't find prefab {name}!");
             return null;
         }
         protected Item GetItemByName(string name)
@@ -471,7 +471,7 @@ namespace UC
             if (cachedItems.TryGetValue(name, out var item))
                 return item;
 
-            Debug.LogError($"Can't find item {name}!");
+            DebugHelpers.LogError($"Can't find item {name}!");
             return null;
         }
 

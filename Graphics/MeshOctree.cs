@@ -13,7 +13,7 @@ namespace UC
         {
             if (!AddTriangle(rootNode, triangle))
             {
-                Debug.LogError("Can't bin triangle in octree!");
+                DebugHelpers.LogError("Can't bin triangle in octree!");
             }
         }
 

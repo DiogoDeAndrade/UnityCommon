@@ -331,10 +331,10 @@ namespace UC
                                 {
                                     foreach (var hit in hits)
                                     {
-                                        Debug.Log($"Mesh={obj.identifier} / Submesh={hit.submeshIndex} / Triangle={hit.triIndex} / Distance={hit.t}");
+                                        DebugHelpers.Log($"Mesh={obj.identifier} / Submesh={hit.submeshIndex} / Triangle={hit.triIndex} / Distance={hit.t}");
                                         var triangle = dm.mesh.GetTriangle(hit.submeshIndex, hit.triIndex);
                                         triangle = triangle * dm.matrix;
-                                        Debug.Log($":: Area={triangle.area}");
+                                        DebugHelpers.Log($":: Area={triangle.area}");
 
                                         highlightObjects.Add(new DebugWireTriangle
                                         {
@@ -358,7 +358,7 @@ namespace UC
                                 float t;
                                 if (Sphere.Raycast(ray, ds.position, ds.radius, float.MaxValue, out t))
                                 {
-                                    Debug.Log($"Sphere={obj.identifier} / Distance={t}");
+                                    DebugHelpers.Log($"Sphere={obj.identifier} / Distance={t}");
                                     highlightObjects.Add(new DebugSphere
                                     {
                                         identifier = "",
