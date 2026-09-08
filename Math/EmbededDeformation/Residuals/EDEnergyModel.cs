@@ -77,6 +77,31 @@ namespace UC.ED
             }
 
             /// <summary>
+            /// True while the terms this instance was built from are still the model's terms, in
+            /// the model's order. Weights re-resolve on every solve; the term list does not, so a
+            /// term added, removed or reordered on the asset - in the inspector, or edited on disk
+            /// and reloaded - leaves an instance whose rows are the old list's, and its owner has
+            /// to rebuild it. Row order is the layout, so a stale instance solves a different
+            /// problem from the one the asset states. Null entries are skipped exactly as the
+            /// constructor skips them.
+            /// </summary>
+            public bool MatchesModel()
+            {
+                int k = 0;
+
+                for (int i = 0; i < model.terms.Count; i++)
+                {
+                    if (model.terms[i] == null) continue;
+                    if (k >= termInstances.Count) return false;
+                    if (!ReferenceEquals(termInstances[k].term, model.terms[i])) return false;
+
+                    k++;
+                }
+
+                return k == termInstances.Count;
+            }
+
+            /// <summary>
             /// The instance of a term of this type, or null when the model does not carry one.
             ///
             /// For the diagnostics dump, which has to describe data a term owns without the

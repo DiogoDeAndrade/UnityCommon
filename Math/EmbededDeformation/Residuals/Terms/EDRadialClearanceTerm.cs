@@ -41,7 +41,7 @@ namespace UC.ED
     /// That is existing behaviour, not something introduced here.
     /// </summary>
     [Serializable]
-    [PolymorphicName("Clearance")]
+    [PolymorphicName("Clearance (Radial)")]
     public class EDRadialClearanceTerm : EDResidualTerm
     {
         [SerializeField, Min(0.0f), Tooltip("Clearance may shrink to this fraction of its rest value before the term objects.")]
