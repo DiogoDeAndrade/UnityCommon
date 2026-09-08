@@ -815,6 +815,34 @@ namespace UC.ED
             return deformed;
         }
 
+        /// <summary>
+        /// The same deformation of the navmesh vertices at an arbitrary state rather than the
+        /// current one - for the deformation scrubber, which records the navmesh beside the output
+        /// mesh at every iteration so the two can be scrubbed together. The parameterless form
+        /// above feeds the golden dump's mesh checksum and is deliberately left as it is.
+        /// </summary>
+        public Vector3[] DeformVertices(EDStateView state)
+        {
+            Vector3[] deformed = new Vector3[restVertices.Length];
+
+            if (usesDeformationField)
+            {
+                FullDeformationField.TransformBlender blender = CreateFieldBlender(state);
+
+                for (int vId = 0; vId < restVertices.Length; vId++)
+                    deformed[vId] = blender.DeformPosition(restVertices[vId].ToVector3(), trilinear: true);
+
+                return deformed;
+            }
+
+            WarnIfFieldMissing(nameof(DeformVertices));
+
+            for (int vId = 0; vId < restVertices.Length; vId++)
+                deformed[vId] = DeformVertex(restVertices[vId], bindings[vId], state).ToVector3();
+
+            return deformed;
+        }
+
         // Internal for the terms that deform a point through its binding - the navmesh vertex
         // constraint and the navmesh form of segment length. Blending a point across the nodes that
         // hold it is the piece's own rule, not any one energy's.
