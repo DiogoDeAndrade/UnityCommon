@@ -1504,6 +1504,15 @@ namespace UC.ED
             return GetTransformedSegment(state, segmentIndex, blender);
         }
 
+        /// <summary>
+        /// The same segment endpoints at an arbitrary state, with a blender the caller built once
+        /// for its pass (null when the deformation does not carry points through the field) - for
+        /// the deformation scrubber, which records the structure beside the output mesh at every
+        /// iteration. The current-state form above, the debug drawing's, is untouched.
+        /// </summary>
+        public (Vector3, Vector3) GetSegment(EDStateView state, int segmentIndex, FullDeformationField.TransformBlender blender)
+            => GetTransformedSegment(state, segmentIndex, blender);
+
         private (Vector3, Vector3) GetTransformedSegment(EDStateView state, int segmentIndex, FullDeformationField.TransformBlender blender)
         {
             NavEDSegments segment = structure[segmentIndex];
