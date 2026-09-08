@@ -1343,7 +1343,7 @@ namespace UC.ED
             }
 
             // The solve reaches clearance without necessarily going through CreateDeformer, so this
-            // path needs its own report. Here rather than in EDClearanceTerm.CreateRowScratch: this
+            // path needs its own report. Here rather than in EDRadialClearanceTerm.CreateRowScratch: this
             // runs once on the main thread before the parallel loop, that one runs per worker.
             WarnIfFieldMissing(nameof(ComputeClearance));
 

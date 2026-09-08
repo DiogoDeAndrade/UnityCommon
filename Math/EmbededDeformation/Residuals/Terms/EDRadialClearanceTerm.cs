@@ -16,6 +16,14 @@ namespace UC.ED
     /// segment, penalising clearance that has shrunk below a fraction of what it was at rest and
     /// saying nothing at all about clearance that grew - this is a floor, not a target.
     ///
+    /// "Radial" since 2026-09-08 (it was EDClearanceTerm): the clearance it reads is a *radius*,
+    /// the minimum distance from the segment to any non-opening boundary edge, which conflates
+    /// the wall ahead with the wall beside and is one-sided - a segment hugging one wall of a wide
+    /// corridor satisfies it perfectly. The corridor form, EDCorridorClearanceTerm, measures the
+    /// navigable extent either side of the node instead. This one is kept as the baseline every
+    /// golden was captured with; its exported name stays "clearance" for the same reason, so no
+    /// dump, CSV column or notebook moves with the class name.
+    ///
     /// Both graph sources share it. What differs is how a point is carried from rest to deformed
     /// underneath, and the deformation already decides that for itself.
     ///
@@ -34,7 +42,7 @@ namespace UC.ED
     /// </summary>
     [Serializable]
     [PolymorphicName("Clearance")]
-    public class EDClearanceTerm : EDResidualTerm
+    public class EDRadialClearanceTerm : EDResidualTerm
     {
         [SerializeField, Min(0.0f), Tooltip("Clearance may shrink to this fraction of its rest value before the term objects.")]
         private float minRatio = 0.85f;
@@ -47,9 +55,9 @@ namespace UC.ED
 
         public class ClearanceInstance : Instance
         {
-            private readonly EDClearanceTerm clearanceTerm;
+            private readonly EDRadialClearanceTerm clearanceTerm;
 
-            public ClearanceInstance(EDClearanceTerm term, EmbededDeformation deformation)
+            public ClearanceInstance(EDRadialClearanceTerm term, EmbededDeformation deformation)
                 : base(term, deformation)
             {
                 clearanceTerm = term;
