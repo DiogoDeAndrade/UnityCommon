@@ -1286,7 +1286,7 @@ namespace UC.ED
             return deformationField.CreateBlender(BuildNodeFrames(state));
         }
 
-        private DVector3 DeformClearancePoint(DVector3 restPosition, EDVertexBinding standardBinding, EDStateView state, FullDeformationField.TransformBlender blender)
+        internal DVector3 DeformClearancePoint(DVector3 restPosition, EDVertexBinding standardBinding, EDStateView state, FullDeformationField.TransformBlender blender)
         {
             if (blender != null)
             {
