@@ -9,6 +9,9 @@ namespace UC.Editor
     public class MovementPlatformerEditor : UnityCommonEditor
     {
         SerializedProperty propSpeed;
+        SerializedProperty propHorizontalControl;
+        SerializedProperty propAcceleration;
+        SerializedProperty propDeceleration;
         SerializedProperty propPlayerInput;
         SerializedProperty propHorizontalInput;
         SerializedProperty propGravityScale;
@@ -22,6 +25,9 @@ namespace UC.Editor
         SerializedProperty propJumpHoldMaxTime;
         SerializedProperty propJumpInput;
         SerializedProperty propEnableAirControl;
+        SerializedProperty propAirHorizontalControl;
+        SerializedProperty propAirAcceleration;
+        SerializedProperty propAirDeceleration;
         SerializedProperty propAirCollider;
         SerializedProperty propGroundCollider;
         SerializedProperty propGlideBehaviour;
@@ -53,6 +59,9 @@ namespace UC.Editor
             base.OnEnable();
 
             propSpeed = serializedObject.FindProperty("speed");
+            propHorizontalControl = serializedObject.FindProperty("horizontalControl");
+            propAcceleration = serializedObject.FindProperty("acceleration");
+            propDeceleration = serializedObject.FindProperty("deceleration");
             propPlayerInput = serializedObject.FindProperty("playerInput");
             propHorizontalInput = serializedObject.FindProperty("horizontalInput");
             propGravityScale = serializedObject.FindProperty("gravityScale");
@@ -66,6 +75,9 @@ namespace UC.Editor
             propJumpHoldMaxTime = serializedObject.FindProperty("jumpHoldMaxTime");
             propJumpInput = serializedObject.FindProperty("jumpInput");
             propEnableAirControl = serializedObject.FindProperty("enableAirControl");
+            propAirHorizontalControl = serializedObject.FindProperty("airHorizontalControl");
+            propAirAcceleration = serializedObject.FindProperty("airAcceleration");
+            propAirDeceleration = serializedObject.FindProperty("airDeceleration");
             propAirCollider = serializedObject.FindProperty("airCollider");
             propGroundCollider = serializedObject.FindProperty("groundCollider");
             propGlideBehaviour = serializedObject.FindProperty("glideBehaviour");
@@ -102,6 +114,12 @@ namespace UC.Editor
                 EditorGUI.BeginChangeCheck();
 
                 EditorGUILayout.PropertyField(propSpeed, new GUIContent("Speed", "Maximum movement speed.\nX component is the maximum horizontal velocity\nY component is the jump velocity"));
+                EditorGUILayout.PropertyField(propHorizontalControl, new GUIContent("Horizontal Control", "How horizontal input drives the character.\nVelocity: Input sets the horizontal velocity directly\nAcceleration: Input accelerates towards the target velocity, so external pushes (springs, etc) have to be fought"));
+                if (propHorizontalControl.intValue == (int)MovementPlatformer.HorizontalControl.Acceleration)
+                {
+                    EditorGUILayout.PropertyField(propAcceleration, new GUIContent("Acceleration", "Horizontal acceleration while there is input, in world units (pixels)/second^2"));
+                    EditorGUILayout.PropertyField(propDeceleration, new GUIContent("Deceleration", "Horizontal deceleration while there is no input, in world units (pixels)/second^2"));
+                }
 
                 MovementPlatformer movementPlatformer = target as MovementPlatformer;
 
@@ -122,6 +140,15 @@ namespace UC.Editor
                 }
                 EditorGUILayout.PropertyField(propCoyoteTime, new GUIContent("Coyote Time", "How long does it take until the character start falling when not grounded?"));
                 EditorGUILayout.PropertyField(propEnableAirControl, new GUIContent("Air Control", "Can the player control the character while in the air?"));
+                if (propEnableAirControl.boolValue)
+                {
+                    EditorGUILayout.PropertyField(propAirHorizontalControl, new GUIContent("Air Horizontal Control", "How horizontal input drives the character while in the air.\nVelocity: Input sets the horizontal velocity directly\nAcceleration: Input accelerates towards the target velocity, so external pushes (springs, etc) have to be fought"));
+                    if (propAirHorizontalControl.intValue == (int)MovementPlatformer.HorizontalControl.Acceleration)
+                    {
+                        EditorGUILayout.PropertyField(propAirAcceleration, new GUIContent("Air Acceleration", "Horizontal acceleration while in the air and there is input, in world units (pixels)/second^2"));
+                        EditorGUILayout.PropertyField(propAirDeceleration, new GUIContent("Air Deceleration", "Horizontal deceleration while in the air and there is no input, in world units (pixels)/second^2.\nZero means the character keeps its horizontal velocity until the player acts."));
+                    }
+                }
                 EditorGUILayout.PropertyField(propAirCollider, new GUIContent("Air Collider", "What is the object's collider while in the air (not grounded)?"));
                 EditorGUILayout.PropertyField(propGroundCollider, new GUIContent("Ground Collider", "What's the object's collider while on the ground?"));
 

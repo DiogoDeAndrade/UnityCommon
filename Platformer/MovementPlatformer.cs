@@ -19,9 +19,16 @@ namespace UC
         public enum JumpBehaviour { None = 0, Fixed = 1, Variable = 2 };
         public enum GlideBehaviour { None = 0, Enabled = 1, Timer = 2 };
         public enum ClimbBehaviour { None = 0, Enabled = 1 };
+        public enum HorizontalControl { Velocity = 0, Acceleration = 1 };
 
         [SerializeField]
         private Vector2 speed = new Vector2(100, 100);
+        [SerializeField]
+        private HorizontalControl horizontalControl = HorizontalControl.Velocity;
+        [SerializeField]
+        private float acceleration = 1000.0f;
+        [SerializeField]
+        private float deceleration = 1000.0f;
         [SerializeField, HideIf("needNewInputSystem")]
         private PlayerInput playerInput;
         [SerializeField, InputPlayer(nameof(playerInput))]
@@ -48,6 +55,12 @@ namespace UC
         private InputControl jumpInput;
         [SerializeField]
         private bool enableAirControl = true;
+        [SerializeField]
+        private HorizontalControl airHorizontalControl = HorizontalControl.Velocity;
+        [SerializeField]
+        private float airAcceleration = 1000.0f;
+        [SerializeField]
+        private float airDeceleration = 1000.0f;
         [SerializeField]
         private Collider2D airCollider;
         [SerializeField]
@@ -318,7 +331,16 @@ namespace UC
             {
                 deltaX = horizontalInput.GetAxis();
 
-                rb.linearVelocity = new Vector2(deltaX * speed.x, rb.linearVelocity.y);
+                HorizontalControl control = (isGrounded) ? horizontalControl : airHorizontalControl;
+                if (control == HorizontalControl.Acceleration)
+                {
+                    float accel = (isGrounded) ? ((deltaX != 0.0f) ? acceleration : deceleration) : ((deltaX != 0.0f) ? airAcceleration : airDeceleration);
+                    rb.linearVelocity = new Vector2(Mathf.MoveTowards(rb.linearVelocity.x, deltaX * speed.x, accel * Time.deltaTime), rb.linearVelocity.y);
+                }
+                else
+                {
+                    rb.linearVelocity = new Vector2(deltaX * speed.x, rb.linearVelocity.y);
+                }
             }
 
             // Need to check with actual is grounded or else coyote time will make the jump count reset immediately after flying off
