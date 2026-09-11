@@ -96,10 +96,19 @@ namespace UC.ED
         /// allowed to disagree. It used to read the deformation's own maxSlope, which coupled them by
         /// accident and made the measurement depend on which energy had last been solved.
         /// </param>
+        /// <param name="openingsEnd">
+        /// Off (the default, and every caller that feeds a golden): an opening edge is skipped as if
+        /// it were not there, so a probe leaving the piece through a connector reports whatever
+        /// boundary it crosses next, however far. On: a side whose nearest crossing is an opening is
+        /// reported as unbounded - the corridor leaves the piece there and this piece has nothing
+        /// more to say about it. Added 2026-09-11 for the corridor damage measure, whose fan rays at
+        /// a terminal lean out through the opening and were being given the width of whatever lay
+        /// beyond.
+        /// </param>
         internal bool TryMeasureCorridor(DVector3 center, DVector3 across, DVector3 up,
                                          EDStateView? state, FullDeformationField.TransformBlender blender,
                                          double coneAngleDegrees,
-                                         out EDCorridorExtent extent)
+                                         out EDCorridorExtent extent, bool openingsEnd = false)
         {
             extent = EDCorridorExtent.unmeasured;
 
@@ -137,14 +146,19 @@ namespace UC.ED
 
             double bestPositive = double.MaxValue;
             double bestNegative = double.MaxValue;
+            double openingPositive = double.MaxValue;
+            double openingNegative = double.MaxValue;
 
             foreach (var edge in navMeshTopology.edges)
             {
                 if (!edge.isBoundary) continue;
 
                 // An opening is a way out of the piece, not a wall across it - the same exclusion
-                // clearance makes, for the same reason.
-                if (IsOpeningEdge(edge)) continue;
+                // clearance makes, for the same reason. With openingsEnd its crossing is kept apart
+                // instead, and decides below whether the side is unbounded.
+                bool isOpening = IsOpeningEdge(edge);
+
+                if ((isOpening) && (!openingsEnd)) continue;
 
                 DVector3 a = CorridorEdgePoint(edge.vertices.i1, state, blender) - center;
                 DVector3 b = CorridorEdgePoint(edge.vertices.i2, state, blender) - center;
@@ -168,13 +182,20 @@ namespace UC.ED
 
                 if (u >= 0.0)
                 {
-                    if (u < bestPositive) bestPositive = u;
+                    if (isOpening) { if (u < openingPositive) openingPositive = u; }
+                    else if (u < bestPositive) bestPositive = u;
                 }
                 else
                 {
-                    if (-u < bestNegative) bestNegative = -u;
+                    if (isOpening) { if (-u < openingNegative) openingNegative = -u; }
+                    else if (-u < bestNegative) bestNegative = -u;
                 }
             }
+
+            // A side that leaves the piece before it meets a wall has no width of this piece's to
+            // report. Never true unless openingsEnd recorded a crossing.
+            if (openingPositive < bestPositive) bestPositive = double.MaxValue;
+            if (openingNegative < bestNegative) bestNegative = double.MaxValue;
 
             extent.positive = bestPositive;
             extent.negative = bestNegative;
