@@ -434,7 +434,12 @@ namespace UC.ED
                 string[] extraHeader = null;
                 string[] extraValues = null;
 
-                if ((state != null) && (rows > 0))
+                // Whatever the row count: a term at weight zero has no rows (Resolve zeroes them)
+                // and is exactly the term whose own columns the export's zero-weight toggle exists
+                // to show - a Describe measures the state, not the residual, and a term with nothing
+                // to say returns nothing. Before 2026-09-12 the rows > 0 guard here left every
+                // zero-weight term's columns empty, which read as "not measured".
+                if (state != null)
                 {
                     var instance = energy.termInstances[i];
 

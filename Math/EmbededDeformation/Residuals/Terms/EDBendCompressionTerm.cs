@@ -26,9 +26,17 @@ namespace UC.ED
     /// constant: the nearer half-extent of the rest corridor along the node's across axis, from the
     /// same probe the field seeds its bars with, measured once in Reset. Their product is the
     /// inner-wall compression, the fraction by which the inner wall's arc is shorter than the
-    /// centreline's (zero length at 1, folded before that). The residual is a hinge above
-    /// maxCompression, one row per measured node; nothing on the navmesh is touched at solve time, so
+    /// centreline's (zero length at 1, folded before that). The residual is a hinge above the
+    /// node's limit, one row per measured node; nothing on the navmesh is touched at solve time, so
     /// the term is pure graph space and reads the same on any navmesh sampling.
+    ///
+    /// The limit is per node: the larger of maxCompression and the node's compression at rest. The
+    /// first Build on Corridor5 read a rest maximum of 1.26 at one node - a half-width measured into
+    /// a room beside a kink in the skeleton, so the number says nothing about a corridor there - and
+    /// an absolute limit would charge that node in every state including rest. What the term can
+    /// honestly ask is that no bend gets tighter than its width allows *or* than the piece was
+    /// modelled with, whichever is looser. The columns report both the absolute maximum and the
+    /// maximum excess over rest, since the second is the one that separates states.
     ///
     /// Not a smoothness energy. With the terminal tangents pinned the total turn between two
     /// connectors is fixed, so a limit on local curvature cannot straighten the path - it can only
@@ -46,7 +54,7 @@ namespace UC.ED
     [PolymorphicName("Bend Compression")]
     public class EDBendCompressionTerm : EDResidualTerm
     {
-        [SerializeField, Range(0.0f, 1.0f), Tooltip("The inner-wall compression a bend may reach before the term objects: half-width times curvature, the fraction of the inner wall's length lost to the bend. 1 is an inner wall of zero length. Set it above what the piece has at rest - the Build line prints that.")]
+        [SerializeField, Range(0.0f, 1.0f), Tooltip("The inner-wall compression a bend may reach before the term objects: half-width times curvature, the fraction of the inner wall's length lost to the bend. 1 is an inner wall of zero length. Per node the limit is the larger of this and the node's rest compression, so a bend the piece was modelled with is never charged; the Build line prints the rest maximum.")]
         private float maxCompression = 0.5f;
 
         [SerializeField, Range(0.0f, 89.0f), Tooltip("The corridor probe's height band when measuring each node's rest half-width - the same filter on which boundary crossings count as walls the corridor clearance term uses.")]
@@ -193,8 +201,11 @@ namespace UC.ED
                 return rowHalfWidth[i] * MengerCurvature(a, p, b);
             }
 
+            /// <summary>The node's limit: the term's, or the bend it was modelled with if that is looser.</summary>
+            private double Limit(int i) => Math.Max(bendTerm.maxCompression, rowRestCompression[i]);
+
             private double EvaluateRow(int i, EDStateView state, double w)
-                => w * Math.Max(0.0, Compression(i, state) - bendTerm.maxCompression);
+                => w * Math.Max(0.0, Compression(i, state) - Limit(i));
 
             public override void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset)
             {
@@ -247,27 +258,32 @@ namespace UC.ED
             private static readonly int[] translationOffsets = { 3, 7, 11 };
 
             public override string[] DescribeHeader()
-                => new[] { "nodesMeasured", "maxCompression", "meanCompression", "nodesOverLimit", "maxCompressionNode" };
+                => new[] { "nodesMeasured", "maxCompression", "meanCompression", "nodesOverLimit", "maxCompressionNode", "maxExcessOverRest", "maxExcessNode" };
 
             /// <summary>
             /// The compression at every measured node at the state, whatever the weight - the column
-            /// §14 reads before the term gets one. Costs one evaluation per row.
+            /// §14 reads before the term gets one: the absolute maximum and its node, the mean, the
+            /// nodes over their limit, and the maximum excess over the node's own rest compression
+            /// with its node - the number that says where the deformation bent the piece tighter
+            /// than it was modelled. Costs one evaluation per row.
             /// </summary>
             public override string[] Describe(EDStateView state)
             {
                 if (rowNode.Length == 0) return Array.Empty<string>();
 
-                double max = 0.0, sum = 0.0;
-                int maxNode = -1, over = 0;
+                double max = 0.0, sum = 0.0, maxExcess = 0.0;
+                int maxNode = -1, over = 0, maxExcessNode = -1;
 
                 for (int i = 0; i < rowNode.Length; i++)
                 {
                     double c = Compression(i, state);
+                    double excess = c - rowRestCompression[i];
 
                     sum += c;
 
-                    if (c > bendTerm.maxCompression) over++;
+                    if (c > Limit(i)) over++;
                     if (c > max) { max = c; maxNode = rowNode[i]; }
+                    if (excess > maxExcess) { maxExcess = excess; maxExcessNode = rowNode[i]; }
                 }
 
                 return new[]
@@ -277,6 +293,8 @@ namespace UC.ED
                     (sum / rowNode.Length).ToString("F4", CultureInfo.InvariantCulture),
                     over.ToString(CultureInfo.InvariantCulture),
                     maxNode.ToString(CultureInfo.InvariantCulture),
+                    maxExcess.ToString("F4", CultureInfo.InvariantCulture),
+                    maxExcessNode.ToString(CultureInfo.InvariantCulture),
                 };
             }
         }
