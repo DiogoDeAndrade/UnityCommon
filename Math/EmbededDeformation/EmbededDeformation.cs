@@ -43,6 +43,16 @@ namespace UC.ED
         public TopologyStatic navMeshTopology;
 
         /// <summary>
+        /// The graph builder's corridor width scale, copied here at Build so the bend compression
+        /// term and the width gizmos read one value. Read through effectiveCorridorWidthScale: a
+        /// deformation deserialised from a scene saved before the field existed carries 0 here,
+        /// and 0 is not a scale anybody asked for.
+        /// </summary>
+        public double corridorWidthScale = 1.0;
+
+        public double effectiveCorridorWidthScale => (corridorWidthScale > 0.0) ? (corridorWidthScale) : (1.0);
+
+        /// <summary>
         /// Whether the navigation data the nav-aware energies measure through has been built - the
         /// per-segment bindings and clearance probes. Only a navigation run builds them, so the
         /// navigation-aware features are simply unavailable in the TranslationOnly and plain ED

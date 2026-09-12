@@ -134,7 +134,9 @@ namespace UC.ED
                         continue;
                     }
 
-                    double halfWidth = Math.Min(extent.positive, extent.negative);
+                    // The builder's width scale applies here and in the gizmos, never to the field's
+                    // seeding - see EDGraphBuilder.corridorWidthScale.
+                    double halfWidth = Math.Min(extent.positive, extent.negative) * deformation.effectiveCorridorWidthScale;
 
                     if (halfWidth <= 1e-9)
                     {
@@ -161,7 +163,8 @@ namespace UC.ED
                 for (int i = 0; i < rowNode.Length; i++)
                     if (rowRestCompression[i] > restMax) { restMax = rowRestCompression[i]; restMaxNode = rowNode[i]; }
 
-                Debug.Log($"[ED] {term.name}: {rowNode.Length} rows ({skippedJunctionsOrTerminals} junctions or terminals skipped, {skippedUnbounded} unbounded at rest); rest compression max {restMax.ToString("F4", CultureInfo.InvariantCulture)} at node {restMaxNode}, limit {bendTerm.maxCompression.ToString("F3", CultureInfo.InvariantCulture)}.");
+                Debug.Log($"[ED] {term.name}: {rowNode.Length} rows ({skippedJunctionsOrTerminals} junctions or terminals skipped, {skippedUnbounded} unbounded at rest); rest compression max {restMax.ToString("F4", CultureInfo.InvariantCulture)} at node {restMaxNode}, limit {bendTerm.maxCompression.ToString("F3", CultureInfo.InvariantCulture)}" +
+                          ((deformation.effectiveCorridorWidthScale != 1.0) ? ($"; corridor width scaled x{deformation.effectiveCorridorWidthScale.ToString("F3", CultureInfo.InvariantCulture)}") : ("")) + ".");
             }
 
             protected override int ComputeRowCount()

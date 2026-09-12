@@ -41,6 +41,9 @@ namespace UC.ED
         [SerializeField, Min(0.0f), ShowIf(nameof(useCorridorLength)), Tooltip("How fast the corridor probe's height band opens with distance, in degrees. A filter on which navmesh boundary crossings count as walls rather than as floor or ceiling - NOT a navigability limit, and no reason for it to match the slope any energy penalises. Too low rejects the far wall of a ramp; too high accepts a wall that is really the floor further along. 45 is what the probe measured with before it had a setting of its own.")]
         private float corridorConeAngleDegrees = 45.0f;
 
+        [SerializeField, Min(0.0f), Tooltip("Scales the corridor width for the bend compression term and the graph-width gizmos only - the field is still seeded with the measured width. 1 is the width as measured. Larger says 'what if the corridor were this much wider', for a piece whose folds sit in geometry outside the walkable width; a diagnostic, recorded in the dump when it is not 1.")]
+        private float corridorWidthScaleFactor = 1.0f;
+
         [SerializeField, Tooltip("How a cell turns the distances it stored into blend weights. InverseDistance is what every structure golden up to now was captured against. InversePower at p = 1 does NOT reproduce it - it differs by the even-split-at-zero branch, which is the point: that comparison isolates what the branch was doing.")]
         private EDFieldWeightMode fieldWeightMode = EDFieldWeightMode.InverseDistance;
         [SerializeField, Min(0.01f), ShowIf(nameof(usesWeightPower)), Tooltip("The exponent. For InversePower, 1/max(d, floor)^p - above 1 sharpens, below 1 flattens. For Gaussian, exp(-(d/sigma)^p) - 2 is the true Gaussian, higher flattens the centre and steepens the shoulder.")]
@@ -86,6 +89,7 @@ namespace UC.ED
         public override bool deformationFieldSeedTerminals => useTerminalLength;
         public override bool deformationFieldSeedCorridors => useCorridorLength;
         public override float corridorConeAngle => corridorConeAngleDegrees;
+        public override float corridorWidthScale => corridorWidthScaleFactor;
         public override EDFieldBlendMode deformationFieldBlendMode => fieldBlendMode;
         public override EDFieldRotationBlend deformationFieldRotationBlend => fieldRotationBlend;
         public override EDFieldScaleBlend deformationFieldScaleBlend => fieldScaleBlend;

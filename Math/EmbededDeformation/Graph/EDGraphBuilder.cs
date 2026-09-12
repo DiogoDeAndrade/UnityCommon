@@ -118,6 +118,16 @@ namespace UC.ED
         public virtual float corridorConeAngle => 45.0f;
 
         /// <summary>
+        /// A factor on the corridor width for the bend compression term and the width gizmos -
+        /// NOT for the field's seeding, which stays the measured width. 1 is the width as measured;
+        /// larger asks "what if the corridor were this much wider", which on a piece whose folds
+        /// sit in geometry outside the navmesh width (a handrail beside the walkable strip) is a way
+        /// of finding out whether the width is what the term is missing. A diagnostic, not a
+        /// setting for practical use, and recorded in the dump whenever it is not 1.
+        /// </summary>
+        public virtual float corridorWidthScale => 1.0f;
+
+        /// <summary>
         /// How the field combines the transforms of the nodes influencing a point.
         ///
         /// On the builder beside the weighting rather than on the output, even though it is strictly a
