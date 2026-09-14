@@ -202,6 +202,18 @@ namespace UC
             }
         }
 
+        public static Vector3 RotateY(this Vector3 v, float angle)
+        {
+            float a = Mathf.Deg2Rad * angle;
+            float c = Mathf.Cos(a);
+            float s = Mathf.Sin(a);
+
+            var x = c * v.x - s * v.z;
+            var z = s * v.x + c * v.z;
+
+            return new Vector3(x, v.y, z);
+        }
+
         public static Vector3 RotateZ(this Vector3 v, float angle)
         {
             float a = Mathf.Deg2Rad * angle;
