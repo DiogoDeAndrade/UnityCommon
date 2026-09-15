@@ -243,7 +243,7 @@ namespace UC
         }
 
         // Exposed so VoxelMeshExporter can reuse it for the atlas
-        internal sealed class Color32EqualityComparer : IEqualityComparer<Color32>
+        public sealed class Color32EqualityComparer : IEqualityComparer<Color32>
         {
             public static readonly Color32EqualityComparer Instance = new();
             public bool Equals(Color32 x, Color32 y)
