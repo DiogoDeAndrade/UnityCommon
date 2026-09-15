@@ -8,6 +8,7 @@ namespace UC
 {
     /// <summary>
     /// Builds Unity Mesh assets (saved as .asset) and palette PNG textures from VoxelData.
+    /// Mesh geometry itself comes from the runtime VoxelMeshBuilder; this class only handles asset I/O.
     ///
     /// ExportWithPalette     - mesh with UVs + palette PNG + optional Material
     /// ExportWithVertexColor - mesh with per-vertex Color32 + optional Material
@@ -28,10 +29,10 @@ namespace UC
             bool      generateMaterial)
         {
             // 1. Build UV map from the pre-computed palette
-            var (uvMap, atlasWidth, atlasHeight) = BuildUVMap(voxels.Palette);
+            var (uvMap, atlasWidth, atlasHeight) = VoxelMeshBuilder.BuildUVMap(voxels.Palette);
 
             // 2. Build mesh
-            Mesh mesh = BuildMesh_Palette(voxels, uvMap);
+            Mesh mesh = VoxelMeshBuilder.BuildMeshPalette(voxels, uvMap);
             mesh.name = baseName + "_model";
 
             // 3. Write palette as a PNG file and import it with Point + Clamp
@@ -67,7 +68,7 @@ namespace UC
             bool      generateMaterial,
             bool      linearToGamma)
         {
-            Mesh mesh = BuildMesh_VertexColor(voxels, linearToGamma);
+            Mesh mesh = VoxelMeshBuilder.BuildMeshVertexColor(voxels, linearToGamma);
             mesh.name = baseName + "_model";
 
             string meshPath = $"{outputDir}/{baseName}_model.asset";
@@ -96,15 +97,8 @@ namespace UC
             string        outputDir,
             string        baseName)
         {
-            // Build pixel data — layout must match BuildUVMap (row-major, left-to-right)
-            var pixels = new Color32[texW * texH];
-            for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(0, 0, 0, 0);
-            for (int i = 0; i < palette.Count; i++)
-            {
-                int col = i % texW;
-                int row = i / texW;
-                pixels[row * texW + col] = palette[i];
-            }
+            // Build pixel data — layout must match VoxelMeshBuilder.BuildUVMap (row-major, left-to-right)
+            var pixels = VoxelMeshBuilder.BuildPalettePixels(palette, texW, texH);
 
             // Encode to PNG via a temporary Texture2D
             var tmp = new Texture2D(texW, texH, TextureFormat.RGBA32, false);
@@ -138,181 +132,7 @@ namespace UC
             return relPath;
         }
 
-        // ---------------------------------------------------------------------
-        // UV map builder (shared between palette writer and mesh builder)
-        // ---------------------------------------------------------------------
-
-        private static (Dictionary<Color32, Vector2> uvMap, int texW, int texH)
-            BuildUVMap(List<Color32> palette)
-        {
-            int count = palette.Count;
-
-            // Use a power-of-two square atlas.
-            // A 1-row strip sounds compact but Unity's NPOT handling can silently
-            // scale or pad the height to 2, which moves texel centres and causes
-            // UV bleeding even with Point filtering.  A proper PoT square avoids
-            // all of that: texel centres are always at (col+0.5)/W, (row+0.5)/H
-            // and nothing gets rescaled on import.
-            int side = Mathf.Max(1, Mathf.NextPowerOfTwo(
-                            Mathf.CeilToInt(Mathf.Sqrt(count))));
-            // Clamp height to the minimum number of rows actually needed
-            int texW = side;
-            int texH = Mathf.NextPowerOfTwo(Mathf.CeilToInt((float)count / texW));
-            texH = Mathf.Max(texH, 1);
-
-            var uvMap = new Dictionary<Color32, Vector2>(
-                VoxelBuilder.Color32EqualityComparer.Instance);
-
-            for (int i = 0; i < palette.Count; i++)
-            {
-                int col = i % texW;
-                int row = i / texW;
-                uvMap[palette[i]] = new Vector2(
-                    (col + 0.5f) / texW,
-                    (row + 0.5f) / texH);
-            }
-
-            return (uvMap, texW, texH);
-        }
-
-        // ---------------------------------------------------------------------
-        // Mesh builders
-        // ---------------------------------------------------------------------
-
-        private static Mesh BuildMesh_Palette(
-            VoxelData                    voxels,
-            Dictionary<Color32, Vector2> uvMap)
-        {
-            var verts   = new List<Vector3>();
-            var norms   = new List<Vector3>();
-            var uvs     = new List<Vector2>();
-            var indices = new List<int>();
-
-            foreach (var voxel in voxels.Voxels)
-            {
-                var uv = uvMap.TryGetValue((Color32)voxel.Color, out var found)
-                    ? found : Vector2.zero;
-                AppendBox(verts, norms, uvs, null, indices, voxel, uv);
-            }
-
-            return FinaliseGeneric(verts, norms, uvs, null, indices);
-        }
-
-        private static Mesh BuildMesh_VertexColor(VoxelData voxels, bool linearToGamma)
-        {
-            var verts   = new List<Vector3>();
-            var norms   = new List<Vector3>();
-            var colors  = new List<Color32>();
-            var indices = new List<int>();
-
-            foreach (var voxel in voxels.Voxels)
-            {
-                // GetPixels() always returns linear-space values because Unity
-                // converts sRGB->linear on load.  Vertex colours are passed
-                // straight to the shader without any colour-space conversion,
-                // unlike texture samples which are linearised at sample time.
-                // When the source PNG is sRGB we therefore need to convert back
-                // to gamma/sRGB space so the shader sees the original perceived
-                // colour rather than a darkened linear value.
-                Color c = linearToGamma
-                    ? voxel.Color.linear   // linear -> sRGB (gamma 2.2 approx)
-                    : voxel.Color;
-                AppendBox(verts, norms, null, colors, indices,
-                          voxel, Vector2.zero, (Color32)c);
-            }
-
-            return FinaliseGeneric(verts, norms, null, colors, indices);
-        }
-
-        // ---------------------------------------------------------------------
-        // Box appender
-        // ---------------------------------------------------------------------
-
-        private static readonly Vector3[] s_FaceNormals =
-        {
-            Vector3.right,   Vector3.left,
-            Vector3.up,      Vector3.down,
-            Vector3.forward, Vector3.back,
-        };
-
-        private static readonly Vector3[][] s_FaceCorners =
-        {
-            // +X
-            new[]{ new Vector3( 1,-1,-1), new Vector3( 1, 1,-1),
-                   new Vector3( 1, 1, 1), new Vector3( 1,-1, 1) },
-            // -X
-            new[]{ new Vector3(-1,-1, 1), new Vector3(-1, 1, 1),
-                   new Vector3(-1, 1,-1), new Vector3(-1,-1,-1) },
-            // +Y
-            new[]{ new Vector3(-1, 1,-1), new Vector3(-1, 1, 1),
-                   new Vector3( 1, 1, 1), new Vector3( 1, 1,-1) },
-            // -Y
-            new[]{ new Vector3(-1,-1, 1), new Vector3(-1,-1,-1),
-                   new Vector3( 1,-1,-1), new Vector3( 1,-1, 1) },
-            // +Z
-            new[]{ new Vector3(-1,-1, 1), new Vector3( 1,-1, 1),
-                   new Vector3( 1, 1, 1), new Vector3(-1, 1, 1) },
-            // -Z
-            new[]{ new Vector3( 1,-1,-1), new Vector3(-1,-1,-1),
-                   new Vector3(-1, 1,-1), new Vector3( 1, 1,-1) },
-        };
-
-        private static void AppendBox(
-            List<Vector3> verts,
-            List<Vector3> norms,
-            List<Vector2> uvs,
-            List<Color32> colors,
-            List<int>     indices,
-            Voxel         voxel,
-            Vector2       uv,
-            Color32       color32 = default)
-        {
-            Vector3 c = voxel.WorldCenter;
-            Vector3 h = voxel.HalfSize;
-
-            for (int face = 0; face < 6; face++)
-            {
-                int baseIdx = verts.Count;
-                var corners = s_FaceCorners[face];
-
-                for (int k = 0; k < 4; k++)
-                {
-                    Vector3 cr = corners[k];
-                    verts.Add(c + new Vector3(cr.x * h.x, cr.y * h.y, cr.z * h.z));
-                    norms.Add(s_FaceNormals[face]);
-                    uvs?.Add(uv);
-                    colors?.Add(color32);
-                }
-
-                indices.Add(baseIdx);     indices.Add(baseIdx + 1); indices.Add(baseIdx + 2);
-                indices.Add(baseIdx);     indices.Add(baseIdx + 2); indices.Add(baseIdx + 3);
-            }
-        }
-
-        // ---------------------------------------------------------------------
-        // Mesh finalisation
-        // ---------------------------------------------------------------------
-
-        private static Mesh FinaliseGeneric(
-            List<Vector3> verts,
-            List<Vector3> norms,
-            List<Vector2> uvs,
-            List<Color32> colors,
-            List<int>     indices)
-        {
-            var mesh = new Mesh();
-            mesh.indexFormat = verts.Count > 65535
-                ? UnityEngine.Rendering.IndexFormat.UInt32
-                : UnityEngine.Rendering.IndexFormat.UInt16;
-
-            mesh.SetVertices(verts);
-            mesh.SetNormals(norms);
-            if (uvs    != null) mesh.SetUVs(0, uvs);
-            if (colors != null) mesh.SetColors(colors);
-            mesh.SetTriangles(indices, 0);
-            mesh.RecalculateBounds();
-            return mesh;
-        }
+        // Mesh construction (UV map, box faces, finalisation) lives in the runtime VoxelMeshBuilder.
 
         // ---------------------------------------------------------------------
         // Material generator
