@@ -3,10 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
-using System.Text.RegularExpressions;
 
 namespace UC
 {
@@ -307,6 +307,12 @@ namespace UC
                 DeleteIgnoredStreamingAssets(windowsPath);
 
                 string burstDebugPath = windowsPath + productName + "_BurstDebugInformation_DoNotShip";
+                if (Directory.Exists(burstDebugPath))
+                {
+                    Directory.Delete(burstDebugPath, true);
+                    Log("Deleted Burst Debug Information folder: " + burstDebugPath);
+                }
+                burstDebugPath = windowsPath + productName + "_BackUpThisFolder_ButDontShipItWithYourGame";
                 if (Directory.Exists(burstDebugPath))
                 {
                     Directory.Delete(burstDebugPath, true);
