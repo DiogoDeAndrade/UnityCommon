@@ -275,11 +275,10 @@ namespace UC.ED
             /// map in either mode - the up only tilts the plane, and a point lifted above the floor
             /// has no business being carried through a field measured along the floor.
             /// </summary>
-            private void PlaneAt(int nodeIndex, EDStateView state, FullDeformationField.TransformBlender blender, out DVector3 centre, out DVector3 normal)
+            private void PlaneAt(int nodeIndex, EDStateView state, FullDeformationField.TransformBlender blender, out DVector3 centre, out DVector3 normal, out DVector3 bar)
             {
                 EDNode node = deformation.nodes[nodeIndex];
                 DVector3 up = state.TransformDirection(nodeIndex, node.restUp);
-                DVector3 bar;
 
                 if (blender != null)
                 {
@@ -306,7 +305,7 @@ namespace UC.ED
             {
                 DVector3 end = Carry(rowNode[row], RestEnd(rowNode[row], rowEnd[row]), state, blender);
 
-                PlaneAt(rowNeighbour[row], state, blender, out DVector3 centre, out DVector3 normal);
+                PlaneAt(rowNeighbour[row], state, blender, out DVector3 centre, out DVector3 normal, out _);
 
                 if (normal.sqrMagnitude < 0.5) return 0.0;
 
@@ -478,6 +477,123 @@ namespace UC.ED
                     crossed.ToString(CultureInfo.InvariantCulture),
                     (sum / rowNode.Length).ToString("F4", CultureInfo.InvariantCulture),
                 };
+            }
+
+            // ---------------------------------------------------------------- per-row dump
+
+            /// <summary>
+            /// Every row at a state, one line each, tab-separated, worst ratio first - the column
+            /// names a node and not a row, and the question the dump exists to answer is which of
+            /// a node's rows is low and why. Per row: the owning node and which end (+1 along its
+            /// rest right, -1 against it), the neighbour whose plane it is measured against, the
+            /// rest distance, the distance at the state, their ratio, the unweighted hinge value,
+            /// and then the anatomy of the distance: <c>pathPart</c> is the neighbour-to-node path
+            /// vector projected on the neighbour's normal and <c>barPart</c> the rest, the bar's
+            /// own half-length times the sine of its tilt out of the neighbour's plane - the
+            /// component that grows with width. <c>restAlong</c> / <c>along</c> are where the end's
+            /// perpendicular foot lands along the neighbour's bar, as a fraction of that bar's
+            /// half-length (beyond +-1 the foot is past the neighbour's bar end, on the extended
+            /// plane), at rest and at the state. Then both half-lengths, the node spacing at rest
+            /// and at the state, and the owning node's rest position for finding it in the scene.
+            /// The header line carries the totals and the term's settings. Costs one residual
+            /// evaluation plus a few products per row.
+            /// </summary>
+            public bool TryDumpRows(EDStateView state, string path, out int written)
+            {
+                written = 0;
+
+                if ((!hasField) || (rowNode.Length == 0)) return false;
+
+                var blender = BlenderFor(state);
+                var ci = CultureInfo.InvariantCulture;
+                int n = rowNode.Length;
+
+                var ratio    = new double[n];
+                var distance = new double[n];
+                var pathPart = new double[n];
+                var restAlong = new double[n];
+                var along    = new double[n];
+                var spacing  = new double[n];
+                var order    = new int[n];
+
+                for (int i = 0; i < n; i++)
+                {
+                    int a = rowNode[i], b = rowNeighbour[i];
+                    EDNode nodeA = deformation.nodes[a], nodeB = deformation.nodes[b];
+
+                    DVector3 restEnd = RestEnd(a, rowEnd[i]);
+                    DVector3 end = Carry(a, restEnd, state, blender);
+                    DVector3 centreA = Carry(a, nodeA.restPosition, state, blender);
+
+                    PlaneAt(b, state, blender, out DVector3 centreB, out DVector3 normal, out DVector3 bar);
+
+                    bool collapsed = normal.sqrMagnitude < 0.5;
+
+                    distance[i] = (collapsed) ? (0.0) : (rowSign[i] * DVector3.Dot(end - centreB, normal));
+                    pathPart[i] = (collapsed) ? (0.0) : (rowSign[i] * DVector3.Dot(centreA - centreB, normal));
+                    ratio[i]    = distance[i] / rowRest[i];
+                    spacing[i]  = (centreA - centreB).magnitude;
+
+                    double barLength = bar.magnitude;
+
+                    along[i] = (barLength > 1e-12) ? (DVector3.Dot(end - centreB, bar) / barLength / (0.5 * barLength)) : (double.NaN);
+                    restAlong[i] = DVector3.Dot(restEnd - nodeB.restPosition, nodeB.restRight.normalized) / nodeHalf[b];
+
+                    order[i] = i;
+                }
+
+                Array.Sort(order, (x, y) => ratio[x].CompareTo(ratio[y]));
+
+                int below = 0, crossed = 0;
+                double min = double.PositiveInfinity, sum = 0.0;
+
+                for (int i = 0; i < n; i++)
+                {
+                    sum += ratio[i];
+                    if (ratio[i] < crossTerm.minRatio) below++;
+                    if (ratio[i] <= 0.0) crossed++;
+                    if (ratio[i] < min) min = ratio[i];
+                }
+
+                using (var w = new System.IO.StreamWriter(path, false))
+                {
+                    w.WriteLine($"# {term.name} rows: {n} minDistanceRatio {min.ToString("F4", ci)} meanDistanceRatio {(sum / n).ToString("F4", ci)} rowsBelowFloor {below} rowsCrossed {crossed} floor {crossTerm.minRatio.ToString("F3", ci)} band {crossTerm.softBand.ToString("F3", ci)} carrier {crossTerm.endpointCarrier}{((blender == null) && (crossTerm.endpointCarrier == EndpointCarrier.ThroughField) ? (" (no field: node transform)") : (""))} widthScale {deformation.effectiveCorridorWidthScale.ToString("F3", ci)}");
+                    w.WriteLine("# end: +1 along the node's rest right, -1 against it. distance = pathPart + barPart. along: the end's foot along the neighbour's bar, in half-lengths - beyond +-1 the foot is past the bar end. Sorted by ratio, worst first.");
+                    w.WriteLine("row\tnode\tend\tneighbour\trestDistance\tdistance\tratio\thinge\tpathPart\tbarPart\trestAlong\talong\thalfThis\thalfNeighbour\trestSpacing\tspacing\tnodeRestX\tnodeRestY\tnodeRestZ");
+
+                    foreach (int i in order)
+                    {
+                        int a = rowNode[i], b = rowNeighbour[i];
+                        DVector3 p = deformation.nodes[a].restPosition;
+
+                        w.WriteLine(string.Join("\t", new[]
+                        {
+                            i.ToString(ci),
+                            a.ToString(ci),
+                            rowEnd[i].ToString(ci),
+                            b.ToString(ci),
+                            rowRest[i].ToString("F5", ci),
+                            distance[i].ToString("F5", ci),
+                            ratio[i].ToString("F4", ci),
+                            Hinge(distance[i], rowRest[i]).ToString("F5", ci),
+                            pathPart[i].ToString("F5", ci),
+                            (distance[i] - pathPart[i]).ToString("F5", ci),
+                            restAlong[i].ToString("F3", ci),
+                            along[i].ToString("F3", ci),
+                            nodeHalf[a].ToString("F4", ci),
+                            nodeHalf[b].ToString("F4", ci),
+                            (p - deformation.nodes[b].restPosition).magnitude.ToString("F4", ci),
+                            spacing[i].ToString("F4", ci),
+                            p.x.ToString("F4", ci),
+                            p.y.ToString("F4", ci),
+                            p.z.ToString("F4", ci),
+                        }));
+
+                        written++;
+                    }
+                }
+
+                return true;
             }
         }
 #endif
