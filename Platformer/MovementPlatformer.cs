@@ -36,6 +36,10 @@ namespace UC
         [SerializeField]
         private float gravityScale = 1.0f;
         [SerializeField]
+        private bool disableGravityWhenGrounded = true;
+        [SerializeField]
+        private float groundedGravity = 1.0f;
+        [SerializeField]
         private bool useTerminalVelocity = false;
         [SerializeField]
         private float terminalVelocity = 100.0f;
@@ -155,7 +159,7 @@ namespace UC
 
             if (rb)
             {
-                rb.gravityScale = 0.0f;
+                rb.gravityScale = (disableGravityWhenGrounded) ? (0.0f) : (groundedGravity);
             }
             if (animator == null)
             {
@@ -346,7 +350,8 @@ namespace UC
             // Need to check with actual is grounded or else coyote time will make the jump count reset immediately after flying off
             if (actualIsGrounded)
             {
-                rb.gravityScale = 0.0f;
+                rb.gravityScale = (disableGravityWhenGrounded) ? (0.0f) : (groundedGravity);
+
                 currentJumpCount = maxJumpCount;
                 if ((airCollider != groundCollider) && (airCollider) && (groundCollider))
                 {
