@@ -15,6 +15,8 @@ namespace UC.Editor
         SerializedProperty propPlayerInput;
         SerializedProperty propHorizontalInput;
         SerializedProperty propGravityScale;
+        SerializedProperty propDisableGravityWhenGrounded;
+        SerializedProperty propGroundedGravity;
         SerializedProperty propUseTerminalVelocity;
         SerializedProperty propTerminalVelocity;
         SerializedProperty propCoyoteTime;
@@ -65,6 +67,8 @@ namespace UC.Editor
             propPlayerInput = serializedObject.FindProperty("playerInput");
             propHorizontalInput = serializedObject.FindProperty("horizontalInput");
             propGravityScale = serializedObject.FindProperty("gravityScale");
+            propDisableGravityWhenGrounded = serializedObject.FindProperty("disableGravityWhenGrounded");
+            propGroundedGravity = serializedObject.FindProperty("groundedGravity");
             propUseTerminalVelocity = serializedObject.FindProperty("useTerminalVelocity");
             propTerminalVelocity = serializedObject.FindProperty("terminalVelocity");
             propCoyoteTime = serializedObject.FindProperty("coyoteTime");
@@ -133,6 +137,11 @@ namespace UC.Editor
                 EditorGUILayout.PropertyField(propGroundCheckCollider, new GUIContent("Ground Check Collider", "Link to a collider that identifies the ground.\nCircle or box collider below the player, when it touches ground, the character is grounded and can jump."));
                 EditorGUILayout.PropertyField(propGroundLayerMask, new GUIContent("Ground Layer Mask", "In which layers are the objects that are considered ground?"));
                 EditorGUILayout.PropertyField(propGravityScale, new GUIContent("Gravity Scale", "What's the gravity like? This is multiplied by the project's 2d gravity settings"));
+                EditorGUILayout.PropertyField(propDisableGravityWhenGrounded, new GUIContent("Disable Gravity When Grounded", "Should we set gravity to zero when on the ground, or just let it stays as it will?"));
+                if (!propDisableGravityWhenGrounded.boolValue)
+                {
+                    EditorGUILayout.PropertyField(propGroundedGravity, new GUIContent("Grounded Gravity", "If we don't disable gravity when grounded, what should be the gravity scale while grounded?"));
+                }
                 EditorGUILayout.PropertyField(propUseTerminalVelocity, new GUIContent("Use Terminal Velocity", "Does the object have a top speed while falling?"));
                 if (propUseTerminalVelocity.boolValue)
                 {
