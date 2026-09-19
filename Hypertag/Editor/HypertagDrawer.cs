@@ -126,13 +126,21 @@ namespace UC.Editor
                 return null;
             }
 
-            var relative = absolute.Substring(projectPath.Length).TrimStart('/');
-            if (!relative.StartsWith("Assets", StringComparison.Ordinal))
+            var relative = absolute.Substring(projectPath.Length).TrimStart('/').TrimEnd('/');
+            if (relative != "Assets" && !relative.StartsWith("Assets/", StringComparison.Ordinal))
             {
                 EditorUtility.DisplayDialog("Invalid Folder",
                     "The selected folder must be inside the Assets folder.",
                     "OK");
                 return null;
+            }
+
+            // A folder created from inside the OS folder panel exists on disk but hasn't been
+            // imported by the AssetDatabase yet, so IsValidFolder would report it as invalid.
+            // Refresh so Unity picks it up (and generates its .meta) before validating.
+            if (!AssetDatabase.IsValidFolder(relative) && Directory.Exists(absolute))
+            {
+                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             }
 
             if (!AssetDatabase.IsValidFolder(relative))
