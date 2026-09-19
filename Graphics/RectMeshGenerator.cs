@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace UC
 {
-
+    [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public class RectMeshGenerator : MeshGenerator
     {
         public enum FillMode { Normal, Hole };
@@ -293,6 +293,12 @@ namespace UC
             float insideDistance = Mathf.Min(Mathf.Max(d.x, d.y), 0.0f);
 
             return outsideDistance + insideDistance;
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireCube(transform.position, size.xy0());
         }
     }
 }
