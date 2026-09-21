@@ -22,7 +22,12 @@ namespace UC.ED
     /// Two reservations, both consequences of sampling on the field's own grid. A feature thinner
     /// than a voxel is invisible to it. And it ties the measurement resolution to the weight
     /// resolution, which the output subdivision scale exists to keep apart - so it is a second
-    /// sampler beside the mesh terms, not a replacement for them.
+    /// sampler beside the mesh terms, not a replacement for them. sampleRefinement loosens the
+    /// first: at r each occupied voxel is split into r^3 sub-cells on a finer lattice, every
+    /// sub-corner carried through the same interpolant, so the stencils sample *inside* a
+    /// trilinear region rather than only at its corners. The map is a trilinear blend of affines
+    /// inside a region and can fold there while the corners stay in order; only a stencil inside
+    /// sees that. At r = 1 the sample set is the field's own corners, exactly as before.
     ///
     /// Only the occupied cells - the voxelized solid, not the cells GrowInfluence merely reached -
     /// and only tetrahedra every corner of which something influences. A stencil with one rest
@@ -34,15 +39,28 @@ namespace UC.ED
     [Serializable]
     public abstract class EDDeformationFieldQualityTerm : EDDeformationQualityTerm
     {
+        [SerializeField, Min(1), Tooltip("Each occupied voxel is sampled on this many sub-cells per axis - six tetrahedra per sub-cell, r^3 sub-cells per voxel - so that the stencils sample inside a trilinear region of the field and not only at its corners. 1 is the field's own corners. The cost is r^3 in tetrahedra, on every measurement and on every Jacobian column. Counts are not comparable across values; the RMS and the inverted volume fraction are.")]
+        private int sampleRefinement = 1;
+
+        /// <summary>
+        /// Sets the refinement exactly as editing the field in the inspector would - for the
+        /// export's debug measures, which host a term of their own. Read when the samples are
+        /// built, so it takes effect on the next Reset (a Build).
+        /// </summary>
+        public void SetSampleRefinement(int value) => sampleRefinement = Mathf.Max(1, value);
+
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
             => new FieldQualityInstance(this, deformation, normalizeWeights);
 
         public sealed class FieldQualityInstance : QualityInstance
         {
+            private readonly EDDeformationFieldQualityTerm fieldTerm;
+
             public FieldQualityInstance(EDDeformationFieldQualityTerm term, EmbededDeformation deformation, bool normalizeWeights)
                 : base(term, deformation, normalizeWeights)
             {
+                fieldTerm = term;
             }
 
             /// <summary>
@@ -86,25 +104,44 @@ namespace UC.ED
                     return false;
                 }
 
-                // Corners are shared by up to eight cells, so each is deformed once: indexed by its
-                // own integer coordinates, one past the grid in every axis for the far corners.
+                // The refined lattice: r sub-cells per voxel per axis. Corners are shared by up to
+                // eight sub-cells, so each is deformed once: indexed by its refined integer
+                // coordinates, one past the grid in every axis for the far corners.
+                int r = Mathf.Max(1, fieldTerm.sampleRefinement);
+
+                Vector3 cellSize = field.cellSize;
+
                 var cornerIndex = new Dictionary<long, int>();
                 var cornerPositions = new List<Vector3>();
                 var tetrahedra = new List<int>();
 
-                long strideY = grid.x + 1;
-                long strideZ = strideY * (grid.y + 1);
+                long strideY = ((long)grid.x * r) + 1;
+                long strideZ = strideY * (((long)grid.y * r) + 1);
 
-                int CornerOf(int x, int y, int z)
+                // A sub-corner at refined coordinate (rx, ry, rz). Its position is the field's own
+                // corner at (rx / r, ...) plus the remainder's fraction of a cell, so that at r = 1
+                // every corner is field.CellCorner(x, y, z) exactly as before and the sample set -
+                // and every column measured over it - is byte-identical to the unrefined one.
+                int CornerOf(long rx, long ry, long rz)
                 {
-                    long key = x + (y * strideY) + (z * strideZ);
+                    long key = rx + (ry * strideY) + (rz * strideZ);
 
                     if (!cornerIndex.TryGetValue(key, out int index))
                     {
                         index = cornerPositions.Count;
 
                         cornerIndex.Add(key, index);
-                        cornerPositions.Add(field.CellCorner(x, y, z));
+
+                        Vector3 corner = field.CellCorner((int)(rx / r), (int)(ry / r), (int)(rz / r));
+
+                        if (r > 1)
+                        {
+                            corner.x += (cellSize.x * (rx % r)) / r;
+                            corner.y += (cellSize.y * (ry % r)) / r;
+                            corner.z += (cellSize.z * (rz % r)) / r;
+                        }
+
+                        cornerPositions.Add(corner);
                     }
 
                     return index;
@@ -116,6 +153,7 @@ namespace UC.ED
 
                 // z outermost, matching the field's own index order, so the sample order - and with
                 // it every serial sum over it - is a fact about the grid rather than about this loop.
+                // Sub-cells follow the same order inside a voxel.
                 for (int z = 0; z < grid.z; z++)
                 {
                     for (int y = 0; y < grid.y; y++)
@@ -126,15 +164,28 @@ namespace UC.ED
 
                             occupiedCells++;
 
-                            for (int corner = 0; corner < 8; corner++)
-                                cellCorners[corner] = CornerOf(x + (corner & 1), y + ((corner >> 1) & 1), z + ((corner >> 2) & 1));
-
-                            for (int t = 0; t < 6; t++)
+                            for (int k = 0; k < r; k++)
                             {
-                                tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 0]]);
-                                tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 1]]);
-                                tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 2]]);
-                                tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 3]]);
+                                for (int j = 0; j < r; j++)
+                                {
+                                    for (int i = 0; i < r; i++)
+                                    {
+                                        long rx = ((long)x * r) + i;
+                                        long ry = ((long)y * r) + j;
+                                        long rz = ((long)z * r) + k;
+
+                                        for (int corner = 0; corner < 8; corner++)
+                                            cellCorners[corner] = CornerOf(rx + (corner & 1), ry + ((corner >> 1) & 1), rz + ((corner >> 2) & 1));
+
+                                        for (int t = 0; t < 6; t++)
+                                        {
+                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 0]]);
+                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 1]]);
+                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 2]]);
+                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 3]]);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

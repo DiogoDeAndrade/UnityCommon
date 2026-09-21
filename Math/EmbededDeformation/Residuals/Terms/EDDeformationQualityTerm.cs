@@ -214,6 +214,9 @@ namespace UC.ED
             /// <summary>The measure of the whole sample set at rest, which weights each simplex's share of a row.</summary>
             public double restMeasure => restTotalMeasure;
 
+            /// <summary>The floor the shortfall is taken against - the term's minRatio, as a fraction of each simplex's rest measure.</summary>
+            public float floor => qualityTerm.minRatio;
+
             /// <summary>How many rows this form puts: one, or one per node.</summary>
             public int rows => rowCountK;
 
