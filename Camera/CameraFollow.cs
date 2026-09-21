@@ -331,5 +331,24 @@ namespace UC
             }
         }
 
+        [Button("Force Update")]
+        protected void ForceUpdate()
+        {
+            if (mainCamera == null)
+            { 
+                mainCamera = GetComponent<Camera>();
+            }
+
+            if (mode == Mode.CameraTrap)
+            {
+                float currentZ = transform.position.z;
+                Vector3 targetPos = GetTargetPos();
+                transform.position = new Vector3(targetPos.x, targetPos.y, currentZ);
+
+                CheckBounds();
+            }
+
+            Run_Update();
+        }
     }
 }
