@@ -771,6 +771,7 @@ namespace UC.ED
                     "squashed",
                     "globalRMS",
                     "worst1%share",
+                    "maxShortfall",
                     "notes"
                 };
             }
@@ -796,6 +797,7 @@ namespace UC.ED
                     squashed.ToString(CultureInfo.InvariantCulture),
                     rms.ToString("E3", CultureInfo.InvariantCulture),
                     WorstOnePercentShare(contributions),
+                    MaxShortfall(contributions).ToString("F4", CultureInfo.InvariantCulture),
                     describeNote
                 };
             }
@@ -816,6 +818,34 @@ namespace UC.ED
             /// share of the mean square and leaves sorted, which is fine for the one caller, who
             /// allocated it for this.
             /// </summary>
+            /// <summary>
+            /// The deepest single simplex: its shortfall as a fraction of its own rest measure,
+            /// unweighted - zero when nothing is under the floor, up to the floor while the worst
+            /// is squashed without inverting, past it once inverted and unbounded after that (a
+            /// simplex turned over by twice its rest measure reads floor + 2). The RMS is a
+            /// statement about the population and hides a few deep folds behind many shallow ones;
+            /// this is the tail's depth on its own, the same quantity on triangles and on
+            /// tetrahedra. Recovered exactly from the contribution, which is (shortfall / m)^2 *
+            /// (m / total), so no second pass over the samples.
+            /// </summary>
+            private double MaxShortfall(double[] contributions)
+            {
+                if ((contributions == null) || (restTotalMeasure <= 0.0)) return 0.0;
+
+                double worst = 0.0;
+
+                for (int s = 0; s < contributions.Length; s++)
+                {
+                    if ((contributions[s] <= 0.0) || (restMeasures[s] <= 0.0)) continue;
+
+                    double depth = Math.Sqrt(contributions[s] * restTotalMeasure / restMeasures[s]);
+
+                    if (depth > worst) worst = depth;
+                }
+
+                return worst;
+            }
+
             private static string WorstOnePercentShare(double[] contributions)
             {
                 if (contributions == null) return string.Empty;
