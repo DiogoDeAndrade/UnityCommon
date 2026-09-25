@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using NaughtyAttributes;
-using NUnit.Framework.Internal;
-
 
 #if UNITY_EDITOR
 using UnityEditor;
