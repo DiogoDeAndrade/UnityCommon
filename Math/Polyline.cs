@@ -449,10 +449,15 @@ namespace UC
             return GetEnumerator();
         }
 
-        public void Triangulate_EarCut(List<Polyline> holes, ref List<Vector3> outVertices, ref List<int> outTriangles)
+        // Tolerances are absolute, in the polyline's units (the defaults suit world units):
+        //  - duplicateEpsilon: consecutive points closer than this are merged
+        //  - collinearEpsilon: a point closer than this to the line through its neighbours is dropped
+        //  - minTriangleArea: output triangles with less area than this are dropped
+        public void Triangulate_EarCut(List<Polyline> holes, ref List<Vector3> outVertices, ref List<int> outTriangles,
+                                       float duplicateEpsilon = 1e-5f, float collinearEpsilon = 1e-2f, float minTriangleArea = 5e-3f)
         {
             #region Helpers
-            static bool NearlyEqual(Vector2 a, Vector2 b, float eps = 1e-5f)
+            static bool NearlyEqual(Vector2 a, Vector2 b, float eps)
             {
                 return (a - b).sqrMagnitude <= eps * eps;
             }
@@ -473,19 +478,19 @@ namespace UC
             // cross-product). A cross-product threshold is not scale-independent: at large world
             // coordinates the float noise on exactly-collinear points dwarfs a tiny eps, so
             // collinear points were never removed and EarCut sliced zero-area sliver triangles.
-            static List<Vector2> NormalizeRing(List<Vector3> src, bool wantCCW, float collinearEps = 1e-2f)
+            static List<Vector2> NormalizeRing(List<Vector3> src, bool wantCCW, float duplicateEps, float collinearEps)
             {
                 // 1) copy to 2D, drop duplicate last==first and consecutive dups
                 var pts = new List<Vector2>(src.Count);
                 for (int i = 0; i < src.Count; i++)
                 {
                     var v = new Vector2(src[i].x, src[i].y);
-                    if (pts.Count == 0 || !NearlyEqual(pts[pts.Count - 1], v)) pts.Add(v);
+                    if (pts.Count == 0 || !NearlyEqual(pts[pts.Count - 1], v, duplicateEps)) pts.Add(v);
                 }
-                if (pts.Count >= 2 && NearlyEqual(pts[0], pts[^1])) pts.RemoveAt(pts.Count - 1);
+                if (pts.Count >= 2 && NearlyEqual(pts[0], pts[^1], duplicateEps)) pts.RemoveAt(pts.Count - 1);
 
                 for (int i = pts.Count - 2; i >= 0 && pts.Count >= 2; --i)
-                    if (NearlyEqual(pts[i], pts[i + 1])) pts.RemoveAt(i + 1);
+                    if (NearlyEqual(pts[i], pts[i + 1], duplicateEps)) pts.RemoveAt(i + 1);
 
                 // 2) remove near-collinears
                 if (pts.Count >= 3)
@@ -503,7 +508,7 @@ namespace UC
                         float acLen = ac.magnitude;
                         // perpendicular distance of b from line a-c = |2*area| / |a-c|
                         float perp = (acLen > 1e-6f) ? Mathf.Abs(cross) / acLen : 0f;
-                        if (perp > collinearEps || NearlyEqual(a, b) || NearlyEqual(b, c))
+                        if (perp > collinearEps || NearlyEqual(a, b, duplicateEps) || NearlyEqual(b, c, duplicateEps))
                             clean.Add(b);
                     }
                     pts = clean;
@@ -581,7 +586,7 @@ namespace UC
             else outVertices.Clear();
 
             // Outer ring normalization (CCW)
-            var outer = NormalizeRing(this.vertices, true);
+            var outer = NormalizeRing(this.vertices, true, duplicateEpsilon, collinearEpsilon);
 
             // Candidate hole normalization (CW) + filtering to "fully inside outer"
             var keptHoles = new List<List<Vector2>>();
@@ -589,7 +594,7 @@ namespace UC
             {
                 for (int h = 0; h < holes.Count; h++)
                 {
-                    var ring = NormalizeRing(holes[h].GetVertices(), false);
+                    var ring = NormalizeRing(holes[h].GetVertices(), false, duplicateEpsilon, collinearEpsilon);
                     if ((ring.Count >= 3) && (RingFullyInside(ring, outer)))
                     {
                         keptHoles.Add(ring);
@@ -649,7 +654,7 @@ namespace UC
                     Vector3 b = outVertices[outTriangles[i + 1]];
                     Vector3 c = outVertices[outTriangles[i + 2]];
                     float area2 = Mathf.Abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
-                    if (area2 > 1e-2f)
+                    if (area2 > 2.0f * minTriangleArea)
                     {
                         filtered.Add(outTriangles[i]);
                         filtered.Add(outTriangles[i + 1]);

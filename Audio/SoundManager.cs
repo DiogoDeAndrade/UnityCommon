@@ -529,6 +529,24 @@ namespace UC
             return _instance.musicSource.clip.name;
         }
 
+        /// <summary>Playback position of the current music in seconds - 0 when nothing is playing.</summary>
+        static public float GetMusicTime()
+        {
+            if (_instance == null) return 0.0f;
+            if (_instance.musicSource == null) return 0.0f;
+            if (!_instance.musicSource.isPlaying) return 0.0f;
+            return _instance.musicSource.time;
+        }
+
+        /// <summary>Jumps the current music to a position in seconds, clamped to the clip.</summary>
+        static public void SetMusicTime(float seconds)
+        {
+            if (_instance == null) return;
+            var source = _instance.musicSource;
+            if ((source == null) || (source.clip == null)) return;
+            source.time = Mathf.Clamp(seconds, 0.0f, Mathf.Max(0.0f, source.clip.length - 0.01f));
+        }
+
         static public int CountInstances(AudioClip clip)
         {
             if (_instance == null) return 0;
