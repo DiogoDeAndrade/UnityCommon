@@ -74,6 +74,25 @@ namespace UC.ED
         public bool         cut => cutAtCellPlanes;
         public Carrier      carrierMode => carrier;
         public float        limit => Mathf.Clamp(slopeLimit, 0.0f, 90.0f);
+
+        /// <summary>An independent copy - every field is a value, so a member-wise copy is a full one.</summary>
+        public EDFloorRibbonSettings Clone() => (EDFloorRibbonSettings)MemberwiseClone();
+
+        /// <summary>
+        /// A copy with the form and the tessellation replaced and every other setting kept - what
+        /// the schedule runner hands the floor slope term for a run that varies only how the floor
+        /// is sampled (queue §26d).
+        /// </summary>
+        public EDFloorRibbonSettings WithTessellation(Form newForm, int newAlong, int newAcross)
+        {
+            var copy = Clone();
+
+            copy.form = newForm;
+            copy.alongSubdivisions = Math.Max(1, newAlong);
+            copy.acrossSubdivisions = Math.Max(1, newAcross);
+
+            return copy;
+        }
     }
 
     /// <summary>
@@ -83,7 +102,11 @@ namespace UC.ED
     /// node's frame tilt, so a rise carried by translation with level frames costs it nothing and
     /// the floor between two nodes at different heights is a wall nothing prices. This reads that
     /// floor, the way a game reads it - the angle between a floor patch's normal and up, whatever
-    /// direction a walker crosses the patch.
+    /// direction a walker crosses the patch. The angle is signed by the patch's upward face: each
+    /// triangle's winding is oriented at rest so its normal points up, and a patch that has folded
+    /// over at a state reads past vertical rather than as the gentle slope its underside makes with
+    /// up. Until 2026-09-26 the cosine was taken absolute, which let a fold at the top of the ramp
+    /// read as a satisfied floor and put a corner at 90 degrees with the wrong sign beyond it.
     ///
     /// Diogo's construction generalised: at one segment per link, a bar across the corridor at
     /// each end of the link and the triangles from each bar to the other end's centre point;
@@ -416,6 +439,13 @@ namespace UC.ED
 
             for (int t = 0; t < count; t++)
             {
+                // The winding is oriented so the rest normal points up, and the cosine is signed
+                // from here on: the same corner order is carried to every state, so a triangle
+                // that folds over reads a negative cosine, past vertical. A triangle vertical at
+                // rest has no upward face to orient by and keeps the order it was built with.
+                if (DVector3.Dot(DVector3.Cross(rest[3 * t + 1] - rest[3 * t], rest[3 * t + 2] - rest[3 * t]), worldUp) < 0.0)
+                    (rest[3 * t + 1], rest[3 * t + 2]) = (rest[3 * t + 2], rest[3 * t + 1]);
+
                 Measure(rest[3 * t], rest[3 * t + 1], rest[3 * t + 2], worldUp, out restArea[t], out double cosine);
 
                 restSlope[t] = Degrees(cosine);
@@ -479,8 +509,9 @@ namespace UC.ED
             => (throughField) ? (deformation.CreateFieldBlender(state)) : (null);
 
         /// <summary>
-        /// One triangle at a state: |cos| of its normal against up, and its corners. A collapsed
-        /// triangle reads as a wall (cosine zero).
+        /// One triangle at a state: the signed cosine of its normal against up (negative once the
+        /// triangle has folded over), and its corners. A collapsed triangle reads as a wall
+        /// (cosine zero).
         /// </summary>
         public double CosineAt(int t, EDStateView state, FullDeformationField.TransformBlender blender, out DVector3 a, out DVector3 b, out DVector3 c)
         {
@@ -718,7 +749,11 @@ namespace UC.ED
             return byA * (1.0 - s) + byB * s;
         }
 
-        /// <summary>A triangle's area and |cos| of its normal against up; a collapsed triangle reads as a wall.</summary>
+        /// <summary>
+        /// A triangle's area and the signed cosine of its normal against up, in the winding it is
+        /// given - the rest orientation faces up, so a negative cosine is a triangle folded over. A
+        /// collapsed triangle reads as a wall.
+        /// </summary>
         private static void Measure(DVector3 a, DVector3 b, DVector3 c, DVector3 up, out double area, out double cosine)
         {
             DVector3 normal = DVector3.Cross(b - a, c - a);
@@ -732,10 +767,11 @@ namespace UC.ED
                 return;
             }
 
-            cosine = Math.Max(0.0, Math.Min(1.0, Math.Abs(DVector3.Dot(normal, up)) / length));
+            cosine = Math.Max(-1.0, Math.Min(1.0, DVector3.Dot(normal, up) / length));
         }
 
-        public static double Degrees(double cosine) => Math.Acos(Math.Max(0.0, Math.Min(1.0, cosine))) * 180.0 / Math.PI;
+        /// <summary>The slope in degrees, 0 to 180: past 90 the triangle has folded over.</summary>
+        public static double Degrees(double cosine) => Math.Acos(Math.Max(-1.0, Math.Min(1.0, cosine))) * 180.0 / Math.PI;
 
         private static double Area(DVector3 a, DVector3 b, DVector3 c)
             => 0.5 * DVector3.Cross(b - a, c - a).magnitude;

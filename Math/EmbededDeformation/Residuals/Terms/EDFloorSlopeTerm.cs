@@ -52,8 +52,15 @@ namespace UC.ED
 
         public override string name => "floorSlope";
 
-        /// <summary>The one sanctioned driver-write, for the measure that hosts a weight-zero instance over its own settings.</summary>
+        /// <summary>
+        /// The one sanctioned driver-write: for the measure that hosts a weight-zero instance over its
+        /// own settings, and for the schedule runner, which swaps a run's tessellation in before Build
+        /// and restores the snapshot afterwards. Takes effect at the next instance Reset.
+        /// </summary>
         public void SetRibbonSettings(EDFloorRibbonSettings settings) => ribbon = settings ?? new EDFloorRibbonSettings();
+
+        /// <summary>The settings in force, for a driver that snapshots and restores them. Copy before keeping.</summary>
+        public EDFloorRibbonSettings ribbonSettings => ribbon;
 
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
