@@ -462,6 +462,44 @@ namespace UC.ED
 
             return measured;
         }
+
+        /// <summary>
+        /// The breakdown of some of the model's terms at an arbitrary state, evaluating only those:
+        /// every other term comes back with its rows and weight and no energy. For a measurement
+        /// that scores a few terms again under other inputs - the end target measure, which scores
+        /// the terms that read the handle targets against the end pose - where evaluating the whole
+        /// residual would pay for the field and the floor terms to learn nothing new about them.
+        ///
+        /// The model must already be resolved, which any solve or breakdown before this has done;
+        /// it is not resolved again here, because this is called from inside a solve's own report.
+        /// The terms' own columns are not measured.
+        /// </summary>
+        public static IReadOnlyList<EDTermEnergy> MeasureTermEnergies(EDEnergyModel.Instance energy, EDStateView state, System.Predicate<string> includeTerm)
+        {
+            if ((energy == null) || (includeTerm == null)) return null;
+
+            // A model that has not been resolved, or that carries no rows, has nothing to score -
+            // and a vector of no length is not one the library will build.
+            if (energy.totalRows <= 0) return null;
+
+            Vector<double> residual = Vector<double>.Build.Dense(energy.totalRows);
+
+            int offset = 0;
+
+            for (int i = 0; i < energy.termInstances.Count; i++)
+            {
+                var instance = energy.termInstances[i];
+
+                if (instance.rowCount == 0) continue;
+
+                if (includeTerm(instance.term.name))
+                    instance.EvaluateResidual(state, residual, offset);
+
+                offset += instance.rowCount;
+            }
+
+            return MeasureTermEnergies(residual, energy, null);
+        }
 #endif
     }
 }

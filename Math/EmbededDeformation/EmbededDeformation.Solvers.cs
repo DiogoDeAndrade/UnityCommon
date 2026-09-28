@@ -44,6 +44,44 @@ namespace UC.ED
 
             return flatIterations >= 2;
         }
+
+        /// <summary>
+        /// The start of an iteration: the entering state's row, the inputs the iteration runs
+        /// under, and the residual it solves with.
+        ///
+        /// With nobody moving the inputs this is one residual evaluation, which the caller reports
+        /// exactly as it always did. With a listener, the entering state is measured and reported
+        /// *before* the inputs move: it is the state the previous iteration produced, and the
+        /// targets still in force are the ones it was solved against. Measured after the move its
+        /// row would be scored against a request it has never been solved for, where a press's row
+        /// - written after the press's step - is scored against the one it has, and the two routes
+        /// would export different quantities under the same column names. The residual is then
+        /// evaluated again only when the inputs did move, so the second evaluation is paid per
+        /// moved iteration rather than per iteration, and not at all when nobody is listening for
+        /// rows.
+        /// </summary>
+        private Vector<double> EnterIteration(EDEnergyModel.Instance energy, EDStateView stateView, bool reportEntry, out EDIterationInputs inputs, out bool entryReported)
+        {
+            Vector<double> f = null;
+
+            entryReported = false;
+
+            if ((onIterationBegin != null) && (onIterationMeasured != null) && (reportEntry))
+            {
+                f = energy.EvaluateResidual(stateView);
+
+                ReportIteration(f, energy, stateView);
+
+                entryReported = true;
+            }
+
+            inputs = BeginIteration();
+
+            if ((f == null) || (inputs.changed))
+                f = energy.EvaluateResidual(stateView);
+
+            return f;
+        }
 #endif
 
         public void SolveED_GN(int maxIterations, EDEnergyModel.Instance energy,
@@ -80,23 +118,36 @@ namespace UC.ED
 
                 var stateView = new EDStateView(currentState);
 
-                var f = energy.EvaluateResidual(stateView);
+                var f = EnterIteration(energy, stateView, true, out EDIterationInputs inputs, out bool entryReported);
 
                 double error = f.L2Norm();
 
-                ReportIteration(f, energy, stateView);
+                if (!entryReported)
+                    ReportIteration(f, energy, stateView);
+
+                // The entering state's row has read the step that made it; what follows is this
+                // iteration's own.
+                ClearStepReport();
 
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
-                // Already solved / close enough
-                if (!double.IsFinite(error) || error < residualTolerance)
+                // Already solved / close enough - unless the inputs are still moving, where
+                // "solved" describes a request that is about to change.
+                if (!double.IsFinite(error) || ((error < residualTolerance) && (!inputs.pending)))
                 {
                     break;
                 }
 
+                // Totals either side of a moved input belong to different objectives.
+                if (inputs.changed)
+                {
+                    previousError = double.NaN;
+                    flatIterations = 0;
+                }
+
                 // Checked at entry, before the Jacobian - the expensive half of an iteration that
                 // would improve nothing.
-                if (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations))
+                if ((!inputs.pending) && (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations)))
                 {
                     break;
                 }
@@ -109,6 +160,10 @@ namespace UC.ED
 
                 if (!double.IsFinite(jNorm) || jNorm < 1e-12)
                 {
+                    // Nothing to step along. With the inputs still moving the next iteration is
+                    // another problem, so the solve goes on to it rather than ending here.
+                    if (inputs.pending) continue;
+
                     break;
                 }
 
@@ -137,10 +192,14 @@ namespace UC.ED
                     return;
                 }
 
-                if (stepNorm < stepTolerance)
+                // A step this small ends the solve - unless the inputs are still moving, where it
+                // is taken and the solve goes on.
+                if ((stepNorm < stepTolerance) && (!inputs.pending))
                 {
                     break;
                 }
+
+                ReportStepTaken(0, 0.0, stepNorm * Math.Abs(damping));
 
                 currentState.Apply(delta, damping);
             }
@@ -189,11 +248,16 @@ namespace UC.ED
 
                 var stateView = new EDStateView(currentState);
 
-                var f = energy.EvaluateResidual(stateView);
+                var f = EnterIteration(energy, stateView, true, out EDIterationInputs inputs, out bool entryReported);
 
                 double error = f.L2Norm();
 
-                ReportIteration(f, energy, stateView);
+                if (!entryReported)
+                    ReportIteration(f, energy, stateView);
+
+                // The entering state's row has read the step that made it; what follows is this
+                // iteration's own.
+                ClearStepReport();
 
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
@@ -203,12 +267,21 @@ namespace UC.ED
                     return;
                 }
 
-                if (error < residualTolerance)
+                // Close enough ends the solve - unless the inputs are still moving, where "solved"
+                // describes a request that is about to change.
+                if ((error < residualTolerance) && (!inputs.pending))
                     break;
+
+                // Totals either side of a moved input belong to different objectives.
+                if (inputs.changed)
+                {
+                    previousError = double.NaN;
+                    flatIterations = 0;
+                }
 
                 // Checked at entry, before the Jacobian - the expensive half of an iteration that
                 // would improve nothing.
-                if (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations))
+                if ((!inputs.pending) && (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations)))
                     break;
 
                 previousError = error;
@@ -218,7 +291,13 @@ namespace UC.ED
                 EDDiagnostics.Trace($"[iter {iter}] jNorm {EDDiagnostics.F(jNorm)}");
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
+                {
+                    // Nothing to step along. With the inputs still moving the next iteration is
+                    // another problem, so the solve goes on to it rather than ending here.
+                    if (inputs.pending) continue;
+
                     break;
+                }
 
                 var JT = J.Transpose();
                 var H = JT * J;
@@ -227,6 +306,10 @@ namespace UC.ED
                 Vector<double> delta = null;
                 EDState acceptedState = null;
                 bool solved = false;
+
+                // The damping as this iteration found it, before its attempts raise it - what it
+                // goes back to if they all fail while the inputs are still moving, see below.
+                double lambdaAtEntry = currentLambda;
 
                 for (int attempt = 0; attempt < 8; attempt++)
                 {
@@ -288,13 +371,19 @@ namespace UC.ED
 
                     if (candidateError <= error)
                     {
+                        // Recorded before the damping is lowered for the next iteration: this is
+                        // the value the step was solved with.
+                        ReportStepTaken(attempt, currentLambda, stepNorm);
+
                         acceptedState = candidateState;
                         solved = true;
 
                         if (adaptiveLambda)
                             currentLambda = Math.Max(currentLambda * 0.3, 1e-12);
 
-                        if (stepNorm < stepTolerance)
+                        // A step this small ends the solve - unless the inputs are still moving,
+                        // where it is taken and the solve goes on.
+                        if ((stepNorm < stepTolerance) && (!inputs.pending))
                         {
                             currentState = acceptedState;
 
@@ -311,8 +400,26 @@ namespace UC.ED
 
                 if (!solved)
                 {
-                    Debug.LogWarning("[ED] LM could not find an improving step.");
-                    break;
+                    // Every attempt was refused: the row that follows is a stall's.
+                    ReportStepRefused(8);
+
+                    if (!inputs.pending)
+                    {
+                        Debug.LogWarning("[ED] LM could not find an improving step.");
+                        break;
+                    }
+
+                    // The inputs move again at the next iteration, so the solve goes on to it: a
+                    // stall is a fact about this objective, and the next one is another. The
+                    // damping goes back to what it was on entering this iteration - the attempts
+                    // raised it by eight factors of ten against an objective that is about to be
+                    // replaced, and carried over it would hold the next iterations to steps too
+                    // small to follow the inputs.
+                    Debug.LogWarning("[ED] LM could not find an improving step; the inputs are still moving, so the solve goes on with them.");
+
+                    currentLambda = lambdaAtEntry;
+
+                    continue;
                 }
 
                 currentState = acceptedState;
@@ -373,21 +480,27 @@ namespace UC.ED
 
                 var stateView = new EDStateView(currentState);
 
-                var f = energy.EvaluateResidual(stateView);
-
-                double error = f.L2Norm();
-
-                LogResidualEnergies(f, energy, iter);
-
                 // The state entering the first iteration of a *continuing* solve is the previous
                 // solve's accepted state, and the export already holds that row - reporting it
                 // again is what made every accepted state appear twice under per-press driving
                 // (Run Iteration), the twin-row pattern of 2026-08-25. A from-reset solve still
                 // reports it: there it is the rest state, which nothing else records. The console
-                // log above is deliberately unconditional - the debug window keeps showing the
+                // log below is deliberately unconditional - the debug window keeps showing the
                 // entering state either way.
-                if ((iter > 0) || (resetBeforeSolve))
+                bool reportEntry = (iter > 0) || (resetBeforeSolve);
+
+                var f = EnterIteration(energy, stateView, reportEntry, out EDIterationInputs inputs, out bool entryReported);
+
+                double error = f.L2Norm();
+
+                LogResidualEnergies(f, energy, iter);
+
+                if ((reportEntry) && (!entryReported))
                     ReportIteration(f, energy, stateView);
+
+                // The entering state's row has read the step that made it; what follows is this
+                // iteration's own.
+                ClearStepReport();
 
                 EDDiagnostics.Trace($"[iter {iter}] residual {EDDiagnostics.F(error)}");
 
@@ -397,14 +510,23 @@ namespace UC.ED
                     return;
                 }
 
-                if (error < residualTolerance)
+                // Close enough ends the solve - unless the inputs are still moving, where "solved"
+                // describes a request that is about to change.
+                if ((error < residualTolerance) && (!inputs.pending))
                 {
                     break;
                 }
 
+                // Totals either side of a moved input belong to different objectives.
+                if (inputs.changed)
+                {
+                    previousError = double.NaN;
+                    flatIterations = 0;
+                }
+
                 // Checked at entry, before the Jacobian - the expensive half of an iteration that
                 // would improve nothing.
-                if (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations))
+                if ((!inputs.pending) && (ShouldStopOnDeltaEnergy(relativeEnergyStop, previousError, error, ref flatIterations)))
                 {
                     break;
                 }
@@ -417,6 +539,10 @@ namespace UC.ED
 
                 if ((!double.IsFinite(jNorm)) || (jNorm < 1e-12))
                 {
+                    // Nothing to step along. With the inputs still moving the next iteration is
+                    // another problem, so the solve goes on to it rather than ending here.
+                    if (inputs.pending) continue;
+
                     break;
                 }
 
@@ -428,6 +554,10 @@ namespace UC.ED
                 Vector<double> delta = null;
                 EDState acceptedState = null;
                 bool solved = false;
+
+                // The damping as this iteration found it, before its attempts raise it - what it
+                // goes back to if they all fail while the inputs are still moving, see below.
+                double lambdaAtEntry = currentLambda;
 
                 // Try current lambda, optionally increasing it if solve or step is bad.
                 for (int attempt = 0; attempt < 8; attempt++)
@@ -505,6 +635,10 @@ namespace UC.ED
                     // Accept only if it improves the residual.
                     if (candidateError <= error)
                     {
+                        // Recorded before the damping is lowered for the next iteration: this is
+                        // the value the step was solved with.
+                        ReportStepTaken(attempt, currentLambda, stepNorm);
+
                         EDDiagnostics.Trace($"[iter {iter}] accepted attempt {attempt} lambda {EDDiagnostics.F(currentLambda)} step {EDDiagnostics.F(stepNorm)} candidateError {EDDiagnostics.F(candidateError)}");
 
                         acceptedState = candidateState;
@@ -513,7 +647,9 @@ namespace UC.ED
                         if (adaptiveLambda)
                             currentLambda = Math.Max(currentLambda * 0.3, 1e-12);
 
-                        if (stepNorm < stepTolerance)
+                        // A step this small ends the solve - unless the inputs are still moving,
+                        // where it is taken and the solve goes on.
+                        if ((stepNorm < stepTolerance) && (!inputs.pending))
                         {
                             currentState = acceptedState;
 
@@ -532,8 +668,26 @@ namespace UC.ED
 
                 if (!solved)
                 {
-                    Debug.LogWarning("[ED] LM could not find an improving step.");
-                    break;
+                    // Every attempt was refused: the row that follows is a stall's.
+                    ReportStepRefused(8);
+
+                    if (!inputs.pending)
+                    {
+                        Debug.LogWarning("[ED] LM could not find an improving step.");
+                        break;
+                    }
+
+                    // The inputs move again at the next iteration, so the solve goes on to it: a
+                    // stall is a fact about this objective, and the next one is another. The
+                    // damping goes back to what it was on entering this iteration - the attempts
+                    // raised it by eight factors of ten against an objective that is about to be
+                    // replaced, and carried over it would hold the next iterations to steps too
+                    // small to follow the inputs.
+                    Debug.LogWarning("[ED] LM could not find an improving step; the inputs are still moving, so the solve goes on with them.");
+
+                    currentLambda = lambdaAtEntry;
+
+                    continue;
                 }
 
                 currentState = acceptedState;

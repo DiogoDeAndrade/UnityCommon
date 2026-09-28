@@ -157,6 +157,10 @@ namespace UC.ED
         {
             currentState = new EDState(nodes.Count);
             restState = new EDState(nodes.Count);
+
+            iterationsSinceReset = 0;
+
+            ClearStepReport();
         }
 
         // ---------------------------------------------------------------------------------------
