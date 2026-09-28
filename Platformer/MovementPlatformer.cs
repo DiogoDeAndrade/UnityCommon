@@ -60,6 +60,8 @@ namespace UC
         [SerializeField]
         private bool enableAirControl = true;
         [SerializeField]
+        private bool airJumpRedirect = false;
+        [SerializeField]
         private HorizontalControl airHorizontalControl = HorizontalControl.Velocity;
         [SerializeField]
         private float airAcceleration = 1000.0f;
@@ -150,7 +152,7 @@ namespace UC
         public void SetGlideMaxTime(float v) { glideMaxTime = v; }
         public float GetGlideMaxTime() => glideMaxTime;
 
-        public bool needNewInputSystem => (horizontalInput.type == InputControl.InputType.NewInput);
+        public bool needNewInputSystem => (horizontalInput.type == InputControl.InputType.NewInput);        
 
         protected Rigidbody2D rb;
 
@@ -295,7 +297,15 @@ namespace UC
                 snd?.Play();
             }
 
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, speed.y);
+            float vx = rb.linearVelocityX;
+
+            if ((!isGrounded) && (airJumpRedirect))
+            {
+                float input = horizontalInput.GetAxis();
+                if (Mathf.Abs(input) > inputEpsilonZero) vx = Mathf.Sign(input) * speed.x;
+            }
+
+            rb.linearVelocity = new Vector2(vx, speed.y);
             jumpBufferingTimer = 0.0f;
             coyoteTimer = 0;
             jumpTime = Time.time;
