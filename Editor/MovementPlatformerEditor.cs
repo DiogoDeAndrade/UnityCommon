@@ -27,6 +27,7 @@ namespace UC.Editor
         SerializedProperty propJumpHoldMaxTime;
         SerializedProperty propJumpInput;
         SerializedProperty propEnableAirControl;
+        SerializedProperty propAirJumpRedirect;
         SerializedProperty propAirHorizontalControl;
         SerializedProperty propAirAcceleration;
         SerializedProperty propAirDeceleration;
@@ -80,6 +81,7 @@ namespace UC.Editor
             propJumpInput = serializedObject.FindProperty("jumpInput");
             propEnableAirControl = serializedObject.FindProperty("enableAirControl");
             propAirHorizontalControl = serializedObject.FindProperty("airHorizontalControl");
+            propAirJumpRedirect = serializedObject.FindProperty("airJumpRedirect");
             propAirAcceleration = serializedObject.FindProperty("airAcceleration");
             propAirDeceleration = serializedObject.FindProperty("airDeceleration");
             propAirCollider = serializedObject.FindProperty("airCollider");
@@ -151,6 +153,7 @@ namespace UC.Editor
                 EditorGUILayout.PropertyField(propEnableAirControl, new GUIContent("Air Control", "Can the player control the character while in the air?"));
                 if (propEnableAirControl.boolValue)
                 {
+                    EditorGUILayout.PropertyField(propAirJumpRedirect, new GUIContent("Air Jump Redirect", "If we jump in the air, should the horizontal speed snap to the horizontal input?"));                    
                     EditorGUILayout.PropertyField(propAirHorizontalControl, new GUIContent("Air Horizontal Control", "How horizontal input drives the character while in the air.\nVelocity: Input sets the horizontal velocity directly\nAcceleration: Input accelerates towards the target velocity, so external pushes (springs, etc) have to be fought"));
                     if (propAirHorizontalControl.intValue == (int)MovementPlatformer.HorizontalControl.Acceleration)
                     {
