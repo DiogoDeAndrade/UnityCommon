@@ -138,6 +138,23 @@ namespace UC
             else effects &= ~Effects.Outline;
         }
 
+        public void SetOutline(bool b)
+        {
+            if (b)
+            {
+                effects |= Effects.Outline;
+            }
+            else
+            {
+                effects &= ~Effects.Outline;
+            }
+        }
+
+        public void SetOutlineWidth(float w)
+        {
+            outlineWidth = w;
+        }
+
         private void LateUpdate()
         {
             ConfigureMaterial();
