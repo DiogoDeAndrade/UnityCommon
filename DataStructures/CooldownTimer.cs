@@ -27,6 +27,12 @@ namespace UC
             this.cooldown = cooldown;
             timer = 0.0f;
         }
+        public CooldownTimer(float cooldown, bool autoStart)
+        {
+            this.cooldown = cooldown;
+            timer = 0.0f;
+            if (autoStart) Start();
+        }
 
         public static implicit operator CooldownTimer(float cooldown)
         {

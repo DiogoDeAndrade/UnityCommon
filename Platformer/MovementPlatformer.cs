@@ -117,6 +117,7 @@ namespace UC
         private string isClimbingParameter;
 
         public bool isGrounded { get; private set; }
+        public bool isActuallyGrounded => actualIsGrounded;
         public bool isClimbing { get; private set; }
         private SpriteRenderer spriteRenderer;
         private int currentJumpCount;
@@ -352,7 +353,8 @@ namespace UC
             {
                 rb.gravityScale = (disableGravityWhenGrounded) ? (0.0f) : (groundedGravity);
 
-                currentJumpCount = maxJumpCount;
+                ResetJump();
+
                 if ((airCollider != groundCollider) && (airCollider) && (groundCollider))
                 {
                     airCollider.enabled = false;
@@ -534,6 +536,11 @@ namespace UC
         {
             if (airCollider) airCollider.enabled = v;
             if (groundCollider) groundCollider.enabled = v;
+        }
+
+        public void ResetJump(int count = -1)
+        {
+            currentJumpCount = (count == -1) ? (maxJumpCount) : (count);
         }
     }
 }
