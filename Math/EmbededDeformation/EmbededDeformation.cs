@@ -784,6 +784,12 @@ namespace UC.ED
         {
             currentState = new EDState(nodes.Count);
             ComputeClearance(currentState);
+
+            // The state starts from rest, so whatever follows the iteration count starts with it.
+            iterationsSinceReset = 0;
+
+            // And no step produced it.
+            ClearStepReport();
         }
 
         /// <summary>
