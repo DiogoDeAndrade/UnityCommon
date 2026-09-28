@@ -7,6 +7,7 @@ namespace UC
     {
         public static void SetEmission(this ParticleSystem ps, bool b)
         {
+            if (ps == null) return;
             var emissionModule = ps.emission;
             emissionModule.enabled = b;
         }
