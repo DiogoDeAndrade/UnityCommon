@@ -40,6 +40,8 @@ namespace UC
         [NoAutoStaticsCleanup]
         protected static GlobalsBase _instanceBase = null;
 
+        public static GlobalsBase instanceBase => GetInstanceBase<GlobalsBase>();
+
         public static T GetInstanceBase<T>() where T : GlobalsBase
         {
             if (_instanceBase) return (T)_instanceBase;
@@ -58,7 +60,5 @@ namespace UC
 
             return (T)_instanceBase;
         }
-
-        public static GlobalsBase instanceBase => GetInstanceBase<GlobalsBase>();
     }
 }
