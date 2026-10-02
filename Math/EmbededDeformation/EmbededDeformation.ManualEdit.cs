@@ -403,8 +403,12 @@ namespace UC.ED
         /// residual-evaluation cost, which a breakdown pays once and the per-iteration solver log
         /// must not pay at all - so the per-iteration caller passes null and only the shared
         /// columns are filled.
+        ///
+        /// With a state, the last argument says which terms are asked for their own columns;
+        /// null is every term, which is what a breakdown wants. The solver's attempts pass the
+        /// terms that say their columns are cheap enough for every attempt.
         /// </summary>
-        public static IReadOnlyList<EDTermEnergy> MeasureTermEnergies(Vector<double> f, EDEnergyModel.Instance energy, EDStateView? state = null)
+        public static IReadOnlyList<EDTermEnergy> MeasureTermEnergies(Vector<double> f, EDEnergyModel.Instance energy, EDStateView? state = null, System.Predicate<EDResidualTerm.Instance> describes = null)
         {
             if ((f == null) || (energy == null)) return null;
 
@@ -439,7 +443,7 @@ namespace UC.ED
                 // to show - a Describe measures the state, not the residual, and a term with nothing
                 // to say returns nothing. Before 2026-09-12 the rows > 0 guard here left every
                 // zero-weight term's columns empty, which read as "not measured".
-                if (state != null)
+                if ((state != null) && ((describes == null) || (describes(energy.termInstances[i]))))
                 {
                     var instance = energy.termInstances[i];
 

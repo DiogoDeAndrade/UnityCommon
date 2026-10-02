@@ -144,6 +144,15 @@ namespace UC.ED
             /// </summary>
             public virtual string[] Describe(EDStateView state) => Array.Empty<string>();
 
+            /// <summary>
+            /// Whether the term's own columns are also measured on the solver's attempts - the
+            /// candidates of an iteration, refused or accepted, and the state they depart from.
+            /// There are up to eight attempts an iteration, so only a term whose
+            /// <see cref="Describe"/> costs next to nothing says yes; a quality term's, which
+            /// measures the state again, would cost the solve several residual evaluations a step.
+            /// </summary>
+            public virtual bool describesAttempts => false;
+
             public abstract void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset);
 
             public abstract void FillJacobian(EDState state, DenseMatrix jacobian, int rowOffset, ref double jacobianNormSq);

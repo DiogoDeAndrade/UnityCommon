@@ -19,6 +19,16 @@ namespace UC.ED
         protected float initialLambda = 1e-3f;
         [SerializeField, Tooltip("Lower lambda after an accepted step and raise it after a rejected one.")]
         protected bool adaptive = true;
+        // Off, the default, is what every solve did before the option existed: the damping an
+        // iteration ends with, lowered or raised, is where the next one begins. A solve of 50
+        // iterations and 50 presses then part ways, because a press is a solve of one iteration
+        // and begins at the initial damping every time. On 2026-09-29 (queue section 31) that
+        // difference was the whole of what separated a total of 1.64 from one of 0.0057: the
+        // damping is added to every parameter alike, so at a damping in the hundreds the terminals
+        // moved and the chain they pull did not, and the solve never tried the undamped step a
+        // press from the same state took at its first attempt.
+        [SerializeField, Tooltip("Begin every iteration's attempts at the initial damping, as a solve of one iteration does, so a solve of N iterations takes the steps N presses of Run Iteration take. Off, the damping is carried from one iteration to the next.")]
+        protected bool restartDampingEachIteration = false;
         [SerializeField]
         protected float residualTolerance = 1e-5f;
         [SerializeField]
@@ -27,6 +37,7 @@ namespace UC.ED
         public override string modeLabel => "FullED_LM";
         public override float lambda => initialLambda;
         public override bool adaptiveLambda => adaptive;
+        public override bool restartsDamping => restartDampingEachIteration;
 
         public override Instance NewInstance(EmbededDeformation deformation) => new LMInstance(this, deformation);
 
@@ -48,7 +59,8 @@ namespace UC.ED
                                        def.stepTolerance,
                                        resetBeforeSolve,
                                        def.adaptive,
-                                       def.relativeEnergyStop);
+                                       def.relativeEnergyStop,
+                                       def.restartDampingEachIteration);
             }
         }
     }
