@@ -53,6 +53,7 @@ namespace UC.ED
         public virtual float lambda => 1e-3f;
         public virtual bool adaptiveLambda => true;
         public virtual bool choleskyFactorization => false;
+        public virtual bool restartsDamping => false;
         public virtual float smoothnessWeight => 0.1f;
 
         public abstract Instance NewInstance(EmbededDeformation deformation);

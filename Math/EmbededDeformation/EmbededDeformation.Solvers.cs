@@ -217,7 +217,8 @@ namespace UC.ED
                                double stepTolerance = 1e-6,
                                bool resetBeforeSolve = true,
                                bool adaptiveLambda = true,
-                               double relativeEnergyStop = 0.0)
+                               double relativeEnergyStop = 0.0,
+                               bool restartDamping = false)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -307,9 +308,17 @@ namespace UC.ED
                 EDState acceptedState = null;
                 bool solved = false;
 
+                // With the restart on, every iteration's attempts begin at the solver's initial
+                // damping, as a solve of one iteration does - so a solve of N iterations takes the
+                // steps N presses take. Off, the damping is carried from the iteration before.
+                if (restartDamping) currentLambda = lambda;
+
                 // The damping as this iteration found it, before its attempts raise it - what it
                 // goes back to if they all fail while the inputs are still moving, see below.
                 double lambdaAtEntry = currentLambda;
+
+                // What the attempts are measured against: the state they depart from.
+                ReportAttempt(-1, EDAttemptOutcome.Entry, double.NaN, double.NaN, f, energy, stateView);
 
                 for (int attempt = 0; attempt < 8; attempt++)
                 {
@@ -333,6 +342,8 @@ namespace UC.ED
 
                     if (delta == null)
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NoStep, currentLambda, double.NaN, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -341,6 +352,8 @@ namespace UC.ED
 
                     if (!double.IsFinite(stepNorm))
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NoStep, currentLambda, double.NaN, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -353,6 +366,8 @@ namespace UC.ED
                     }
                     catch
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NoState, currentLambda, stepNorm, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -365,6 +380,8 @@ namespace UC.ED
 
                     if (!double.IsFinite(candidateError))
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NonFinite, currentLambda, stepNorm, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -374,6 +391,7 @@ namespace UC.ED
                         // Recorded before the damping is lowered for the next iteration: this is
                         // the value the step was solved with.
                         ReportStepTaken(attempt, currentLambda, stepNorm);
+                        ReportAttempt(attempt, EDAttemptOutcome.Accepted, currentLambda, stepNorm, fCandidate, energy, candidateView);
 
                         acceptedState = candidateState;
                         solved = true;
@@ -394,6 +412,8 @@ namespace UC.ED
 
                         break;
                     }
+
+                    ReportAttempt(attempt, EDAttemptOutcome.Worse, currentLambda, stepNorm, fCandidate, energy, candidateView);
 
                     currentLambda *= 10.0;
                 }
@@ -445,7 +465,8 @@ namespace UC.ED
                                 bool resetBeforeSolve = true,
                                 bool adaptiveLambda = true,
                                 bool choleskyFactorization = false,
-                                double relativeEnergyStop = 0.0)
+                                double relativeEnergyStop = 0.0,
+                                bool restartDamping = false)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -555,9 +576,17 @@ namespace UC.ED
                 EDState acceptedState = null;
                 bool solved = false;
 
+                // With the restart on, every iteration's attempts begin at the solver's initial
+                // damping, as a solve of one iteration does - so a solve of N iterations takes the
+                // steps N presses take. Off, the damping is carried from the iteration before.
+                if (restartDamping) currentLambda = lambda;
+
                 // The damping as this iteration found it, before its attempts raise it - what it
                 // goes back to if they all fail while the inputs are still moving, see below.
                 double lambdaAtEntry = currentLambda;
+
+                // What the attempts are measured against: the state they depart from.
+                ReportAttempt(-1, EDAttemptOutcome.Entry, double.NaN, double.NaN, f, energy, stateView);
 
                 // Try current lambda, optionally increasing it if solve or step is bad.
                 for (int attempt = 0; attempt < 8; attempt++)
@@ -569,6 +598,9 @@ namespace UC.ED
                         if (!TrySolveCholeskyWithDamping(H, g, currentLambda, out delta, out double usedLambda))
                         {
                             currentLambda = usedLambda;
+
+                            ReportAttempt(attempt, EDAttemptOutcome.NoStep, currentLambda, double.NaN, null, energy, null);
+
                             continue;
                         }
 
@@ -595,6 +627,8 @@ namespace UC.ED
 
                     if (delta == null)
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NoStep, currentLambda, double.NaN, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -603,6 +637,8 @@ namespace UC.ED
 
                     if (!double.IsFinite(stepNorm))
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NoStep, currentLambda, double.NaN, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -616,6 +652,8 @@ namespace UC.ED
                     }
                     catch
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NoState, currentLambda, stepNorm, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -628,6 +666,8 @@ namespace UC.ED
 
                     if (!double.IsFinite(candidateError))
                     {
+                        ReportAttempt(attempt, EDAttemptOutcome.NonFinite, currentLambda, stepNorm, null, energy, null);
+
                         currentLambda *= 10.0;
                         continue;
                     }
@@ -638,6 +678,7 @@ namespace UC.ED
                         // Recorded before the damping is lowered for the next iteration: this is
                         // the value the step was solved with.
                         ReportStepTaken(attempt, currentLambda, stepNorm);
+                        ReportAttempt(attempt, EDAttemptOutcome.Accepted, currentLambda, stepNorm, fCandidate, energy, candidateView);
 
                         EDDiagnostics.Trace($"[iter {iter}] accepted attempt {attempt} lambda {EDDiagnostics.F(currentLambda)} step {EDDiagnostics.F(stepNorm)} candidateError {EDDiagnostics.F(candidateError)}");
 
@@ -662,6 +703,8 @@ namespace UC.ED
 
                         break;
                     }
+
+                    ReportAttempt(attempt, EDAttemptOutcome.Worse, currentLambda, stepNorm, fCandidate, energy, candidateView);
 
                     currentLambda *= 10.0;
                 }

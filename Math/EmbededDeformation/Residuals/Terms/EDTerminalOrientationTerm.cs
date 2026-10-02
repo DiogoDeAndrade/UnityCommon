@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using UnityEngine;
 using UC.DoubleMath;
 
@@ -63,6 +64,112 @@ namespace UC.ED
 
                 for (int i = 0; i < (rowCount / 3); i++)
                     row = FillJacobianBlock(state, jacobian, row, i, residualWeight, ref jacobianNormSq);
+            }
+
+            // A few products a terminal, so the columns are measured on the solver's attempts
+            // as well as on its states.
+            public override bool describesAttempts => true;
+
+            private static readonly string[] terminalColumns =
+            {
+                "node", "angle",
+                "rightLength", "upLength", "forwardLength",
+                "rightOnTarget", "upOnTarget", "forwardOnTarget",
+                "determinant",
+            };
+
+            private int terminalCount => (deformation.terminalConstraints != null) ? (deformation.terminalConstraints.Count) : (0);
+
+            public override string[] DescribeHeader()
+            {
+                int terminals = terminalCount;
+
+                if (terminals == 0) return Array.Empty<string>();
+
+                var header = new string[2 + terminals * terminalColumns.Length];
+
+                header[0] = "maxAngle";
+                header[1] = "maxAngleNode";
+
+                for (int i = 0; i < terminals; i++)
+                    for (int c = 0; c < terminalColumns.Length; c++)
+                        header[2 + i * terminalColumns.Length + c] = $"terminal{i}_{terminalColumns[c]}";
+
+                return header;
+            }
+
+            /// <summary>
+            /// Every terminal's frame at the state, whatever the weight: how far it is turned from
+            /// its target, and the three columns the node's map makes of its rest axes - their
+            /// lengths, how much of each lies along the target's own axis, and their determinant.
+            ///
+            /// Built 2026-09-29 (queue section 31) because the energy alone could not say what
+            /// had happened to a frame: every attempt refused over presses 2 to 15 of the K 10
+            /// run had one terminal 172 to 179 degrees from its target, and nothing on file said
+            /// which terminal or how it got there. The rows read the frame from the forward and
+            /// up columns made unit length, so they hold those columns' directions and say
+            /// nothing of their lengths: a column carried through zero reads as half a turn, and
+            /// here as a component along its target that has changed sign.
+            ///
+            /// The angle is the length of the rotation vector the rows carry, unweighted, in
+            /// degrees; a frame that cannot be read as a rotation scores 180, as it does there.
+            /// The determinant is that of the three columns, which is the node's own when its rest
+            /// frame is orthonormal; negative is a node turned inside out.
+            /// </summary>
+            public override string[] Describe(EDStateView state)
+            {
+                int terminals = terminalCount;
+
+                if (terminals == 0) return Array.Empty<string>();
+
+                var values = new string[2 + terminals * terminalColumns.Length];
+
+                double maxAngle = -1.0;
+                int maxAngleNode = -1;
+
+                for (int i = 0; i < terminals; i++)
+                {
+                    EDTerminalConstraint terminal = deformation.terminalConstraints[i];
+
+                    int at = 2 + i * terminalColumns.Length;
+
+                    values[at] = terminal.nodeIndex.ToString(CultureInfo.InvariantCulture);
+
+                    if ((terminal.nodeIndex < 0) || (terminal.nodeIndex >= deformation.nodes.Count))
+                    {
+                        for (int c = 1; c < terminalColumns.Length; c++) values[at + c] = "";
+
+                        continue;
+                    }
+
+                    double angle = EvaluateItem(state, i, 1.0).magnitude * (180.0 / Math.PI);
+
+                    if (angle > maxAngle)
+                    {
+                        maxAngle = angle;
+                        maxAngleNode = terminal.nodeIndex;
+                    }
+
+                    EDNode node = deformation.nodes[terminal.nodeIndex];
+
+                    DVector3 right = state.TransformVector(terminal.nodeIndex, node.restRight);
+                    DVector3 up = state.TransformVector(terminal.nodeIndex, node.restUp);
+                    DVector3 forward = state.TransformVector(terminal.nodeIndex, node.restForward);
+
+                    values[at + 1] = angle.ToString("F3", CultureInfo.InvariantCulture);
+                    values[at + 2] = right.magnitude.ToString("F4", CultureInfo.InvariantCulture);
+                    values[at + 3] = up.magnitude.ToString("F4", CultureInfo.InvariantCulture);
+                    values[at + 4] = forward.magnitude.ToString("F4", CultureInfo.InvariantCulture);
+                    values[at + 5] = DVector3.Dot(right, terminal.targetRight.normalized).ToString("F4", CultureInfo.InvariantCulture);
+                    values[at + 6] = DVector3.Dot(up, terminal.targetUp.normalized).ToString("F4", CultureInfo.InvariantCulture);
+                    values[at + 7] = DVector3.Dot(forward, terminal.targetForward.normalized).ToString("F4", CultureInfo.InvariantCulture);
+                    values[at + 8] = DVector3.Dot(DVector3.Cross(right, up), forward).ToString("F4", CultureInfo.InvariantCulture);
+                }
+
+                values[0] = (maxAngleNode >= 0) ? (maxAngle.ToString("F3", CultureInfo.InvariantCulture)) : ("");
+                values[1] = (maxAngleNode >= 0) ? (maxAngleNode.ToString(CultureInfo.InvariantCulture)) : ("");
+
+                return values;
             }
 
             /// <summary>

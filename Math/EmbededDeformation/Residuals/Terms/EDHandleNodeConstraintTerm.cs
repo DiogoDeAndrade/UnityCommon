@@ -22,6 +22,16 @@ namespace UC.ED
     /// A handle whose rest position finds no node still occupies its rows, left at zero. Dropping
     /// them instead would make the layout depend on how well the handles happen to line up with the
     /// graph, which is exactly the kind of quiet coupling the row count should not have.
+    ///
+    /// With Pin Terminal Frame on (2026-10-01, off by default) a terminal handle constrains
+    /// four points and not two: the bar's ends, and its centre moved along the handle's up and
+    /// along its forward. Four points in the handle's own frame are twelve linear rows for the
+    /// node's twelve parameters, so the node's map is the handle's - turned as the handle is,
+    /// scaled along the bar as the handle asks, and nothing else. The terminal orientation and
+    /// scale terms then have nothing left to hold. It was built after those two were each found
+    /// asking for the same thing as these rows along a slightly different axis (queue section 31
+    /// to 34): the scale term read the node's own right column, 4 degrees off the bar, and the
+    /// orientation term reads directions and leaves the columns' lengths free.
     /// </summary>
     [Serializable]
     [PolymorphicName("Terminal Position (Structure Nodes)")]
@@ -33,15 +43,33 @@ namespace UC.ED
         // detaches every energy asset that carries the term.
         public override string name => "terminalPosition";
 
+        // Off is what every run made before 2026-10-01 solved under.
+        [SerializeField, Tooltip("Pin each terminal node's whole frame through these rows: beside the two ends of its bar, a terminal handle constrains a point above the bar's centre and a point ahead of it, all four in the handle's own frame. The node's map is then the handle's - turned as the handle is, scaled along the bar as the handle asks - and the terminal orientation and scale terms have nothing left to hold: set them to 1e-12. Read at every solve, so it needs no Build.")]
+        protected bool pinTerminalFrame = false;
+
+        public bool pinsTerminalFrame => pinTerminalFrame;
+
+        /// <summary>
+        /// Sets Pin Terminal Frame, exactly as ticking the field in the inspector would. The row
+        /// count is resolved at the start of every solve, so the next one runs with it. For
+        /// experiment drivers such as the schedule runner, as SetConceptualWeight is.
+        /// </summary>
+        public void SetPinTerminalFrame(bool value) => pinTerminalFrame = value;
+
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
             => new HandleNodeConstraintInstance(this, deformation);
 
         public class HandleNodeConstraintInstance : Instance
         {
+            // The term as its own type, for the one option it carries beside its weight. Read
+            // where it is used and never copied: the option can change between two solves.
+            private readonly EDHandleNodeConstraintTerm positionTerm;
+
             public HandleNodeConstraintInstance(EDHandleNodeConstraintTerm term, EmbededDeformation deformation)
                 : base(term, deformation)
             {
+                positionTerm = term;
             }
 
             /// <summary>
@@ -57,13 +85,20 @@ namespace UC.ED
                 int pointCount = 0;
 
                 for (int i = 0; i < deformation.handleConstraints.Count; i++)
-                {
-                    // Root/centre handles constrain one point.
-                    // Terminal handles constrain both ends of the handle bar.
-                    pointCount += deformation.handleConstraints[i].isTerminal ? 2 : 1;
-                }
+                    pointCount += PointCount(deformation.handleConstraints[i]);
 
                 return 3 * pointCount;
+            }
+
+            /// <summary>
+            /// Root/centre handles constrain one point. Terminal handles constrain both ends of
+            /// the handle bar, and two more when they pin the frame.
+            /// </summary>
+            private int PointCount(EDHandleConstraint hc)
+            {
+                if (!hc.isTerminal) return 1;
+
+                return (positionTerm.pinTerminalFrame) ? (4) : (2);
             }
 
             public override void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset)
@@ -77,7 +112,7 @@ namespace UC.ED
                 {
                     EDHandleConstraint hc = deformation.handleConstraints[c];
 
-                    int handleRowCount = (hc.isTerminal) ? (6) : (3);
+                    int handleRowCount = 3 * PointCount(hc);
 
                     if (!TryGetHandleNodeIndex(hc, out int nodeIndex))
                     {
@@ -104,6 +139,22 @@ namespace UC.ED
                         residual[row++] = w * rightError.x;
                         residual[row++] = w * rightError.y;
                         residual[row++] = w * rightError.z;
+
+                        if (positionTerm.pinTerminalFrame)
+                        {
+                            GetHandleFramePoints(hc, out DVector3 restAbove, out DVector3 restAhead, out DVector3 targetAbove, out DVector3 targetAhead);
+
+                            DVector3 aboveError = state.DeformVertex(nodeIndex, restAbove, node.restPosition) - targetAbove;
+                            DVector3 aheadError = state.DeformVertex(nodeIndex, restAhead, node.restPosition) - targetAhead;
+
+                            residual[row++] = w * aboveError.x;
+                            residual[row++] = w * aboveError.y;
+                            residual[row++] = w * aboveError.z;
+
+                            residual[row++] = w * aheadError.x;
+                            residual[row++] = w * aheadError.y;
+                            residual[row++] = w * aheadError.z;
+                        }
                     }
                     else
                     {
@@ -131,7 +182,7 @@ namespace UC.ED
                 {
                     EDHandleConstraint hc = deformation.handleConstraints[c];
 
-                    int handleRowCount = (hc.isTerminal) ? (6) : (3);
+                    int handleRowCount = 3 * PointCount(hc);
 
                     if (!TryGetHandleNodeIndex(hc, out int nodeIndex))
                     {
@@ -145,6 +196,14 @@ namespace UC.ED
 
                         row = FillJacobianBlock(jacobian, row, nodeIndex, restLeft, residualWeight, ref jacobianNormSq);
                         row = FillJacobianBlock(jacobian, row, nodeIndex, restRight, residualWeight, ref jacobianNormSq);
+
+                        if (positionTerm.pinTerminalFrame)
+                        {
+                            GetHandleFramePoints(hc, out DVector3 restAbove, out DVector3 restAhead, out _, out _);
+
+                            row = FillJacobianBlock(jacobian, row, nodeIndex, restAbove, residualWeight, ref jacobianNormSq);
+                            row = FillJacobianBlock(jacobian, row, nodeIndex, restAhead, residualWeight, ref jacobianNormSq);
+                        }
                     }
                     else
                     {
@@ -231,6 +290,53 @@ namespace UC.ED
                 targetLeft = (targetCenter - targetDirection * halfTargetWidth).ToDVector3();
 
                 targetRight = (targetCenter + targetDirection * halfTargetWidth).ToDVector3();
+            }
+
+            /// <summary>
+            /// The two points that pin the rest of a terminal's frame, at rest and where the handle
+            /// now asks them to be: the bar's centre moved along the handle's up, and along its
+            /// forward. With the bar's two ends they are four points that are not in one plane,
+            /// which is what it takes to fix an affine map.
+            ///
+            /// Both are half the bar's rest width from the centre, the distance the bar's ends are
+            /// at, so a turn about any of the three axes moves a point by the same amount and the
+            /// one weight holds the three alike; a handle without a width uses one unit. The
+            /// distance is the same at rest and at the target: the handle's X scale is the width
+            /// it asks for and is read by the bar, and its Y and Z scales ask for nothing, so up
+            /// and forward keep their length. A degenerate rest axis falls back to the world's,
+            /// and a degenerate target axis to the rest direction, as the bar's do.
+            /// </summary>
+            private static void GetHandleFramePoints(EDHandleConstraint hc, out DVector3 restAbove, out DVector3 restAhead, out DVector3 targetAbove, out DVector3 targetAhead)
+            {
+                const float epsilon = 1e-8f;
+
+                Vector3 restCenter = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+                Vector3 targetCenter = hc.currentHandleMatrix.MultiplyPoint3x4(Vector3.zero);
+
+                Vector3 restUp = hc.restHandleMatrix.MultiplyVector(Vector3.up);
+                Vector3 restForward = hc.restHandleMatrix.MultiplyVector(Vector3.forward);
+
+                Vector3 targetUp = hc.currentHandleMatrix.MultiplyVector(Vector3.up);
+                Vector3 targetForward = hc.currentHandleMatrix.MultiplyVector(Vector3.forward);
+
+                Vector3 restUpDirection = (restUp.magnitude > epsilon) ? (restUp.normalized) : (Vector3.up);
+                Vector3 restForwardDirection = (restForward.magnitude > epsilon) ? (restForward.normalized) : (Vector3.forward);
+
+                Vector3 targetUpDirection = (targetUp.magnitude > epsilon) ? (targetUp.normalized) : (restUpDirection);
+                Vector3 targetForwardDirection = (targetForward.magnitude > epsilon) ? (targetForward.normalized) : (restForwardDirection);
+
+                float reach = 0.5f * Mathf.Abs(hc.width);
+
+                if (reach <= epsilon) reach = 1.0f;
+
+                restAbove = (restCenter + restUpDirection * reach).ToDVector3();
+
+                restAhead = (restCenter + restForwardDirection * reach).ToDVector3();
+
+                targetAbove = (targetCenter + targetUpDirection * reach).ToDVector3();
+
+                targetAhead = (targetCenter + targetForwardDirection * reach).ToDVector3();
             }
 
             /// <summary>
