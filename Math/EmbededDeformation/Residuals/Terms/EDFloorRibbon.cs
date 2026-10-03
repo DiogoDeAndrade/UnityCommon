@@ -661,6 +661,15 @@ namespace UC.ED
             var linkOverArea = new double[links];
             var linkArea = new double[links];
             var linkCount = new int[links];
+            var linkMinAreaRatio = new double[links];
+
+            // The area each triangle has at the state, and its smallest altitude: a triangle's
+            // slope is its normal's direction, which a triangle with no area does not have, so a
+            // slope read off a needle is only as good as its altitude is long.
+            var area = new double[triangles.Count];
+            var altitude = new double[triangles.Count];
+
+            for (int k = 0; k < links; k++) linkMinAreaRatio[k] = double.MaxValue;
 
             for (int t = 0; t < triangles.Count; t++)
             {
@@ -674,6 +683,10 @@ namespace UC.ED
                 linkRestMax[k] = Math.Max(linkRestMax[k], tri.restSlope);
 
                 if (tri.overLimit) linkOverArea[k] += restArea[t];
+
+                AreaAndAltitude(tri.a, tri.b, tri.c, out area[t], out altitude[t]);
+
+                if (restArea[t] > 0.0) linkMinAreaRatio[k] = Math.Min(linkMinAreaRatio[k], area[t] / restArea[t]);
             }
 
             var linkOrder = new List<int>();
@@ -696,25 +709,27 @@ namespace UC.ED
                 w.WriteLine($"floorSlope rows: {owner}, {summary}");
                 w.WriteLine($"form {settings.ribbonForm} along {settings.along} across {settings.across} widths {settings.widths} carrier {((throughField) ? ("ThroughField") : ("LinkBlend"))} limit {settings.limit.ToString("F1", ci)}");
                 w.WriteLine();
-                w.WriteLine("links, steepest first: nodeA nodeB triangles restMaxSlope maxSlope maxExcess areaOverLimit(fraction of the link's rest area)");
+                w.WriteLine("links, steepest first: nodeA nodeB triangles restMaxSlope maxSlope maxExcess areaOverLimit(fraction of the link's rest area) minAreaRatio(the smallest of its triangles' area over its rest area)");
 
                 foreach (int k in linkOrder)
                 {
                     double overFraction = (linkArea[k] > 0.0) ? (linkOverArea[k] / linkArea[k]) : (0.0);
+                    double minAreaRatio = (linkMinAreaRatio[k] < double.MaxValue) ? (linkMinAreaRatio[k]) : (0.0);
 
-                    w.WriteLine($"link {linkA[k]} {linkB[k]} {linkCount[k]} {linkRestMax[k].ToString("F3", ci)} {linkMax[k].ToString("F3", ci)} {linkExcess[k].ToString("F3", ci)} {overFraction.ToString("F4", ci)}");
+                    w.WriteLine($"link {linkA[k]} {linkB[k]} {linkCount[k]} {linkRestMax[k].ToString("F3", ci)} {linkMax[k].ToString("F3", ci)} {linkExcess[k].ToString("F3", ci)} {overFraction.ToString("F4", ci)} {minAreaRatio.ToString("F4", ci)}");
                 }
 
                 w.WriteLine();
-                w.WriteLine("triangles, steepest first: nodeA nodeB side restSlope slope excess limit over restArea restCentroid deformedCentroid");
+                w.WriteLine("triangles, steepest first: nodeA nodeB side restSlope slope excess limit over restArea restCentroid deformedCentroid area areaRatio(area over rest area) minAltitude");
 
                 foreach (int t in triangleOrder)
                 {
                     Triangle tri = triangles[t];
                     DVector3 restCentroid = (rest[3 * t] + rest[3 * t + 1] + rest[3 * t + 2]) / 3.0;
                     Vector3 deformedCentroid = (tri.a + tri.b + tri.c) / 3.0f;
+                    double areaRatio = (restArea[t] > 0.0) ? (area[t] / restArea[t]) : (0.0);
 
-                    w.WriteLine($"tri {tri.nodeA} {tri.nodeB} {tri.side} {tri.restSlope.ToString("F3", ci)} {tri.slope.ToString("F3", ci)} {(tri.slope - tri.restSlope).ToString("F3", ci)} {tri.limit.ToString("F3", ci)} {((tri.overLimit) ? (1) : (0))} {restArea[t].ToString("F5", ci)} {Fmt(restCentroid.ToVector3(), ci)} {Fmt(deformedCentroid, ci)}");
+                    w.WriteLine($"tri {tri.nodeA} {tri.nodeB} {tri.side} {tri.restSlope.ToString("F3", ci)} {tri.slope.ToString("F3", ci)} {(tri.slope - tri.restSlope).ToString("F3", ci)} {tri.limit.ToString("F3", ci)} {((tri.overLimit) ? (1) : (0))} {restArea[t].ToString("F5", ci)} {Fmt(restCentroid.ToVector3(), ci)} {Fmt(deformedCentroid, ci)} {area[t].ToString("F5", ci)} {areaRatio.ToString("F4", ci)} {altitude[t].ToString("F5", ci)}");
 
                     written++;
                 }
@@ -775,6 +790,28 @@ namespace UC.ED
 
         private static double Area(DVector3 a, DVector3 b, DVector3 c)
             => 0.5 * DVector3.Cross(b - a, c - a).magnitude;
+
+        /// <summary>
+        /// A recorded triangle's area and its smallest altitude, the one over its longest edge: how
+        /// far a vertex has to move across the triangle to turn its normal by a radian, so the
+        /// length under which the triangle's slope stops meaning anything.
+        /// </summary>
+        private static void AreaAndAltitude(Vector3 a, Vector3 b, Vector3 c, out double area, out double minAltitude)
+        {
+            double abx = (double)b.x - a.x, aby = (double)b.y - a.y, abz = (double)b.z - a.z;
+            double acx = (double)c.x - a.x, acy = (double)c.y - a.y, acz = (double)c.z - a.z;
+            double bcx = (double)c.x - b.x, bcy = (double)c.y - b.y, bcz = (double)c.z - b.z;
+
+            double nx = aby * acz - abz * acy;
+            double ny = abz * acx - abx * acz;
+            double nz = abx * acy - aby * acx;
+
+            area = 0.5 * Math.Sqrt(nx * nx + ny * ny + nz * nz);
+
+            double longest = Math.Sqrt(Math.Max(abx * abx + aby * aby + abz * abz, Math.Max(acx * acx + acy * acy + acz * acz, bcx * bcx + bcy * bcy + bcz * bcz)));
+
+            minAltitude = (longest > 0.0) ? (2.0 * area / longest) : (0.0);
+        }
 
         private static DVector3 Vertex(DVector3 centre, DVector3 across, double halfPositive, double halfNegative, int j, int n)
         {
