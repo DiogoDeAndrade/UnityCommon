@@ -40,10 +40,15 @@ namespace UC
         protected bool gamepadCursor = false;
         [SerializeField, InputPlayer(nameof(playerInput)), InputButton, ShowIf(nameof(needClickControl))]
         protected InputControl      mouseClickControl;
+        [SerializeField]
+        protected SoundDef          moveSound;
+        [SerializeField]
+        protected SoundDef          selectSound;
 
         protected float                 cooldownTimer;
         [SerializeField, ReadOnly]
         protected BaseUIControl         _selectedControl;
+        protected BaseUIControl         lastSelectedControl;
         protected bool                  selectedFromMouse;
         protected int                   mouseSkipFrames = 4;
         protected float                 timeOfLastMouseMove = -float.MaxValue;
@@ -117,6 +122,8 @@ namespace UC
         {
             if (!_uiEnable) return;
 
+            if (_selectedControl) lastSelectedControl = _selectedControl;
+
             if (mouseSkipFrames > 0) mouseSkipFrames--;
             if ((_enableMouseSupport) && ((mouseSkipFrames <= 0) || (forceMouseUpdate)))
             {
@@ -140,6 +147,7 @@ namespace UC
                     {
                         if (ctrl)
                         {
+                            if (selectedControl != ctrl) moveSound?.Play();
                             selectedControl = ctrl;
                             selectedFromMouse = (selectedControl != null);
                         }
@@ -149,6 +157,7 @@ namespace UC
                     {
                         if ((!clickToSelect) || (ctrl != null))
                         {
+                            if (selectedControl != ctrl) moveSound?.Play();
                             selectedControl = ctrl;
                             selectedFromMouse = (selectedControl != null);
                         }
@@ -177,7 +186,8 @@ namespace UC
                         {
                             if (dy < -0.5f)
                             {
-                                var next = NextSelectable(_selectedControl, c => c.navDown); 
+                                var next = NextSelectable(_selectedControl, c => c.navDown);
+                                if (selectedControl != next) moveSound?.Play();
                                 _selectedControl = (next) ? (next) : (_selectedControl);
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
@@ -187,6 +197,7 @@ namespace UC
                             else if (dy > 0.5f)
                             {
                                 var next = NextSelectable(_selectedControl, c => c.navUp);
+                                if (selectedControl != next) moveSound?.Play();
                                 _selectedControl = (next) ? (next) : (_selectedControl);
                                 cooldownTimer = moveCooldown;
                                 _verticalReset = false;
@@ -242,10 +253,25 @@ namespace UC
                     }
                 }
             }
+            else if ((lastSelectedControl) && (!enableGamepadCursor))
+            {
+                // Nothing selected (the mouse moved away from every control), moving with the input controls goes back to the last selected control
+                if ((verticalControl.needPlayerInput) && (playerInput == null)) return;
+                if ((horizontalControl.needPlayerInput) && (playerInput == null)) return;
+
+                if ((Mathf.Abs(verticalControl.GetAxis()) > 0.5f) || (Mathf.Abs(horizontalControl.GetAxis()) > 0.5f))
+                {
+                    moveSound?.Play();
+                    SetControl(lastSelectedControl);
+                    _horizontalReset = false;
+                    selectedFromMouse = false;
+                }
+            }
         }
 
         public void RunInteraction(BaseUIControl ctrl, bool fromMouse)
         {
+            selectSound?.Play();
             _selectedControl = ctrl;
             selectedFromMouse = fromMouse;
             GlobalsBase.uiSelectSnd?.Play();

@@ -80,14 +80,36 @@ namespace UC
                     FullscreenFader.FadeOut(fadeTime, Color.black, () => SceneManager.LoadScene(sceneName));
                     break;
                 case AutoEvent.QuitApplication:
-                    FullscreenFader.FadeOut(fadeTime, Color.black, () =>
+                    if (FullscreenFader.hasFader)
+                    {
+                        FullscreenFader.FadeOut(fadeTime, Color.black, () =>
+                        {
+#if UNITY_EDITOR
+                            UnityEditor.EditorApplication.isPlaying = false;
+#else
+                            Application.Quit();
+#endif
+                        });
+                    }
+                    else if (FullscreenWiper.hasWiper)
+                    {
+                        FullscreenWiper.WipeOut(fadeTime, WipeType.Random, () =>
+                        {
+#if UNITY_EDITOR
+                            UnityEditor.EditorApplication.isPlaying = false;
+#else
+                            Application.Quit();
+#endif
+                        });
+                    }
+                    else
                     {
 #if UNITY_EDITOR
                         UnityEditor.EditorApplication.isPlaying = false;
 #else
-                        Application.Quit();
+                            Application.Quit();
 #endif
-                    });
+                    }
                     break;
                 case AutoEvent.ShowCredits:
                     {

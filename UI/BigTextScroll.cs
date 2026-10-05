@@ -17,6 +17,8 @@ namespace UC
         [SerializeField, ResizableTextArea, ShowIf("noFile")]
         private string text;
         [SerializeField]
+        private RectTransform   contentTarget;
+        [SerializeField]
         private TextMeshProUGUI textPrefab;
         [SerializeField]
         private float scrollSpeed;
@@ -37,6 +39,8 @@ namespace UC
 
         void Start()
         {
+            if (contentTarget == null) contentTarget = transform as RectTransform;
+
             backControl.playerInput = playerInput;
 
             if (textFile)
@@ -47,7 +51,7 @@ namespace UC
             var lines = text.Split('\n', System.StringSplitOptions.None);
             foreach (var line in lines)
             {
-                var tmp = Instantiate(textPrefab, transform);
+                var tmp = Instantiate(textPrefab, contentTarget);
                 if (string.IsNullOrEmpty(line.Trim()))
                     tmp.text = "<color=#FF000000>||ABCD||</color>";
                 else
@@ -56,10 +60,10 @@ namespace UC
                 lastRectTransform = tmp.GetComponent<RectTransform>();
             }
 
-            rectTransform = GetComponent<RectTransform>();
+            rectTransform = contentTarget;
             originalPosition = rectTransform.anchoredPosition;
 
-            LayoutRebuilder.ForceRebuildLayoutImmediate(transform as RectTransform);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentTarget as RectTransform);
         }
 
         void Update()
