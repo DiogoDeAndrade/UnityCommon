@@ -11,6 +11,8 @@ namespace UC
     {
         public delegate void OnJump();
         public event OnJump onJump;
+        public delegate void OnLand();
+        public event OnLand onLand;
 
         public enum FlipBehaviour
         {
@@ -480,6 +482,8 @@ namespace UC
 
         void UpdateGroundState()
         {
+            bool prevIsGrounded = actualIsGrounded;
+
             if (groundCheckCollider)
             {
                 ContactFilter2D contactFilter = new ContactFilter2D();
@@ -494,6 +498,11 @@ namespace UC
                     actualIsGrounded = true;
                     isGrounded = true;
                     coyoteTimer = coyoteTime;
+
+                    if (!prevIsGrounded)
+                    {
+                        onLand?.Invoke();
+                    }
                     return;
                 }
                 else

@@ -120,7 +120,9 @@ namespace UC
             if (targetPos.y < r.yMin) r.position += new Vector2(0, targetPos.y - r.yMin);
             if (targetPos.y > r.yMax) r.position += new Vector2(0, targetPos.y - r.yMax);
 
-            transform.position = new Vector3(r.center.x, r.center.y, currentZ);
+            // The rect is relative to the camera position (not necessarily centered on it)
+            Vector2 newPos = r.position - rect.position;
+            transform.position = new Vector3(newPos.x, newPos.y, currentZ);
 
             RunZoom();
             CheckBounds();

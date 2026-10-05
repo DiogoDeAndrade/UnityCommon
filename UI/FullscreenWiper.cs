@@ -16,6 +16,8 @@ namespace UC
         [SerializeField] private float wipeInTime = 0.75f;
         [ShowIf(EConditionOperator.And, "startWiped", "autoWipeIn")]
         [SerializeField] private WipeType wipeInType = WipeType.Random;
+        [SerializeField] private SoundDef wipeInSound;
+        [SerializeField] private SoundDef wipeOutSound;
 
         WipeGraphic wiper;
         float       target;
@@ -69,6 +71,9 @@ namespace UC
                     return;
                 }
             }
+
+            if (targetOpenness <= 0.0f) wipeOutSound?.Play();
+            else if (targetOpenness >= 1.0f) wipeInSound?.Play();
 
             if (type == WipeType.Random)
             {
