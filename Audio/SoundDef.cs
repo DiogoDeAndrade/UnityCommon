@@ -1,5 +1,6 @@
 using NaughtyAttributes;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -134,6 +135,34 @@ namespace UC
             return audioSource;
         }
 
+#if UNITY_EDITOR
+        static AudioSource previewSource;
+
+        [Button("Preview")]
+        void Preview()
+        {
+            var previewClip = isMultiple ? clips.Get() : clip;
+            if (previewClip == null) return;
+
+            if (previewSource == null)
+            {
+                var go = EditorUtility.CreateGameObjectWithHideFlags("SoundDef Preview", HideFlags.HideAndDontSave, typeof(AudioSource));
+                previewSource = go.GetComponent<AudioSource>();
+            }
+
+            previewSource.Stop();
+            previewSource.clip = previewClip;
+            previewSource.volume = volumeRange.Random();
+            previewSource.pitch = pitchRange.Random();
+            previewSource.Play();
+        }
+
+        [Button("Stop Preview")]
+        void StopPreview()
+        {
+            if (previewSource) previewSource.Stop();
+        }
+#endif
     }
 
 #if UNITY_EDITOR
@@ -156,15 +185,46 @@ namespace UC
             // If user picked exactly one SubtitleTrack and/or one Speaker, treat them as defaults
             SubtitleTrack subtitle = subtitles.Length >= 1 ? subtitles[0] : null;
             Speaker speaker = speakers.Length >= 1 ? speakers[0] : null;
-            foreach (var clip in clips)
+
+            // With several clips, ask if they should all go into a single SoundDef (Multiple mode), or one SoundDef each
+            bool singleSoundDef = false;
+            if (clips.Length > 1)
+            {
+                int option = EditorUtility.DisplayDialogComplex("Create SoundDef From Selection", $"{clips.Length} audio clips selected.\n\nCreate a single SoundDef with all of them, or one SoundDef per clip?", "Single SoundDef", "Cancel", "One Per Clip");
+                if (option == 1) return;
+                singleSoundDef = (option == 0);
+            }
+
+            // Each group of clips becomes one SoundDef
+            var groups = new List<AudioClip[]>();
+            if (singleSoundDef)
+            {
+                Array.Sort(clips, (a, b) => EditorUtility.NaturalCompare(a.name, b.name));
+                groups.Add(clips);
+            }
+            else
+            {
+                foreach (var clip in clips) groups.Add(new[] { clip });
+            }
+
+            foreach (var group in groups)
             {
                 // Choose output folder (based on first selected object)
-                var firstPath = AssetDatabase.GetAssetPath(clip);
+                var firstPath = AssetDatabase.GetAssetPath(group[0]);
                 var outFolder = Directory.Exists(firstPath) ? firstPath : Path.GetDirectoryName(firstPath);
                 if (string.IsNullOrEmpty(outFolder)) outFolder = "Assets";
 
                 var sd = ScriptableObject.CreateInstance<SoundDef>();
-                sd.clip = clip;
+                if (group.Length == 1)
+                {
+                    sd.clip = group[0];
+                }
+                else
+                {
+                    sd.mode = SoundDef.Mode.Multiple;
+                    sd.clips = new AudioClipProbList();
+                    foreach (var clip in group) sd.clips.Add(clip, 1.0f);
+                }
                 if (speaker)
                 {
                     sd.soundType = SoundType.Voice;
@@ -182,7 +242,7 @@ namespace UC
                     sd.subtitleTrack = subtitle;
                 }
 
-                var assetName = $"{clip.name}.asset";
+                var assetName = $"{GetCommonName(group)}.asset";
                 var path = AssetDatabase.GenerateUniqueAssetPath(Path.Combine(outFolder, assetName));
 
                 AssetDatabase.CreateAsset(sd, path);
@@ -191,7 +251,24 @@ namespace UC
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-        }        
+        }
+
+        // Common start of the clip names, without trailing separators and digits (Jump_01, Jump_02 => Jump)
+        private static string GetCommonName(AudioClip[] clips)
+        {
+            if (clips.Length == 1) return clips[0].name;
+
+            string prefix = clips[0].name;
+            foreach (var clip in clips)
+            {
+                int len = 0;
+                while ((len < prefix.Length) && (len < clip.name.Length) && (prefix[len] == clip.name[len])) len++;
+                prefix = prefix.Substring(0, len);
+            }
+            prefix = prefix.TrimEnd('_', '-', ' ', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+
+            return (prefix.Length > 0) ? prefix : clips[0].name;
+        }
     }
 #endif
 }

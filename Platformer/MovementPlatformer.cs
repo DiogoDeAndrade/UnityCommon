@@ -9,6 +9,9 @@ namespace UC
     [RequireComponent(typeof(Rigidbody2D))]
     public class MovementPlatformer : MonoBehaviour
     {
+        public delegate void OnJump();
+        public event OnJump onJump;
+
         public enum FlipBehaviour
         {
             None = 0,
@@ -310,6 +313,8 @@ namespace UC
             coyoteTimer = 0;
             jumpTime = Time.time;
             currentJumpCount--;
+
+            onJump?.Invoke();
         }
 
         public void Bounce(float multiplier)
