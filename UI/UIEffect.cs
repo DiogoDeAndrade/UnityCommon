@@ -6,7 +6,6 @@ using System;
 namespace UC
 {
 
-    [ExecuteAlways]
     public class UIImageEffect : MonoBehaviour
     {
         [Flags]
