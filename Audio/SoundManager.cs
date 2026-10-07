@@ -46,10 +46,14 @@ namespace UC
         [SerializeField, Range(0.0f, 1.0f)] private float defaultBackgroundVolume = 1.0f;
         [SerializeField, Range(0.0f, 1.0f)] private float defaultVoiceVolume = 1.0f;
         [SerializeField, Range(0.0f, 1.0f)] private float defaultMoviesVolume = 1.0f;
-        [SerializeField, Header("Default Music")] private AudioClip  startMusic;
+        [Header("Default Music")]
+        [SerializeField] private SoundDef startMusicDef;
+        [SerializeField, ShowIf(nameof(noStartMusicDef))] private AudioClip  startMusic;
         [SerializeField] private Hypertag   musicTag;
         [SerializeField] private float defaultCrossfadeTime = 1.0f;
         [SerializeField] List<MaxPerCategory> _maxSoundsPerCategory = new();
+
+        bool noStartMusicDef => startMusicDef == null;
 
         class AudioElement
         {
@@ -127,7 +131,11 @@ namespace UC
                 _SetVolume(type, volume, true);
             }
 
-            if (startMusic)
+            if (startMusicDef)
+            {
+                startMusicDef.Play();
+            }
+            else if (startMusic) 
             {
                 musicSource = _PlayMusic(startMusic, 1.0f, 1.0f, musicTag);
             }
@@ -177,7 +185,7 @@ namespace UC
                 if (clip == null) return null;
 
                 musicSource = _PlaySound(SoundType.Music, clip, 0.0f, 1, true, (defaultTag == null) ? (musicTag) : (defaultTag));
-                musicSource.FadeTo(1.0f, (crossFadeTime < 0.0f) ? (defaultCrossfadeTime) : (crossFadeTime));
+                musicSource.FadeTo(volume, (crossFadeTime < 0.0f) ? (defaultCrossfadeTime) : (crossFadeTime));
 
                 return musicSource;
             }
