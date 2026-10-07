@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using UnityEngine;
 using UC.DoubleMath;
 
@@ -80,6 +81,52 @@ namespace UC.ED
                 DVector3 axisZ = state.GetAxisZ(nodeIndex);
 
                 return DVector3.Dot(axisX, DVector3.Cross(axisY, axisZ));
+            }
+
+            private static readonly string[] describeColumns = { "minDeterminant", "minDeterminantNode", "nodesUnderFloor" };
+
+            public override string[] DescribeHeader() => (string[])describeColumns.Clone();
+
+            /// <summary>
+            /// The node nearest to collapse at the state, whatever the weight: the smallest
+            /// determinant relative to the scale its node is allowed - the quantity the rows score,
+            /// so 1 is undeformed and the floor is where the term starts to object - the node it
+            /// belongs to, and how many nodes sit under the floor.
+            ///
+            /// Built 2026-10-07 (queue section 40) because the term's largest row, the one column
+            /// the export carried, is clipped at the floor and names no node: under rotation 0.03 it
+            /// said a node had gone to a third of its volume and could not say which.
+            /// </summary>
+            public override string[] Describe(EDStateView state)
+            {
+                int count = deformation.nodes.Count;
+
+                if (count == 0) return new[] { "", "", "" };
+
+                double floor = determinantTerm.minDeterminant;
+                double min = double.PositiveInfinity;
+                int minNode = -1;
+                int under = 0;
+
+                for (int i = 0; i < count; i++)
+                {
+                    double relative = Determinant(state, i) / ReferenceScale(i);
+
+                    if (relative < floor) under++;
+
+                    if (relative < min)
+                    {
+                        min = relative;
+                        minNode = i;
+                    }
+                }
+
+                return new[]
+                {
+                    (minNode >= 0) ? (min.ToString("F4", CultureInfo.InvariantCulture)) : (""),
+                    (minNode >= 0) ? (minNode.ToString(CultureInfo.InvariantCulture)) : (""),
+                    under.ToString(CultureInfo.InvariantCulture),
+                };
             }
 
             public override void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset)
