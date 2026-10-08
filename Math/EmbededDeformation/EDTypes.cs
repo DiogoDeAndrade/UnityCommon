@@ -157,6 +157,33 @@ namespace UC.ED
         [SerializeField]
         public EDClearanceCache clearances;
 
+        // Whether the cache above was measured at these parameters. The solver measures the
+        // clearances only for a model whose terms read them (2026-10-08), so a state can carry a
+        // cache copied from the state it was stepped from, or none - plausible numbers for another
+        // configuration, which is the one thing a reader must not take for these. Cleared by
+        // everything that writes a parameter and set only by SetClearances.
+        //
+        // Serialized with the cache it describes, so a domain reload keeps a measured cache
+        // readable without measuring again - which, in structure mode, it could not do honestly
+        // until the field has been rebuilt. A state saved before this existed reads false, the
+        // safe side.
+        [SerializeField]
+        private bool            clearancesMeasured;
+
+        /// <summary>
+        /// True when the cached clearances are this state's own. Tests the data as well as the
+        /// flag, for the reason every reader of the cache does: a [Serializable] cache is never
+        /// null after a reload.
+        /// </summary>
+        public bool hasCurrentClearances => (clearancesMeasured) && (clearances != null);
+
+        /// <summary>The clearances measured at these parameters - the one write that marks the cache current.</summary>
+        public void SetClearances(EDClearanceCache measured)
+        {
+            clearances = measured;
+            clearancesMeasured = (measured != null);
+        }
+
         public EDState(int nodeCount)
         {
             parameters = new double[12 * nodeCount];
@@ -174,6 +201,7 @@ namespace UC.ED
         public void Set(int index, double value)
         {
             parameters[index] = value;
+            clearancesMeasured = false;
         }
 
         public int Count => parameters.Length;
@@ -185,11 +213,15 @@ namespace UC.ED
             parameters[o + 3] = x;
             parameters[o + 7] = y;
             parameters[o + 11] = z;
+
+            clearancesMeasured = false;
         }
 
         public void ResetRotation(int nodeIndex)
         {
             int o = nodeIndex * 12;
+
+            clearancesMeasured = false;
 
             parameters[o + 0] = 1.0;
             parameters[o + 1] = 0.0;
@@ -214,6 +246,9 @@ namespace UC.ED
                 throw new ArgumentException($"Delta size mismatch. Delta={delta.Count}, State={parameters.Length}");
             }
 
+            // The parameters move, so whatever cache the state carries is the previous ones'.
+            clearancesMeasured = false;
+
             for (int i = 0; i < parameters.Length; i++)
             {
                 double v = parameters[i] + damping * delta[i];
@@ -235,6 +270,9 @@ namespace UC.ED
             // can carry a cache that was never populated, and Unity hands that back as a live object
             // rather than as a null.
             clone.clearances = (clearances != null) ? (clearances.Clone()) : (new EDClearanceCache(0));
+            // The same parameters, so the copy is as current as the original. CloneAndApply moves
+            // them afterwards, and Apply clears this.
+            clone.clearancesMeasured = clearancesMeasured;
             return clone;
         }
 
@@ -317,6 +355,13 @@ namespace UC.ED
         }
 
         public EDClearanceCache clearances => (_clearances == null) ? (parentState.clearances) : (_clearances);
+
+        /// <summary>
+        /// True when the clearances this view answers with were measured at the parameters it
+        /// answers with: a cache handed to the view, or the parent state's own while the view
+        /// perturbs nothing. A perturbed view has none - the cache is the unperturbed state's.
+        /// </summary>
+        public bool hasCurrentClearances => (perturbedIndex < 0) && ((_clearances != null) || ((parentState != null) && (parentState.hasCurrentClearances)));
 
         /// <summary>
         /// Cached clearance for a segment, or double.MaxValue when none was computed. Mirrors

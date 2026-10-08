@@ -36,9 +36,12 @@ namespace UC.ED
     /// copy rather than sharing one.
     ///
     /// It reads state the solver computes rather than deriving everything from the parameters. The
-    /// clearances live on EDState and are refreshed by the navigation solver at each accepted step,
-    /// so pairing this term with a solver that never refreshes them silently measures stale values.
-    /// That is existing behaviour, not something introduced here.
+    /// clearances live on EDState, and the navigation solver measures them on every candidate
+    /// because this term says it reads them (readsClearanceCache, 2026-10-08) - with no such term
+    /// in the model it measures none. The Gauss-Newton and the plain Levenberg-Marquardt loops
+    /// still never measure them, so pairing this term with either scores every iteration against
+    /// the clearances the state last had measured. That is existing behaviour, not something
+    /// introduced here.
     /// </summary>
     [Serializable]
     [PolymorphicName("Clearance (Radial)")]
@@ -62,6 +65,9 @@ namespace UC.ED
             {
                 clearanceTerm = term;
             }
+
+            // The residual below reads the cache; the Jacobian rows measure for themselves.
+            public override bool readsClearanceCache => true;
 
             /// <summary>
             /// Gated on the navigation data being present, not merely on the weight. Clearance is

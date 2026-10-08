@@ -475,16 +475,27 @@ namespace UC.ED
 
 #if MATH_NET_AVAILABLE
             if (currentState == null)
-            {
                 currentState = new EDState(nodes.Count);
-                ComputeClearance(currentState);
-            }
 
             double currentLambda = lambda;
             // Row counts and weights are resolved once here rather than rebuilt inside every
             // residual evaluation, as the layout builder used to be. They are a function of the
             // graph and the weights, neither of which changes during a solve.
             energy.Resolve();
+
+            // The clearances are measured only for a model that reads them (2026-10-08). They used
+            // to be measured on every reset, on the candidate of every attempt and again on the
+            // state accepted, whatever the model held - a pass over every structure segment each
+            // time, paid by a model with no clearance term for a number nothing in it read. With
+            // such a term the passes below are the ones there always were, on the same states,
+            // less the one after an acceptance, which measured again a state measured as a
+            // candidate. Everything that reads them outside a term asks for itself, through
+            // EnsureClearance.
+            bool readsClearance = energy.readsClearanceCache;
+
+            // The entering state's: a reset no longer measures them, and a state this solve
+            // continues from may have been left by a solve under a model that read none.
+            if (readsClearance) EnsureClearance(currentState);
 
             TraceResidualLayout(energy);
 
@@ -648,7 +659,8 @@ namespace UC.ED
                     try
                     {
                         candidateState = currentState.CloneAndApply(delta, 1.0);
-                        ComputeClearance(candidateState);
+
+                        if (readsClearance) ComputeClearance(candidateState);
                     }
                     catch
                     {
@@ -733,8 +745,9 @@ namespace UC.ED
                     continue;
                 }
 
+                // The accepted state is the candidate, whose clearances were measured when it was
+                // tried, if the model reads any.
                 currentState = acceptedState;
-                ComputeClearance(currentState);
             }
 
             DebugProfiler.DebugMark(timeIteration);
