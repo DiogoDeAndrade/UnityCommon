@@ -782,8 +782,10 @@ namespace UC.ED
 
         public void ResetDeformation()
         {
+            // No clearances are measured here any more (2026-10-08). The new state carries none,
+            // and whoever reads them asks: the navigation solver before it evaluates a model whose
+            // terms read them, everything else through EnsureClearance.
             currentState = new EDState(nodes.Count);
-            ComputeClearance(currentState);
 
             // The state starts from rest, so whatever follows the iteration count starts with it.
             iterationsSinceReset = 0;
@@ -1188,6 +1190,8 @@ namespace UC.ED
 
         public void LogCurrentClearance()
         {
+            if (!EnsureClearance()) return;
+
             LogClearance("Current clearance:", restState, currentState);
         }
 
@@ -1364,7 +1368,69 @@ namespace UC.ED
 
         EDClearanceCache ComputeClearance(EDState state)
         {
-            return state.clearances = ComputeClearance(new EDStateView(state));
+            EDClearanceCache measured = ComputeClearance(new EDStateView(state));
+
+            state.SetClearances(measured);
+
+            return measured;
+        }
+
+        /// <summary>
+        /// Measures a state's clearances unless the ones it carries were measured at its
+        /// parameters. What the navigation solver calls before it evaluates a model whose terms
+        /// read them, and what replaced the pass every reset and every accepted step used to make
+        /// whatever the model held.
+        /// </summary>
+        void EnsureClearance(EDState state)
+        {
+            if ((state == null) || (state.hasCurrentClearances)) return;
+
+            ComputeClearance(state);
+        }
+
+        /// <summary>
+        /// The current state's clearances, measured now if they were not measured at its
+        /// parameters - for the readers that are not terms: the gizmos, the dump, a log. False
+        /// when there is no state, or when measuring would not be honest: a structure graph whose
+        /// field has not been rebuilt since a reload would measure through the bindings and keep
+        /// the answer as though it were the field's.
+        /// </summary>
+        public bool EnsureClearance()
+        {
+            if (currentState == null) return false;
+            if (currentState.hasCurrentClearances) return true;
+            if ((isNavConfigured) && (fieldMissing)) return false;
+
+            ComputeClearance(currentState);
+
+            return true;
+        }
+
+        /// <summary>
+        /// The clearances at a state, for a reader that is handed a state rather than asking about
+        /// the current one - the checkpoint recorder. The state's own when they were measured at
+        /// its parameters, measured now and not kept otherwise; false, and null, when they cannot
+        /// be measured honestly, on EnsureClearance's terms.
+        /// </summary>
+        public bool TryGetClearances(EDStateView state, out EDClearanceCache clearances)
+        {
+            if (state.hasCurrentClearances)
+            {
+                clearances = state.clearances;
+
+                return true;
+            }
+
+            if ((isNavConfigured) && (fieldMissing))
+            {
+                clearances = null;
+
+                return false;
+            }
+
+            clearances = ComputeClearance(state);
+
+            return true;
         }
 
         EDClearanceCache ComputeClearance(EDStateView state)
@@ -1608,9 +1674,14 @@ namespace UC.ED
             return n.ToVector3();
         }
 
+        /// <summary>
+        /// A segment's clearance at the current state, measured on demand: the solver only keeps
+        /// the cache current for a model whose terms read it. double.MaxValue, the "no clearance"
+        /// marker, when it cannot be measured - see EnsureClearance.
+        /// </summary>
         public double GetClearance(int segIndex)
         {
-            return currentState.GetClearance(segIndex);
+            return (EnsureClearance()) ? (currentState.GetClearance(segIndex)) : (double.MaxValue);
         }
 
         /// <summary>

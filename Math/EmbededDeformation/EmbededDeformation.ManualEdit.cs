@@ -382,6 +382,10 @@ namespace UC.ED
 
             energy.Resolve();
 
+            // As the navigation solver does before it evaluates: the state may have been left by
+            // a solve under a model that read no clearances, and so carries none of its own.
+            if (energy.readsClearanceCache) EnsureClearance(currentState);
+
             EDStateView stateView = new EDStateView(currentState);
 
             Vector<double> f = energy.EvaluateResidual(stateView);

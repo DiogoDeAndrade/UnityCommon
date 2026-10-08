@@ -120,6 +120,28 @@ namespace UC.ED
             }
 
             /// <summary>
+            /// Whether any term of the model reads the clearances cached on a state - what tells
+            /// the navigation solver, and anything else that evaluates this model's residual, to
+            /// have them measured first.
+            ///
+            /// By the term's presence and not by its rows or its weight: a term parked at a weight
+            /// of zero has no rows and can still be asked for its columns, and the cost of being
+            /// wrong the other way is a term scored against another state's clearances.
+            /// </summary>
+            public bool readsClearanceCache
+            {
+                get
+                {
+                    for (int i = 0; i < termInstances.Count; i++)
+                    {
+                        if (termInstances[i].readsClearanceCache) return true;
+                    }
+
+                    return false;
+                }
+            }
+
+            /// <summary>
             /// Re-resolves every term's row count and weight. Run at the start of each solve rather
             /// than only at construction, because a weight can be edited on the asset and the graph
             /// can be rebuilt while this instance is cached.

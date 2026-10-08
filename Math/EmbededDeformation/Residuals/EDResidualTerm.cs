@@ -153,6 +153,15 @@ namespace UC.ED
             /// </summary>
             public virtual bool describesAttempts => false;
 
+            /// <summary>
+            /// Whether the term reads the clearances cached on a state rather than deriving what it
+            /// needs from the parameters. Measuring them is a pass over every structure segment, so
+            /// the navigation solver makes it for each candidate only when a term of the model says
+            /// yes here, and a model with no such term never pays for it. A term that says yes may
+            /// rely on the cache being the evaluated state's own.
+            /// </summary>
+            public virtual bool readsClearanceCache => false;
+
             public abstract void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset);
 
             public abstract void FillJacobian(EDState state, DenseMatrix jacobian, int rowOffset, ref double jacobianNormSq);

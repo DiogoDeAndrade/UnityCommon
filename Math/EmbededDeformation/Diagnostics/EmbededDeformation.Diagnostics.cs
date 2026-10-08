@@ -63,6 +63,12 @@ namespace UC.ED
 
             w.WriteLine("[clearance]");
 
+            // Asked for here since 2026-10-08: the solver keeps the clearances current only for a
+            // model whose terms read them, and this section records the final state's whatever
+            // the model holds - config 4 has none and its dump has every segment's. The same
+            // measurement on the same state the solve used to make at its last accepted step.
+            EnsureClearance();
+
             int clearanceCount = (currentState.clearances != null) ? (currentState.clearances.count) : (0);
 
             if (clearanceCount == 0)
