@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NaughtyAttributes;
 using UnityEngine;
@@ -225,6 +226,18 @@ namespace UC.ED
 
                 return topology;
             }
+
+            /// <summary>
+            /// The report the owner is timing a build into, or null. Set around Build, so the
+            /// stages inside - the skeleton, the bindings, the field's passes - land under whatever
+            /// stage the owner opened; null times nothing. A property rather than an argument of
+            /// Build because RebuildDeformationField reaches the same stages from a press, which
+            /// has no report of this kind.
+            /// </summary>
+            public DebugProfilerReport timings { get; set; }
+
+            /// <summary>A stage of the owner's report, or nothing to dispose when there is none. Keep it in a using.</summary>
+            protected IDisposable Stage(string name) => timings?.Begin(name);
 
             public abstract void Build(List<int> forcedVertices);
 

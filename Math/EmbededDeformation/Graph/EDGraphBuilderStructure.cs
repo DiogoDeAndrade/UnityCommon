@@ -137,7 +137,8 @@ namespace UC.ED
 
                 deformation.BeginGraphBuild(DeformationGraphSource.StructureOnly);
 
-                deformation.BuildStructure(structureSource, def.maxSegmentLength, nav.tryGetSurfaceNormal);
+                using (Stage("Skeleton"))
+                    deformation.BuildStructure(structureSource, def.maxSegmentLength, nav.tryGetSurfaceNormal);
 
                 var structure = deformation.structure;
 
@@ -151,22 +152,26 @@ namespace UC.ED
                 // 1) Copy source navmesh into ED rest data.
                 //    Even in StructureOnly mode, the mesh still needs to deform.
                 // -----------------------------------------------------------------
-                deformation.SetRestGeometry(topology);
+                using (Stage("Rest geometry"))
+                    deformation.SetRestGeometry(topology);
 
                 // -----------------------------------------------------------------
                 // 2) Build ED graph directly from structure segment endpoints.
                 // -----------------------------------------------------------------
-                for (int i = 0; i < structure.Count; i++)
+                using (Stage("Nodes"))
                 {
-                    var seg = structure[i];
+                    for (int i = 0; i < structure.Count; i++)
+                    {
+                        var seg = structure[i];
 
-                    int idx1 = deformation.AddGraphNode(seg.p1, structureNodeMergeDistanceSq);
-                    int idx2 = deformation.AddGraphNode(seg.p2, structureNodeMergeDistanceSq);
+                        int idx1 = deformation.AddGraphNode(seg.p1, structureNodeMergeDistanceSq);
+                        int idx2 = deformation.AddGraphNode(seg.p2, structureNodeMergeDistanceSq);
 
-                    seg.node1 = idx1;
-                    seg.node2 = idx2;
+                        seg.node1 = idx1;
+                        seg.node2 = idx2;
 
-                    deformation.LinkGraphNodes(idx1, idx2);
+                        deformation.LinkGraphNodes(idx1, idx2);
+                    }
                 }
 
                 if (deformation.nodes.Count == 0)
@@ -178,7 +183,8 @@ namespace UC.ED
                 // -----------------------------------------------------------------
                 // 3) Bind navmesh vertices to the structure graph.
                 // -----------------------------------------------------------------
-                deformation.SetGraphBindings(topology, def.binding, def.sampleMinDistance);
+                using (Stage("Bindings"))
+                    deformation.SetGraphBindings(topology, def.binding, def.sampleMinDistance);
 
                 deformation.EndGraphBuild();
 
@@ -192,13 +198,16 @@ namespace UC.ED
                 // -----------------------------------------------------------------
                 // 4) Everything that only means something on a skeleton graph.
                 // -----------------------------------------------------------------
-                deformation.BuildNodeRestFrames();
+                using (Stage("Rest frames"))
+                    deformation.BuildNodeRestFrames();
 
                 // After the node loop above, which is what makes it possible: the tree is recovered
                 // from seg.node1/seg.node2, and those are written there.
-                deformation.BuildStructureTree();
+                using (Stage("Structure tree"))
+                    deformation.BuildStructureTree();
 
-                BuildDeformationField(def);
+                using (Stage("Deformation field"))
+                    BuildDeformationField(def);
             }
 
             /// <summary>
@@ -574,7 +583,10 @@ namespace UC.ED
                     identityMatrices.Add(Matrix4x4.identity);
                 }
 
-                field.FillWithMesh(sourceGeometry, identityMatrices);
+                // Each pass from here is a stage of the owner's build report when one is open - the
+                // breakdown the Time line below does not give - and nothing otherwise.
+                using (Stage("Voxelisation"))
+                    field.FillWithMesh(sourceGeometry, identityMatrices);
 
                 // -------------------------------------------------------------
                 // 4) Add deformation graph nodes as volumetric/geodesic seeds.
@@ -584,13 +596,19 @@ namespace UC.ED
                 //    The runaway limit is the piece's own diagonal. It is a symptom detector rather
                 //    than a cap - see MeasureCorridorWidths for why the measurement itself is not
                 //    bounded - and it is derived here because this is where the bounds exist.
-                float[] seedLengths = ResolveSeedLengths(def, bounds.size.magnitude);
+                float[] seedLengths;
 
-                for (int i = 0; i < nodes.Count; i++)
+                using (Stage("Seed lengths"))
+                    seedLengths = ResolveSeedLengths(def, bounds.size.magnitude);
+
+                using (Stage("Node wavefronts"))
                 {
-                    EDNode node = nodes[i];
+                    for (int i = 0; i < nodes.Count; i++)
+                    {
+                        EDNode node = nodes[i];
 
-                    field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), seedLengths[i]);
+                        field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), seedLengths[i]);
+                    }
                 }
 
                 // -------------------------------------------------------------
@@ -598,13 +616,17 @@ namespace UC.ED
                 //
                 //    The occupied volume gets geodesic distances from AddDeformationNode(). GrowInfluence() lets nearby empty cells also query valid weights.
                 // -------------------------------------------------------------
-                field.GrowInfluence();
+                using (Stage("Influence growth"))
+                    field.GrowInfluence();
 
                 // -------------------------------------------------------------
                 // 6) Convert distances into normalized weights.
                 // -------------------------------------------------------------
-                field.ComputeWeights(safeMaxWeights, def.CreateFieldWeightResolver());
-                field.BuildTrilinearRegions();
+                using (Stage("Weights"))
+                    field.ComputeWeights(safeMaxWeights, def.CreateFieldWeightResolver());
+
+                using (Stage("Trilinear regions"))
+                    field.BuildTrilinearRegions();
 
                 deformation.SetDeformationField(field);
 

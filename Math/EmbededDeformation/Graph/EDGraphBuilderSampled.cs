@@ -37,7 +37,8 @@ namespace UC.ED
 
                 // The skeleton is still built even when it does not define the graph: it seeds
                 // nodes when asked to, and it is what the navigation energies measure along.
-                deformation.BuildStructure(structureSource, builder.maxSegmentLength, nav.tryGetSurfaceNormal);
+                using (Stage("Skeleton"))
+                    deformation.BuildStructure(structureSource, builder.maxSegmentLength, nav.tryGetSurfaceNormal);
 
                 float minDistance = builder.sampleMinDistance;
 
@@ -47,16 +48,23 @@ namespace UC.ED
                     minDistance = 0.001f;
                 }
 
-                deformation.SetRestGeometry(topology);
+                using (Stage("Rest geometry"))
+                    deformation.SetRestGeometry(topology);
 
-                if (!SampleNodes(topology, forcedVertices, minDistance))
-                    return;
+                bool sampled;
+
+                using (Stage("Nodes"))
+                    sampled = SampleNodes(topology, forcedVertices, minDistance);
+
+                if (!sampled) return;
 
                 // Sigma is resolved against the configured spacing rather than the clamped one, so
                 // that a degenerate spacing does not silently rescale the falloff as well.
-                deformation.SetGraphBindings(topology, builder.binding, builder.sampleMinDistance);
+                using (Stage("Bindings"))
+                    deformation.SetGraphBindings(topology, builder.binding, builder.sampleMinDistance);
 
-                LinkNodes(topology);
+                using (Stage("Links"))
+                    LinkNodes(topology);
 
                 deformation.EndGraphBuild();
 
