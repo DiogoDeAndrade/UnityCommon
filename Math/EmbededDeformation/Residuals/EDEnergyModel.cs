@@ -33,7 +33,12 @@ namespace UC.ED
         public bool normalizesWeights => normalizeWeights;
 
 #if MATH_NET_AVAILABLE
-        public Instance NewInstance(EmbededDeformation deformation) => new Instance(this, deformation);
+        /// <summary>
+        /// A new instance over this deformation. With a report, the terms' construction and the
+        /// first reset of each are stages of it, for the build report that asks where a
+        /// configuration switch spends its time.
+        /// </summary>
+        public Instance NewInstance(EmbededDeformation deformation, DebugProfilerReport timings = null) => new Instance(this, deformation, timings);
 
         public class Instance
         {
@@ -43,18 +48,21 @@ namespace UC.ED
 
             public int totalRows { get; private set; }
 
-            public Instance(EDEnergyModel model, EmbededDeformation deformation)
+            public Instance(EDEnergyModel model, EmbededDeformation deformation, DebugProfilerReport timings = null)
             {
                 this.model = model;
                 this.deformation = deformation;
 
                 termInstances = new List<EDResidualTerm.Instance>();
 
-                for (int i = 0; i < model.terms.Count; i++)
+                using (timings?.Begin("Term instances"))
                 {
-                    if (model.terms[i] == null) continue;
+                    for (int i = 0; i < model.terms.Count; i++)
+                    {
+                        if (model.terms[i] == null) continue;
 
-                    termInstances.Add(model.terms[i].NewInstance(deformation, model.normalizeWeights));
+                        termInstances.Add(model.terms[i].NewInstance(deformation, model.normalizeWeights));
+                    }
                 }
 
                 // Here as well as from the graph rebuild, and neither call is redundant. An instance
@@ -63,17 +71,21 @@ namespace UC.ED
                 // would silently contribute no rows the first time that button is pressed. The
                 // rebuild call is what keeps an already-built instance from going stale; this one is
                 // what keeps a fresh one from being empty.
-                Reset();
+                Reset(timings);
             }
 
             /// <summary>
             /// Rebuilds what every term derives from the graph. Call after the graph is rebuilt and
-            /// before anything reads rows from it - see EDResidualTerm.Instance.Reset.
+            /// before anything reads rows from it - see EDResidualTerm.Instance.Reset. With a
+            /// report, each term's reset is a stage of it under the term's exported name.
             /// </summary>
-            public void Reset()
+            public void Reset(DebugProfilerReport timings = null)
             {
                 for (int i = 0; i < termInstances.Count; i++)
-                    termInstances[i].Reset();
+                {
+                    using (timings?.Begin(termInstances[i].term.name))
+                        termInstances[i].Reset();
+                }
             }
 
             /// <summary>
