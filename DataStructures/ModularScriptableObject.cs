@@ -5,15 +5,15 @@ using UnityEngine;
 namespace UC 
 {
     [Serializable]
-    public abstract class SOModule
+    public abstract class SOModule : IGenericSerialization
     {
         [SerializeField, HideInInspector]
         protected bool _enabled = true; 
-        [SerializeField, HideInInspector]
+        [SerializeField, HideInInspector, GenericSerializationIgnore]
         protected bool _open = true; 
-        [SerializeField, HideInInspector]
+        [SerializeField, HideInInspector, GenericSerializationIgnore]
         protected ModularScriptableObject _scriptableObject;
-        [SerializeField, HideInInspector]
+        [SerializeField, HideInInspector, GenericSerializationIgnore]
         protected RPGModuleOverride       _moduleOverride;
 
         public ModularScriptableObject  scriptableObject => _scriptableObject;
@@ -37,7 +37,7 @@ namespace UC
     }
 
     [CreateAssetMenu(fileName = "ModularScriptableObject", menuName = "Unity Common/Modular SO")]
-    public class ModularScriptableObject : ScriptableObject
+    public class ModularScriptableObject : ScriptableObject, ISerializationCallbackReceiver
     {
         [SerializeField]
         private List<ModularScriptableObject>   _parents = new();
@@ -272,6 +272,22 @@ namespace UC
             }
 
             return newSO;
+        }
+
+        public void OnBeforeSerialize()
+        {
+        }
+
+        // Not every way of loading a module brings its owner along (generic serialization leaves it
+        // out, since it only makes sense inside the asset), so it's set again every time.
+        public void OnAfterDeserialize()
+        {
+            if (_modules == null) return;
+
+            foreach (var module in _modules)
+            {
+                module?.SetOwner(this);
+            }
         }
 
         protected virtual void OnValidate()
