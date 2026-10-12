@@ -58,6 +58,8 @@ public partial class FullDeformationField
         private readonly float                      fz;
         private readonly bool                       trilinear;
         private readonly bool                       valid;
+        private readonly InfluenceTable             table;
+        private readonly int                        tableEnd;
         private int                                 index;
 
         internal InfluenceEnumerator(FullDeformationField field, DeformationFieldWeights cell, bool valid)
@@ -71,6 +73,8 @@ public partial class FullDeformationField
             fy = 0.0f;
             fz = 0.0f;
             trilinear = false;
+            table = null;
+            tableEnd = 0;
             index = 0;
         }
 
@@ -85,7 +89,29 @@ public partial class FullDeformationField
 
             cell = default;
             trilinear = true;
+            table = null;
+            tableEnd = 0;
             index = region.influenceStart;
+        }
+
+        /// <summary>
+        /// Replays one position's row of a captured table - see InfluenceTable. The field's guards
+        /// ran when the row was captured, so what is left here is the walk.
+        /// </summary>
+        internal InfluenceEnumerator(InfluenceTable table, int start, int end)
+        {
+            this.table = table;
+            tableEnd = end;
+            index = start;
+            valid = (table != null);
+
+            field = null;
+            cell = default;
+            region = default;
+            fx = 0.0f;
+            fy = 0.0f;
+            fz = 0.0f;
+            trilinear = false;
         }
 
         /// <summary>
@@ -99,6 +125,18 @@ public partial class FullDeformationField
             weight = 0.0f;
 
             if (!valid) return false;
+
+            if (table != null)
+            {
+                if (index >= tableEnd) return false;
+
+                nodeIndex = table.nodes[index];
+                weight = table.weights[index];
+
+                index++;
+
+                return true;
+            }
 
             if (trilinear)
             {
@@ -145,6 +183,67 @@ public partial class FullDeformationField
 
             return false;
         }
+    }
+
+    /// <summary>
+    /// The influences at a fixed set of rest positions, captured once and replayed: for every
+    /// position, exactly the (node, weight) pairs EnumerateInfluences yields there, in its order and
+    /// with its weights. A quality term's sample vertices never move, so the region lookup and the
+    /// eight corner interpolations per influence were the same work on every one of the hundreds of
+    /// thousands of deformations a Jacobian makes of them; replayed from here, a deformation is the
+    /// gather and the blend and nothing else - and the same floats in the same order, so the result is
+    /// the position-based one to the bit. What stays is the gather itself and, in the polar blend,
+    /// the decomposition per point, which is the larger part.
+    ///
+    /// Compressed rows: position i's pairs are the entries start[i] to start[i + 1]. Captured against
+    /// the field as it is; a field rebuilt is a table to capture again, which is why the term that
+    /// holds one builds it in its Reset beside the sample set.
+    /// </summary>
+    public sealed class InfluenceTable
+    {
+        internal readonly int[]   start;
+        internal readonly int[]   nodes;
+        internal readonly float[] weights;
+
+        internal InfluenceTable(int[] start, int[] nodes, float[] weights)
+        {
+            this.start = start;
+            this.nodes = nodes;
+            this.weights = weights;
+        }
+
+        /// <summary>How many positions were captured.</summary>
+        public int count => start.Length - 1;
+
+        /// <summary>The influences captured for position <paramref name="index"/>, as an enumerator at its start.</summary>
+        public InfluenceEnumerator Enumerate(int index) => new InfluenceEnumerator(this, start[index], start[index + 1]);
+    }
+
+    /// <summary>
+    /// Captures the influences at every position, the way EnumerateInfluences would yield them.
+    /// </summary>
+    public InfluenceTable CaptureInfluences(Vector3[] positions, bool trilinear)
+    {
+        var start = new int[positions.Length + 1];
+        var nodes = new List<int>(positions.Length * 4);
+        var weights = new List<float>(positions.Length * 4);
+
+        for (int i = 0; i < positions.Length; i++)
+        {
+            start[i] = nodes.Count;
+
+            InfluenceEnumerator influences = EnumerateInfluences(positions[i], trilinear);
+
+            while (influences.MoveNext(out int nodeIndex, out float weight))
+            {
+                nodes.Add(nodeIndex);
+                weights.Add(weight);
+            }
+        }
+
+        start[positions.Length] = nodes.Count;
+
+        return new InfluenceTable(start, nodes.ToArray(), weights.ToArray());
     }
 
     /// <summary>
@@ -295,7 +394,23 @@ public partial class FullDeformationField
         /// The affine transform acting at a rest-space point. False when nothing influences the point,
         /// in which case it should be left where it is.
         /// </summary>
-        public abstract bool TryGetMatrix(Vector3 position, bool trilinear, out Matrix4x4 matrix);
+        public bool TryGetMatrix(Vector3 position, bool trilinear, out Matrix4x4 matrix)
+            => TryGetMatrix(field.EnumerateInfluences(position, trilinear), out matrix);
+
+        /// <summary>
+        /// The same transform at a position whose influences were captured in advance - see
+        /// InfluenceTable. The replayed enumerator yields what the position-based lookup would have,
+        /// so the two overloads are one computation.
+        /// </summary>
+        public bool TryGetMatrix(InfluenceTable influences, int index, out Matrix4x4 matrix)
+            => TryGetMatrix(influences.Enumerate(index), out matrix);
+
+        /// <summary>
+        /// The blend over a given set of influences - the one method a blender writes. The enumerator
+        /// is a struct and arrives as a copy at its start; a blender that walks the set more than once
+        /// walks copies of the argument, so the argument itself is never advanced.
+        /// </summary>
+        protected abstract bool TryGetMatrix(InfluenceEnumerator influences, out Matrix4x4 matrix);
 
         /// <summary>
         /// Where the deformation carries a point.
@@ -355,14 +470,12 @@ public partial class FullDeformationField
         // recorded under, and only the modes that need parameters spell them out.
         public override string Describe() => DescribeBlend(EDFieldBlendMode.LinearAffine, default, default);
 
-        public override bool TryGetMatrix(Vector3 position, bool trilinear, out Matrix4x4 matrix)
+        protected override bool TryGetMatrix(InfluenceEnumerator influences, out Matrix4x4 matrix)
         {
             matrix = Matrix4x4.identity;
 
             Matrix4x4 blended = Matrix4x4.zero;
             float weightSum = 0.0f;
-
-            InfluenceEnumerator influences = field.EnumerateInfluences(position, trilinear);
 
             while (influences.MoveNext(out int nodeIndex, out float weight))
             {

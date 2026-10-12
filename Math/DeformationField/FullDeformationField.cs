@@ -2,6 +2,7 @@ using UC;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 /// <summary>
 /// Which neighbours a wavefront may step to.
@@ -883,6 +884,11 @@ public partial class FullDeformationField
             }
         }
 
+        // The step costs indexed beside the offsets rather than a square root per neighbour test.
+        // Each entry is what StepCost returns for its offset, so no distance changes.
+        Vector3Int[] offsets = NeighbourOffsets();
+        float[] costs = StepCosts(offsets);
+
         while (heap.TryDequeue(out QueueItem current))
         {
             DeformationFieldWeights currentElement = voxelData.data[current.voxelIndex];
@@ -895,8 +901,6 @@ public partial class FullDeformationField
             }
 
             Vector3Int currentPos = PositionOf(current.voxelIndex);
-
-            Vector3Int[] offsets = NeighbourOffsets();
 
             for (int i = 0; i < offsets.Length; i++)
             {
@@ -913,7 +917,7 @@ public partial class FullDeformationField
                 // Measuring through the solid, so a diagonal may not slide across a gap in it.
                 if (!StepIsClear(currentPos, offset, true)) continue;
 
-                float newDistance = current.distance + StepCost(offset);
+                float newDistance = current.distance + costs[i];
 
                 ref DeformationFieldWeights neighbour = ref voxelData.data[neighbourIndex];
                 if (TryStoreDistance(ref neighbour, nodeIndex, newDistance))
@@ -971,12 +975,65 @@ public partial class FullDeformationField
         }
     }
 
-    public void GrowInfluence()
+    /// <summary>
+    /// Extends every node's influence from the occupied cells into the empty ones around them,
+    /// through empty cells only, so the influence outside the solid is measured along the solid and
+    /// never through it.
+    ///
+    /// Two paths to one result. With a slot per node the nodes are independent and each gets its own
+    /// wavefront, the wavefronts in parallel - FullDeformationField.Growth.cs has the argument for
+    /// why that is the same field to the bit. With capped storage the nodes interact through
+    /// eviction, and the one shared heap below is kept as it was. Both seed only the occupied cells
+    /// that have an empty neighbour to step to, and both read the step costs off a table; neither
+    /// changes a distance.
+    /// </summary>
+    /// <param name="parallelOptions">
+    /// How the per-node wavefronts are scheduled; null runs them with the defaults. The solver's
+    /// callers pass EDDiagnostics.parallelOptions, which collapses to one worker in verification
+    /// mode - the result is the same either way, this keeps the field under the same switch as every
+    /// other Parallel.For in a build.
+    /// </param>
+    public void GrowInfluence(ParallelOptions parallelOptions = null)
     {
         if (!HasVoxelData()) return;
 
         InvalidateTrilinearRegions();
 
+        Vector3Int[] offsets = NeighbourOffsets();
+        float[] costs = StepCosts(offsets);
+        bool[] occupied = OccupancySnapshot();
+        bool[] boundary = BoundaryCells(occupied, offsets);
+
+        growthOccupiedCells = 0;
+        growthBoundaryCells = 0;
+
+        for (int index = 0; index < occupied.Length; index++)
+        {
+            if (occupied[index]) growthOccupiedCells++;
+            if (boundary[index]) growthBoundaryCells++;
+        }
+
+        // Slot-per-node is set when the slots cover every node at construction; a node added past
+        // the slot count would fall back to the searched path in TryStoreDistance, so the same bound
+        // is checked here against the nodes actually present.
+        if ((slotPerNode) && (deformationNodes.Count <= storageSlots))
+        {
+            growthPath = "per-node";
+            GrowInfluencePerNode(parallelOptions ?? new ParallelOptions(), occupied, boundary, offsets, costs);
+            return;
+        }
+
+        growthPath = "shared heap";
+        GrowInfluenceShared(boundary, offsets, costs);
+    }
+
+    /// <summary>
+    /// The legacy growth: one heap over every node, for storage that can evict. Unchanged but for
+    /// the boundary seeding and the cost table, which are the same computation with the pops that
+    /// relaxed nothing removed and no square root per neighbour test.
+    /// </summary>
+    void GrowInfluenceShared(bool[] boundary, Vector3Int[] offsets, float[] costs)
+    {
         MinHeap heap = new();
 
         // Seed the diffusion from the occupied volume. Empty cells are allowed
@@ -985,6 +1042,7 @@ public partial class FullDeformationField
         {
             DeformationFieldWeights element = voxelData.data[index];
             if (!element.IsOccupied()) continue;
+            if (!boundary[index]) continue;
             if (!HasInfluence(element)) continue;
 
             for (int i = 0; i < storageSlots; i++)
@@ -1008,8 +1066,6 @@ public partial class FullDeformationField
 
             Vector3Int currentPos = PositionOf(current.voxelIndex);
 
-            Vector3Int[] offsets = NeighbourOffsets();
-
             for (int i = 0; i < offsets.Length; i++)
             {
                 Vector3Int offset = offsets[i];
@@ -1030,7 +1086,7 @@ public partial class FullDeformationField
                 // round the corner of it.
                 if (!StepIsClear(currentPos, offset, false)) continue;
 
-                float newDistance = current.distance + StepCost(offset);
+                float newDistance = current.distance + costs[i];
 
                 ref DeformationFieldWeights neighbour = ref voxelData.data[neighbourIndex];
                 if (TryStoreDistance(ref neighbour, current.nodeIndex, newDistance))

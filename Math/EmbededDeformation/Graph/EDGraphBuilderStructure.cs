@@ -617,7 +617,7 @@ namespace UC.ED
                 //    The occupied volume gets geodesic distances from AddDeformationNode(). GrowInfluence() lets nearby empty cells also query valid weights.
                 // -------------------------------------------------------------
                 using (Stage("Influence growth"))
-                    field.GrowInfluence();
+                    field.GrowInfluence(EDDiagnostics.parallelOptions);
 
                 // -------------------------------------------------------------
                 // 6) Convert distances into normalized weights.
@@ -641,6 +641,7 @@ namespace UC.ED
                     $"  MaxWeights={safeMaxWeights}\n" +
                     $"  Bounds={bounds.size}\n" +
                     $"  Grid Size={field.gridSize}\n" +
+                    $"  Growth={field.lastGrowthPath}, {field.lastGrowthOccupiedCells} occupied cells, {field.lastGrowthBoundaryCells} of them seeds\n" +
                     $"  Time={timer.accumulatedTimeMS:F6} ms"
                 );
             }

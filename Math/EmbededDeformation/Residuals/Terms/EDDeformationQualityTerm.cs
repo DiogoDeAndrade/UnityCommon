@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UC.DoubleMath;
@@ -13,6 +14,24 @@ using MathNet.Numerics.LinearAlgebra.Double;
 #if UC_ENABLE_ED
 namespace UC.ED
 {
+    /// <summary>
+    /// Which of a node's reached samples a quality term's Jacobian column re-measures.
+    /// </summary>
+    public enum EDQualityColumnScope
+    {
+        /// <summary>Every sample the node influences - the whole set the node could move.</summary>
+        AllReached,
+        /// <summary>
+        /// Only the samples under the floor at the base state, and the corners of those. A sample
+        /// above the floor before and after the perturbation contributes exactly zero to the column,
+        /// and one the perturbation itself takes under is the sliver over the step that the
+        /// node-level skip already dismisses - the same argument one level down. Tens of times less
+        /// work on a piece that is mostly healthy; not bit-identical with AllReached where a sample
+        /// sits within one step of the floor.
+        /// </summary>
+        UnderFloor
+    }
+
     /// <summary>
     /// Penalises samples of the deformation that have turned over or squashed.
     ///
@@ -97,6 +116,9 @@ namespace UC.ED
         [SerializeField, Range(0.0f, 1.0f), Tooltip("A sample is charged once its measure - area for a mesh triangle, volume for a field tetrahedron - falls below this fraction of its rest measure. At 0 only inversion is charged, and a sample squashed flat costs nothing, which is the configuration the solver reaches for once the inversions are gone. Keep it well below 1: a terminal asked to scale by 0.5 legitimately halves the area of its triangles, and a floor above that argues with the terminal-scale energy.")]
         private float minRatio = 0.0f;
 
+        [SerializeField, Tooltip("Which of a node's reached samples a Jacobian column re-measures. All Reached is every sample the node influences. Under Floor is only the samples under the floor at the base state and their corners: a sample above the floor before and after contributes exactly zero, and one the perturbation itself takes under is the sliver over the step that the node-level skip already dismisses. Tens of times less column work on a mostly healthy piece; not bit-identical with All Reached where a sample sits within one step of the floor.")]
+        private EDQualityColumnScope columnScope = EDQualityColumnScope.AllReached;
+
         /// <summary>
         /// Sets the floor, exactly as editing the field in the inspector would - the companion of
         /// SetConceptualWeight, for experiment drivers and for the export's debug measures, which
@@ -147,6 +169,16 @@ namespace UC.ED
             private EDVertexBinding[]   bindings;
             private int[][]             nodeVertices;
             private int[][]             nodeSimplices;
+            private FullDeformationField.InfluenceTable vertexInfluences;
+
+            // The Jacobian's work, counted beside its time - see DescribeJacobianCost. Longs, since a
+            // stress solve runs to tens of millions of deformations; added under Interlocked by the
+            // per-node workers, which is cheap at one addition per node per build.
+            private long                jacobianBuilds;
+            private long                jacobianActiveNodes;
+            private long                jacobianVertexDeformations;
+            private long                jacobianSimplicesMeasured;
+            private long                jacobianSimplicesUnderFloor;
             private bool                throughField;
             private bool                warnedMissing;
             private string              missingReason;
@@ -248,6 +280,7 @@ namespace UC.ED
                 bindings = null;
                 nodeVertices = null;
                 nodeSimplices = null;
+                vertexInfluences = null;
                 missingReason = null;
 
                 if ((deformation.nodes == null) || (deformation.nodes.Count == 0))
@@ -296,6 +329,11 @@ namespace UC.ED
                 if (throughField)
                 {
                     FullDeformationField field = deformation.GetDeformationField();
+
+                    // The influences at every sample vertex, captured once for the life of the sample
+                    // set and replayed by DeformVertex in place of the region lookup - see
+                    // InfluenceTable. The sets below come from the same lookup.
+                    vertexInfluences = field.CaptureInfluences(restVertices, trilinear: true);
 
                     for (int v = 0; v < vertexCount; v++)
                     {
@@ -930,6 +968,11 @@ namespace UC.ED
 
             private DVector3 DeformVertex(int v, EDStateView state, FullDeformationField.TransformBlender blender)
             {
+                // On the field path the influences were captured in Reset; replaying them is the same
+                // computation without the region lookup and the corner interpolations.
+                if ((blender != null) && (vertexInfluences != null))
+                    return deformation.DeformOutputPoint(restVertices[v], vertexInfluences, v, blender).ToDVector3();
+
                 EDVertexBinding binding = (bindings != null) ? (bindings[v]) : (default);
 
                 return deformation.DeformOutputPoint(restVertices[v], binding, state, blender).ToDVector3();
@@ -1084,7 +1127,18 @@ namespace UC.ED
                 private readonly int[]      rowStamp;
                 private int                 stamp;
 
-                public ColumnScratch(FullDeformationField.TransformBlender blender, int vertexCount, int largestInfluenceSet, int rowCount)
+                // The under-floor selection of a node's columns - see SelectUnderFloor. Stamped per
+                // node as the positions are stamped per column, so nothing is cleared between nodes;
+                // sized to the largest reach, since a selection is a subset of one node's.
+                public readonly int[]       selectedVertices;
+                public int                  selectedVertexCount;
+                public readonly int[]       selectedSimplices;
+                public int                  selectedSimplexCount;
+                private readonly int[]      reachStamp;
+                private readonly int[]      selectStamp;
+                private int                 nodeStamp;
+
+                public ColumnScratch(FullDeformationField.TransformBlender blender, int vertexCount, int largestInfluenceSet, int largestReachedSet, int rowCount)
                 {
                     this.blender = blender;
 
@@ -1093,6 +1147,48 @@ namespace UC.ED
                     vertexStamp = new int[vertexCount];
                     rowDelta = new double[rowCount];
                     rowStamp = new int[rowCount];
+
+                    selectedVertices = new int[Math.Max(1, largestInfluenceSet)];
+                    selectedSimplices = new int[Math.Max(1, largestReachedSet)];
+                    reachStamp = new int[vertexCount];
+                    selectStamp = new int[vertexCount];
+                }
+
+                /// <summary>
+                /// Narrows a node's columns to the reached simplices under the floor at the base state
+                /// and to the corners of those that the node influences. The corners it does not
+                /// influence stay at their base positions, exactly as in the full column; the simplices
+                /// left out would have contributed exactly zero unless the perturbation took them under
+                /// the floor, which is the sliver the node-level skip already dismisses.
+                /// </summary>
+                public void SelectUnderFloor(int[] vertices, int[] reached, double[] baseContribution, int[] indices, int arity)
+                {
+                    nodeStamp++;
+
+                    for (int i = 0; i < vertices.Length; i++) reachStamp[vertices[i]] = nodeStamp;
+
+                    selectedVertexCount = 0;
+                    selectedSimplexCount = 0;
+
+                    for (int i = 0; i < reached.Length; i++)
+                    {
+                        int s = reached[i];
+
+                        if (baseContribution[s] <= 0.0) continue;
+
+                        selectedSimplices[selectedSimplexCount++] = s;
+
+                        for (int k = 0; k < arity; k++)
+                        {
+                            int v = indices[(arity * s) + k];
+
+                            if (reachStamp[v] != nodeStamp) continue;
+                            if (selectStamp[v] == nodeStamp) continue;
+
+                            selectStamp[v] = nodeStamp;
+                            selectedVertices[selectedVertexCount++] = v;
+                        }
+                    }
                 }
 
                 public void BeginColumn()
@@ -1149,6 +1245,8 @@ namespace UC.ED
             {
                 if (indices == null) return;
 
+                jacobianBuilds++;
+
                 var baseView = new EDStateView(state);
 
                 FullDeformationField.TransformBlender baseBlender = (throughField) ? (deformation.CreateFieldBlender(baseView)) : (null);
@@ -1186,8 +1284,13 @@ namespace UC.ED
 
                 int largestInfluenceSet = 0;
 
+                int largestReachedSet = 0;
+
                 for (int node = 0; node < nodeCount; node++)
+                {
                     largestInfluenceSet = Math.Max(largestInfluenceSet, nodeVertices[node].Length);
+                    largestReachedSet = Math.Max(largestReachedSet, nodeSimplices[node].Length);
+                }
 
                 var entries = new double[rowCountK * columnCount];
 
@@ -1200,7 +1303,7 @@ namespace UC.ED
                     nodeCount,
                     EDDiagnostics.parallelOptions,
 
-                    () => new ColumnScratch((throughField) ? (deformation.CreateFieldBlender(baseView)) : (null), restVertices.Length, largestInfluenceSet, rowCountK),
+                    () => new ColumnScratch((throughField) ? (deformation.CreateFieldBlender(baseView)) : (null), restVertices.Length, largestInfluenceSet, largestReachedSet, rowCountK),
 
                     (n, loopState, scratch) =>
                     {
@@ -1228,6 +1331,43 @@ namespace UC.ED
                 }
             }
 
+            /// <summary>
+            /// The finite-difference work of the Jacobians since the last clear, averaged per build:
+            /// how many nodes owed columns, how many vertex deformations and simplex measurements
+            /// their columns made, and how many of those simplices were under the floor at the base
+            /// state - the only ones whose contribution a column can change, bar one that the
+            /// perturbation itself takes under. The last number over the one before it is the share
+            /// of the column work that a column restricted to the under-floor simplices would keep.
+            /// The base pass is stated separately: it is one deformation of every vertex and one
+            /// measurement of every simplex, whatever the columns do.
+            /// </summary>
+            public override string DescribeJacobianCost()
+            {
+                if (jacobianBuilds == 0) return null;
+
+                double builds = jacobianBuilds;
+                int nodeCount = (nodeVertices != null) ? (nodeVertices.Length) : (0);
+                double underFloorShare = (jacobianSimplicesMeasured > 0) ? (100.0 * jacobianSimplicesUnderFloor / jacobianSimplicesMeasured) : (0.0);
+
+                string scope = (qualityTerm.columnScope == EDQualityColumnScope.UnderFloor) ? ("the under-floor samples and their corners") : ("every reached sample");
+
+                return string.Format(CultureInfo.InvariantCulture,
+                                     "{0} Jacobian(s), columns over {10}; per build: {1:F1} of {2} nodes active, {3:N0} vertex deformations, {4:N0} {5} measured, {6:N0} of them ({7:F1}%) under the floor at the base state; plus the base pass over {8:N0} vertices and {9:N0} {5}",
+                                     jacobianBuilds, jacobianActiveNodes / builds, nodeCount, jacobianVertexDeformations / builds, jacobianSimplicesMeasured / builds, sampleLabel,
+                                     jacobianSimplicesUnderFloor / builds, underFloorShare, vertexCount, simplexCount, scope);
+            }
+
+            public override void ClearJacobianCost()
+            {
+                base.ClearJacobianCost();
+
+                jacobianBuilds = 0;
+                jacobianActiveNodes = 0;
+                jacobianVertexDeformations = 0;
+                jacobianSimplicesMeasured = 0;
+                jacobianSimplicesUnderFloor = 0;
+            }
+
             private void FillNodeColumns(int n, EDState state, DVector3[] basePositions, double[] baseContribution, double[] baseRowMeanSquare,
                                          ColumnScratch scratch, double[] entries, int columnCount, double w, double scale, double step)
             {
@@ -1243,19 +1383,41 @@ namespace UC.ED
                 // without being measured. A perturbation could in principle take one of them below
                 // by a sliver, but the derivative that would record is a sliver over the step -
                 // noise, not a gradient - and skipping is what keeps a clean piece cheap.
-                bool anyBelowFloor = false;
+                //
+                // Counted rather than stopped at the first, because the count is what says how much
+                // of a column's work the under-floor simplices are - the question behind restricting
+                // a column to them. A pass over a few thousand doubles beside twelve columns.
+                int underFloor = 0;
 
                 for (int k = 0; k < reached.Length; k++)
                 {
-                    if (baseContribution[reached[k]] > 0.0)
-                    {
-                        anyBelowFloor = true;
-                        break;
-                    }
+                    if (baseContribution[reached[k]] > 0.0) underFloor++;
                 }
 
-                if (!anyBelowFloor) return;
+                if (underFloor == 0) return;
 
+                // What the columns walk: everything the node reaches, or the under-floor selection -
+                // see EDQualityColumnScope. The node's own arrays in the first case, the scratch's in
+                // the second, so the loop below has one shape.
+                int[] columnVertices = vertices;
+                int columnVertexCount = vertices.Length;
+                int[] columnSimplices = reached;
+                int columnSimplexCount = reached.Length;
+
+                if (qualityTerm.columnScope == EDQualityColumnScope.UnderFloor)
+                {
+                    scratch.SelectUnderFloor(vertices, reached, baseContribution, indices, arity);
+
+                    columnVertices = scratch.selectedVertices;
+                    columnVertexCount = scratch.selectedVertexCount;
+                    columnSimplices = scratch.selectedSimplices;
+                    columnSimplexCount = scratch.selectedSimplexCount;
+                }
+
+                Interlocked.Increment(ref jacobianActiveNodes);
+                Interlocked.Add(ref jacobianVertexDeformations, 12L * columnVertexCount);
+                Interlocked.Add(ref jacobianSimplicesMeasured, 12L * columnSimplexCount);
+                Interlocked.Add(ref jacobianSimplicesUnderFloor, 12L * underFloor);
                 double sqrtScale = Math.Sqrt(scale);
 
                 for (int k = 0; k < 12; k++)
@@ -1278,12 +1440,12 @@ namespace UC.ED
 
                     try
                     {
-                        for (int i = 0; i < vertices.Length; i++)
-                            scratch.Set(vertices[i], i, DeformVertex(vertices[i], modifiedState, scratch.blender));
+                        for (int i = 0; i < columnVertexCount; i++)
+                            scratch.Set(columnVertices[i], i, DeformVertex(columnVertices[i], modifiedState, scratch.blender));
 
-                        for (int i = 0; i < reached.Length; i++)
+                        for (int i = 0; i < columnSimplexCount; i++)
                         {
-                            int s = reached[i];
+                            int s = columnSimplices[i];
 
                             if (restMeasures[s] <= 0.0) continue;
 
