@@ -84,6 +84,27 @@ namespace UC.ED
             /// </summary>
             public DebugProfiler jacobianTimer { get; private set; } = new DebugProfiler();
 
+            /// <summary>
+            /// What the Jacobian cost besides time, as one line for the timing report under this
+            /// term's row, or null for a term with nothing to add. The quality terms count the work
+            /// their finite differences do - nodes active, vertices deformed, simplices measured -
+            /// because the time alone cannot say which of those a change would save. Accumulated with
+            /// jacobianTimer and cleared with it.
+            /// </summary>
+            public virtual string DescribeJacobianCost() => null;
+
+            /// <summary>
+            /// Clears jacobianTimer and whatever DescribeJacobianCost reports, at the start of a
+            /// press. The deformation clears its own timers there and never knew about these, so
+            /// until 2026-10-12 a term's row kept accumulating across presses while the Build
+            /// Jacobian row above it started over - from the second press on, the part outgrew the
+            /// whole. EDEnergyModel.Instance.ClearTimers calls this for every term.
+            /// </summary>
+            public virtual void ClearJacobianCost()
+            {
+                jacobianTimer.Clear();
+            }
+
             protected Instance(EDResidualTerm term, EmbededDeformation deformation)
             {
                 this.term = term;

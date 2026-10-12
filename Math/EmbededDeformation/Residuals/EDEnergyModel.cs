@@ -222,20 +222,32 @@ namespace UC.ED
 
             /// <summary>
             /// Per-term Jacobian timers, for the timing report - terms with no rows omitted, since a
-            /// term that did no work has nothing to say about what work costs.
+            /// term that did no work has nothing to say about what work costs. The note is the term's
+            /// own account of that work (DescribeJacobianCost), null where it keeps none.
             /// </summary>
-            public IReadOnlyList<(string name, DebugProfiler timer)> DescribeTermTimers()
+            public IReadOnlyList<(string name, DebugProfiler timer, string note)> DescribeTermTimers()
             {
-                var described = new List<(string, DebugProfiler)>();
+                var described = new List<(string, DebugProfiler, string)>();
 
                 for (int i = 0; i < termInstances.Count; i++)
                 {
                     if (termInstances[i].rowCount == 0) continue;
 
-                    described.Add((termInstances[i].term.name, termInstances[i].jacobianTimer));
+                    described.Add((termInstances[i].term.name, termInstances[i].jacobianTimer, termInstances[i].DescribeJacobianCost()));
                 }
 
                 return described;
+            }
+
+            /// <summary>
+            /// The terms' half of EmbededDeformation.ClearTimers: every term's Jacobian timer and
+            /// counters back to zero, so a press's report describes that press. Called beside the
+            /// deformation's clear by whoever starts a press.
+            /// </summary>
+            public void ClearTimers()
+            {
+                for (int i = 0; i < termInstances.Count; i++)
+                    termInstances[i].ClearJacobianCost();
             }
 
             public Vector<double> EvaluateResidual(EDStateView state)

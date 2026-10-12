@@ -220,7 +220,7 @@ public partial class FullDeformationField
             return parts;
         }
 
-        public override bool TryGetMatrix(Vector3 position, bool trilinear, out Matrix4x4 matrix)
+        protected override bool TryGetMatrix(InfluenceEnumerator influences, out Matrix4x4 matrix)
         {
             matrix = Matrix4x4.identity;
 
@@ -239,9 +239,11 @@ public partial class FullDeformationField
             int referenceNode = -1;
             float referenceWeight = 0.0f;
 
-            InfluenceEnumerator influences = field.EnumerateInfluences(position, trilinear);
+            // The argument arrives as a copy at its start - see the base class - and is walked on a
+            // copy of its own, so the rotation blends below can walk it again from the start.
+            InfluenceEnumerator pass = influences;
 
-            while (influences.MoveNext(out int nodeIndex, out float weight))
+            while (pass.MoveNext(out int nodeIndex, out float weight))
             {
                 if (!TryGetParts(nodeIndex, out NodeParts parts)) continue;
 
@@ -272,7 +274,7 @@ public partial class FullDeformationField
             pivotDeformed *= invWeightSum;
             rotationSum = rotationSum * invWeightSum;
 
-            Matrix3x3 rotation = BlendRotation(position, trilinear, rotationSum, referenceNode);
+            Matrix3x3 rotation = BlendRotation(influences, rotationSum, referenceNode);
 
             Matrix3x3 stretch = (scaleBlend == EDFieldScaleBlend.Diagonal)
                          ? (Matrix3x3.FromDiagonal(principalSum * invWeightSum))
@@ -306,15 +308,15 @@ public partial class FullDeformationField
             return true;
         }
 
-        private Matrix3x3 BlendRotation(Vector3 position, bool trilinear, Matrix3x3 weightedMean, int referenceNode)
+        private Matrix3x3 BlendRotation(InfluenceEnumerator influences, Matrix3x3 weightedMean, int referenceNode)
         {
             switch (rotationBlend)
             {
                 case EDFieldRotationBlend.Nlerp:
-                    return BlendRotationNlerp(position, trilinear, referenceNode);
+                    return BlendRotationNlerp(influences, referenceNode);
 
                 case EDFieldRotationBlend.Karcher:
-                    return BlendRotationKarcher(position, trilinear, ProjectToRotation(weightedMean));
+                    return BlendRotationKarcher(influences, ProjectToRotation(weightedMean));
 
                 default:
                     // The exact chordal mean is the orthogonal polar factor of the averaged rotation
@@ -324,7 +326,7 @@ public partial class FullDeformationField
             }
         }
 
-        private Matrix3x3 BlendRotationNlerp(Vector3 position, bool trilinear, int referenceNode)
+        private Matrix3x3 BlendRotationNlerp(InfluenceEnumerator influences, int referenceNode)
         {
             if (!TryGetParts(referenceNode, out NodeParts reference)) return Matrix3x3.identity;
 
@@ -334,9 +336,9 @@ public partial class FullDeformationField
 
             // A second pass rather than a running alignment, because aligning against whatever arrived
             // first is an order dependency wearing a disguise.
-            InfluenceEnumerator influences = field.EnumerateInfluences(position, trilinear);
+            InfluenceEnumerator pass = influences;
 
-            while (influences.MoveNext(out int nodeIndex, out float weight))
+            while (pass.MoveNext(out int nodeIndex, out float weight))
             {
                 if (!TryGetParts(nodeIndex, out NodeParts parts)) continue;
 
@@ -365,7 +367,7 @@ public partial class FullDeformationField
             return new Matrix3x3(new Quaternion(x * invLength, y * invLength, z * invLength, w * invLength));
         }
 
-        private Matrix3x3 BlendRotationKarcher(Vector3 position, bool trilinear, Matrix3x3 initial)
+        private Matrix3x3 BlendRotationKarcher(InfluenceEnumerator influences, Matrix3x3 initial)
         {
             Matrix3x3 current = initial;
 
@@ -380,9 +382,9 @@ public partial class FullDeformationField
                 // the current estimate, so every influence is needed again each time - this mode is
                 // the expensive one by construction, and is here as the reference the cheap ones are
                 // measured against.
-                InfluenceEnumerator influences = field.EnumerateInfluences(position, trilinear);
+                InfluenceEnumerator pass = influences;
 
-                while (influences.MoveNext(out int nodeIndex, out float weight))
+                while (pass.MoveNext(out int nodeIndex, out float weight))
                 {
                     if (!TryGetParts(nodeIndex, out NodeParts parts)) continue;
 

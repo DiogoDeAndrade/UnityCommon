@@ -109,6 +109,17 @@ namespace UC.ED
         }
 
         /// <summary>
+        /// DeformOutputPoint for a point whose influences were captured in advance - the field path
+        /// only, since a captured table is the field's lookup replayed. The same two steps as above,
+        /// TryGetMatrix then MultiplyPoint3x4, over the same floats, so a vertex deformed this way is
+        /// where DeformMesh would put it to the bit.
+        /// </summary>
+        internal Vector3 DeformOutputPoint(Vector3 restWorldPosition, FullDeformationField.InfluenceTable influences, int index, FullDeformationField.TransformBlender blender)
+        {
+            return (blender.TryGetMatrix(influences, index, out Matrix4x4 matrix)) ? (matrix.MultiplyPoint3x4(restWorldPosition)) : (restWorldPosition);
+        }
+
+        /// <summary>
         /// The rotation of the blend in force at a rest-space point, in the *corotational*
         /// convention, read through the same two paths DeformOutputPoint deforms through.
         ///

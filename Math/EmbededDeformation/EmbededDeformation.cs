@@ -1740,11 +1740,26 @@ namespace UC.ED
         /// A solver that uses no terms at all - the translation-only baseline - reports no
         /// breakdown.
         /// </summary>
-        public void LogTimerReport(string label, IReadOnlyList<(string name, DebugProfiler timer)> termTimers = null)
+        public void LogTimerReport(string label, IReadOnlyList<(string name, DebugProfiler timer, string note)> termTimers = null)
         {
             var sb = new StringBuilder();
 
             int iterations = Math.Max(1, solveIterations);
+
+            double fieldTotal = ((timeFieldRebuild != null) ? (timeFieldRebuild.accumulatedTimeMS) : (0.0));
+            double solveTotal = ((timeIteration != null) ? (timeIteration.accumulatedTimeMS) : (0.0));
+            double outputTotal = ((timeOutputSubdivide != null) ? (timeOutputSubdivide.accumulatedTimeMS) : (0.0))
+                               + ((timeOutputDeform != null) ? (timeOutputDeform.accumulatedTimeMS) : (0.0))
+                               + ((timeOutputSimplify != null) ? (timeOutputSimplify.accumulatedTimeMS) : (0.0));
+
+            // The share column's denominator is the Total line at the foot - the press as a whole -
+            // for every row, nested ones included, so this report and the Build report read the same
+            // way: a percentage is always of the whole, never of the row above it. A nested row's
+            // share therefore says what the press spent on it, which is the question the column is
+            // for; the per-iteration figure beside it is what transfers between solvers.
+            double whole = fieldTotal + solveTotal + outputTotal;
+
+            string Share(double milliseconds) => (whole > 0.0) ? ($"  {100.0 * milliseconds / whole,5:F1}%") : ("");
 
             void Row(string name, DebugProfiler timer, int indent, bool perIteration = true)
             {
@@ -1752,7 +1767,7 @@ namespace UC.ED
 
                 double total = timer.accumulatedTimeMS;
 
-                string line = new string(' ', indent) + name.PadRight(30 - indent) + $"{total,10:F3} ms";
+                string line = new string(' ', indent) + name.PadRight(30 - indent) + $"{total,10:F3} ms" + Share(total);
 
                 // Per-iteration only where it means something. The output stages run once per solve,
                 // not once per iteration, so dividing them by the iteration count would invite
@@ -1762,12 +1777,6 @@ namespace UC.ED
 
                 sb.AppendLine(line);
             }
-
-            double fieldTotal = ((timeFieldRebuild != null) ? (timeFieldRebuild.accumulatedTimeMS) : (0.0));
-            double solveTotal = ((timeIteration != null) ? (timeIteration.accumulatedTimeMS) : (0.0));
-            double outputTotal = ((timeOutputSubdivide != null) ? (timeOutputSubdivide.accumulatedTimeMS) : (0.0))
-                               + ((timeOutputDeform != null) ? (timeOutputDeform.accumulatedTimeMS) : (0.0))
-                               + ((timeOutputSimplify != null) ? (timeOutputSimplify.accumulatedTimeMS) : (0.0));
 
             sb.AppendLine($"Time report - {label}, {solveIterations} iteration(s)");
 
@@ -1788,7 +1797,13 @@ namespace UC.ED
             if (termTimers != null)
             {
                 foreach (var t in termTimers)
+                {
                     Row(t.name, t.timer, 6);
+
+                    // The term's own account of the work behind its time, when it keeps one.
+                    if (!string.IsNullOrEmpty(t.note))
+                        sb.AppendLine(new string(' ', 8) + t.note);
+                }
             }
 
             Row("Linear solve", timeSolve, 4);
@@ -1804,13 +1819,13 @@ namespace UC.ED
 
             if (outputTotal > 0.0)
             {
-                sb.AppendLine($"  {"Output".PadRight(28)}{outputTotal,10:F3} ms");
+                sb.AppendLine($"  {"Output".PadRight(28)}{outputTotal,10:F3} ms{Share(outputTotal)}");
                 Row("Subdivision", timeOutputSubdivide, 4, false);
                 Row("Mesh deformation", timeOutputDeform, 4, false);
                 Row("Simplification", timeOutputSimplify, 4, false);
             }
 
-            sb.AppendLine($"  {"Total".PadRight(28)}{fieldTotal + solveTotal + outputTotal,10:F3} ms");
+            sb.AppendLine($"  {"Total".PadRight(28)}{whole,10:F3} ms{Share(whole)}");
 
             Debug.Log(sb.ToString());
         }
