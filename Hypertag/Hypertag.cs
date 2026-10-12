@@ -6,7 +6,7 @@ namespace UC
 {
 
     [CreateAssetMenu(fileName = "Hypertag", menuName = "Unity Common/Hypertag")]
-    public class Hypertag : ModularScriptableObject
+    public class Hypertag : ModularScriptableObject, IGenericSerialization
     {
         [SerializeField] private string _displayName = String.Empty;
         [SerializeField] private string _category = String.Empty;

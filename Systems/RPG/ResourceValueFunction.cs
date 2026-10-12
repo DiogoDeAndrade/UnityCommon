@@ -5,7 +5,7 @@ using UnityEngine;
 namespace UC.RPG
 {
     [Serializable]
-    public abstract class ResourceValueFunction
+    public abstract class ResourceValueFunction : IGenericSerialization
     {
         public abstract float GetValue(RPGEntity character);
         public abstract Vector2 GetMinMax(RPGEntity character);

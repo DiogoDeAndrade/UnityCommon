@@ -4,7 +4,7 @@ using UC.RPG;
 namespace UC
 {
     [Serializable]
-    public abstract class EquipCondition
+    public abstract class EquipCondition : IGenericSerialization
     {
         public abstract bool CanEquip(Hypertag slot, RPGEntity entity, Item item);
     }

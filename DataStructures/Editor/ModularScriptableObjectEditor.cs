@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -19,6 +20,8 @@ public class ModularScriptableObjectEditor : NaughtyInspector
 
     // Parents and modules get their own sections, and the script reference is not worth a line.
     private static readonly string[] ownPropertyExclusions = { "m_Script", "_parents", "_modules" };
+
+    private const string exportExtension = "data";
 
     private SerializedProperty _parentsProp;
     private SerializedProperty _modulesProp;
@@ -57,6 +60,8 @@ public class ModularScriptableObjectEditor : NaughtyInspector
         DrawNonSerializedFields();
         DrawNativeProperties();
         DrawButtons();
+
+        DrawExportSection(mso);
     }
 
     private new void DrawHeader()
@@ -333,6 +338,39 @@ public class ModularScriptableObjectEditor : NaughtyInspector
         EditorGUILayout.PropertyField(element, GUIContent.none, includeChildren: true);
 
         EditorGUI.indentLevel--;
+    }
+
+    private void DrawExportSection(ModularScriptableObject mso)
+    {
+        if (mso is not IGenericSerialization)
+            return;
+
+        EditorGUILayout.Space();
+
+        if (GUILayout.Button("Export data", GUILayout.Height(22)))
+        {
+            ExportData(mso);
+        }
+    }
+
+    // Writes <name>.data next to the asset; objects that aren't assets have no place to go, so ask for one.
+    private void ExportData(ModularScriptableObject mso)
+    {
+        string assetPath = AssetDatabase.GetAssetPath(mso);
+        string path = string.IsNullOrEmpty(assetPath)
+            ? EditorUtility.SaveFilePanel("Export data", Application.dataPath, mso.name, exportExtension)
+            : Path.ChangeExtension(assetPath, exportExtension);
+
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        File.WriteAllText(path, IGenericSerialization.GenericSerialize(mso));
+
+        // Only what's inside the project can show up in the Project window
+        if (!Path.IsPathRooted(path))
+            AssetDatabase.ImportAsset(path);
+
+        Debug.Log($"Exported {mso.name} to {path}", mso);
     }
 
     private void RemoveModuleAt(ModularScriptableObject mso, int index)
