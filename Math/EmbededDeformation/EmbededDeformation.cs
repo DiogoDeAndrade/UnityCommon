@@ -123,6 +123,11 @@ namespace UC.ED
         internal DebugProfiler timeIteration;
         internal DebugProfiler timeResidualEvaluate;
         internal DebugProfiler timeJacobianBuild;
+        // The transpose, the normal-equations product and the gradient, once an iteration. The
+        // one operation in the loop that grows as rows times the square of the columns, and it
+        // ran under no row until 2026-10-15, when Corridor6's first report (43 nodes, 958 rows)
+        // had half its solve unaccounted for.
+        internal DebugProfiler timeNormalEquations;
         internal DebugProfiler timeSolve;
         internal DebugProfiler timeUpdateClearance;
         internal DebugProfiler timeIterationExport;
@@ -1703,6 +1708,7 @@ namespace UC.ED
             timeIteration = new();
             timeResidualEvaluate = new();
             timeJacobianBuild = new();
+            timeNormalEquations = new();
             timeSolve = new();
             timeUpdateClearance = new();
             timeIterationExport = new();
@@ -1761,6 +1767,8 @@ namespace UC.ED
 
             string Share(double milliseconds) => (whole > 0.0) ? ($"  {100.0 * milliseconds / whole,5:F1}%") : ("");
 
+            static double Accumulated(DebugProfiler timer) => (timer != null) ? (timer.accumulatedTimeMS) : (0.0);
+
             void Row(string name, DebugProfiler timer, int indent, bool perIteration = true)
             {
                 if (timer == null) return;
@@ -1806,6 +1814,7 @@ namespace UC.ED
                 }
             }
 
+            Row("Normal equations", timeNormalEquations, 4);
             Row("Linear solve", timeSolve, 4);
             Row("Clearance update", timeUpdateClearance, 4);
 
@@ -1816,6 +1825,25 @@ namespace UC.ED
             // their shape.
             if ((timeIterationExport != null) && (timeIterationExport.accumulatedTimeMS > 0.0))
                 Row("Iteration export", timeIterationExport, 4);
+
+            // Whatever the loop spent under no row above, as a number rather than a gap. Corridor6's
+            // first report (2026-10-15) had half its solve there, the normal-equations product,
+            // before that row existed; the next such cost should be visible without arithmetic.
+            // The export runs inside the loop too, so it is subtracted with the rest. Printed only
+            // past a hundredth of the solve - the Build report's rule - so a small press keeps the
+            // shape the notes quote.
+            double itemised = Accumulated(timeResidualEvaluate) + Accumulated(timeJacobianBuild) + Accumulated(timeNormalEquations)
+                            + Accumulated(timeSolve) + Accumulated(timeUpdateClearance) + Accumulated(timeIterationExport);
+            double unnamed = solveTotal - itemised;
+
+            if (unnamed > 0.01 * solveTotal)
+            {
+                string line = new string(' ', 4) + "(not itemised)".PadRight(26) + $"{unnamed,10:F3} ms" + Share(unnamed);
+
+                if (solveIterations > 0) line += $"   ({unnamed / iterations,8:F3} ms/iter)";
+
+                sb.AppendLine(line);
+            }
 
             if (outputTotal > 0.0)
             {

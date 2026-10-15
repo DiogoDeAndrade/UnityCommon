@@ -29,6 +29,16 @@ namespace UC.ED
         // press from the same state took at its first attempt.
         [SerializeField, Tooltip("Begin every iteration's attempts at the initial damping, as a solve of one iteration does, so a solve of N iterations takes the steps N presses of Run Iteration take. Off, the damping is carried from one iteration to the next.")]
         protected bool restartDampingEachIteration = false;
+        // Off, the default, forms the normal equations as every solve did: a transpose and two
+        // dense Math.NET products, rows times the square of the columns whatever the Jacobian
+        // holds - half of Corridor6's solve on 2026-10-15. On, EDNormalEquations.Sparse sums the
+        // same products over each row's nonzero entries only, in row order. The set of rounded
+        // additions is the dense product's; their order may not be, so H can differ in its last
+        // bits and a damped step can be accepted where it was refused - which is why this is an
+        // option that the dump names, and not a quiet replacement. Tools/NormalEquationsCheck
+        // measures the bits and the cost on the pieces' own sparsity pattern.
+        [SerializeField, Tooltip("Form the normal equations over each Jacobian row's nonzero entries only, instead of the dense transpose-and-multiply. The same products, summed in row order; hundreds of times cheaper on a large piece. Named in the dump when on.")]
+        protected bool useSparseNormalEquations = false;
         [SerializeField]
         protected float residualTolerance = 1e-5f;
         [SerializeField]
@@ -38,6 +48,7 @@ namespace UC.ED
         public override float lambda => initialLambda;
         public override bool adaptiveLambda => adaptive;
         public override bool restartsDamping => restartDampingEachIteration;
+        public override bool sparseNormalEquations => useSparseNormalEquations;
 
         public override Instance NewInstance(EmbededDeformation deformation) => new LMInstance(this, deformation);
 
@@ -60,7 +71,8 @@ namespace UC.ED
                                        resetBeforeSolve,
                                        def.adaptive,
                                        def.relativeEnergyStop,
-                                       def.restartDampingEachIteration);
+                                       def.restartDampingEachIteration,
+                                       def.useSparseNormalEquations);
             }
         }
     }

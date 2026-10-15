@@ -47,7 +47,8 @@ namespace UC.ED
                                         def.adaptive,
                                         def.cholesky,
                                         def.relativeEnergyStop,
-                                        def.restartDampingEachIteration);
+                                        def.restartDampingEachIteration,
+                                        def.useSparseNormalEquations);
             }
         }
     }
