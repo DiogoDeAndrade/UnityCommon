@@ -218,7 +218,8 @@ namespace UC.ED
                                bool resetBeforeSolve = true,
                                bool adaptiveLambda = true,
                                double relativeEnergyStop = 0.0,
-                               bool restartDamping = false)
+                               bool restartDamping = false,
+                               bool sparseNormalEquations = false)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -300,9 +301,11 @@ namespace UC.ED
                     break;
                 }
 
-                var JT = J.Transpose();
-                var H = JT * J;
-                var g = JT * f;
+                DebugProfiler.DebugMark(timeNormalEquations);
+
+                EDNormalEquations.Build(J, f, sparseNormalEquations, out Matrix<double> H, out Vector<double> g);
+
+                DebugProfiler.DebugMark(timeNormalEquations);
 
                 Vector<double> delta = null;
                 EDState acceptedState = null;
@@ -466,7 +469,8 @@ namespace UC.ED
                                 bool adaptiveLambda = true,
                                 bool choleskyFactorization = false,
                                 double relativeEnergyStop = 0.0,
-                                bool restartDamping = false)
+                                bool restartDamping = false,
+                                bool sparseNormalEquations = false)
         {
             if (resetBeforeSolve)
                 ResetDeformation();
@@ -578,10 +582,13 @@ namespace UC.ED
                     break;
                 }
 
-                var JT = J.Transpose();
+                DebugProfiler.DebugMark(timeNormalEquations);
 
-                var H = JT * J; // approximate Hessian
-                var g = JT * f; // gradient term
+                // H is the approximate Hessian, g the gradient term; the dense path is the
+                // transpose and two products the loop always made, the sparse one the option's.
+                EDNormalEquations.Build(J, f, sparseNormalEquations, out Matrix<double> H, out Vector<double> g);
+
+                DebugProfiler.DebugMark(timeNormalEquations);
 
                 Vector<double> delta = null;
                 EDState acceptedState = null;
