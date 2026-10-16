@@ -33,15 +33,21 @@ namespace UC.ED
         private int fieldStorageSlots = 4;
         [SerializeField, Tooltip("Which neighbours the distance wavefront may step to. Faces6 makes every step the same length, so the metric is L1 and the isolines are diamonds. The richer stencils add diagonals at their true cost and round that out, at the price of a corner-cutting check per diagonal step and more work per cell.")]
         private EDFieldConnectivity fieldConnectivity = EDFieldConnectivity.FacesEdgesCorners26;
-        [SerializeField, Tooltip("Seed each terminal node along its connector's whole cross-section rather than from the single voxel at the frame origin. Off gives every terminal a point source, which is what the field did before.")]
+        [SerializeField, Tooltip("How a rest position finds the nodes that carry it. ThroughVolume: the nearest sources through the solid, blended by the weight mode below - the field as it has always been. AlongSkeleton: the point is carried by the two ends of the first linked pair among its influences that it projects onto, at its position along their link; every node is then seeded as a point and the two bar toggles below are ignored. Named in the dump when it is not ThroughVolume.")]
+        private EDVertexInfluenceMethod vertexInfluence = EDVertexInfluenceMethod.ThroughVolume;
+        [SerializeField, ShowIf(nameof(usesAlongSkeleton)), Tooltip("What a node's cross-section is under AlongSkeleton. LinkPerpendicular: the plane perpendicular to the link being read, t the point's projection on the link. NodeFrame: the plane perpendicular to the node's own rest forward - the bisector at a bend, and the door at a terminal whose frame comes from its connector - with t the point's position between the two end nodes' planes. A junction keeps the link's plane under either.")]
+        private EDSkeletonSection skeletonSections = EDSkeletonSection.LinkPerpendicular;
+        [SerializeField, Tooltip("Take each terminal node's rest forward from its connector - the door's normal, oriented outward like the link's - instead of from its last link. Moves the terminal frames the dump records wherever a door is oblique to its link; with AlongSkeleton and NodeFrame sections it makes the door the terminal's cross-section.")]
+        private bool terminalFrameFromConnector = false;
+        [SerializeField, ShowIf(nameof(usesSeedBars)), Tooltip("Seed each terminal node along its connector's whole cross-section rather than from the single voxel at the frame origin. Off gives every terminal a point source, which is what the field did before.")]
         private bool useTerminalLength = true;
-        [SerializeField, Tooltip("Seed every node along a bar as wide as the navigable corridor is at that node, measured across the node's right axis. This is what makes one node's distance the same kind of quantity as another's: a point source and a bar source are not comparable, so a piece where only the terminals are bars has terminals staying competitive further out than they should.")]
+        [SerializeField, ShowIf(nameof(usesSeedBars)), Tooltip("Seed every node along a bar as wide as the navigable corridor is at that node, measured across the node's right axis. This is what makes one node's distance the same kind of quantity as another's: a point source and a bar source are not comparable, so a piece where only the terminals are bars has terminals staying competitive further out than they should.")]
         private bool useCorridorLength = false;
 
-        [SerializeField, Min(0.0f), ShowIf(nameof(useCorridorLength)), Tooltip("How fast the corridor probe's height band opens with distance, in degrees. A filter on which navmesh boundary crossings count as walls rather than as floor or ceiling - NOT a navigability limit, and no reason for it to match the slope any energy penalises. Too low rejects the far wall of a ramp; too high accepts a wall that is really the floor further along. 45 is what the probe measured with before it had a setting of its own.")]
+        [SerializeField, Min(0.0f), ShowIf(nameof(usesCorridorBars)), Tooltip("How fast the corridor probe's height band opens with distance, in degrees. A filter on which navmesh boundary crossings count as walls rather than as floor or ceiling - NOT a navigability limit, and no reason for it to match the slope any energy penalises. Too low rejects the far wall of a ramp; too high accepts a wall that is really the floor further along. 45 is what the probe measured with before it had a setting of its own.")]
         private float corridorConeAngleDegrees = 45.0f;
 
-        [SerializeField, Min(0.0f), ShowIf(nameof(useCorridorLength)), Tooltip("Scales the corridor width for the bend compression term and the graph-width gizmos only - the field is still seeded with the measured width. 1 is the width as measured. Larger says 'what if the corridor were this much wider', for a piece whose folds sit in geometry outside the walkable width; a diagnostic, recorded in the dump when it is not 1.")]
+        [SerializeField, Min(0.0f), ShowIf(nameof(usesCorridorBars)), Tooltip("Scales the corridor width for the bend compression term and the graph-width gizmos only - the field is still seeded with the measured width. 1 is the width as measured. Larger says 'what if the corridor were this much wider', for a piece whose folds sit in geometry outside the walkable width; a diagnostic, recorded in the dump when it is not 1.")]
         private float corridorWidthScaleFactor = 1.0f;
 
         [SerializeField, Tooltip("How a cell turns the distances it stored into blend weights. InverseDistance is what every structure golden up to now was captured against. InversePower at p = 1 does NOT reproduce it - it differs by the even-split-at-zero branch, which is the point: that comparison isolates what the branch was doing.")]
@@ -70,6 +76,12 @@ namespace UC.ED
 
         private bool usesExplicitStorage => (fieldDistanceStorage == EDFieldDistanceStorage.Explicit);
 
+        // The bars are the volume method's: under AlongSkeleton every node is a point source and the
+        // toggles that size a bar have nothing to size, so they hide and read as off.
+        private bool usesSeedBars => (vertexInfluence == EDVertexInfluenceMethod.ThroughVolume);
+        private bool usesCorridorBars => usesSeedBars && useCorridorLength;
+        private bool usesAlongSkeleton => (vertexInfluence == EDVertexInfluenceMethod.AlongSkeleton);
+
         private bool usesWeightPower => (fieldWeightMode == EDFieldWeightMode.InversePower) || (fieldWeightMode == EDFieldWeightMode.Gaussian);
         private bool usesWeightFloor => (fieldWeightMode == EDFieldWeightMode.InversePower);
         private bool usesWeightSigma => (fieldWeightMode == EDFieldWeightMode.Gaussian);
@@ -86,8 +98,11 @@ namespace UC.ED
         public override EDFieldDistanceStorage deformationFieldDistanceStorage => fieldDistanceStorage;
         public override int deformationFieldStorageSlots => fieldStorageSlots;
         public override EDFieldConnectivity deformationFieldConnectivity => fieldConnectivity;
-        public override bool deformationFieldSeedTerminals => useTerminalLength;
-        public override bool deformationFieldSeedCorridors => useCorridorLength;
+        public override bool deformationFieldSeedTerminals => usesSeedBars && useTerminalLength;
+        public override bool deformationFieldSeedCorridors => usesSeedBars && useCorridorLength;
+        public override EDVertexInfluenceMethod deformationFieldInfluenceMethod => vertexInfluence;
+        public override EDSkeletonSection deformationFieldSkeletonSections => skeletonSections;
+        public override bool terminalFramesFromConnectors => terminalFrameFromConnector;
         public override float corridorConeAngle => corridorConeAngleDegrees;
         public override float corridorWidthScale => corridorWidthScaleFactor;
         public override EDFieldBlendMode deformationFieldBlendMode => fieldBlendMode;
@@ -199,7 +214,7 @@ namespace UC.ED
                 // 4) Everything that only means something on a skeleton graph.
                 // -----------------------------------------------------------------
                 using (Stage("Rest frames"))
-                    deformation.BuildNodeRestFrames();
+                    deformation.BuildNodeRestFrames(def.terminalFramesFromConnectors);
 
                 // After the node loop above, which is what makes it possible: the tree is recovered
                 // from seg.node1/seg.node2, and those are written there.
@@ -232,12 +247,12 @@ namespace UC.ED
                 float[] connectorWidths = ResolveConnectorWidths();
                 float[] lengths = new float[nodeCount];
 
-                if (def.useCorridorLength)
+                if (def.deformationFieldSeedCorridors)
                 {
                     MeasureCorridorWidths(lengths, connectorWidths, runawayLimit, def.corridorConeAngleDegrees);
                 }
 
-                if (def.useTerminalLength)
+                if (def.deformationFieldSeedTerminals)
                 {
                     for (int i = 0; i < nodeCount; i++)
                     {
@@ -566,9 +581,16 @@ namespace UC.ED
                 // to what the field was actually given.
                 bool slotPerNode = (storageSlots >= nodes.Count);
 
+                // Three slots are what a pair needs with one to spare for the node behind it; fewer
+                // and the no-linked-pair fallback fires where the graph is fine.
+                if ((def.vertexInfluence == EDVertexInfluenceMethod.AlongSkeleton) && (storageSlots < 3))
+                {
+                    Debug.LogWarning($"AlongSkeleton influence with {storageSlots} stored nodes per cell: three or more are needed for a linked pair to be found reliably, so expect the no-linked-pair fallback. Raise Max Weights or the storage.");
+                }
+
                 FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity,
-                                                                      def.useTerminalLength, def.useCorridorLength, def.fieldBlendMode,
-                                                                      def.fieldRotationBlend, def.fieldScaleBlend);
+                                                                      def.deformationFieldSeedTerminals, def.deformationFieldSeedCorridors, def.fieldBlendMode,
+                                                                      def.fieldRotationBlend, def.fieldScaleBlend, def.vertexInfluence, def.skeletonSections);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.
@@ -616,6 +638,21 @@ namespace UC.ED
                 //
                 //    The occupied volume gets geodesic distances from AddDeformationNode(). GrowInfluence() lets nearby empty cells also query valid weights.
                 // -------------------------------------------------------------
+                // The graph's links, whatever the method: AlongSkeleton reads them to find the pair a
+                // point lies beside, and under ThroughVolume the probe uses them to say what
+                // AlongSkeleton would do at the point in front of it.
+                using (Stage("Skeleton links"))
+                {
+                    var links = new List<IReadOnlyList<int>>(nodes.Count);
+
+                    for (int i = 0; i < nodes.Count; i++)
+                    {
+                        links.Add(nodes[i].neighbors);
+                    }
+
+                    field.SetNodeLinks(links);
+                }
+
                 using (Stage("Influence growth"))
                     field.GrowInfluence(EDDiagnostics.parallelOptions);
 
@@ -627,6 +664,18 @@ namespace UC.ED
 
                 using (Stage("Trilinear regions"))
                     field.BuildTrilinearRegions();
+
+                // The build's own census of the along-skeleton fallbacks, so a piece says how often
+                // a cell's influences held no linked pair - the one case the method hands back to
+                // the volume blend - before anything is read off it.
+                string influenceLine = "";
+
+                if (def.vertexInfluence == EDVertexInfluenceMethod.AlongSkeleton)
+                {
+                    field.CountSkeletonResolutions(out int influenceCells, out int onLink, out int clampedToEnd, out int noLinkedPair);
+
+                    influenceLine = $"  Influence=AlongSkeleton over {influenceCells} cells: {onLink} on a link, {clampedToEnd} clamped to a link's end, {noLinkedPair} with no linked pair (blended as ThroughVolume)\n";
+                }
 
                 deformation.SetDeformationField(field);
 
@@ -642,6 +691,7 @@ namespace UC.ED
                     $"  Bounds={bounds.size}\n" +
                     $"  Grid Size={field.gridSize}\n" +
                     $"  Growth={field.lastGrowthPath}, {field.lastGrowthOccupiedCells} occupied cells, {field.lastGrowthBoundaryCells} of them seeds\n" +
+                    influenceLine +
                     $"  Time={timer.accumulatedTimeMS:F6} ms"
                 );
             }

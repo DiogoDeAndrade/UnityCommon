@@ -780,7 +780,9 @@ public partial class FullDeformationField
     /// </param>
     public FullDeformationField(float voxelSize, float voxelDensity, int maxWeights, int storageSlots = -1, bool slotPerNode = false, EDFieldConnectivity connectivity = EDFieldConnectivity.Faces6,
                                 bool seedTerminals = false, bool seedCorridors = false, EDFieldBlendMode blendMode = EDFieldBlendMode.LinearAffine,
-                                EDFieldRotationBlend rotationBlend = EDFieldRotationBlend.Chordal, EDFieldScaleBlend scaleBlend = EDFieldScaleBlend.Full)
+                                EDFieldRotationBlend rotationBlend = EDFieldRotationBlend.Chordal, EDFieldScaleBlend scaleBlend = EDFieldScaleBlend.Full,
+                                EDVertexInfluenceMethod influenceMethod = EDVertexInfluenceMethod.ThroughVolume,
+                                EDSkeletonSection skeletonSections = EDSkeletonSection.LinkPerpendicular)
     {
         this.voxelSize = Mathf.Max(voxelSize, DistanceEpsilon);
         this.voxelDensity = voxelDensity;
@@ -793,6 +795,8 @@ public partial class FullDeformationField
         this.blendMode = blendMode;
         this.rotationBlend = rotationBlend;
         this.scaleBlend = scaleBlend;
+        this.influenceMethod = influenceMethod;
+        this.skeletonSections = skeletonSections;
 
         voxelData = new VoxelData<DeformationFieldWeights>();
         deformationNodes = new();
@@ -1603,30 +1607,21 @@ public partial class FullDeformationField
         nodeIds = null;
         blendedWeights = null;
 
-        EnsureTrilinearRegionsBuilt();
+        // Walked through the same enumerator the blenders walk, so this reports what deforms the
+        // point under the field's own method - under AlongSkeleton the resolved pair, not the union
+        // it was chosen from. Under ThroughVolume the enumerator yields the region's entries in the
+        // order and with the interpolated weights the loop that used to stand here computed, so the
+        // numbers are the same to the bit.
+        InfluenceEnumerator influences = EnumerateInfluences(position, true);
 
-        if (!TryGetTrilinearRegion(position, out TrilinearRegion region, out float fx, out float fy, out float fz))
-        {
-            return false;
-        }
-
-        int influenceEnd = region.influenceStart + region.influenceCount;
-
-        var ids = new List<int>(region.influenceCount);
-        var values = new List<float>(region.influenceCount);
+        var ids = new List<int>(8);
+        var values = new List<float>(8);
 
         float weightSum = 0f;
 
-        for (int i = region.influenceStart; i < influenceEnd; i++)
+        while (influences.MoveNext(out int nodeId, out float weight))
         {
-            TrilinearInfluence influence = trilinearInfluences[i];
-
-            float weight = InterpolateTrilinearWeight(influence, fx, fy, fz);
-
-            if (weight <= 0f) continue;
-            if (influence.nodeId < 0) continue;
-
-            ids.Add(influence.nodeId);
+            ids.Add(nodeId);
             values.Add(weight);
 
             weightSum += weight;

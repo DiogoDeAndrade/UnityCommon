@@ -317,6 +317,33 @@ namespace UC.ED
         }
 
         /// <summary>
+        /// What the along-skeleton influence resolves a point to, whichever method the field was
+        /// built with: the pair, its t and the outcome, and whether that method is the one in force.
+        /// Under ThroughVolume it says what the other method would do at the point in front of the
+        /// probe. False with no field, or a field that was given no links.
+        /// </summary>
+        public bool TryGetSkeletonResolution(Vector3 position, bool trilinear, out int nodeA, out int nodeB, out float t, out EDSkeletonResolution status, out bool inForce)
+        {
+            nodeA = -1;
+            nodeB = -1;
+            t = 0.0f;
+            status = EDSkeletonResolution.NoInfluence;
+            inForce = false;
+
+            FullDeformationField field = GetField();
+
+            if (field == null) return false;
+
+            inForce = (field.builtInfluenceMethod == EDVertexInfluenceMethod.AlongSkeleton);
+
+            if (!field.hasNodeLinks) return false;
+
+            field.TryResolveSkeletonPair(position, trilinear, out nodeA, out nodeB, out t, out status);
+
+            return true;
+        }
+
+        /// <summary>
         /// Where the deformation carries a point.
         ///
         /// Trilinear sampling is what the field deforms geometry with; the nearest-cell variant is
