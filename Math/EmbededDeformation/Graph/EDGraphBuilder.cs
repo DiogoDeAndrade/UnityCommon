@@ -107,6 +107,24 @@ namespace UC.ED
         public virtual bool deformationFieldSeedCorridors => false;
 
         /// <summary>
+        /// How a rest position finds the nodes that carry it - see EDVertexInfluenceMethod. Under
+        /// AlongSkeleton the seed bars are not used, and a builder reports its seeding toggles as off.
+        /// </summary>
+        public virtual EDVertexInfluenceMethod deformationFieldInfluenceMethod => EDVertexInfluenceMethod.ThroughVolume;
+
+        /// <summary>
+        /// What a node's cross-section is under AlongSkeleton - see EDSkeletonSection.
+        /// </summary>
+        public virtual EDSkeletonSection deformationFieldSkeletonSections => EDSkeletonSection.LinkPerpendicular;
+
+        /// <summary>
+        /// Whether a terminal node's rest frame takes its forward from its connector, the door's
+        /// normal, rather than from its last link. On, the terminal frames in the dump's graph
+        /// section move wherever a door is oblique to the link that reaches it.
+        /// </summary>
+        public virtual bool terminalFramesFromConnectors => false;
+
+        /// <summary>
         /// How fast the corridor probe's height band opens with distance, in degrees. Only read when
         /// deformationFieldSeedCorridors is on, since that is the one thing that measures corridors.
         ///

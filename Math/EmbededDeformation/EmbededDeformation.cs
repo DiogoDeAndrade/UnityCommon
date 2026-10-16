@@ -316,12 +316,21 @@ namespace UC.ED
         /// Orients every node from the skeleton running through it. Public because it is the
         /// structure builder that knows its graph has meaningful frames - a sampled graph does not.
         /// </summary>
-        public void BuildNodeRestFrames()
+        /// <summary>
+        /// Every node's rest frame from the graph: the forward along the skeleton, the up from the
+        /// surface. With <paramref name="terminalFramesFromConnectors"/>, a leaf matched to a
+        /// connector takes the connector's forward - the door's normal, oriented outward as a leaf's
+        /// own forward is - in place of its link's direction, so the terminal's cross-section is the
+        /// door rather than the plane perpendicular to a link that may reach the door obliquely.
+        /// Off, the frames are what they have always been.
+        /// </summary>
+        public void BuildNodeRestFrames(bool terminalFramesFromConnectors = false)
         {
             if ((nodes == null) || (nodes.Count == 0))
                 return;
 
             DVector3[] surfaceNormals = BuildNodeSurfaceNormals();
+            DVector3[] connectorForwards = (terminalFramesFromConnectors) ? (ResolveConnectorForwards()) : (null);
 
             for (int i = 0; i < nodes.Count; i++)
             {
@@ -329,8 +338,53 @@ namespace UC.ED
 
                 DVector3 forward = ComputeNodeForward(i);
 
+                if ((connectorForwards != null) && (connectorForwards[i].sqrMagnitude > 1e-8))
+                {
+                    DVector3 connectorForward = connectorForwards[i];
+
+                    // The same sense as the link's own: a leaf's forward points out of the piece.
+                    if (DVector3.Dot(connectorForward, forward) < 0.0)
+                    {
+                        connectorForward = new DVector3(-connectorForward.x, -connectorForward.y, -connectorForward.z);
+                    }
+
+                    forward = connectorForward.normalized;
+                }
+
                 node.BuildSurfaceFrame(forward, surfaceNormals[i]);
             }
+        }
+
+        /// <summary>
+        /// Each leaf's connector forward, matched as the corridor widths are matched - the nearest
+        /// leaf to the connector's rest position, the wider connector when two land on one leaf -
+        /// and zero for a node with none.
+        /// </summary>
+        private DVector3[] ResolveConnectorForwards()
+        {
+            var forwards = new DVector3[nodes.Count];
+            var widths = new float[nodes.Count];
+
+            var seeds = GetConnectorSeeds();
+
+            if (seeds == null) return forwards;
+
+            for (int i = 0; i < seeds.Count; i++)
+            {
+                EDConnectorSeed seed = seeds[i];
+
+                if (seed.forward.sqrMagnitude <= 1e-8f) continue;
+
+                int nodeIndex = GetClosestLeafNodeIndex(seed.restPosition);
+
+                if ((nodeIndex < 0) || (nodeIndex >= forwards.Length)) continue;
+                if ((widths[nodeIndex] > 0.0f) && (seed.width <= widths[nodeIndex])) continue;
+
+                widths[nodeIndex] = seed.width;
+                forwards[nodeIndex] = seed.forward.ToDVector3();
+            }
+
+            return forwards;
         }
 
         private int GetSampledVertexIndex(DVector3 pos, double tolerance)

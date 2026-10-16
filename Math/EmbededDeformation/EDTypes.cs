@@ -553,6 +553,10 @@ namespace UC.ED
         // The full bar length, unscaled - the same number the handle's vertex matching spans, so a
         // connector influences the field over exactly the extent it is considered to hold.
         public float    width;
+
+        // The connector's forward at rest - the door's normal - for a terminal node's frame when
+        // the builder takes it from the connector. Zero when the handle had none to give.
+        public Vector3  forward;
     }
 
     [Serializable]

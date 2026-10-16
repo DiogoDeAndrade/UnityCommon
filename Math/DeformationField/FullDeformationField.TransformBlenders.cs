@@ -60,6 +60,12 @@ public partial class FullDeformationField
         private readonly bool                       valid;
         private readonly InfluenceTable             table;
         private readonly int                        tableEnd;
+        // A resolved along-skeleton pair, walked as a two-entry set - see FullDeformationField.AlongSkeleton.
+        private readonly bool                       pair;
+        private readonly int                        pairNodeA;
+        private readonly int                        pairNodeB;
+        private readonly float                      pairWeightA;
+        private readonly float                      pairWeightB;
         private int                                 index;
 
         internal InfluenceEnumerator(FullDeformationField field, DeformationFieldWeights cell, bool valid)
@@ -75,6 +81,11 @@ public partial class FullDeformationField
             trilinear = false;
             table = null;
             tableEnd = 0;
+            pair = false;
+            pairNodeA = -1;
+            pairNodeB = -1;
+            pairWeightA = 0.0f;
+            pairWeightB = 0.0f;
             index = 0;
         }
 
@@ -91,6 +102,11 @@ public partial class FullDeformationField
             trilinear = true;
             table = null;
             tableEnd = 0;
+            pair = false;
+            pairNodeA = -1;
+            pairNodeB = -1;
+            pairWeightA = 0.0f;
+            pairWeightB = 0.0f;
             index = region.influenceStart;
         }
 
@@ -112,6 +128,36 @@ public partial class FullDeformationField
             fy = 0.0f;
             fz = 0.0f;
             trilinear = false;
+            pair = false;
+            pairNodeA = -1;
+            pairNodeB = -1;
+            pairWeightA = 0.0f;
+            pairWeightB = 0.0f;
+        }
+
+        /// <summary>
+        /// A resolved along-skeleton pair: the two ends of the link a point lies beside, at the
+        /// point's position along it. A zero weight is skipped on the walk, as everywhere else.
+        /// </summary>
+        internal InfluenceEnumerator(FullDeformationField field, int nodeA, float weightA, int nodeB, float weightB)
+        {
+            this.field = field;
+            pair = true;
+            pairNodeA = nodeA;
+            pairNodeB = nodeB;
+            pairWeightA = weightA;
+            pairWeightB = weightB;
+            valid = (field != null) && (nodeA >= 0) && (nodeB >= 0);
+
+            cell = default;
+            region = default;
+            fx = 0.0f;
+            fy = 0.0f;
+            fz = 0.0f;
+            trilinear = false;
+            table = null;
+            tableEnd = 0;
+            index = 0;
         }
 
         /// <summary>
@@ -125,6 +171,28 @@ public partial class FullDeformationField
             weight = 0.0f;
 
             if (!valid) return false;
+
+            if (pair)
+            {
+                while (index < 2)
+                {
+                    int n = (index == 0) ? (pairNodeA) : (pairNodeB);
+                    float w = (index == 0) ? (pairWeightA) : (pairWeightB);
+
+                    index++;
+
+                    if (w <= 0.0f) continue;
+                    if (n < 0) continue;
+                    if (n >= field.deformationNodes.Count) continue;
+
+                    nodeIndex = n;
+                    weight = w;
+
+                    return true;
+                }
+
+                return false;
+            }
 
             if (table != null)
             {
@@ -580,12 +648,31 @@ public partial class FullDeformationField
     }
 
     /// <summary>
-    /// The influences acting at a point, gathered the way the caller asks for them.
+    /// The influences acting at a point under the field's own method. ThroughVolume: the gathered
+    /// set as EnumerateRawInfluences yields it. AlongSkeleton: the linked pair the point resolves
+    /// to, as a two-entry set, or the gathered set when no two influences are linked - the counted
+    /// fallback. One enumerator for every consumer, so the blenders, the captured influence tables
+    /// and the probe cannot read a point three different ways.
+    /// </summary>
+    internal InfluenceEnumerator EnumerateInfluences(Vector3 position, bool trilinear)
+    {
+        InfluenceEnumerator raw = EnumerateRawInfluences(position, trilinear);
+
+        if (influenceMethod != EDVertexInfluenceMethod.AlongSkeleton) return raw;
+
+        if (!TryResolveSkeletonPair(raw, position, out int nodeA, out int nodeB, out float t, out _)) return raw;
+
+        return new InfluenceEnumerator(this, nodeA, 1.0f - t, nodeB, t);
+    }
+
+    /// <summary>
+    /// The influences at a point, gathered the way the caller asks for them - the field's own set,
+    /// before any method reads it.
     ///
     /// Trilinear is what deforms geometry; the containing cell's weights are a step function across
     /// cell boundaries and exist for the tools that want to see exactly that difference.
     /// </summary>
-    internal InfluenceEnumerator EnumerateInfluences(Vector3 position, bool trilinear)
+    internal InfluenceEnumerator EnumerateRawInfluences(Vector3 position, bool trilinear)
     {
         if (trilinear)
         {
