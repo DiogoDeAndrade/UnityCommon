@@ -118,6 +118,13 @@ namespace UC.ED
         public virtual EDSkeletonSection deformationFieldSkeletonSections => EDSkeletonSection.LinkPerpendicular;
 
         /// <summary>
+        /// What AlongSkeleton does where its sections fail to tile the corridor - see EDSkeletonKinkFix -
+        /// and the blend distance of the fix as a fraction of the link's rest length.
+        /// </summary>
+        public virtual EDSkeletonKinkFix deformationFieldSkeletonKinkFix => EDSkeletonKinkFix.None;
+        public virtual float deformationFieldSkeletonKinkDistance => 0.5f;
+
+        /// <summary>
         /// Whether a terminal node's rest frame takes its forward from its connector, the door's
         /// normal, rather than from its last link. On, the terminal frames in the dump's graph
         /// section move wherever a door is oblique to the link that reaches it.

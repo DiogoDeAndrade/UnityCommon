@@ -66,6 +66,19 @@ public partial class FullDeformationField
         private readonly int                        pairNodeB;
         private readonly float                      pairWeightA;
         private readonly float                      pairWeightB;
+        // A kink fix's result - see FullDeformationField.AlongSkeleton: an explicit list of up to six
+        // (node, weight) entries in the slots and any more in the overflow arrays, then, at a tail
+        // scale above zero, the raw set's entries scaled by it with the listed nodes skipped, their
+        // raw share being in the list already. The raw set is the cell or the region the enumerator
+        // was built from.
+        private readonly bool                       list;
+        private readonly int                        listCount;
+        private readonly int                        ln0, ln1, ln2, ln3, ln4, ln5;
+        private readonly float                      lw0, lw1, lw2, lw3, lw4, lw5;
+        private readonly int[]                      listNodes;
+        private readonly float[]                    listWeights;
+        private readonly float                      tailScale;
+        private int                                 tailIndex;
         private int                                 index;
 
         internal InfluenceEnumerator(FullDeformationField field, DeformationFieldWeights cell, bool valid)
@@ -86,6 +99,14 @@ public partial class FullDeformationField
             pairNodeB = -1;
             pairWeightA = 0.0f;
             pairWeightB = 0.0f;
+            list = false;
+            listCount = 0;
+            ln0 = ln1 = ln2 = ln3 = ln4 = ln5 = -1;
+            lw0 = lw1 = lw2 = lw3 = lw4 = lw5 = 0.0f;
+            listNodes = null;
+            listWeights = null;
+            tailScale = 0.0f;
+            tailIndex = 0;
             index = 0;
         }
 
@@ -107,6 +128,14 @@ public partial class FullDeformationField
             pairNodeB = -1;
             pairWeightA = 0.0f;
             pairWeightB = 0.0f;
+            list = false;
+            listCount = 0;
+            ln0 = ln1 = ln2 = ln3 = ln4 = ln5 = -1;
+            lw0 = lw1 = lw2 = lw3 = lw4 = lw5 = 0.0f;
+            listNodes = null;
+            listWeights = null;
+            tailScale = 0.0f;
+            tailIndex = 0;
             index = region.influenceStart;
         }
 
@@ -133,6 +162,14 @@ public partial class FullDeformationField
             pairNodeB = -1;
             pairWeightA = 0.0f;
             pairWeightB = 0.0f;
+            list = false;
+            listCount = 0;
+            ln0 = ln1 = ln2 = ln3 = ln4 = ln5 = -1;
+            lw0 = lw1 = lw2 = lw3 = lw4 = lw5 = 0.0f;
+            listNodes = null;
+            listWeights = null;
+            tailScale = 0.0f;
+            tailIndex = 0;
         }
 
         /// <summary>
@@ -157,7 +194,105 @@ public partial class FullDeformationField
             trilinear = false;
             table = null;
             tableEnd = 0;
+            list = false;
+            listCount = 0;
+            ln0 = ln1 = ln2 = ln3 = ln4 = ln5 = -1;
+            lw0 = lw1 = lw2 = lw3 = lw4 = lw5 = 0.0f;
+            listNodes = null;
+            listWeights = null;
+            tailScale = 0.0f;
+            tailIndex = 0;
             index = 0;
+        }
+
+        /// <summary>
+        /// A kink fix's result: <paramref name="count"/> entries of <paramref name="nodes"/> and
+        /// <paramref name="weights"/> copied in (the caller's scratch, read once here), then the raw
+        /// set <paramref name="raw"/> was built from walked at <paramref name="tailScale"/> with the
+        /// listed nodes skipped - no tail at a scale of zero. See FullDeformationField.AlongSkeleton.
+        /// </summary>
+        internal InfluenceEnumerator(FullDeformationField field, InfluenceEnumerator raw, float tailScale, int count, int[] nodes, float[] weights)
+        {
+            this.field = field;
+            cell = raw.cell;
+            region = raw.region;
+            fx = raw.fx;
+            fy = raw.fy;
+            fz = raw.fz;
+            trilinear = raw.trilinear;
+            valid = (field != null) && (count > 0);
+
+            table = null;
+            tableEnd = 0;
+            pair = false;
+            pairNodeA = -1;
+            pairNodeB = -1;
+            pairWeightA = 0.0f;
+            pairWeightB = 0.0f;
+
+            list = true;
+            listCount = count;
+            ln0 = (count > 0) ? (nodes[0]) : (-1); lw0 = (count > 0) ? (weights[0]) : (0.0f);
+            ln1 = (count > 1) ? (nodes[1]) : (-1); lw1 = (count > 1) ? (weights[1]) : (0.0f);
+            ln2 = (count > 2) ? (nodes[2]) : (-1); lw2 = (count > 2) ? (weights[2]) : (0.0f);
+            ln3 = (count > 3) ? (nodes[3]) : (-1); lw3 = (count > 3) ? (weights[3]) : (0.0f);
+            ln4 = (count > 4) ? (nodes[4]) : (-1); lw4 = (count > 4) ? (weights[4]) : (0.0f);
+            ln5 = (count > 5) ? (nodes[5]) : (-1); lw5 = (count > 5) ? (weights[5]) : (0.0f);
+
+            if (count > 6)
+            {
+                listNodes = new int[count - 6];
+                listWeights = new float[count - 6];
+                Array.Copy(nodes, 6, listNodes, 0, count - 6);
+                Array.Copy(weights, 6, listWeights, 0, count - 6);
+            }
+            else
+            {
+                listNodes = null;
+                listWeights = null;
+            }
+
+            this.tailScale = (raw.valid && (raw.table == null)) ? (tailScale) : (0.0f);
+            tailIndex = (raw.trilinear) ? (raw.region.influenceStart) : (0);
+            index = 0;
+        }
+
+        private int ListNode(int k)
+        {
+            switch (k)
+            {
+                case 0: return ln0;
+                case 1: return ln1;
+                case 2: return ln2;
+                case 3: return ln3;
+                case 4: return ln4;
+                case 5: return ln5;
+                default: return listNodes[k - 6];
+            }
+        }
+
+        private float ListWeight(int k)
+        {
+            switch (k)
+            {
+                case 0: return lw0;
+                case 1: return lw1;
+                case 2: return lw2;
+                case 3: return lw3;
+                case 4: return lw4;
+                case 5: return lw5;
+                default: return listWeights[k - 6];
+            }
+        }
+
+        private bool InList(int node)
+        {
+            for (int k = 0; k < listCount; k++)
+            {
+                if (ListNode(k) == node) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -171,6 +306,74 @@ public partial class FullDeformationField
             weight = 0.0f;
 
             if (!valid) return false;
+
+            if (list)
+            {
+                while (index < listCount)
+                {
+                    int k = index++;
+                    int n = ListNode(k);
+                    float w = ListWeight(k);
+
+                    if (w <= 0.0f) continue;
+                    if (n < 0) continue;
+                    if (n >= field.deformationNodes.Count) continue;
+
+                    nodeIndex = n;
+                    weight = w;
+
+                    return true;
+                }
+
+                if (tailScale <= 0.0f) return false;
+
+                if (trilinear)
+                {
+                    int end = region.influenceStart + region.influenceCount;
+
+                    while (tailIndex < end)
+                    {
+                        TrilinearInfluence influence = field.trilinearInfluences[tailIndex];
+
+                        tailIndex++;
+
+                        float w = InterpolateTrilinearWeight(influence, fx, fy, fz) * tailScale;
+                        int n = influence.nodeId;
+
+                        if (w <= 0.0f) continue;
+                        if (n < 0) continue;
+                        if (n >= field.deformationNodes.Count) continue;
+                        if (InList(n)) continue;
+
+                        nodeIndex = n;
+                        weight = w;
+
+                        return true;
+                    }
+
+                    return false;
+                }
+
+                while ((cell.weights != null) && (tailIndex < cell.weights.Length))
+                {
+                    float w = cell.weights[tailIndex] * tailScale;
+                    int n = cell.nodeId[tailIndex];
+
+                    tailIndex++;
+
+                    if (w <= 0.0f) continue;
+                    if (n < 0) continue;
+                    if (n >= field.deformationNodes.Count) continue;
+                    if (InList(n)) continue;
+
+                    nodeIndex = n;
+                    weight = w;
+
+                    return true;
+                }
+
+                return false;
+            }
 
             if (pair)
             {
@@ -659,6 +862,12 @@ public partial class FullDeformationField
         InfluenceEnumerator raw = EnumerateRawInfluences(position, trilinear);
 
         if (influenceMethod != EDVertexInfluenceMethod.AlongSkeleton) return raw;
+
+        // A kink fix in force resolves through its own path; None is the statements below, untouched.
+        if (skeletonKinkFix != EDSkeletonKinkFix.None)
+        {
+            return (TryResolveSkeletonBlend(raw, position, out InfluenceEnumerator resolved, out _, out _)) ? (resolved) : (raw);
+        }
 
         if (!TryResolveSkeletonPair(raw, position, out int nodeA, out int nodeB, out float t, out _)) return raw;
 
