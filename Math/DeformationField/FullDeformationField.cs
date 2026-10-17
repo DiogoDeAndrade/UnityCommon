@@ -782,7 +782,9 @@ public partial class FullDeformationField
                                 bool seedTerminals = false, bool seedCorridors = false, EDFieldBlendMode blendMode = EDFieldBlendMode.LinearAffine,
                                 EDFieldRotationBlend rotationBlend = EDFieldRotationBlend.Chordal, EDFieldScaleBlend scaleBlend = EDFieldScaleBlend.Full,
                                 EDVertexInfluenceMethod influenceMethod = EDVertexInfluenceMethod.ThroughVolume,
-                                EDSkeletonSection skeletonSections = EDSkeletonSection.LinkPerpendicular)
+                                EDSkeletonSection skeletonSections = EDSkeletonSection.LinkPerpendicular,
+                                EDSkeletonKinkFix skeletonKinkFix = EDSkeletonKinkFix.None,
+                                float skeletonKinkDistance = 0.5f)
     {
         this.voxelSize = Mathf.Max(voxelSize, DistanceEpsilon);
         this.voxelDensity = voxelDensity;
@@ -797,6 +799,8 @@ public partial class FullDeformationField
         this.scaleBlend = scaleBlend;
         this.influenceMethod = influenceMethod;
         this.skeletonSections = skeletonSections;
+        this.skeletonKinkFix = skeletonKinkFix;
+        this.skeletonKinkDistance = Mathf.Max(0.01f, skeletonKinkDistance);
 
         voxelData = new VoxelData<DeformationFieldWeights>();
         deformationNodes = new();

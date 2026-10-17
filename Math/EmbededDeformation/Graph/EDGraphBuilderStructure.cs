@@ -37,6 +37,10 @@ namespace UC.ED
         private EDVertexInfluenceMethod vertexInfluence = EDVertexInfluenceMethod.ThroughVolume;
         [SerializeField, ShowIf(nameof(usesAlongSkeleton)), Tooltip("What a node's cross-section is under AlongSkeleton. LinkPerpendicular: the plane perpendicular to the link being read, t the point's projection on the link. NodeFrame: the plane perpendicular to the node's own rest forward - the bisector at a bend, and the door at a terminal whose frame comes from its connector - with t the point's position between the two end nodes' planes. A junction keeps the link's plane under either.")]
         private EDSkeletonSection skeletonSections = EDSkeletonSection.LinkPerpendicular;
+        [SerializeField, ShowIf(nameof(usesAlongSkeleton)), Tooltip("What AlongSkeleton does where its sections fail to tile the corridor - a bend sharper than the corridor is wide, where a link's end planes cross inside it, or a hub's rim where two links' regions overlap. None: one pair, clamped past an end or first-ranked, the carry switching across the crossing. Blend Towards Volume: the pair's share falls to the four-influence blend's, by the overshoot past the region or the depth inside a second one, over the blend distance. Blend Sections: the regions that claim the point are averaged, never leaving the skeleton's pairs. Both leave a straight run bit-identical to None. Named in the dump when not None.")]
+        private EDSkeletonKinkFix skeletonKinkFix = EDSkeletonKinkFix.None;
+        [SerializeField, Min(0.01f), ShowIf(nameof(usesKinkFix)), Tooltip("The blend distance of the kink fix, as a fraction of each link's rest length: how far past a region's boundary, or how deep into a second region, the fix takes to act in full. 0.5 is half a link.")]
+        private float skeletonKinkDistance = 0.5f;
         [SerializeField, Tooltip("Take each terminal node's rest forward from its connector - the door's normal, oriented outward like the link's - instead of from its last link. Moves the terminal frames the dump records wherever a door is oblique to its link; with AlongSkeleton and NodeFrame sections it makes the door the terminal's cross-section.")]
         private bool terminalFrameFromConnector = false;
         [SerializeField, ShowIf(nameof(usesSeedBars)), Tooltip("Seed each terminal node along its connector's whole cross-section rather than from the single voxel at the frame origin. Off gives every terminal a point source, which is what the field did before.")]
@@ -81,6 +85,7 @@ namespace UC.ED
         private bool usesSeedBars => (vertexInfluence == EDVertexInfluenceMethod.ThroughVolume);
         private bool usesCorridorBars => usesSeedBars && useCorridorLength;
         private bool usesAlongSkeleton => (vertexInfluence == EDVertexInfluenceMethod.AlongSkeleton);
+        private bool usesKinkFix => usesAlongSkeleton && (skeletonKinkFix != EDSkeletonKinkFix.None);
 
         private bool usesWeightPower => (fieldWeightMode == EDFieldWeightMode.InversePower) || (fieldWeightMode == EDFieldWeightMode.Gaussian);
         private bool usesWeightFloor => (fieldWeightMode == EDFieldWeightMode.InversePower);
@@ -102,6 +107,8 @@ namespace UC.ED
         public override bool deformationFieldSeedCorridors => usesSeedBars && useCorridorLength;
         public override EDVertexInfluenceMethod deformationFieldInfluenceMethod => vertexInfluence;
         public override EDSkeletonSection deformationFieldSkeletonSections => skeletonSections;
+        public override EDSkeletonKinkFix deformationFieldSkeletonKinkFix => skeletonKinkFix;
+        public override float deformationFieldSkeletonKinkDistance => skeletonKinkDistance;
         public override bool terminalFramesFromConnectors => terminalFrameFromConnector;
         public override float corridorConeAngle => corridorConeAngleDegrees;
         public override float corridorWidthScale => corridorWidthScaleFactor;
@@ -590,7 +597,8 @@ namespace UC.ED
 
                 FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity,
                                                                       def.deformationFieldSeedTerminals, def.deformationFieldSeedCorridors, def.fieldBlendMode,
-                                                                      def.fieldRotationBlend, def.fieldScaleBlend, def.vertexInfluence, def.skeletonSections);
+                                                                      def.fieldRotationBlend, def.fieldScaleBlend, def.vertexInfluence, def.skeletonSections,
+                                                                      def.skeletonKinkFix, def.skeletonKinkDistance);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.
@@ -674,7 +682,16 @@ namespace UC.ED
                 {
                     field.CountSkeletonResolutions(out int influenceCells, out int onLink, out int clampedToEnd, out int noLinkedPair);
 
-                    influenceLine = $"  Influence=AlongSkeleton over {influenceCells} cells: {onLink} on a link, {clampedToEnd} clamped to a link's end, {noLinkedPair} with no linked pair (blended as ThroughVolume)\n";
+                    influenceLine = $"  Influence=AlongSkeleton over {influenceCells} cells: {onLink} on a link, {clampedToEnd} clamped to a link's end, {noLinkedPair} with no linked pair (blended as ThroughVolume)";
+
+                    if (def.skeletonKinkFix != EDSkeletonKinkFix.None)
+                    {
+                        field.CountSkeletonKinkBlends(out int kinkCells, out int kinkBlended);
+
+                        influenceLine += $"; kink fix {def.skeletonKinkFix} at {def.skeletonKinkDistance:F2} of the link: {kinkBlended} of {kinkCells} cells blended";
+                    }
+
+                    influenceLine += "\n";
                 }
 
                 deformation.SetDeformationField(field);
