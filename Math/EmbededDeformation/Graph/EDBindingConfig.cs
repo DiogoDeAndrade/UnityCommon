@@ -42,8 +42,9 @@ namespace UC.ED
         public BindingWeightMode weightMode => weights;
 
         /// <summary>
-        /// At least two, because "the nearest k" with k below two is not a blend and the weighting
-        /// modes below all divide by a k-th distance.
+        /// At least two, because "the nearest k" with k below two is not a blend. OriginalED divides
+        /// by the (k + 1)-th nearest distance, the paper's d_max (the k-th until 2026-10-20, which
+        /// left the k-th node at weight zero); the other modes read no such distance.
         /// </summary>
         public int nearestK => Mathf.Max(2, k);
 

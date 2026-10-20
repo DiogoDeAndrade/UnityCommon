@@ -98,6 +98,8 @@ namespace UC.ED
 
         public override DeformationGraphSource graphSource => DeformationGraphSource.StructureOnly;
         public override EDBindingConfig binding => fixedBinding;
+        public override bool buildsDeformationField => true;
+        public override EDGeometryCarrier geometryCarrier => EDGeometryCarrier.DeformationField;
         public override float deformationFieldVoxelDensity => fieldVoxelDensity;
         public override int deformationFieldMaxWeights => fieldMaxWeights;
         public override EDFieldDistanceStorage deformationFieldDistanceStorage => fieldDistanceStorage;
@@ -449,7 +451,7 @@ namespace UC.ED
             /// Same call the tail of Build() makes, deliberately: a field rebuilt this way has to be
             /// the one Build() would have produced, or the two routes to it diverge.
             /// </summary>
-            public void RebuildDeformationField()
+            public override void RebuildDeformationField()
             {
                 BuildDeformationField((EDGraphBuilderStructure)builder);
             }

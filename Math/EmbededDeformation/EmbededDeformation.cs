@@ -110,6 +110,12 @@ namespace UC.ED
         // Build() runs and the guard means what it says.
         [NonSerialized]
         private FullDeformationField    deformationField;
+        // Whether a sampled graph deforms through its field - the sampled builder's carrier option
+        // (EDGeometryCarrier), set at every build. Serialized, as the graph source is, so that after
+        // a reload the deformation still knows a field is meant to carry it and fieldMissing says so
+        // rather than the binding path standing in quietly. A structure graph never reads it.
+        [SerializeField, HideInInspector]
+        private bool                    sampledGraphFieldCarrier;
         [SerializeField, HideInInspector]
         private List<Mesh>  sourceGeometry;
 
@@ -471,6 +477,11 @@ namespace UC.ED
                                                       });
                             break;
                         case BindingWeightMode.OriginalED:
+                            // Sumner, Schmid and Pauly 2007, Eq. 4: (1 - d / d_max)^2 over the k
+                            // nearest, d_max the distance to the (k + 1)-nearest node - which is
+                            // what GetNearestK_Generic hands over as dMaxSq. The k-th node therefore
+                            // keeps a weight; the (k + 1)-th, outside the blend, is where it would
+                            // reach zero. Normalised to sum to one by the caller below, as the paper's.
                             epsilon = 1e-12;
                             ret = GetNearestK_Generic(p, k,
                                                       (dSq, dMaxSq) =>
@@ -496,6 +507,18 @@ namespace UC.ED
             return ret;
         }
 
+        /// <summary>
+        /// The k nearest nodes to a point, nearest first, each weighted by weightFunc(dSq, dMaxSq)
+        /// and the weights normalised to sum to one. dMaxSq is the squared distance to the
+        /// (k + 1)-nearest node - the first node left out of the blend - which is the d_max of
+        /// Sumner, Schmid and Pauly 2007, Eq. 4, and the only weight mode that reads it is
+        /// OriginalED. Until 2026-10-20 it was the k-th node's own distance, which under OriginalED
+        /// put the k-th weight at exactly zero and made k = 4 a blend of three; the change moved
+        /// golden 5 and no other, the remaining modes ignoring the argument. A graph with no
+        /// (k + 1)-th node to measure - k nodes or fewer - falls back to the furthest selected
+        /// node's distance, the old value. A node within snapDistanceSq of the point takes the
+        /// whole weight before any of this is read.
+        /// </summary>
         EDVertexBinding GetNearestK_Generic(DVector3 p, int k, Func<double, double, double> weightFunc)
         {
             int nodeCount = nodes.Count;
@@ -513,15 +536,27 @@ namespace UC.ED
                 bestDistSq[i] = double.MaxValue;
             }
 
+            // The nearest distance among the nodes that did not make the K: the (K + 1)-th. A node
+            // that ties the K-th exactly is not placed (the test below is strict), so it lands here
+            // and the K-th weight under OriginalED is then exactly zero, as the paper's would be.
+            double nextDistSq = double.MaxValue;
+
             // Find K nearest
             for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
             {
                 double dSq = (nodes[nodeIndex].restPosition - p).sqrMagnitude;
 
+                bool placed = false;
+
                 for (int slot = 0; slot < actualK; slot++)
                 {
                     if (dSq < bestDistSq[slot])
                     {
+                        // Whoever held the last slot leaves the selection and is a candidate for
+                        // the (K + 1)-th; an empty last slot holds MaxValue and proposes nothing.
+                        if (bestDistSq[actualK - 1] < nextDistSq)
+                            nextDistSq = bestDistSq[actualK - 1];
+
                         for (int shift = actualK - 1; shift > slot; shift--)
                         {
                             bestDistSq[shift] = bestDistSq[shift - 1];
@@ -530,9 +565,13 @@ namespace UC.ED
 
                         bestDistSq[slot] = dSq;
                         bestIndices[slot] = nodeIndex;
+                        placed = true;
                         break;
                     }
                 }
+
+                if ((!placed) && (dSq < nextDistSq))
+                    nextDistSq = dSq;
             }
 
             double[] weights = new double[actualK];
@@ -556,7 +595,9 @@ namespace UC.ED
             {
                 double weightSum = 0.0;
 
-                double dMaxSq = bestDistSq[actualK - 1];
+                // The (K + 1)-th distance where there is one; the K-th where the graph has no more
+                // nodes than K, so a degenerate graph binds as it always did.
+                double dMaxSq = (nextDistSq < double.MaxValue) ? (nextDistSq) : (bestDistSq[actualK - 1]);
 
                 for (int i = 0; i < actualK; i++)
                 {
@@ -949,10 +990,73 @@ namespace UC.ED
             {
                 return DVector3.zero;
             }
-            DVector3 v = restVertices[vertexId];
-            var binding = bindings[vertexId];
-                
-            return DeformVertex(v, binding, new EDStateView(currentState));
+
+            // Where the pins are measured, so the gizmo drawn to a pinned vertex points where the
+            // vertex constraint term sees it.
+            var state = new EDStateView(currentState);
+
+            return DeformPinnedVertex(vertexId, state, CreatePinBlender(state));
+        }
+
+        // ---------------------------------------------------------------------------------------
+        // Pinned vertices - one answer for where the carrier puts a vertex of the topology
+        // ---------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Whether the pinned vertices go through the field: the decision CreateDeformer makes for
+        /// the output, so a pin is measured where the output puts its vertex. True on a structure
+        /// graph (whose terminals are pinned on nodes, so no golden pins a vertex this way) and on a
+        /// sampled graph whose field is the carrier.
+        /// </summary>
+        internal bool pinsThroughField => usesDeformationField;
+
+        /// <summary>
+        /// Whether a pinned vertex's deformed position is linear in the node parameters - through
+        /// the bindings, or through the field under its linear blend - so the vertex constraint
+        /// term's Jacobian is analytic. Under a decomposed blend it is not, and the term differences.
+        /// </summary>
+        internal bool pinsBlendLinearly => (!usesDeformationField) || (deformationField.builtBlendMode == EDFieldBlendMode.LinearAffine);
+
+        /// <summary>
+        /// The blender the pinned vertices are deformed through at a state - the output's, when the
+        /// field carries the geometry - or null when the bindings do. One per pass, as every blender
+        /// is: it freezes the node frames it was made from.
+        /// </summary>
+        internal FullDeformationField.TransformBlender CreatePinBlender(EDStateView state)
+            => (usesDeformationField) ? (CreateFieldBlender(state)) : (null);
+
+        /// <summary>
+        /// Where the carrier puts a rest vertex of the topology under a state: the one answer the
+        /// vertex constraint term pins against and the pin gizmo draws.
+        ///
+        /// Through the field, the output's own arithmetic - DeformOutputPoint, the blender's matrix
+        /// at the point applied to it - under whichever blend the field was built with, so a pin met
+        /// is a vertex the output puts there. Through the bindings, DeformVertex over the vertex's
+        /// binding, in double: the expression the term has always evaluated and the goldens carry.
+        /// </summary>
+        internal DVector3 DeformPinnedVertex(int vertexIndex, EDStateView state, FullDeformationField.TransformBlender blender)
+        {
+            if (blender != null)
+                return DeformOutputPoint(restVertices[vertexIndex].ToVector3(), default, state, blender).ToDVector3();
+
+            return DeformVertex(restVertices[vertexIndex], bindings[vertexIndex], state);
+        }
+
+        /// <summary>
+        /// The nodes the field carries a rest vertex by, with their weights normalized to one - the
+        /// trilinear lookup the field's blenders read. Under the linear blend the deformed position is
+        /// the weighted sum of these nodes' maps at the vertex, so these weights are the analytic
+        /// Jacobian's, exactly as a binding's weights are on the bindings path. False when the field is
+        /// not the carrier or reaches no node there; the output then leaves the vertex at rest.
+        /// </summary>
+        internal bool TryGetPinInfluences(int vertexIndex, out int[] nodeIds, out float[] weights)
+        {
+            nodeIds = null;
+            weights = null;
+
+            if ((!usesDeformationField) || (restVertices == null) || (vertexIndex < 0) || (vertexIndex >= restVertices.Length)) return false;
+
+            return deformationField.TryGetTrilinearInfluences(restVertices[vertexIndex].ToVector3(), out nodeIds, out weights);
         }
 
         /// <summary>
@@ -1320,23 +1424,30 @@ namespace UC.ED
         }
 
         /// <summary>
-        /// Whether the volumetric field is what deforms things for this graph. Only the structure
-        /// builder produces one.
+        /// Whether this graph is meant to deform through a field: a structure graph always, a
+        /// sampled graph when its builder made the field the carrier. A sampled graph whose field
+        /// only gives the field quality term its cells is not - its geometry goes through the
+        /// bindings, the field there or not.
+        /// </summary>
+        private bool deformsThroughField => (deformationGraphSource == DeformationGraphSource.StructureOnly) || (sampledGraphFieldCarrier);
+
+        /// <summary>
+        /// Whether the volumetric field is what deforms things for this graph.
         ///
         /// Both halves are still tested even though deformationField is [NonSerialized] and so is
-        /// honestly null in navmesh mode. The graph source says what this deformation is meant to
-        /// do; the reference says whether Build() has actually run. They answer different
-        /// questions, and fieldMissing below is the case where they disagree.
+        /// honestly null in navmesh mode. The graph source and the carrier say what this deformation
+        /// is meant to do; the reference says whether Build() has actually run. They answer
+        /// different questions, and fieldMissing below is the case where they disagree.
         /// </summary>
-        private bool usesDeformationField => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField != null);
+        private bool usesDeformationField => (deformsThroughField) && (deformationField != null);
 
         internal bool UseDeformationFieldForClearance => usesDeformationField;
 
         /// <summary>
-        /// A structure graph that should have a field and has not got one - the state after a domain
+        /// A graph that should deform through a field and has not got one - the state after a domain
         /// reload or a scene load, before Build() has run.
         /// </summary>
-        private bool fieldMissing => (deformationGraphSource == DeformationGraphSource.StructureOnly) && (deformationField == null);
+        private bool fieldMissing => (deformsThroughField) && (deformationField == null);
 
         // Deliberately [NonSerialized], and that is the whole mechanism: it comes back false from
         // every domain reload, which is exactly when the warning needs to fire again.
@@ -1361,7 +1472,7 @@ namespace UC.ED
 
             warnedFieldMissing = true;
 
-            Debug.LogWarning($"{context}: structure graph has no deformation field, falling back to binding deformation. Build() has not run since the last scene load or domain reload - rebuild before trusting this result or capturing a golden.");
+            Debug.LogWarning($"{context}: {((deformationGraphSource == DeformationGraphSource.StructureOnly) ? ("structure graph") : ("graph whose field carries the geometry"))} has no deformation field, falling back to binding deformation. Build() has not run since the last scene load or domain reload - rebuild before trusting this result or capturing a golden.");
         }
 
         internal List<FullDeformationField.Frame> BuildNodeFrames(EDStateView state)

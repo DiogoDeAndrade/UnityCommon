@@ -217,6 +217,7 @@ namespace UC.ED
                                double stepTolerance = 1e-6,
                                bool resetBeforeSolve = true,
                                bool adaptiveLambda = true,
+                               bool choleskyFactorization = false,
                                double relativeEnergyStop = 0.0,
                                bool restartDamping = false,
                                bool sparseNormalEquations = false)
@@ -325,22 +326,45 @@ namespace UC.ED
 
                 for (int attempt = 0; attempt < 8; attempt++)
                 {
-                    var Hlm = H.Clone();
-
-                    for (int i = 0; i < Hlm.RowCount; i++)
-                        Hlm[i, i] += currentLambda;
-
-                    try
+                    if (choleskyFactorization)
                     {
+                        // The navigation loop's branch: the factorisation raises the damping itself
+                        // until the matrix is positive definite, and the damping it ended at is the
+                        // one this attempt is reported and carried on with.
                         DebugProfiler.DebugMark(timeSolve);
 
-                        delta = Hlm.Solve(-g);
+                        bool factorised = TrySolveCholeskyWithDamping(H, g, currentLambda, out delta, out double usedLambda);
 
                         DebugProfiler.DebugMark(timeSolve);
+
+                        currentLambda = usedLambda;
+
+                        if (!factorised)
+                        {
+                            ReportAttempt(attempt, EDAttemptOutcome.NoStep, currentLambda, double.NaN, null, energy, null);
+
+                            continue;
+                        }
                     }
-                    catch
+                    else
                     {
-                        delta = null;
+                        var Hlm = H.Clone();
+
+                        for (int i = 0; i < Hlm.RowCount; i++)
+                            Hlm[i, i] += currentLambda;
+
+                        try
+                        {
+                            DebugProfiler.DebugMark(timeSolve);
+
+                            delta = Hlm.Solve(-g);
+
+                            DebugProfiler.DebugMark(timeSolve);
+                        }
+                        catch
+                        {
+                            delta = null;
+                        }
                     }
 
                     if (delta == null)
