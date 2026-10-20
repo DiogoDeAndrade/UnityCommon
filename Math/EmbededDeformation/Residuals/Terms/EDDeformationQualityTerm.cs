@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UC.DoubleMath;
+using NaughtyAttributes;
 
 #if MATH_NET_AVAILABLE
 using MathNet.Numerics.LinearAlgebra;
@@ -27,7 +28,8 @@ namespace UC.ED
         /// and one the perturbation itself takes under is the sliver over the step that the
         /// node-level skip already dismisses - the same argument one level down. Tens of times less
         /// work on a piece that is mostly healthy; not bit-identical with AllReached where a sample
-        /// sits within one step of the floor.
+        /// sits within one step of the floor. With the ceiling on, "under the floor" reads "charged":
+        /// the samples over the ceiling are selected the same way, by the same argument.
         /// </summary>
         UnderFloor
     }
@@ -79,6 +81,19 @@ namespace UC.ED
     /// ratio have. It is a margin rather than a scale limit, and it has to stay well below one,
     /// because a terminal asked to scale by a half legitimately halves the area of its triangles.
     ///
+    /// **The ceiling is the floor's mirror, and off by default.** With it on, a simplex is also
+    /// charged how far its measure ratio has risen above a ceiling, r_s = max(0, a_s / A_s - kappa),
+    /// into the same row and the same mean square - so the term prices growth of the measure as
+    /// well as its loss, and with both on it is a two-sided band around the rest measure. The two
+    /// sides cannot both charge one simplex, since kappa is held at or above one and rho at or
+    /// below it. It is a ceiling on the *measure* - volume for a tetrahedron, area for a triangle -
+    /// and not on stretch: a simplex lengthened along one axis and narrowed along another keeps
+    /// its measure and reads clean under any floor and any ceiling. Keep it clear of the largest
+    /// scale a request legitimately asks for, the reason the floor stays clear of the smallest,
+    /// and clear of one: at one every simplex of the rest state sits on the hinge, where the row's
+    /// root has no gradient. Off, every number this term produces is the one it produced before
+    /// the ceiling existed - the violation is the shortfall, exactly.
+    ///
     /// **The orientation reference turns with the map.** A triangle's signed area needs a direction
     /// to be signed against, and a rest normal frozen in world space reads legitimate rotation as
     /// damage: past ~72 degrees of local rotation a healthy triangle scores squashed, past 90
@@ -101,7 +116,9 @@ namespace UC.ED
     /// influences, since the reference is read there - accumulating the change in each row's mean
     /// square rather than re-summing the whole set. A node none of whose simplices is below the floor at the base state
     /// contributes zero columns without being measured at all - the one-sided early-out clearance
-    /// uses, and what makes the term cheap on a healthy piece.
+    /// uses, and what makes the term cheap on a healthy piece. With the ceiling on, "below the
+    /// floor" is "charged on either side" there and everywhere the Jacobian asks it: every test is
+    /// on a simplex's contribution, which carries both.
     ///
     /// A subclass supplies the samples and says which way they are carried; this class does the
     /// rest. The sample set is rebuilt in Reset, so it follows the graph and the mesh, and a term
@@ -116,7 +133,13 @@ namespace UC.ED
         [SerializeField, Range(0.0f, 1.0f), Tooltip("A sample is charged once its measure - area for a mesh triangle, volume for a field tetrahedron - falls below this fraction of its rest measure. At 0 only inversion is charged, and a sample squashed flat costs nothing, which is the configuration the solver reaches for once the inversions are gone. Keep it well below 1: a terminal asked to scale by 0.5 legitimately halves the area of its triangles, and a floor above that argues with the terminal-scale energy.")]
         private float minRatio = 0.0f;
 
-        [SerializeField, Tooltip("Which of a node's reached samples a Jacobian column re-measures. All Reached is every sample the node influences. Under Floor is only the samples under the floor at the base state and their corners: a sample above the floor before and after contributes exactly zero, and one the perturbation itself takes under is the sliver over the step that the node-level skip already dismisses. Tens of times less column work on a mostly healthy piece; not bit-identical with All Reached where a sample sits within one step of the floor.")]
+        [SerializeField, Tooltip("Also charge a sample whose measure - area for a mesh triangle, volume for a field tetrahedron - rises above Max Ratio times its rest measure: the floor's mirror, pricing growth of the measure the way the floor prices its loss. Off by default, and off the term is exactly what it was before the ceiling existed. A ceiling on the measure, not on stretch: a sample lengthened along one axis and narrowed along another keeps its measure and is not charged.")]
+        private bool useMaxRatio = false;
+
+        [SerializeField, ShowIf(nameof(useMaxRatio)), AllowNesting, Min(1.0f), Tooltip("The ceiling, as a multiple of each sample's rest measure, read only while Use Max Ratio is on. Held at one or above, so the floor and the ceiling never both charge one sample. Keep it clear of one - at one every sample of the rest state sits on the hinge, where the row has no gradient - and clear of the largest scale a request legitimately asks for: a terminal widened to 2.5 times multiplies the measure of its samples by about that much, and a ceiling below it argues with the terminal energies.")]
+        private float maxRatio = 2.0f;
+
+        [SerializeField, Tooltip("Which of a node's reached samples a Jacobian column re-measures. All Reached is every sample the node influences. Under Floor is only the samples charged at the base state - under the floor, or over the ceiling when it is on - and their corners: a sample uncharged before and after contributes exactly zero, and one the perturbation itself takes across is the sliver over the step that the node-level skip already dismisses. Tens of times less column work on a mostly healthy piece; not bit-identical with All Reached where a sample sits within one step of the floor or the ceiling.")]
         private EDQualityColumnScope columnScope = EDQualityColumnScope.AllReached;
 
         /// <summary>
@@ -128,6 +151,17 @@ namespace UC.ED
         public void SetMinRatio(float value) => minRatio = Mathf.Clamp01(value);
 
         /// <summary>
+        /// Sets the ceiling, exactly as editing the two fields in the inspector would - the
+        /// companion of SetMinRatio, for the debug measures and the benchmark evaluator, which host a
+        /// term of their own. Read per measurement, so it takes effect immediately.
+        /// </summary>
+        public void SetMaxRatio(bool enabled, float value)
+        {
+            useMaxRatio = enabled;
+            maxRatio = Mathf.Max(1.0f, value);
+        }
+
+        /// <summary>
         /// One row over every sample, or one row per deformation node over the samples whose
         /// centroid that node dominates. A fact about the concrete term rather than a setting, so
         /// the two forms are two entries in the energy model and two lines in the dump.
@@ -135,16 +169,18 @@ namespace UC.ED
         protected abstract bool perNode { get; }
 
         /// <summary>
-        /// What the measure has to say about one sample at a state, matching the residual's three
-        /// cases exactly: unchanged, below the floor without turning over, turned over. A sample
-        /// dropped at rest - degenerate, or a stencil with an uninfluenced corner - reads as
-        /// healthy, because the residual never charges it either.
+        /// What the measure has to say about one sample at a state, matching the residual's cases
+        /// exactly: uncharged, below the floor without turning over, turned over, and - only while
+        /// the ceiling is on - above the ceiling. A sample dropped at rest - degenerate, or a stencil
+        /// with an uninfluenced corner - reads as healthy, because the residual never charges it
+        /// either.
         /// </summary>
         public enum SampleState : byte
         {
             Healthy  = 0,
             Squashed = 1,
             Inverted = 2,
+            Expanded = 3,
         }
 
 #if MATH_NET_AVAILABLE
@@ -248,6 +284,12 @@ namespace UC.ED
 
             /// <summary>The floor the shortfall is taken against - the term's minRatio, as a fraction of each simplex's rest measure.</summary>
             public float floor => qualityTerm.minRatio;
+
+            /// <summary>Whether the ceiling is on, so samples above it are charged too.</summary>
+            public bool hasCeiling => qualityTerm.useMaxRatio;
+
+            /// <summary>The ceiling the excess is taken against, as a multiple of each simplex's rest measure - never below one; meaningful only while hasCeiling.</summary>
+            public float ceiling => Mathf.Max(1.0f, qualityTerm.maxRatio);
 
             /// <summary>How many rows this form puts: one, or one per node.</summary>
             public int rows => rowCountK;
@@ -703,7 +745,7 @@ namespace UC.ED
 
             public override void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset)
             {
-                double[] rowMeanSquare = MeasureRows(state, out _, out _, out _);
+                double[] rowMeanSquare = MeasureRows(state, out _, out _, out _, out _);
 
                 if (rowMeanSquare == null) return;
 
@@ -715,16 +757,20 @@ namespace UC.ED
 
             /// <summary>
             /// The mean square of every row at a state, with what it is made of: how many simplices
-            /// have actually turned over and how much measure that is, and how many sit below the
-            /// floor without having turned over. Null when there is nothing to measure. A caller
-            /// that also wants each simplex's own share hands in an array sized to the simplex
-            /// count - entries the loop skips stay at the zero the allocation gave them.
+            /// have actually turned over and how much measure that is, how many sit below the floor
+            /// without having turned over, and how many sit above the ceiling (none while it is
+            /// off). Null when there is nothing to measure. A caller that also wants each simplex's
+            /// own share hands in an array sized to the simplex count - entries the loop skips stay
+            /// at the zero the allocation gave them - and one that wants to tell the two sides apart
+            /// hands in a flag array the same size, set where the charge is an excess.
             /// </summary>
-            private double[] MeasureRows(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices, double[] perSimplexContribution = null)
+            private double[] MeasureRows(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices, out int expandedSimplices,
+                                         double[] perSimplexContribution = null, bool[] perSimplexExpanded = null)
             {
                 invertedSimplices = 0;
                 invertedMeasure = 0.0;
                 squashedSimplices = 0;
+                expandedSimplices = 0;
 
                 if (indices == null) return null;
 
@@ -754,13 +800,27 @@ namespace UC.ED
                         invertedSimplices++;
                     }
 
-                    double shortfall = Shortfall(s, signed);
+                    // The shortfall first, the excess only where there is none: at most one side
+                    // charges a simplex, and with the ceiling off the excess is zero and this is the
+                    // loop it was, statement for statement.
+                    double violation = Shortfall(s, signed);
 
-                    if (shortfall <= 0.0) continue;
+                    if (violation <= 0.0)
+                    {
+                        violation = Excess(s, signed);
 
-                    if (signed >= 0.0) squashedSimplices++;
+                        if (violation <= 0.0) continue;
 
-                    double contribution = Contribution(s, shortfall);
+                        expandedSimplices++;
+
+                        if (perSimplexExpanded != null) perSimplexExpanded[s] = true;
+                    }
+                    else if (signed >= 0.0)
+                    {
+                        squashedSimplices++;
+                    }
+
+                    double contribution = Contribution(s, violation);
 
                     if (perSimplexContribution != null) perSimplexContribution[s] = contribution;
 
@@ -777,8 +837,15 @@ namespace UC.ED
             /// the thesis quotes, and the two have to be read off the same simplices.
             /// </summary>
             public double MeasureInversion(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices, double[] perSimplexContribution = null)
+                => MeasureInversion(state, out invertedSimplices, out invertedMeasure, out squashedSimplices, out _, perSimplexContribution);
+
+            /// <summary>
+            /// As above, with the count of simplices above the ceiling beside the others - zero
+            /// while the ceiling is off. The RMS covers both sides: it is the row's own number.
+            /// </summary>
+            public double MeasureInversion(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices, out int expandedSimplices, double[] perSimplexContribution = null)
             {
-                double[] rowMeanSquare = MeasureRows(state, out invertedSimplices, out invertedMeasure, out squashedSimplices, perSimplexContribution);
+                double[] rowMeanSquare = MeasureRows(state, out invertedSimplices, out invertedMeasure, out squashedSimplices, out expandedSimplices, perSimplexContribution);
 
                 if (rowMeanSquare == null) return 0.0;
 
@@ -790,15 +857,71 @@ namespace UC.ED
             }
 
             /// <summary>
+            /// Every simplex's signed measure over its rest measure at a state - 1 at rest, 0 squashed
+            /// flat, negative turned over, above 1 grown - with the rest measures beside them, and
+            /// NaN for a simplex the term drops at rest (degenerate, or a stencil with an
+            /// uninfluenced corner), which nothing charges. The term's floor and ceiling play no part:
+            /// this is the raw measure, for an instrument that sets its own thresholds (the benchmark
+            /// evaluator). The rest array is the instance's own; read it, do not write to it. Costs a
+            /// residual evaluation.
+            /// </summary>
+            public bool TryMeasureRatios(EDStateView state, out double[] ratios, out double[] simplexRestMeasures)
+            {
+                ratios = null;
+                simplexRestMeasures = null;
+
+                if (indices == null) return false;
+
+                FullDeformationField.TransformBlender blender = (throughField) ? (deformation.CreateFieldBlender(state)) : (null);
+
+                var positions = new DVector3[restVertices.Length];
+
+                DeformAll(state, blender, positions);
+
+                DVector3[] referenceNormals = TransportNormals(state, blender);
+
+                int count = indices.Length / arity;
+
+                ratios = new double[count];
+
+                for (int s = 0; s < count; s++)
+                    ratios[s] = (restMeasures[s] > 0.0) ? (SignedMeasure(s, positions, referenceNormals) / restMeasures[s]) : (double.NaN);
+
+                simplexRestMeasures = restMeasures;
+
+                return true;
+            }
+
+            /// <summary>
             /// The columns this term adds to the breakdown, labelled in its own vocabulary -
             /// invertedTriangles against invertedTetrahedra, restArea against restVolume - so a CSV
             /// of one term reads in the units the term measures. The trailing notes column carries
-            /// describeNote, the caveat about how to read the numbers, when the form has one.
+            /// describeNote, the caveat about how to read the numbers, when the form has one. The
+            /// ceiling's two columns, expanded and maxExcess, are there only while it is on, so every
+            /// export made without it keeps the schema it had.
             /// </summary>
             public override string[] DescribeHeader()
             {
                 string sample = Capitalize(sampleLabel);
                 string measure = Capitalize(measureLabel);
+
+                if (hasCeiling)
+                {
+                    return new[]
+                    {
+                        $"inverted{sample}",
+                        $"total{sample}",
+                        $"inverted{measure}",
+                        $"rest{measure}",
+                        "squashed",
+                        "expanded",
+                        "globalRMS",
+                        "worst1%share",
+                        "maxShortfall",
+                        "maxExcess",
+                        "notes"
+                    };
+                }
 
                 return new[]
                 {
@@ -817,14 +940,55 @@ namespace UC.ED
             /// <summary>
             /// What the energy measured at a state, one value per DescribeHeader column.
             /// Re-measures the samples, so it costs a residual evaluation.
+            ///
+            /// The deepest violations are read before the one-percent share, which sorts the
+            /// contributions in place. Until 2026-10-20 the share came first, inside the array
+            /// initializer, so maxShortfall paired the s-th smallest contribution with simplex s's
+            /// rest measure: wrong on the mesh terms, whose triangles differ in area, and right on
+            /// the field terms only because their tetrahedra share one rest volume.
             /// </summary>
             public override string[] Describe(EDStateView state)
             {
                 int count = simplexCount;
 
-                var contributions = (count > 0) ? (new double[count]) : (null);
+                bool ceilingOn = hasCeiling;
 
-                double rms = MeasureInversion(state, out int inverted, out double measure, out int squashed, contributions);
+                var contributions = (count > 0) ? (new double[count]) : (null);
+                var expandedFlags = ((ceilingOn) && (count > 0)) ? (new bool[count]) : (null);
+
+                double[] rowMeanSquare = MeasureRows(state, out int inverted, out double measure, out int squashed, out int expanded, contributions, expandedFlags);
+
+                double total = 0.0;
+
+                if (rowMeanSquare != null)
+                {
+                    for (int k = 0; k < rowMeanSquare.Length; k++) total += rowMeanSquare[k];
+                }
+
+                double rms = Math.Sqrt(total);
+
+                double maxShortfall = MaxViolation(contributions, expandedFlags, excess: false);
+                double maxExcess = (ceilingOn) ? (MaxViolation(contributions, expandedFlags, excess: true)) : (0.0);
+
+                string worstShare = WorstOnePercentShare(contributions);
+
+                if (ceilingOn)
+                {
+                    return new[]
+                    {
+                        inverted.ToString(CultureInfo.InvariantCulture),
+                        count.ToString(CultureInfo.InvariantCulture),
+                        measure.ToString("F4", CultureInfo.InvariantCulture),
+                        restTotalMeasure.ToString("F2", CultureInfo.InvariantCulture),
+                        squashed.ToString(CultureInfo.InvariantCulture),
+                        expanded.ToString(CultureInfo.InvariantCulture),
+                        rms.ToString("E3", CultureInfo.InvariantCulture),
+                        worstShare,
+                        maxShortfall.ToString("F4", CultureInfo.InvariantCulture),
+                        maxExcess.ToString("F4", CultureInfo.InvariantCulture),
+                        describeNote
+                    };
+                }
 
                 return new[]
                 {
@@ -834,14 +998,50 @@ namespace UC.ED
                     restTotalMeasure.ToString("F2", CultureInfo.InvariantCulture),
                     squashed.ToString(CultureInfo.InvariantCulture),
                     rms.ToString("E3", CultureInfo.InvariantCulture),
-                    WorstOnePercentShare(contributions),
-                    MaxShortfall(contributions).ToString("F4", CultureInfo.InvariantCulture),
+                    worstShare,
+                    maxShortfall.ToString("F4", CultureInfo.InvariantCulture),
                     describeNote
                 };
             }
 
             private static string Capitalize(string label)
                 => (string.IsNullOrEmpty(label)) ? (label) : (char.ToUpperInvariant(label[0]) + label.Substring(1));
+
+            /// <summary>
+            /// The deepest single simplex on one side: its shortfall below the floor - or, with
+            /// <paramref name="excess"/>, its excess above the ceiling - as a fraction of its own
+            /// rest measure, unweighted. A shortfall is zero when nothing is under the floor, up to
+            /// the floor while the worst is squashed without inverting, past it once inverted and
+            /// unbounded after that (a simplex turned over by twice its rest measure reads floor +
+            /// 2). The RMS is a statement about the population and hides a few deep folds behind
+            /// many shallow ones; this is the tail's depth on its own, the same quantity on
+            /// triangles and on tetrahedra. Recovered exactly from the contribution, which is
+            /// (violation / m)^2 * (m / total), so no second pass over the samples - and so it has
+            /// to be read while the contributions are still in simplex order. The flags say which
+            /// side charged each simplex; without them every charge is a shortfall, as it is while
+            /// the ceiling is off.
+            /// </summary>
+            private double MaxViolation(double[] contributions, bool[] expandedFlags, bool excess)
+            {
+                if ((contributions == null) || (restTotalMeasure <= 0.0)) return 0.0;
+
+                double worst = 0.0;
+
+                for (int s = 0; s < contributions.Length; s++)
+                {
+                    if ((contributions[s] <= 0.0) || (restMeasures[s] <= 0.0)) continue;
+
+                    bool isExcess = (expandedFlags != null) && (expandedFlags[s]);
+
+                    if (isExcess != excess) continue;
+
+                    double depth = Math.Sqrt(contributions[s] * restTotalMeasure / restMeasures[s]);
+
+                    if (depth > worst) worst = depth;
+                }
+
+                return worst;
+            }
 
             /// <summary>
             /// How much of the mean square the worst one percent of samples carry - the number that
@@ -853,37 +1053,9 @@ namespace UC.ED
             /// Read it before and after any change to the loss shape; it is the number that says the
             /// tail is tamed. Empty when nothing was charged, which the breakdown renders as an
             /// absent column and a CSV as an empty cell. The array arrives as each simplex's own
-            /// share of the mean square and leaves sorted, which is fine for the one caller, who
-            /// allocated it for this.
+            /// share of the mean square and leaves sorted - so anything reading it by simplex index
+            /// reads it first.
             /// </summary>
-            /// <summary>
-            /// The deepest single simplex: its shortfall as a fraction of its own rest measure,
-            /// unweighted - zero when nothing is under the floor, up to the floor while the worst
-            /// is squashed without inverting, past it once inverted and unbounded after that (a
-            /// simplex turned over by twice its rest measure reads floor + 2). The RMS is a
-            /// statement about the population and hides a few deep folds behind many shallow ones;
-            /// this is the tail's depth on its own, the same quantity on triangles and on
-            /// tetrahedra. Recovered exactly from the contribution, which is (shortfall / m)^2 *
-            /// (m / total), so no second pass over the samples.
-            /// </summary>
-            private double MaxShortfall(double[] contributions)
-            {
-                if ((contributions == null) || (restTotalMeasure <= 0.0)) return 0.0;
-
-                double worst = 0.0;
-
-                for (int s = 0; s < contributions.Length; s++)
-                {
-                    if ((contributions[s] <= 0.0) || (restMeasures[s] <= 0.0)) continue;
-
-                    double depth = Math.Sqrt(contributions[s] * restTotalMeasure / restMeasures[s]);
-
-                    if (depth > worst) worst = depth;
-                }
-
-                return worst;
-            }
-
             private static string WorstOnePercentShare(double[] contributions)
             {
                 if (contributions == null) return string.Empty;
@@ -942,6 +1114,7 @@ namespace UC.ED
 
                     if (signed < 0.0)                    states[s] = SampleState.Inverted;
                     else if (Shortfall(s, signed) > 0.0) states[s] = SampleState.Squashed;
+                    else if (Excess(s, signed) > 0.0)    states[s] = SampleState.Expanded;
                 }
 
                 deformedPositions = new Vector3[positions.Length];
@@ -1041,9 +1214,35 @@ namespace UC.ED
             }
 
             /// <summary>
-            /// A simplex's share of its row's mean square: its shortfall as a fraction of its rest
-            /// measure, squared, weighted by its share of the total rest measure.
-            /// (shortfall / A_s)^2 * (A_s / A), with one A_s cancelled.
+            /// How far a simplex's measure sits above its ceiling, in measure units: its signed
+            /// measure less kappa times its rest measure, when that is positive - and zero, without
+            /// reading anything, while the ceiling is off.
+            /// </summary>
+            private double Excess(int s, double signedMeasure)
+            {
+                if (!qualityTerm.useMaxRatio) return 0.0;
+
+                double excess = signedMeasure - ((double)ceiling * restMeasures[s]);
+
+                return (excess > 0.0) ? (excess) : (0.0);
+            }
+
+            /// <summary>
+            /// What a simplex is charged on: its shortfall, or failing that its excess. The two
+            /// cannot both be positive, the ceiling being held at or above one and the floor at or
+            /// below it; while the ceiling is off this is the shortfall, the same double.
+            /// </summary>
+            private double Violation(int s, double signedMeasure)
+            {
+                double shortfall = Shortfall(s, signedMeasure);
+
+                return (shortfall > 0.0) ? (shortfall) : (Excess(s, signedMeasure));
+            }
+
+            /// <summary>
+            /// A simplex's share of its row's mean square: its violation - the shortfall, or the
+            /// excess - as a fraction of its rest measure, squared, weighted by its share of the
+            /// total rest measure. (violation / A_s)^2 * (A_s / A), with one A_s cancelled.
             /// </summary>
             private double Contribution(int s, double shortfall)
                 => ((shortfall > 0.0) && (restMeasures[s] > 0.0)) ? ((shortfall * shortfall) / (restMeasures[s] * restTotalMeasure)) : (0.0);
@@ -1268,13 +1467,13 @@ namespace UC.ED
                 {
                     if (restMeasures[s] <= 0.0) continue;
 
-                    baseContribution[s] = Contribution(s, Shortfall(s, SignedMeasure(s, basePositions, baseNormals)));
+                    baseContribution[s] = Contribution(s, Violation(s, SignedMeasure(s, basePositions, baseNormals)));
                     baseRowMeanSquare[simplexRow[s]] += baseContribution[s];
                     baseTotal += baseContribution[s];
                 }
 
-                // Nothing below the floor anywhere: every row is flat and stays at the zeros the
-                // Jacobian was allocated with. One-sided, like the determinant floor - and it is
+                // Nothing below the floor (or above the ceiling) anywhere: every row is flat and
+                // stays at the zeros the Jacobian was allocated with. One-sided, like the determinant floor - and it is
                 // also the one point where the root is not differentiable, so there is no gradient
                 // to take.
                 if (baseTotal <= 0.0) return;
@@ -1349,12 +1548,13 @@ namespace UC.ED
                 int nodeCount = (nodeVertices != null) ? (nodeVertices.Length) : (0);
                 double underFloorShare = (jacobianSimplicesMeasured > 0) ? (100.0 * jacobianSimplicesUnderFloor / jacobianSimplicesMeasured) : (0.0);
 
-                string scope = (qualityTerm.columnScope == EDQualityColumnScope.UnderFloor) ? ("the under-floor samples and their corners") : ("every reached sample");
+                string scope = (qualityTerm.columnScope == EDQualityColumnScope.UnderFloor) ? ((hasCeiling) ? ("the charged samples and their corners") : ("the under-floor samples and their corners")) : ("every reached sample");
+                string charged = (hasCeiling) ? ("under the floor or over the ceiling") : ("under the floor");
 
                 return string.Format(CultureInfo.InvariantCulture,
-                                     "{0} Jacobian(s), columns over {10}; per build: {1:F1} of {2} nodes active, {3:N0} vertex deformations, {4:N0} {5} measured, {6:N0} of them ({7:F1}%) under the floor at the base state; plus the base pass over {8:N0} vertices and {9:N0} {5}",
+                                     "{0} Jacobian(s), columns over {10}; per build: {1:F1} of {2} nodes active, {3:N0} vertex deformations, {4:N0} {5} measured, {6:N0} of them ({7:F1}%) {11} at the base state; plus the base pass over {8:N0} vertices and {9:N0} {5}",
                                      jacobianBuilds, jacobianActiveNodes / builds, nodeCount, jacobianVertexDeformations / builds, jacobianSimplicesMeasured / builds, sampleLabel,
-                                     jacobianSimplicesUnderFloor / builds, underFloorShare, vertexCount, simplexCount, scope);
+                                     jacobianSimplicesUnderFloor / builds, underFloorShare, vertexCount, simplexCount, scope, charged);
             }
 
             public override void ClearJacobianCost()
@@ -1455,7 +1655,7 @@ namespace UC.ED
                             // not listen to.
                             DVector3 referenceNormal = (arity == 3) ? (TransportedNormal(s, modifiedState, scratch.blender)) : (default);
 
-                            double delta = Contribution(s, Shortfall(s, SignedMeasure(s, basePositions, scratch, in referenceNormal))) - baseContribution[s];
+                            double delta = Contribution(s, Violation(s, SignedMeasure(s, basePositions, scratch, in referenceNormal))) - baseContribution[s];
 
                             if (delta != 0.0) scratch.AddRowDelta(simplexRow[s], delta);
                         }
