@@ -33,8 +33,9 @@ namespace UC.ED
     /// and only tetrahedra every corner of which something influences. A stencil with one rest
     /// corner and three deformed ones would report a fold the deformation never made.
     ///
-    /// Structure graphs only, since only they carry a field; elsewhere it contributes no rows and
-    /// says so.
+    /// A structure graph, or a mesh-sampled graph whose builder builds a field; elsewhere it
+    /// contributes no rows and says so. The corners are carried by whatever carries the geometry -
+    /// the field, or on a sampled graph under the bindings carrier, ED's bindings.
     /// </summary>
     [Serializable]
     public abstract class EDDeformationFieldQualityTerm : EDDeformationQualityTerm
@@ -90,7 +91,7 @@ namespace UC.ED
 
                 if (field == null)
                 {
-                    reason = "there is no deformation field to sample - only a structure graph builds one, and it is rebuilt by Build() after a reload";
+                    reason = "there is no deformation field to sample - a structure graph builds one, a mesh-sampled graph when its builder's Build Field is on, and it is rebuilt by Build() after a reload";
 
                     return false;
                 }
@@ -204,7 +205,12 @@ namespace UC.ED
                 return true;
             }
 
-            protected override bool samplesThroughField => true;
+            // The cells are the field's; what carries their corners is whatever carries the geometry
+            // - the rule the mesh term follows - so the volume measured is the volume the geometry
+            // has. Through the field on a structure graph, where this was always true, and on a
+            // sampled graph under the field carrier; through the bindings, bound as ED binds a
+            // vertex, on a sampled graph under the bindings carrier.
+            protected override bool samplesThroughField => deformation.usesDeformationFieldForOutput;
 
             protected override bool measureUninfluenced => false;
 

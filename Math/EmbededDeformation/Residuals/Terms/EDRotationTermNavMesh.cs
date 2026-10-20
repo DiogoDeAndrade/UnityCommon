@@ -20,7 +20,7 @@ namespace UC.ED
     /// right axis.
     /// </summary>
     [Serializable]
-    [PolymorphicName("Rotation (NavMesh)")]
+    [PolymorphicName("Rotation (Matrix)")]
     public class EDRotationTermNavMesh : EDResidualTerm
     {
         public override string name => "rotation";

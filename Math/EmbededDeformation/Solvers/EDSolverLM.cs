@@ -4,9 +4,9 @@ using UnityEngine;
 namespace UC.ED
 {
     /// <summary>
-    /// Levenberg-Marquardt on the dense normal equations: form JtJ and Jtf, add lambda to the
-    /// diagonal, and only accept a step that improves the residual, raising lambda and retrying
-    /// when it does not.
+    /// Levenberg-Marquardt on the normal equations: form JtJ and Jtf, add lambda to the diagonal,
+    /// and only accept a step that improves the residual, raising lambda and retrying when it does
+    /// not. The damped system is solved by a general solve, or by Cholesky when the option is on.
     ///
     /// This is the plain variant. It does not refresh the clearance cache between steps, so a
     /// configuration with a clearance term should use the nav-aware subclass instead - see
@@ -39,6 +39,12 @@ namespace UC.ED
         // measures the bits and the cost on the pieces' own sparsity pattern.
         [SerializeField, Tooltip("Form the normal equations over each Jacobian row's nonzero entries only, instead of the dense transpose-and-multiply. The same products, summed in row order; hundreds of times cheaper on a large piece. Named in the dump when on.")]
         protected bool useSparseNormalEquations = false;
+        // On the navigation solver until 2026-10-20, moved here so a geometry-sampled graph, which
+        // the navigation solver is refused on, can have it too. Same field name, so the navigation
+        // solver assets keep their value; off, the default, is the general solve every plain LM
+        // asset has always made.
+        [SerializeField, Tooltip("Factorise the damped normal equations by Cholesky instead of a general solve. Faster, but it fails on an indefinite matrix, and then raises the damping and retries.")]
+        protected bool cholesky = false;
         [SerializeField]
         protected float residualTolerance = 1e-5f;
         [SerializeField]
@@ -49,6 +55,7 @@ namespace UC.ED
         public override bool adaptiveLambda => adaptive;
         public override bool restartsDamping => restartDampingEachIteration;
         public override bool sparseNormalEquations => useSparseNormalEquations;
+        public override bool choleskyFactorization => cholesky;
 
         public override Instance NewInstance(EmbededDeformation deformation) => new LMInstance(this, deformation);
 
@@ -70,6 +77,7 @@ namespace UC.ED
                                        def.stepTolerance,
                                        resetBeforeSolve,
                                        def.adaptive,
+                                       def.cholesky,
                                        def.relativeEnergyStop,
                                        def.restartDampingEachIteration,
                                        def.useSparseNormalEquations);

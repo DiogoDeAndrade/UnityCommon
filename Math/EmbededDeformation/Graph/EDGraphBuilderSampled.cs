@@ -69,6 +69,204 @@ namespace UC.ED
                 deformation.EndGraphBuild();
 
                 Debug.Log($"ED graph built. Vertices={topology.vertexCount}, Triangles={topology.triangleCount}, Nodes={deformation.nodes.Count}, Edges={deformation.graphEdgeCount}");
+
+                // After the links, which read ED's own bindings: the graph is ED's whatever then
+                // carries the geometry, and rebinding the vertices to the field comes last.
+                if (builder.buildsDeformationField)
+                {
+                    using (Stage("Deformation field"))
+                        BuildDeformationField();
+                }
+            }
+
+            /// <summary>
+            /// The field again from the current settings, carrier included, without the rest of
+            /// Build: after a reload, which discards the field, or after a field setting changed.
+            /// </summary>
+            public override void RebuildDeformationField()
+            {
+                if (!builder.buildsDeformationField) return;
+
+                BuildDeformationField();
+            }
+
+            /// <summary>
+            /// The deformation field over the sampled graph: the geometry voxelized, every node a
+            /// point source at its rest position, the geodesic distances grown through the empty
+            /// cells and turned into weights. The structure builder's construction without what
+            /// only a skeleton has - no seed bars, no skeleton links, no along-skeleton resolution -
+            /// and kept as its own sequence rather than shared with it, so the structure path the
+            /// goldens run through stays the statements it was; the calls into the field are the
+            /// same calls in the same order.
+            ///
+            /// The bindings stay ED's under either carrier: what carries a point is decided by the
+            /// deformation (usesDeformationField), and every reader - the output, the quality terms,
+            /// the vertex constraint term - asks it, so nothing here re-encodes it.
+            /// </summary>
+            private void BuildDeformationField()
+            {
+                bool carrier = (builder.geometryCarrier == EDGeometryCarrier.DeformationField);
+
+                // Before anything can fail, so a field that does not build reads as missing rather
+                // than as never asked for.
+                deformation.SetSampledGraphFieldCarrier(carrier);
+
+                DebugProfiler timer = new();
+                timer.Mark();
+
+                List<Mesh> sourceGeometry = deformation.GetSourceGeometry();
+
+                if ((sourceGeometry == null) || (sourceGeometry.Count == 0))
+                {
+                    Debug.LogWarning($"{builder.name}: the deformation field was asked for and no source geometry was provided, so there is none.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                var nodes = deformation.nodes;
+
+                if ((nodes == null) || (nodes.Count == 0))
+                {
+                    Debug.LogWarning($"{builder.name}: the deformation field was asked for and the graph has no nodes.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                // The geometry's bounds and the nodes inside them. Bounds is a struct, so the
+                // copy is encapsulated in place.
+                bool hasBounds = false;
+                Bounds bounds = default;
+
+                for (int i = 0; i < sourceGeometry.Count; i++)
+                {
+                    Mesh mesh = sourceGeometry[i];
+                    if (mesh == null) continue;
+
+                    if (!hasBounds)
+                    {
+                        bounds = mesh.bounds;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(mesh.bounds);
+                    }
+                }
+
+                if (!hasBounds)
+                {
+                    Debug.LogWarning($"{builder.name}: the source geometry has no valid meshes, so there is no deformation field.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                for (int i = 0; i < nodes.Count; i++)
+                    bounds.Encapsulate(nodes[i].restPosition.ToVector3());
+
+                float maxSize = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+
+                if (maxSize <= 1e-6f)
+                {
+                    Debug.LogWarning($"{builder.name}: the source geometry's bounds are degenerate, so there is no deformation field.");
+                    deformation.SetDeformationField(null);
+                    return;
+                }
+
+                float safeDensity = Mathf.Max(builder.deformationFieldVoxelDensity, 1e-5f);
+                float voxelSize = maxSize * safeDensity;
+
+                // The structure builder checks its shortest segment; here the nodes have no
+                // segments, and the question is the same one asked of their spacing: two nodes in
+                // one cell have the same distance everywhere and no weighting can tell them apart.
+                double minSpacing = ShortestNodeSpacing(nodes);
+
+                if (minSpacing > 0.0)
+                {
+                    if (minSpacing < voxelSize)
+                        Debug.LogError($"{builder.name}: the closest two nodes are {minSpacing:F4} apart against a voxel of {voxelSize:F4}, so they share a cell and the field cannot tell them apart. Raise the sample distance, or lower the field voxel density (voxel = density x largest bound).");
+                    else if (minSpacing < 2.0 * voxelSize)
+                        Debug.LogWarning($"{builder.name}: the closest two nodes are {minSpacing:F4} apart against a voxel of {voxelSize:F4} ({minSpacing / voxelSize:F2} voxels), so their distances quantize to a step or two and the weights separate them poorly. Raise the sample distance, or lower the field voxel density.");
+                }
+
+                EDGraphBuilder.ResolveFieldSlots(builder.deformationFieldMaxWeights, builder.deformationFieldDistanceStorage, builder.deformationFieldStorageSlots, nodes.Count,
+                                                 out int safeMaxWeights, out int storageSlots);
+
+                bool slotPerNode = (storageSlots >= nodes.Count);
+
+                // Point sources, so neither seeding flag; the volume influence, the only one a graph
+                // without a skeleton has.
+                FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, builder.deformationFieldConnectivity,
+                                                                      false, false, builder.deformationFieldBlendMode,
+                                                                      builder.deformationFieldRotationBlend, builder.deformationFieldScaleBlend);
+
+                // Baked to world space by SetSourceGeometry, so the voxelizer takes identities.
+                List<Matrix4x4> identityMatrices = new();
+
+                for (int i = 0; i < sourceGeometry.Count; i++)
+                    identityMatrices.Add(Matrix4x4.identity);
+
+                using (Stage("Voxelisation"))
+                    field.FillWithMesh(sourceGeometry, identityMatrices);
+
+                // In node order, so the field's node index is the graph's.
+                using (Stage("Node wavefronts"))
+                {
+                    for (int i = 0; i < nodes.Count; i++)
+                    {
+                        EDNode node = nodes[i];
+
+                        field.AddDeformationNode(node.restPosition.ToVector3(), node.restRight.ToVector3(), node.restUp.ToVector3(), node.restForward.ToVector3(), 0.0f);
+                    }
+                }
+
+                using (Stage("Influence growth"))
+                    field.GrowInfluence(EDDiagnostics.parallelOptions);
+
+                using (Stage("Weights"))
+                    field.ComputeWeights(safeMaxWeights, builder.CreateFieldWeightResolver());
+
+                using (Stage("Trilinear regions"))
+                    field.BuildTrilinearRegions();
+
+                deformation.SetDeformationField(field);
+
+                string carrierLine = (carrier)
+                    ? ($"  Carrier=DeformationField, blend {field.builtBlendDescriptor}: the output, the pins and the quality terms' samples all through the field\n")
+                    : ("  Carrier=Bindings: the output, the pins and the field quality terms' cell corners all through ED's bindings, the field giving only its cells\n");
+
+                timer.Mark();
+
+                Debug.Log(
+                    $"Deformation field built over the sampled graph:\n" +
+                    $"  Meshes={sourceGeometry.Count}\n" +
+                    $"  Nodes={nodes.Count}\n" +
+                    $"  VoxelSize={voxelSize:F4}\n" +
+                    ((minSpacing > 0.0) ? ($"  MinNodeSpacing={minSpacing:F4} ({minSpacing / voxelSize:F2} voxels)\n") : ("")) +
+                    $"  MaxWeights={safeMaxWeights}\n" +
+                    $"  Bounds={bounds.size}\n" +
+                    $"  Grid Size={field.gridSize}\n" +
+                    $"  Growth={field.lastGrowthPath}, {field.lastGrowthOccupiedCells} occupied cells, {field.lastGrowthBoundaryCells} of them seeds\n" +
+                    carrierLine +
+                    $"  Time={timer.accumulatedTimeMS:F6} ms"
+                );
+            }
+
+            /// <summary>The smallest rest distance between two nodes, or -1 with fewer than two.</summary>
+            private static double ShortestNodeSpacing(List<EDNode> nodes)
+            {
+                if ((nodes == null) || (nodes.Count < 2)) return -1.0;
+
+                double minSq = double.MaxValue;
+
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    DVector3 p = nodes[i].restPosition;
+
+                    for (int j = i + 1; j < nodes.Count; j++)
+                        minSq = Math.Min(minSq, (nodes[j].restPosition - p).sqrMagnitude);
+                }
+
+                return Math.Sqrt(minSq);
             }
 
             /// <summary>

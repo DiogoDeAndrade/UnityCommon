@@ -7,23 +7,26 @@ namespace UC.ED
     /// The navigation-aware Levenberg-Marquardt solver, and the one the nav-aware deformation
     /// actually uses.
     ///
-    /// Differs from the plain LM in exactly five ways, all of which matter once navigation energies
-    /// are involved: it initialises the Math.NET provider, recomputes the clearance cache for the
-    /// current state and for every candidate step so the clearance term is never evaluated against
-    /// stale data, optionally factorises with Cholesky instead of a general solve, logs the
-    /// per-energy residual breakdown each iteration, and reports the profiler timings.
+    /// The same loop as the plain LM - the damping rules, the restart, the sparse normal equations,
+    /// the Cholesky option, the energy stop and the per-iteration hook are shared - and it differs
+    /// in what it records and in one measurement. It measures the clearances of every candidate
+    /// step, and of the state it enters with, when the model holds a term that reads them
+    /// (2026-10-08; with no such term it measures none). It logs the per-energy breakdown at every
+    /// iteration and at the end. And it writes the export's rows differently: a continuing solve
+    /// does not report the state it entered with, which the previous solve's last row already
+    /// holds, and every solve reports its final state.
     ///
     /// The clearance refresh is the important one: pairing a clearance-weighted configuration with
-    /// the plain LM silently measures clearance against the previous state.
+    /// the plain LM silently measures clearance against the previous state. The owner also reads
+    /// the solver's type: a GenerateED with this solver builds the navigation data.
     /// </summary>
     [CreateAssetMenu(fileName = "EDSolverNavLM", menuName = "Unity Common/ED/Solver/Levenberg-Marquardt (Nav-Aware)")]
     public class EDSolverNavLM : EDSolverLM
     {
-        [SerializeField, Tooltip("Faster, but fails on an indefinite Hessian and falls back to raising lambda.")]
-        private bool cholesky = false;
+        // The Cholesky option is the plain LM's since 2026-10-20, under the same field name, so the
+        // assets of this class kept their value.
 
         public override string modeLabel => "NavED";
-        public override bool choleskyFactorization => cholesky;
 
         public override Instance NewInstance(EmbededDeformation deformation) => new NavLMInstance(this, deformation);
 

@@ -57,6 +57,28 @@ namespace UC.ED
     }
 
     /// <summary>
+    /// What carries the geometry of a graph that has a deformation field: ED's own bindings, or
+    /// the field. One choice for everything a point of the geometry goes through - the output mesh,
+    /// the field's own cell corners that the field quality term measures, the mesh quality terms'
+    /// samples and the vertices the constraints pin - so a term always measures the deformation
+    /// the geometry suffers.
+    ///
+    /// Only a sampled graph has the choice. The structure graph always deforms through its field.
+    /// </summary>
+    public enum EDGeometryCarrier
+    {
+        /// <summary>The bindings, as ED deforms: each point blended linearly over its nearest
+        /// nodes by the builder's binding settings. The field then contributes only its cells -
+        /// where the solid is - and none of its weights.</summary>
+        Bindings,
+        /// <summary>The field: each point carried by the nodes the field's geodesic distances
+        /// pick, trilinearly filtered, under the field's blend - the pinned vertices too, which
+        /// the vertex constraint term deforms as the output does (analytic under the linear blend,
+        /// finite differences under a decomposed one). The bindings stay ED's.</summary>
+        DeformationField
+    }
+
+    /// <summary>
     /// Where the deformation graph comes from, and the construction that produces it.
     ///
     /// The two builders answer genuinely different questions. Sampling the navmesh has to decide
@@ -98,6 +120,13 @@ namespace UC.ED
         public virtual GraphLinkMode linkMode => GraphLinkMode.PartitionAdjacency;
         public virtual float maxBindDistance => 2.0f;
         public virtual float minBindAngle => 20.0f;
+        /// <summary>
+        /// Whether this builder builds a deformation field. The structure builder always does; a
+        /// sampled builder when its option is on, and then <see cref="geometryCarrier"/> says
+        /// whether the field or the bindings carry the geometry.
+        /// </summary>
+        public virtual bool buildsDeformationField => false;
+        public virtual EDGeometryCarrier geometryCarrier => EDGeometryCarrier.Bindings;
         public virtual float deformationFieldVoxelDensity => 0.05f;
         public virtual int deformationFieldMaxWeights => 4;
         public virtual EDFieldDistanceStorage deformationFieldDistanceStorage => EDFieldDistanceStorage.NearestWeighted;
@@ -265,6 +294,15 @@ namespace UC.ED
             protected IDisposable Stage(string name) => timings?.Begin(name);
 
             public abstract void Build(List<int> forcedVertices);
+
+            /// <summary>
+            /// Rebuilds only the deformation field, for when it is missing after a reload or stale
+            /// after a settings change, without the rest of Build. Nothing for a builder that
+            /// builds no field.
+            /// </summary>
+            public virtual void RebuildDeformationField()
+            {
+            }
 
             /// <summary>
             /// Builds the per-segment bindings and clearance probes the nav-aware energies measure

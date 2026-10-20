@@ -127,8 +127,9 @@ namespace UC.ED
             clearanceOpenings.Clear();
             terminalConstraints.Clear();
 
-            // Only the structure path produces one.
+            // The structure path produces one, and a sampled path whose builder asks for it.
             deformationField = null;
+            sampledGraphFieldCarrier = false;
             structureTree = null;
 
             navigationDataBuilt = false;
@@ -313,6 +314,17 @@ namespace UC.ED
             // Re-arm, so the next reload warns again rather than staying quiet on the strength of a
             // build that a reload has since discarded.
             warnedFieldMissing = false;
+        }
+
+        /// <summary>
+        /// Says whether a sampled graph's field carries its geometry (EDGeometryCarrier). Set by the
+        /// sampled builder at every build, before its field is built, so that a field that failed
+        /// to build, or one a reload discarded, reads as missing rather than as never asked for.
+        /// BeginGraphBuild clears it. A structure graph deforms through its field whatever this says.
+        /// </summary>
+        public void SetSampledGraphFieldCarrier(bool carries)
+        {
+            sampledGraphFieldCarrier = carries;
         }
     }
 }
