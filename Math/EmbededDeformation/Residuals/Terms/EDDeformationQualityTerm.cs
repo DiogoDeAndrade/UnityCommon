@@ -94,6 +94,16 @@ namespace UC.ED
     /// root has no gradient. Off, every number this term produces is the one it produced before
     /// the ceiling existed - the violation is the shortfall, exactly.
     ///
+    /// **Empty space is a second sample set, never part of the first.** A sampler may lay samples
+    /// over the space outside the solid too (the field term's Account For Empty Space). Those are
+    /// a fold of the map across a gap - two parts of the piece passing through each other turn
+    /// the space between them over - and they are charged on their own: rows of their own after
+    /// the solid's (one, or one per node, clustered the same way), a mean over their own rest
+    /// measure, their own floor, no ceiling (a bend legitimately opens the space outside it and
+    /// squeezes the space inside it), and their own weight, which means what the term's weight
+    /// means. The solid's rows, sums, counts and columns are bit for bit what they are without
+    /// them; the empty space's have columns of their own.
+    ///
     /// **The orientation reference turns with the map.** A triangle's signed area needs a direction
     /// to be signed against, and a rest normal frozen in world space reads legitimate rotation as
     /// damage: past ~72 degrees of local rotation a healthy triangle scores squashed, past 90
@@ -169,6 +179,22 @@ namespace UC.ED
         protected abstract bool perNode { get; }
 
         /// <summary>
+        /// Whether the sampler also lays samples over empty space - the field term's option, off
+        /// on every other term. Empty-space samples are a second set beside the solid's, with rows
+        /// of their own (as many again as the solid's: one, or one per node), their own floor,
+        /// no ceiling and their own weight; the solid's rows, its counts and its columns are
+        /// exactly what they are without it. Read as a setting, so the readout's header can say
+        /// which columns it has before any sample exists.
+        /// </summary>
+        protected virtual bool samplesEmptySpace => false;
+
+        /// <summary>The floor an empty-space sample is charged under, as a fraction of its rest measure; meaningful only while samplesEmptySpace.</summary>
+        protected virtual float emptySpaceFloorRatio => 0.0f;
+
+        /// <summary>The empty-space rows' weight, meaning what the term's own weight means for the solid's rows: the weight times the mean squared violation.</summary>
+        protected virtual float emptySpaceRowWeight => 0.0f;
+
+        /// <summary>
         /// What the measure has to say about one sample at a state, matching the residual's cases
         /// exactly: uncharged, below the floor without turning over, turned over, and - only while
         /// the ceiling is on - above the ceiling. A sample dropped at rest - degenerate, or a stencil
@@ -202,6 +228,15 @@ namespace UC.ED
             private double              restTotalMeasure;
             private int[]               simplexRow;
             private int                 rowCountK;
+
+            // The empty-space samples, when the sampler lays any: which simplices they are, their
+            // rest measure apart from the solid's, and how many rows the solid's set has - the
+            // empty space's rows follow it, as many again. Null and the term's whole row count when
+            // there are none, which is the term exactly as it was before the option.
+            private bool[]              simplexEmpty;
+            private double              restEmptyMeasure;
+            private int                 emptySimplexCount;
+            private int                 solidRowCount;
             private EDVertexBinding[]   bindings;
             private int[][]             nodeVertices;
             private int[][]             nodeSimplices;
@@ -260,6 +295,13 @@ namespace UC.ED
             /// <summary>Anything a sampler wants appended to its readout.</summary>
             protected virtual string describeNote => string.Empty;
 
+            /// <summary>
+            /// Which of the simplices the last TryBuildSamples laid over empty space, one flag per
+            /// simplex, or null when none - read once, right after that call. Only a sampler whose
+            /// term samples empty space has any.
+            /// </summary>
+            protected virtual bool[] emptySpaceSimplices => null;
+
             public int simplexCount => (indices != null) ? (indices.Length / Math.Max(1, arity)) : (0);
             public int vertexCount => (restVertices != null) ? (restVertices.Length) : (0);
 
@@ -279,8 +321,17 @@ namespace UC.ED
                 return (indices != null);
             }
 
-            /// <summary>The measure of the whole sample set at rest, which weights each simplex's share of a row.</summary>
+            /// <summary>The measure of the whole sample set at rest - the solid's, without the empty space - which weights each simplex's share of a row.</summary>
             public double restMeasure => restTotalMeasure;
+
+            /// <summary>The measure of the empty-space samples at rest, zero when there are none.</summary>
+            public double restEmptySpaceMeasure => restEmptyMeasure;
+
+            /// <summary>How many of the simplices sample empty space rather than the solid.</summary>
+            public int emptySpaceSimplexCount => emptySimplexCount;
+
+            /// <summary>Whether a simplex samples empty space rather than the solid.</summary>
+            public bool IsEmptySpace(int s) => (simplexEmpty != null) && (s >= 0) && (s < simplexEmpty.Length) && (simplexEmpty[s]);
 
             /// <summary>The floor the shortfall is taken against - the term's minRatio, as a fraction of each simplex's rest measure.</summary>
             public float floor => qualityTerm.minRatio;
@@ -319,6 +370,10 @@ namespace UC.ED
                 restTotalMeasure = 0.0;
                 simplexRow = null;
                 rowCountK = 0;
+                simplexEmpty = null;
+                restEmptyMeasure = 0.0;
+                emptySimplexCount = 0;
+                solidRowCount = 0;
                 bindings = null;
                 nodeVertices = null;
                 nodeSimplices = null;
@@ -360,6 +415,16 @@ namespace UC.ED
                 int vertexCount = restVertices.Length;
                 int simplexCount = indices.Length / arity;
                 int nodeCount = deformation.nodes.Count;
+
+                bool[] emptyFlags = emptySpaceSimplices;
+
+                if ((emptyFlags != null) && (emptyFlags.Length == simplexCount))
+                {
+                    for (int s = 0; s < simplexCount; s++)
+                        if (emptyFlags[s]) emptySimplexCount++;
+
+                    if (emptySimplexCount > 0) simplexEmpty = emptyFlags;
+                }
 
                 // Which nodes reach each vertex - and whether any do at all.
                 var perNode = new List<int>[nodeCount];
@@ -478,7 +543,10 @@ namespace UC.ED
                         restMeasures[s] = Math.Abs(signedVolume);
                     }
 
-                    restTotalMeasure += restMeasures[s];
+                    // The empty space's measure apart from the solid's, so each set's rows are a
+                    // mean over its own measure and neither dilutes the other.
+                    if ((simplexEmpty != null) && (simplexEmpty[s])) restEmptyMeasure += restMeasures[s];
+                    else restTotalMeasure += restMeasures[s];
                 }
 
                 // Where the per-node rows ask for their dominant node - and, for triangles, where
@@ -562,6 +630,24 @@ namespace UC.ED
                     rowCountK = 1;
                 }
 
+                // The empty space's rows after the solid's, as many again and clustered the same
+                // way, so the solid's rows keep their indices and their sums.
+                solidRowCount = rowCountK;
+
+                if ((simplexEmpty != null) && (restEmptyMeasure > 0.0))
+                {
+                    for (int s = 0; s < simplexCount; s++)
+                        if (simplexEmpty[s]) simplexRow[s] += solidRowCount;
+
+                    rowCountK = 2 * solidRowCount;
+                }
+                else
+                {
+                    simplexEmpty = null;
+                    emptySimplexCount = 0;
+                    restEmptyMeasure = 0.0;
+                }
+
                 // Simplices per vertex, as a compact adjacency, so the simplices a node reaches can
                 // be collected by walking its vertices.
                 var vertexSimplexCount = new int[vertexCount + 1];
@@ -631,7 +717,9 @@ namespace UC.ED
                     nodeSimplices[n] = reached.ToArray();
                 }
 
-                Debug.Log($"[ED] {term.name}: {simplexCount} {sampleLabel} over {vertexCount} vertices, rest {measureLabel} {restTotalMeasure:F3}, {rowCountK} row(s)" +
+                Debug.Log($"[ED] {term.name}: {simplexCount - emptySimplexCount} {sampleLabel} over {vertexCount} vertices, rest {measureLabel} {restTotalMeasure:F3}, {rowCountK} row(s)" +
+                          ((simplexEmpty != null) ? ($", of which {solidRowCount} over {emptySimplexCount} {sampleLabel} of empty space, rest {measureLabel} {restEmptyMeasure:F3}") : ("")) +
+                          ((qualityTerm.samplesEmptySpace) && (simplexEmpty == null) ? (", no empty space to sample") : ("")) +
                           ((droppedUninfluenced > 0) ? ($", {droppedUninfluenced} dropped for a vertex nothing influences") : ("")) +
                           ((droppedDegenerate > 0) ? ($", {droppedDegenerate} degenerate at rest") : ("")) + ".");
             }
@@ -741,7 +829,33 @@ namespace UC.ED
             /// global mean square and the energy is the same number the single-row form would give.
             /// One otherwise - the unnormalised energy sums the rows as they are.
             /// </summary>
-            private double rowScale => ((qualityTerm.perNode) && (normalizeWeights)) ? (rowCountK) : (1.0);
+            private double rowScale => ((qualityTerm.perNode) && (normalizeWeights)) ? (solidRowCount) : (1.0);
+
+            /// <summary>
+            /// Each row's weight. Without empty space every row carries the term's residualWeight,
+            /// as it always has. With it, the residualWeight Resolve gave is over both sets' rows, so
+            /// each set's is taken again over its own: the solid's rows under the term's weight, the
+            /// empty space's under its own - so that each is its weight times its own mean square,
+            /// normalised or not, as the term alone always was.
+            /// </summary>
+            private double[] RowWeights()
+            {
+                var weights = new double[rowCountK];
+
+                if (simplexEmpty == null)
+                {
+                    for (int k = 0; k < rowCountK; k++) weights[k] = residualWeight;
+
+                    return weights;
+                }
+
+                double solid = EDResidualTerm.BuildResidualWeight(term.conceptualWeight, solidRowCount, normalizeWeights);
+                double empty = EDResidualTerm.BuildResidualWeight(qualityTerm.emptySpaceRowWeight, solidRowCount, normalizeWeights);
+
+                for (int k = 0; k < rowCountK; k++) weights[k] = (k < solidRowCount) ? (solid) : (empty);
+
+                return weights;
+            }
 
             public override void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset)
             {
@@ -750,9 +864,10 @@ namespace UC.ED
                 if (rowMeanSquare == null) return;
 
                 double scale = rowScale;
+                double[] weights = RowWeights();
 
                 for (int k = 0; k < rowCountK; k++)
-                    residual[rowOffset + k] = residualWeight * Math.Sqrt(scale * rowMeanSquare[k]);
+                    residual[rowOffset + k] = weights[k] * Math.Sqrt(scale * rowMeanSquare[k]);
             }
 
             /// <summary>
@@ -763,9 +878,12 @@ namespace UC.ED
             /// own share hands in an array sized to the simplex count - entries the loop skips stay
             /// at the zero the allocation gave them - and one that wants to tell the two sides apart
             /// hands in a flag array the same size, set where the charge is an excess.
+            ///
+            /// The counts are the solid's: an empty-space simplex goes into its own row and, when
+            /// the caller hands one in, into the tally, and nowhere else.
             /// </summary>
             private double[] MeasureRows(EDStateView state, out int invertedSimplices, out double invertedMeasure, out int squashedSimplices, out int expandedSimplices,
-                                         double[] perSimplexContribution = null, bool[] perSimplexExpanded = null)
+                                         double[] perSimplexContribution = null, bool[] perSimplexExpanded = null, EmptySpaceTally emptyTally = null)
             {
                 invertedSimplices = 0;
                 invertedMeasure = 0.0;
@@ -793,6 +911,20 @@ namespace UC.ED
                     if (restMeasures[s] <= 0.0) continue;
 
                     double signed = SignedMeasure(s, positions, referenceNormals);
+
+                    // Empty space: its own row, its own floor, no ceiling, and its own tally - kept
+                    // out of the solid's counts and out of the per-simplex arrays the solid's
+                    // columns are read from.
+                    if ((simplexEmpty != null) && (simplexEmpty[s]))
+                    {
+                        double shortfall = Shortfall(s, signed);
+
+                        if (emptyTally != null) emptyTally.Add(signed, shortfall, restMeasures[s]);
+
+                        if (shortfall > 0.0) rowMeanSquare[simplexRow[s]] += Contribution(s, shortfall);
+
+                        continue;
+                    }
 
                     if (signed < 0.0)
                     {
@@ -831,6 +963,55 @@ namespace UC.ED
             }
 
             /// <summary>
+            /// What the empty-space samples came to at a state: how many turned over and how much
+            /// measure that is, how many sit under their floor without turning over, and the deepest
+            /// shortfall as a fraction of its own rest measure - the solid's maxShortfall, read on
+            /// the empty space.
+            /// </summary>
+            private sealed class EmptySpaceTally
+            {
+                public int    inverted;
+                public double invertedMeasure;
+                public int    underFloor;
+                public double maxShortfall;
+
+                public void Add(double signedMeasure, double shortfall, double restMeasure)
+                {
+                    if (signedMeasure < 0.0)
+                    {
+                        inverted++;
+                        invertedMeasure -= signedMeasure;
+                    }
+                    else if (shortfall > 0.0)
+                    {
+                        underFloor++;
+                    }
+
+                    if ((shortfall > 0.0) && (restMeasure > 0.0)) maxShortfall = Math.Max(maxShortfall, shortfall / restMeasure);
+                }
+            }
+
+            /// <summary>The solid's rows' mean squares summed - the global mean square the solid's columns quote, without the empty space's rows.</summary>
+            private double SolidMeanSquare(double[] rowMeanSquare)
+            {
+                double total = 0.0;
+
+                for (int k = 0; k < Math.Min(solidRowCount, rowMeanSquare.Length); k++) total += rowMeanSquare[k];
+
+                return total;
+            }
+
+            /// <summary>The empty space's rows' mean squares summed, zero when there are none.</summary>
+            private double EmptyMeanSquare(double[] rowMeanSquare)
+            {
+                double total = 0.0;
+
+                for (int k = solidRowCount; k < rowMeanSquare.Length; k++) total += rowMeanSquare[k];
+
+                return total;
+            }
+
+            /// <summary>
             /// The global RMS at a state - the single-row residual before weighting, whichever form
             /// this is - together with the counts behind it. Public for the report after a solve,
             /// which wants the counts beside the number the energy saw: the inversion count is what
@@ -849,11 +1030,8 @@ namespace UC.ED
 
                 if (rowMeanSquare == null) return 0.0;
 
-                double total = 0.0;
-
-                for (int k = 0; k < rowMeanSquare.Length; k++) total += rowMeanSquare[k];
-
-                return Math.Sqrt(total);
+                // The solid's: the empty space's rows have their own columns.
+                return Math.Sqrt(SolidMeanSquare(rowMeanSquare));
             }
 
             /// <summary>
@@ -863,9 +1041,13 @@ namespace UC.ED
             /// uninfluenced corner), which nothing charges. The term's floor and ceiling play no part:
             /// this is the raw measure, for an instrument that sets its own thresholds (the benchmark
             /// evaluator). The rest array is the instance's own; read it, do not write to it. Costs a
-            /// residual evaluation.
+            /// residual evaluation. The solid's simplices only, by default: an empty-space one reads
+            /// NaN, as a dropped one does, so an instrument reading the lattice reads the solid's.
+            /// With includeEmptySpace the empty-space simplices read their ratio too, and the caller
+            /// tells the two sets apart by IsEmptySpace - the benchmark evaluator's empty-space
+            /// metric (2026-10-21), which hosts a term with the option on and reads only those.
             /// </summary>
-            public bool TryMeasureRatios(EDStateView state, out double[] ratios, out double[] simplexRestMeasures)
+            public bool TryMeasureRatios(EDStateView state, out double[] ratios, out double[] simplexRestMeasures, bool includeEmptySpace = false)
             {
                 ratios = null;
                 simplexRestMeasures = null;
@@ -885,7 +1067,7 @@ namespace UC.ED
                 ratios = new double[count];
 
                 for (int s = 0; s < count; s++)
-                    ratios[s] = (restMeasures[s] > 0.0) ? (SignedMeasure(s, positions, referenceNormals) / restMeasures[s]) : (double.NaN);
+                    ratios[s] = ((restMeasures[s] > 0.0) && ((includeEmptySpace) || (!IsEmptySpace(s)))) ? (SignedMeasure(s, positions, referenceNormals) / restMeasures[s]) : (double.NaN);
 
                 simplexRestMeasures = restMeasures;
 
@@ -897,44 +1079,48 @@ namespace UC.ED
             /// invertedTriangles against invertedTetrahedra, restArea against restVolume - so a CSV
             /// of one term reads in the units the term measures. The trailing notes column carries
             /// describeNote, the caveat about how to read the numbers, when the form has one. The
-            /// ceiling's two columns, expanded and maxExcess, are there only while it is on, so every
-            /// export made without it keeps the schema it had.
+            /// ceiling's two columns, expanded and maxExcess, are there only while it is on, and the
+            /// empty space's seven only while the term samples it, so every export made without
+            /// either keeps the schema it had.
             /// </summary>
             public override string[] DescribeHeader()
             {
                 string sample = Capitalize(sampleLabel);
                 string measure = Capitalize(measureLabel);
 
-                if (hasCeiling)
-                {
-                    return new[]
-                    {
-                        $"inverted{sample}",
-                        $"total{sample}",
-                        $"inverted{measure}",
-                        $"rest{measure}",
-                        "squashed",
-                        "expanded",
-                        "globalRMS",
-                        "worst1%share",
-                        "maxShortfall",
-                        "maxExcess",
-                        "notes"
-                    };
-                }
-
-                return new[]
+                var header = new List<string>
                 {
                     $"inverted{sample}",
                     $"total{sample}",
                     $"inverted{measure}",
                     $"rest{measure}",
                     "squashed",
-                    "globalRMS",
-                    "worst1%share",
-                    "maxShortfall",
-                    "notes"
                 };
+
+                if (hasCeiling) header.Add("expanded");
+
+                header.Add("globalRMS");
+                header.Add("worst1%share");
+                header.Add("maxShortfall");
+
+                if (hasCeiling) header.Add("maxExcess");
+
+                // The empty space's, while the term samples it - by the setting, not by what was
+                // built, so the header is right before any sample exists.
+                if (qualityTerm.samplesEmptySpace)
+                {
+                    header.Add($"empty{sample}");
+                    header.Add($"emptyInverted{sample}");
+                    header.Add($"emptyInverted{measure}");
+                    header.Add($"emptyRest{measure}");
+                    header.Add("emptyUnderFloor");
+                    header.Add("emptyRMS");
+                    header.Add("emptyMaxShortfall");
+                }
+
+                header.Add("notes");
+
+                return header.ToArray();
             }
 
             /// <summary>
@@ -946,62 +1132,87 @@ namespace UC.ED
             /// initializer, so maxShortfall paired the s-th smallest contribution with simplex s's
             /// rest measure: wrong on the mesh terms, whose triangles differ in area, and right on
             /// the field terms only because their tetrahedra share one rest volume.
+            ///
+            /// The solid's columns are the solid's alone: its count, its RMS and its worst share
+            /// leave the empty space out, which has columns of its own after them - empty when the
+            /// option is on and nothing was laid (a flat rest mesh has no inside to its hull).
             /// </summary>
             public override string[] Describe(EDStateView state)
             {
                 int count = simplexCount;
+                int solidCount = count - emptySimplexCount;
 
                 bool ceilingOn = hasCeiling;
 
                 var contributions = (count > 0) ? (new double[count]) : (null);
                 var expandedFlags = ((ceilingOn) && (count > 0)) ? (new bool[count]) : (null);
+                var emptyTally = (qualityTerm.samplesEmptySpace) ? (new EmptySpaceTally()) : (null);
 
-                double[] rowMeanSquare = MeasureRows(state, out int inverted, out double measure, out int squashed, out int expanded, contributions, expandedFlags);
+                double[] rowMeanSquare = MeasureRows(state, out int inverted, out double measure, out int squashed, out int expanded, contributions, expandedFlags, emptyTally);
 
-                double total = 0.0;
-
-                if (rowMeanSquare != null)
-                {
-                    for (int k = 0; k < rowMeanSquare.Length; k++) total += rowMeanSquare[k];
-                }
+                double total = (rowMeanSquare != null) ? (SolidMeanSquare(rowMeanSquare)) : (0.0);
 
                 double rms = Math.Sqrt(total);
 
                 double maxShortfall = MaxViolation(contributions, expandedFlags, excess: false);
                 double maxExcess = (ceilingOn) ? (MaxViolation(contributions, expandedFlags, excess: true)) : (0.0);
 
-                string worstShare = WorstOnePercentShare(contributions);
+                // The one-percent share over the solid's simplices only, so the empty space's count
+                // does not widen the solid's worst one percent.
+                string worstShare = WorstOnePercentShare(SolidOnly(contributions));
 
-                if (ceilingOn)
-                {
-                    return new[]
-                    {
-                        inverted.ToString(CultureInfo.InvariantCulture),
-                        count.ToString(CultureInfo.InvariantCulture),
-                        measure.ToString("F4", CultureInfo.InvariantCulture),
-                        restTotalMeasure.ToString("F2", CultureInfo.InvariantCulture),
-                        squashed.ToString(CultureInfo.InvariantCulture),
-                        expanded.ToString(CultureInfo.InvariantCulture),
-                        rms.ToString("E3", CultureInfo.InvariantCulture),
-                        worstShare,
-                        maxShortfall.ToString("F4", CultureInfo.InvariantCulture),
-                        maxExcess.ToString("F4", CultureInfo.InvariantCulture),
-                        describeNote
-                    };
-                }
-
-                return new[]
+                var values = new List<string>
                 {
                     inverted.ToString(CultureInfo.InvariantCulture),
-                    count.ToString(CultureInfo.InvariantCulture),
+                    solidCount.ToString(CultureInfo.InvariantCulture),
                     measure.ToString("F4", CultureInfo.InvariantCulture),
                     restTotalMeasure.ToString("F2", CultureInfo.InvariantCulture),
                     squashed.ToString(CultureInfo.InvariantCulture),
-                    rms.ToString("E3", CultureInfo.InvariantCulture),
-                    worstShare,
-                    maxShortfall.ToString("F4", CultureInfo.InvariantCulture),
-                    describeNote
                 };
+
+                if (ceilingOn) values.Add(expanded.ToString(CultureInfo.InvariantCulture));
+
+                values.Add(rms.ToString("E3", CultureInfo.InvariantCulture));
+                values.Add(worstShare);
+                values.Add(maxShortfall.ToString("F4", CultureInfo.InvariantCulture));
+
+                if (ceilingOn) values.Add(maxExcess.ToString("F4", CultureInfo.InvariantCulture));
+
+                if (qualityTerm.samplesEmptySpace)
+                {
+                    if (simplexEmpty != null)
+                    {
+                        values.Add(emptySimplexCount.ToString(CultureInfo.InvariantCulture));
+                        values.Add(emptyTally.inverted.ToString(CultureInfo.InvariantCulture));
+                        values.Add(emptyTally.invertedMeasure.ToString("F4", CultureInfo.InvariantCulture));
+                        values.Add(restEmptyMeasure.ToString("F2", CultureInfo.InvariantCulture));
+                        values.Add(emptyTally.underFloor.ToString(CultureInfo.InvariantCulture));
+                        values.Add(Math.Sqrt((rowMeanSquare != null) ? (EmptyMeanSquare(rowMeanSquare)) : (0.0)).ToString("E3", CultureInfo.InvariantCulture));
+                        values.Add(emptyTally.maxShortfall.ToString("F4", CultureInfo.InvariantCulture));
+                    }
+                    else
+                    {
+                        for (int i = 0; i < 7; i++) values.Add(string.Empty);
+                    }
+                }
+
+                values.Add(describeNote);
+
+                return values.ToArray();
+            }
+
+            /// <summary>The solid's entries of a per-simplex array, the array itself when there is no empty space.</summary>
+            private double[] SolidOnly(double[] perSimplex)
+            {
+                if ((perSimplex == null) || (simplexEmpty == null)) return perSimplex;
+
+                var solid = new double[perSimplex.Length - emptySimplexCount];
+                int next = 0;
+
+                for (int s = 0; s < perSimplex.Length; s++)
+                    if (!simplexEmpty[s]) solid[next++] = perSimplex[s];
+
+                return solid;
             }
 
             private static string Capitalize(string label)
@@ -1208,7 +1419,11 @@ namespace UC.ED
             /// </summary>
             private double Shortfall(int s, double signedMeasure)
             {
-                double shortfall = (qualityTerm.minRatio * restMeasures[s]) - signedMeasure;
+                // An empty-space simplex against the empty space's own floor - the same float
+                // product as the solid's, so a solid simplex reads exactly what it always did.
+                float floorRatio = ((simplexEmpty != null) && (simplexEmpty[s])) ? (qualityTerm.emptySpaceFloorRatio) : (qualityTerm.minRatio);
+
+                double shortfall = (floorRatio * restMeasures[s]) - signedMeasure;
 
                 return (shortfall > 0.0) ? (shortfall) : (0.0);
             }
@@ -1221,6 +1436,9 @@ namespace UC.ED
             private double Excess(int s, double signedMeasure)
             {
                 if (!qualityTerm.useMaxRatio) return 0.0;
+
+                // Empty space has no ceiling: a bend legitimately opens the space outside it.
+                if ((simplexEmpty != null) && (simplexEmpty[s])) return 0.0;
 
                 double excess = signedMeasure - ((double)ceiling * restMeasures[s]);
 
@@ -1245,7 +1463,7 @@ namespace UC.ED
             /// total rest measure. (violation / A_s)^2 * (A_s / A), with one A_s cancelled.
             /// </summary>
             private double Contribution(int s, double shortfall)
-                => ((shortfall > 0.0) && (restMeasures[s] > 0.0)) ? ((shortfall * shortfall) / (restMeasures[s] * restTotalMeasure)) : (0.0);
+                => ((shortfall > 0.0) && (restMeasures[s] > 0.0)) ? ((shortfall * shortfall) / (restMeasures[s] * (((simplexEmpty != null) && (simplexEmpty[s])) ? (restEmptyMeasure) : (restTotalMeasure)))) : (0.0);
 
             /// <summary>
             /// A simplex's deformed measure, signed against its rest orientation: the rest measure
@@ -1493,7 +1711,7 @@ namespace UC.ED
 
                 var entries = new double[rowCountK * columnCount];
 
-                double w = residualWeight;
+                double[] w = RowWeights();
                 double scale = rowScale;
                 double step = Math.Max(qualityTerm.finiteDifferenceStep, 1e-9);
 
@@ -1569,7 +1787,7 @@ namespace UC.ED
             }
 
             private void FillNodeColumns(int n, EDState state, DVector3[] basePositions, double[] baseContribution, double[] baseRowMeanSquare,
-                                         ColumnScratch scratch, double[] entries, int columnCount, double w, double scale, double step)
+                                         ColumnScratch scratch, double[] entries, int columnCount, double[] w, double scale, double step)
             {
                 int[] vertices = nodeVertices[n];
                 int[] reached = nodeSimplices[n];
@@ -1680,7 +1898,7 @@ namespace UC.ED
 
                             double deltaRoot = sqrtScale * deltaMeanSquare / (Math.Sqrt(perturbedMeanSquare) + Math.Sqrt(baseMeanSquare));
 
-                            entries[(row * columnCount) + col] = w * deltaRoot / eps;
+                            entries[(row * columnCount) + col] = w[row] * deltaRoot / eps;
                         }
                     }
                     finally

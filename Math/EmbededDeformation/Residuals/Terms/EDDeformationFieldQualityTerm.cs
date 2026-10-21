@@ -1,10 +1,27 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using NaughtyAttributes;
 
 #if UC_ENABLE_ED
 namespace UC.ED
 {
+    /// <summary>
+    /// Which empty cells a field quality term lays samples over when it accounts for empty space.
+    /// </summary>
+    public enum EDEmptySpaceRegion
+    {
+        /// <summary>
+        /// The empty cells whose centre lies inside the convex hull of the rest mesh: the space in
+        /// the piece's concavities - between a cactus's arms and its trunk - which is where two of
+        /// its parts can meet, the segment between any two points of the solid lying inside the
+        /// hull. A flat rest mesh has no inside and lays nothing.
+        /// </summary>
+        InsideRestConvexHull,
+        /// <summary>Every empty cell of the field's grid, out to its padding.</summary>
+        FullVolume,
+    }
+
     /// <summary>
     /// The deformation-quality measure sampled on the deformation field itself: every occupied
     /// voxel split into six tetrahedra on its corners, with their rest volumes. See
@@ -36,6 +53,18 @@ namespace UC.ED
     /// A structure graph, or a mesh-sampled graph whose builder builds a field; elsewhere it
     /// contributes no rows and says so. The corners are carried by whatever carries the geometry -
     /// the field, or on a sampled graph under the bindings carrier, ED's bindings.
+    ///
+    /// **Account For Empty Space** (off by default; added 2026-10-21, Diogo's design) lays the same
+    /// tetrahedra over empty cells too - every one, or those inside the rest mesh's convex hull -
+    /// after the solid's, so the solid's samples and rows are as they were. An empty cell's
+    /// tetrahedron turns over when the map folds across the gap it sits in, which is what two
+    /// parts of the piece passing through each other do to the space between them: the idea of
+    /// Mueller, Chentanez, Kim and Macklin's air meshes (2015), on the field's lattice. It is
+    /// charged on rows of its own with a floor of its own, no ceiling - a bend squeezes the space
+    /// inside it and opens the space outside it, legitimately - and a weight of its own; its
+    /// corners are carried exactly as the solid's are, by the carrier in force. A fold of the map
+    /// is what it reads, which two surfaces crossing must cause and which a fold in the gap away
+    /// from either surface causes too.
     /// </summary>
     [Serializable]
     public abstract class EDDeformationFieldQualityTerm : EDDeformationQualityTerm
@@ -43,12 +72,44 @@ namespace UC.ED
         [SerializeField, Min(1), Tooltip("Each occupied voxel is sampled on this many sub-cells per axis - six tetrahedra per sub-cell, r^3 sub-cells per voxel - so that the stencils sample inside a trilinear region of the field and not only at its corners. 1 is the field's own corners. The cost is r^3 in tetrahedra, on every measurement and on every Jacobian column. Counts are not comparable across values; the RMS and the inverted volume fraction are.")]
         private int sampleRefinement = 1;
 
+        [SerializeField, Tooltip("Also sample the field's empty cells, so a fold of the map across the space between two parts of the piece - the parts passing through each other - is charged. The empty space gets rows of its own after the solid's, its own floor, no ceiling and its own weight, and its corners are carried by whatever carries the geometry. Off, the term is exactly what it was. Takes effect on the next Build.")]
+        private bool accountForEmptySpace = false;
+
+        [SerializeField, ShowIf(nameof(accountForEmptySpace)), AllowNesting, Tooltip("Which empty cells are sampled: those whose centre lies inside the convex hull of the rest mesh - the space in the piece's concavities, where two of its parts can meet - or every empty cell of the field's grid. A flat rest mesh has no inside to its hull and lays nothing under the first.")]
+        private EDEmptySpaceRegion emptySpaceRegion = EDEmptySpaceRegion.InsideRestConvexHull;
+
+        [SerializeField, ShowIf(nameof(accountForEmptySpace)), AllowNesting, Range(0.0f, 1.0f), Tooltip("An empty-space tetrahedron is charged once its volume falls below this fraction of its rest volume; there is no ceiling. At 0 only a turned-over tetrahedron is charged - the space between two parts may be squeezed to nothing, not through. Keep it low: a bend legitimately squeezes the space inside it.")]
+        private float emptySpaceFloor = 0.0f;
+
+        [SerializeField, ShowIf(nameof(accountForEmptySpace)), AllowNesting, Min(0.0f), Tooltip("The empty space's weight: its rows contribute this times the mean squared shortfall over the empty-space tetrahedra, as the term's own weight does for the solid's. The term's own weight switches the whole term: at zero neither is solved for.")]
+        private float emptySpaceWeight = 1.0f;
+
         /// <summary>
         /// Sets the refinement exactly as editing the field in the inspector would - for the
         /// export's debug measures, which host a term of their own. Read when the samples are
         /// built, so it takes effect on the next Reset (a Build).
         /// </summary>
         public void SetSampleRefinement(int value) => sampleRefinement = Mathf.Max(1, value);
+
+        /// <summary>
+        /// Sets the empty-space option exactly as editing the four fields in the inspector would -
+        /// for a driver or an instrument hosting a term of its own. The samples are built in
+        /// Reset, so the switch and the region take effect on the next Build; the floor and the
+        /// weight are read per measurement.
+        /// </summary>
+        public void SetEmptySpace(bool enabled, EDEmptySpaceRegion region, float floor, float weight)
+        {
+            accountForEmptySpace = enabled;
+            emptySpaceRegion = region;
+            emptySpaceFloor = Mathf.Clamp01(floor);
+            emptySpaceWeight = Mathf.Max(0.0f, weight);
+        }
+
+        protected override bool samplesEmptySpace => accountForEmptySpace;
+
+        protected override float emptySpaceFloorRatio => Mathf.Clamp01(emptySpaceFloor);
+
+        protected override float emptySpaceRowWeight => Mathf.Max(0.0f, emptySpaceWeight);
 
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
@@ -86,6 +147,7 @@ namespace UC.ED
                 indices = null;
                 arity = 4;
                 reason = null;
+                emptyFlags = null;
 
                 FullDeformationField field = deformation.GetDeformationField();
 
@@ -150,6 +212,34 @@ namespace UC.ED
 
                 var cellCorners = new int[8];
 
+                // One voxel's six tetrahedra, or r^3 sub-cells' worth, in sub-cell order.
+                void AddCell(int x, int y, int z)
+                {
+                    for (int k = 0; k < r; k++)
+                    {
+                        for (int j = 0; j < r; j++)
+                        {
+                            for (int i = 0; i < r; i++)
+                            {
+                                long rx = ((long)x * r) + i;
+                                long ry = ((long)y * r) + j;
+                                long rz = ((long)z * r) + k;
+
+                                for (int corner = 0; corner < 8; corner++)
+                                    cellCorners[corner] = CornerOf(rx + (corner & 1), ry + ((corner >> 1) & 1), rz + ((corner >> 2) & 1));
+
+                                for (int t = 0; t < 6; t++)
+                                {
+                                    tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 0]]);
+                                    tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 1]]);
+                                    tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 2]]);
+                                    tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 3]]);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 int occupiedCells = 0;
 
                 // z outermost, matching the field's own index order, so the sample order - and with
@@ -165,29 +255,7 @@ namespace UC.ED
 
                             occupiedCells++;
 
-                            for (int k = 0; k < r; k++)
-                            {
-                                for (int j = 0; j < r; j++)
-                                {
-                                    for (int i = 0; i < r; i++)
-                                    {
-                                        long rx = ((long)x * r) + i;
-                                        long ry = ((long)y * r) + j;
-                                        long rz = ((long)z * r) + k;
-
-                                        for (int corner = 0; corner < 8; corner++)
-                                            cellCorners[corner] = CornerOf(rx + (corner & 1), ry + ((corner >> 1) & 1), rz + ((corner >> 2) & 1));
-
-                                        for (int t = 0; t < 6; t++)
-                                        {
-                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 0]]);
-                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 1]]);
-                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 2]]);
-                                            tetrahedra.Add(cellCorners[KuhnTetrahedra[t, 3]]);
-                                        }
-                                    }
-                                }
-                            }
+                            AddCell(x, y, z);
                         }
                     }
                 }
@@ -199,8 +267,122 @@ namespace UC.ED
                     return false;
                 }
 
+                // The empty space, after every solid sample, so the solid's samples, corners and
+                // rows are the ones they are without it - the same loop over the cells the solid's
+                // left out, the region permitting.
+                emptyFlags = null;
+
+                if (fieldTerm.accountForEmptySpace)
+                {
+                    int solidTetrahedra = tetrahedra.Count / 4;
+                    int emptyCells = 0;
+
+                    double[] hullPlanes = null;
+                    double hullTolerance = 0.0;
+                    string region = "every empty cell of the grid";
+                    bool regionAvailable = true;
+
+                    if (fieldTerm.emptySpaceRegion == EDEmptySpaceRegion.InsideRestConvexHull)
+                    {
+                        regionAvailable = TryRestHull(out hullPlanes, out hullTolerance, out region);
+                    }
+
+                    if (regionAvailable)
+                    {
+                        Vector3 half = 0.5f * cellSize;
+
+                        for (int z = 0; z < grid.z; z++)
+                        {
+                            for (int y = 0; y < grid.y; y++)
+                            {
+                                for (int x = 0; x < grid.x; x++)
+                                {
+                                    if (field.IsCellOccupied(x, y, z)) continue;
+
+                                    if ((hullPlanes != null) && (!ConvexHull3D.Contains(hullPlanes, field.CellCorner(x, y, z) + half, hullTolerance))) continue;
+
+                                    emptyCells++;
+
+                                    AddCell(x, y, z);
+                                }
+                            }
+                        }
+                    }
+
+                    int total = tetrahedra.Count / 4;
+
+                    if (total > solidTetrahedra)
+                    {
+                        emptyFlags = new bool[total];
+
+                        for (int s = solidTetrahedra; s < total; s++) emptyFlags[s] = true;
+                    }
+
+                    Debug.Log($"[ED] {term.name}: empty space over {region} - {emptyCells} of {(grid.x * grid.y * grid.z) - occupiedCells} empty cells, {total - solidTetrahedra} tetrahedra.");
+                }
+
                 vertices = cornerPositions.ToArray();
                 indices = tetrahedra.ToArray();
+
+                return true;
+            }
+
+            // The empty-space flags of the last TryBuildSamples - see emptySpaceSimplices.
+            private bool[] emptyFlags;
+
+            protected override bool[] emptySpaceSimplices => emptyFlags;
+
+            /// <summary>
+            /// The face planes of the rest mesh's convex hull: every vertex of the source geometry
+            /// the field was voxelized from, in world space as the field is. False, with the reason
+            /// as the region's description, when there is no rest mesh or its hull has no inside -
+            /// which lays no empty space rather than all of it. The tolerance is a millionth of the
+            /// hull's largest extent, so a cell centre on a face counts as inside.
+            /// </summary>
+            private bool TryRestHull(out double[] planes, out double tolerance, out string region)
+            {
+                planes = null;
+                tolerance = 0.0;
+
+                List<Mesh> meshes = deformation.GetSourceGeometry();
+
+                var points = new List<Vector3>();
+
+                if (meshes != null)
+                {
+                    foreach (Mesh mesh in meshes)
+                        if ((mesh != null) && (mesh.isReadable)) points.AddRange(mesh.vertices);
+                }
+
+                if (points.Count == 0)
+                {
+                    region = "the rest mesh's convex hull, but there is no readable rest mesh to take it of - no empty space laid";
+                    return false;
+                }
+
+                Vector3[] array = points.ToArray();
+
+                if (!ConvexHull3D.TryBuild(array, out double volume, out int[] triangles, out bool degenerate, out double joggle, out string why))
+                {
+                    region = $"the rest mesh's convex hull, which could not be built ({why}) - no empty space laid";
+                    return false;
+                }
+
+                if (degenerate)
+                {
+                    region = "the rest mesh's convex hull, which is flat - no empty space laid";
+                    return false;
+                }
+
+                planes = ConvexHull3D.FacePlanes(array, triangles);
+
+                Bounds bounds = new Bounds(array[0], Vector3.zero);
+
+                for (int i = 1; i < array.Length; i++) bounds.Encapsulate(array[i]);
+
+                tolerance = 1e-6 * Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+
+                region = $"the rest mesh's convex hull ({triangles.Length / 3} faces over {array.Length} vertices, volume {volume:G5}" + ((joggle > 0.0) ? ($", joggled by {joggle:G2}") : ("")) + ")";
 
                 return true;
             }
