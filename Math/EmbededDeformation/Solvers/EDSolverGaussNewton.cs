@@ -12,7 +12,7 @@ namespace UC.ED
     /// deformation.
     /// </summary>
     [CreateAssetMenu(fileName = "EDSolverGaussNewton", menuName = "Unity Common/ED/Solver/Gauss-Newton")]
-    public class EDSolverGaussNewton : EDSolver
+    public partial class EDSolverGaussNewton : EDSolver
     {
         [SerializeField, Tooltip("Fraction of the computed step that is applied each iteration.")]
         private float stepDamping = 1.0f;
@@ -24,27 +24,20 @@ namespace UC.ED
         public override string modeLabel => "FullED_GN";
         public override float damping => stepDamping;
 
-        public override Instance NewInstance(EmbededDeformation deformation) => new GaussNewtonInstance(this, deformation);
+        public override Instance NewInstance(EmbededDeformation deformation) => new ProblemInstance(this, deformation);
 
-        public class GaussNewtonInstance : Instance
+        public override bool solvesProblems => true;
+
+        // The loop is RunGaussNewton, in EDSolverGaussNewton.Loop.cs.
+        public override void Solve<TState>(IEDSolverProblem<TState> problem, int iterations, bool resetBeforeSolve)
         {
-            public GaussNewtonInstance(EDSolverGaussNewton solver, EmbededDeformation deformation)
-                : base(solver, deformation)
-            {
-            }
-
-            public override void Solve(EDEnergyModel.Instance energy, int iterations, bool resetBeforeSolve)
-            {
-                var def = (EDSolverGaussNewton)solver;
-
-                deformation.SolveED_GN(iterations,
-                                       energy,
-                                       def.stepDamping,
-                                       def.residualTolerance,
-                                       def.stepTolerance,
-                                       resetBeforeSolve,
-                                       def.relativeEnergyStop);
-            }
+            RunGaussNewton(problem,
+                           iterations,
+                           stepDamping,
+                           residualTolerance,
+                           stepTolerance,
+                           resetBeforeSolve,
+                           relativeEnergyStop);
         }
     }
 }

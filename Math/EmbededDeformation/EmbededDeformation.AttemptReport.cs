@@ -9,25 +9,8 @@ using MathNet.Numerics.LinearAlgebra;
 #if UC_ENABLE_ED
 namespace UC.ED
 {
-    /// <summary>
-    /// What became of one of an iteration's attempts, or that the record is of the state the
-    /// iteration's attempts depart from.
-    /// </summary>
-    public enum EDAttemptOutcome
-    {
-        /// <summary>Not an attempt: the state the iteration departs from, scored against the inputs in force for it.</summary>
-        Entry,
-        /// <summary>The candidate's total is no higher than the entry's, and its step is the one taken.</summary>
-        Accepted,
-        /// <summary>The candidate was evaluated and its total is higher than the entry's.</summary>
-        Worse,
-        /// <summary>No step came out of the linear solve, or the one that did is not finite.</summary>
-        NoStep,
-        /// <summary>The step could not be applied, or the candidate state could not be prepared.</summary>
-        NoState,
-        /// <summary>The candidate's residual is not finite.</summary>
-        NonFinite,
-    }
+    // EDAttemptOutcome is in Solvers/EDSolverProblem.cs since 2026-10-22, with the rest of the
+    // vocabulary a solver and its problem share.
 
     /// <summary>
     /// One of the damped solver's attempts, refused or accepted, or the state they depart from.

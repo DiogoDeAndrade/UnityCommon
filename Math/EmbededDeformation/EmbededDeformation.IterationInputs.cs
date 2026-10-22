@@ -4,28 +4,8 @@ using UnityEngine;
 #if UC_ENABLE_ED
 namespace UC.ED
 {
-    /// <summary>
-    /// What the driver did to the problem's inputs when an iteration began - the answer to
-    /// <see cref="EmbededDeformation.onIterationBegin"/>.
-    ///
-    /// The default value, both flags false, is "nothing moved and nothing will", which is what a
-    /// solve with no listener gets: every solver path reads it and behaves exactly as it did before
-    /// the callback existed.
-    /// </summary>
-    public struct EDIterationInputs
-    {
-        /// <summary>
-        /// The inputs the residual reads - the handle targets - were moved by this call. The totals
-        /// either side of it belong to different objectives, so the solver never compares them.
-        /// </summary>
-        public bool changed;
-
-        /// <summary>
-        /// They will move again at a later iteration. While this holds the solve is not allowed to
-        /// finish: a state that stopped here would be solved for a request nobody made.
-        /// </summary>
-        public bool pending;
-    }
+    // EDIterationInputs is in Solvers/EDSolverProblem.cs since 2026-10-22, with the rest of the
+    // vocabulary a solver and its problem share.
 
     public partial class EmbededDeformation
     {

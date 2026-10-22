@@ -21,38 +21,28 @@ namespace UC.ED
     /// the solver's type: a GenerateED with this solver builds the navigation data.
     /// </summary>
     [CreateAssetMenu(fileName = "EDSolverNavLM", menuName = "Unity Common/ED/Solver/Levenberg-Marquardt (Nav-Aware)")]
-    public class EDSolverNavLM : EDSolverLM
+    public partial class EDSolverNavLM : EDSolverLM
     {
         // The Cholesky option is the plain LM's since 2026-10-20, under the same field name, so the
         // assets of this class kept their value.
 
         public override string modeLabel => "NavED";
 
-        public override Instance NewInstance(EmbededDeformation deformation) => new NavLMInstance(this, deformation);
-
-        public class NavLMInstance : LMInstance
+        // The loop is RunNavigation, in EDSolverNavLM.Loop.cs; the instance is the plain LM's
+        // ProblemInstance, which calls this.
+        public override void Solve<TState>(IEDSolverProblem<TState> problem, int iterations, bool resetBeforeSolve)
         {
-            public NavLMInstance(EDSolverNavLM solver, EmbededDeformation deformation)
-                : base(solver, deformation)
-            {
-            }
-
-            public override void Solve(EDEnergyModel.Instance energy, int iterations, bool resetBeforeSolve)
-            {
-                var def = (EDSolverNavLM)solver;
-
-                deformation.SolveED_Nav(iterations,
-                                        energy,
-                                        def.initialLambda,
-                                        def.residualTolerance,
-                                        def.stepTolerance,
-                                        resetBeforeSolve,
-                                        def.adaptive,
-                                        def.cholesky,
-                                        def.relativeEnergyStop,
-                                        def.restartDampingEachIteration,
-                                        def.useSparseNormalEquations);
-            }
+            RunNavigation(problem,
+                          iterations,
+                          initialLambda,
+                          residualTolerance,
+                          stepTolerance,
+                          resetBeforeSolve,
+                          adaptive,
+                          cholesky,
+                          relativeEnergyStop,
+                          restartDampingEachIteration,
+                          useSparseNormalEquations);
         }
     }
 }
