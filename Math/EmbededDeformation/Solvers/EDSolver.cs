@@ -21,8 +21,18 @@ namespace UC.ED
     /// an <see cref="Instance"/>, which holds everything mutable a run needs, so two components
     /// referencing the same solver asset cannot interfere with one another. This mirrors the
     /// Ability/Ability.Instance split used elsewhere in these projects.
+    ///
+    /// **The term solvers own their loops** (2026-10-22, Diogo's call): Gauss-Newton,
+    /// Levenberg-Marquardt, the navigation solver and LBFGS each run on an
+    /// <see cref="IEDSolverProblem{TState}"/>, in a static method of their own class in a
+    /// `.Loop.cs` partial, with every parameter passed and every local state in locals - so the
+    /// asset stays a definition, and any of them runs on any problem: an EmbededDeformation, or the
+    /// meshless method. The three that were EmbededDeformation's SolveED_GN, SolveED_LM and
+    /// SolveED_Nav were moved verbatim, the calls into the deformation becoming the problem's. The
+    /// translation-only solver is not one of them: a linear solve over the point constraints, it
+    /// has no residual to minimise.
     /// </summary>
-    public abstract class EDSolver : ScriptableObject
+    public abstract partial class EDSolver : ScriptableObject
     {
         [SerializeField, Min(1)]
         protected int maxIterations = 10;
@@ -58,6 +68,35 @@ namespace UC.ED
         public virtual float smoothnessWeight => 0.1f;
 
         public abstract Instance NewInstance(EmbededDeformation deformation);
+
+        /// <summary>Whether this solver runs on any <see cref="IEDSolverProblem{TState}"/>, not only on an EmbededDeformation.</summary>
+        public virtual bool solvesProblems => false;
+
+        /// <summary>
+        /// Runs this solver on a problem, with this asset's parameters. Iteration count and reset are
+        /// passed per call, as <see cref="Instance.Solve"/> takes them.
+        /// </summary>
+        public virtual void Solve<TState>(IEDSolverProblem<TState> problem, int iterations, bool resetBeforeSolve) where TState : class
+        {
+            throw new System.NotSupportedException($"{GetType().Name} solves an EmbededDeformation only, and runs on no other problem.");
+        }
+
+        /// <summary>
+        /// The instance of every solver that runs on problems: the deformation and the energy made
+        /// into one, handed to <see cref="Solve{TState}"/>.
+        /// </summary>
+        public class ProblemInstance : Instance
+        {
+            public ProblemInstance(EDSolver solver, EmbededDeformation deformation)
+                : base(solver, deformation)
+            {
+            }
+
+            public override void Solve(EDEnergyModel.Instance energy, int iterations, bool resetBeforeSolve)
+            {
+                solver.Solve(deformation.CreateSolverProblem(energy), iterations, resetBeforeSolve);
+            }
+        }
 
         public abstract class Instance
         {
