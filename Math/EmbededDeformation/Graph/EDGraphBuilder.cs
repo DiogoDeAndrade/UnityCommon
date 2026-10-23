@@ -100,6 +100,13 @@ namespace UC.ED
         [SerializeField, Min(0.0f), Label("Structure Max Segment Length"), Tooltip("Subdivide skeleton segments longer than this. Zero leaves them intact.")]
         protected float structureMaxSegmentLength = 0.0f;
 
+        // Absolute is what every golden's builder is: the two lengths in world units.
+        [SerializeField, Label("Length Basis"), Tooltip("What this builder's lengths are in - Structure Max Segment Length, and a sampled builder's Sample Distance: world units (Absolute), or fractions of the rest geometry's size, the largest side of its bounding box, which is the field voxel's own basis - so one asset serves a unit cactus and a hundred-unit bar alike, and the ratio of node spacing to field voxel does not depend on the mesh. The dump names the basis and the resolved lengths when it is not Absolute.")]
+        private EDLengthBasis lengthBasisSetting = EDLengthBasis.Absolute;
+
+        /// <summary>What the two lengths are read in; see <see cref="ResolveLength"/>.</summary>
+        public EDLengthBasis lengthBasis => lengthBasisSetting;
+
         public abstract DeformationGraphSource graphSource { get; }
 
         /// <summary>
@@ -213,6 +220,43 @@ namespace UC.ED
         public float maxSegmentLength => structureMaxSegmentLength;
 
         /// <summary>
+        /// A length setting of this builder in world units: the setting itself under Absolute, or
+        /// the setting times the rest size - the largest side of the rest geometry's bounding box,
+        /// <see cref="RestSizeOf"/> - under FractionOfRestSize (2026-10-23).
+        /// </summary>
+        public float ResolveLength(float setting, double restSize)
+            => (lengthBasisSetting == EDLengthBasis.FractionOfRestSize) ? ((float)(setting * restSize)) : (setting);
+
+        public float ResolvedSampleMinDistance(double restSize) => ResolveLength(sampleMinDistance, restSize);
+        public float ResolvedMaxSegmentLength(double restSize) => ResolveLength(structureMaxSegmentLength, restSize);
+
+        /// <summary>
+        /// The largest side of a topology's vertex bounds, or 1 for an empty one: what a
+        /// FractionOfRestSize length is a fraction of. EmbededDeformation.restSize reads the same
+        /// number off the rest vertices this topology becomes, so a build and a dump agree.
+        /// </summary>
+        public static double RestSizeOf(TopologyStatic topology)
+        {
+            if ((topology == null) || (topology.vertexCount == 0)) return 1.0;
+
+            Vector3 min = topology.GetVertexPosition(0);
+            Vector3 max = min;
+
+            for (int i = 1; i < topology.vertexCount; i++)
+            {
+                Vector3 p = topology.GetVertexPosition(i);
+
+                min = Vector3.Min(min, p);
+                max = Vector3.Max(max, p);
+            }
+
+            Vector3 size = max - min;
+            float largest = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+
+            return (largest > 0.0f) ? (largest) : (1.0);
+        }
+
+        /// <summary>
         /// The slot counts a field built from these settings would end up with.
         ///
         /// Shared rather than duplicated: the field build applies these clamps, and so does the
@@ -265,6 +309,32 @@ namespace UC.ED
                 this.nav = nav;
             }
 
+            // The builder's two lengths in world units for this build, resolved once against the
+            // topology's rest size at the start of Build (2026-10-23); before that, against the
+            // deformation's, so a caller outside Build - BuildNavigationData after a reload - reads
+            // the same number a build would.
+            private bool  lengthsResolved;
+            private float sampleMinDistanceResolved;
+            private float maxSegmentLengthResolved;
+
+            /// <summary>The rest size the lengths were resolved against: the largest side of the topology's bounds.</summary>
+            public double restSize { get; private set; } = 1.0;
+
+            /// <summary>The builder's sample distance in world units for this build.</summary>
+            public float resolvedSampleMinDistance => (lengthsResolved) ? (sampleMinDistanceResolved) : (builder.ResolvedSampleMinDistance(deformation.restSize));
+
+            /// <summary>The builder's structure segment cap in world units for this build.</summary>
+            public float resolvedMaxSegmentLength => (lengthsResolved) ? (maxSegmentLengthResolved) : (builder.ResolvedMaxSegmentLength(deformation.restSize));
+
+            /// <summary>Resolves the two lengths against the topology the build is on; the first thing a Build does with its topology.</summary>
+            protected void ResolveLengths(TopologyStatic topology)
+            {
+                restSize = RestSizeOf(topology);
+                sampleMinDistanceResolved = builder.ResolvedSampleMinDistance(restSize);
+                maxSegmentLengthResolved = builder.ResolvedMaxSegmentLength(restSize);
+                lengthsResolved = true;
+            }
+
             /// <summary>
             /// The mesh this builder is built over, or null with the error already reported. The
             /// owner supplies both candidates through SetTopology before the build; asking for it
@@ -315,9 +385,20 @@ namespace UC.ED
             /// </summary>
             public virtual void BuildNavigationData()
             {
-                deformation.BuildNavigationData(builder.binding, builder.sampleMinDistance);
+                deformation.BuildNavigationData(builder.binding, resolvedSampleMinDistance);
             }
         }
+    }
+
+    /// <summary>
+    /// What a graph builder's lengths are in (2026-10-23): world units, or fractions of the rest
+    /// geometry's size - the largest side of its bounding box, the basis the field's voxel density
+    /// already uses - so one builder asset serves meshes of any size.
+    /// </summary>
+    public enum EDLengthBasis
+    {
+        Absolute,
+        FractionOfRestSize,
     }
 }
 #endif

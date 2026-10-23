@@ -42,23 +42,38 @@ namespace UC.ED
         // it, and a renamed class detaches every energy asset that carries the term.
         public override string name => "terminalPosition";
 
+        // Off is what every golden and every run before 2026-10-23 solved under: rows in world units.
+        [SerializeField, Tooltip("Divide the rows by the rest geometry's size - the largest side of its bounding box - so the term is dimensionless: its energy is the weight times the mean squared miss as a fraction of the size, and a weight tuned on a unit mesh means the same on one a hundred across. Off, the rows are world distances. Read at every solve, so it needs no Build.")]
+        protected bool normalizeByRestSize = false;
+
+        public bool normalizesByRestSize => normalizeByRestSize;
+
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
             => new VertexConstraintInstance(this, deformation);
 
         public class VertexConstraintInstance : Instance
         {
+            // The term as its own type, for the option it carries beside its weight. Read where it
+            // is used and never copied: the option can change between two solves.
+            private readonly EDVertexConstraintTerm constraintTerm;
+
             public VertexConstraintInstance(EDVertexConstraintTerm term, EmbededDeformation deformation)
                 : base(term, deformation)
             {
+                constraintTerm = term;
             }
+
+            // The weight each row carries: the resolved residual weight, over the rest size when the
+            // term is dimensionless (2026-10-23); every Jacobian path below scales by the same number.
+            private double rowWeight => (constraintTerm.normalizeByRestSize) ? (residualWeight / deformation.restSize) : (residualWeight);
 
             protected override int ComputeRowCount()
                 => 3 * ((deformation.vertexConstraints != null) ? (deformation.vertexConstraints.Count) : (0));
 
             public override void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset)
             {
-                double w = residualWeight;
+                double w = rowWeight;
                 int row = rowOffset;
 
                 // The carrier's blender at this state, or null when the bindings carry.
@@ -134,7 +149,7 @@ namespace UC.ED
                 // because the baselines were captured against it and no golden configuration
                 // contains such a constraint - so the guard has never had anything to do.
                 for (int c = 0; c < deformation.vertexConstraints.Count; c++)
-                    row = FillJacobianBlock(jacobian, row, deformation.vertexConstraints[c].vertexIndex, residualWeight, ref jacobianNormSq);
+                    row = FillJacobianBlock(jacobian, row, deformation.vertexConstraints[c].vertexIndex, rowWeight, ref jacobianNormSq);
             }
 
             /// <summary>
@@ -257,7 +272,7 @@ namespace UC.ED
             /// </summary>
             private void FillLinearFieldJacobian(DenseMatrix J, int rowOffset, ref double jNormRunningTotalSq)
             {
-                double wCon = residualWeight;
+                double wCon = rowWeight;
                 int row = rowOffset;
 
                 for (int c = 0; c < deformation.vertexConstraints.Count; c++)
@@ -300,7 +315,7 @@ namespace UC.ED
 
                 var baseView = new EDStateView(state);
 
-                double wCon = residualWeight;
+                double wCon = rowWeight;
                 double totalNormSq = 0.0;
                 object normLock = new object();
 

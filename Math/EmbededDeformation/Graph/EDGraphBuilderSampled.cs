@@ -33,14 +33,17 @@ namespace UC.ED
                 TopologyStatic topology = ResolveTopology();
                 if (topology == null) return;
 
+                // The two lengths in world units for this mesh, under the builder's length basis.
+                ResolveLengths(topology);
+
                 deformation.BeginGraphBuild(DeformationGraphSource.NavMeshAndStructure);
 
                 // The skeleton is still built even when it does not define the graph: it seeds
                 // nodes when asked to, and it is what the navigation energies measure along.
                 using (Stage("Skeleton"))
-                    deformation.BuildStructure(structureSource, builder.maxSegmentLength, nav.tryGetSurfaceNormal);
+                    deformation.BuildStructure(structureSource, resolvedMaxSegmentLength, nav.tryGetSurfaceNormal);
 
-                float minDistance = builder.sampleMinDistance;
+                float minDistance = resolvedSampleMinDistance;
 
                 if (minDistance <= 0.0f)
                 {
@@ -61,7 +64,7 @@ namespace UC.ED
                 // Sigma is resolved against the configured spacing rather than the clamped one, so
                 // that a degenerate spacing does not silently rescale the falloff as well.
                 using (Stage("Bindings"))
-                    deformation.SetGraphBindings(topology, builder.binding, builder.sampleMinDistance);
+                    deformation.SetGraphBindings(topology, builder.binding, resolvedSampleMinDistance);
 
                 using (Stage("Links"))
                     LinkNodes(topology);

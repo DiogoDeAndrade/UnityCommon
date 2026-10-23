@@ -148,6 +148,52 @@ namespace UC.ED
                 restVertices[i] = v[i].ToDVector3();
 
             triangles = topology.GetTriangleIndices().ToArray();
+
+            restSizeCache = -1.0;
+        }
+
+        // The rest geometry's size, for the lengths read as fractions of it - the graph builder's
+        // Length Basis and the positional terms' Normalize By Rest Size (2026-10-23): the largest
+        // side of the rest vertices' bounding box, the basis the field's voxel density, the lattice
+        // voxel and the meshless settings already use. Not serialized: a scene saved before it
+        // existed reads it off the rest vertices it holds, which is the same number.
+        [System.NonSerialized] private double restSizeCache = -1.0;
+
+        /// <summary>
+        /// The largest side of the rest geometry's bounding box, or 1 with no rest geometry: what a
+        /// fraction-of-rest-size length is a fraction of. The same number, to the bit, as
+        /// EDGraphBuilder.RestSizeOf gives for the topology the rest geometry came from, since the
+        /// rest vertices are that topology's floats and the sides are taken in float here too.
+        /// </summary>
+        public double restSize
+        {
+            get
+            {
+                if (restSizeCache <= 0.0) restSizeCache = RestSizeOf(restVertices);
+
+                return restSizeCache;
+            }
+        }
+
+        public static double RestSizeOf(DVector3[] vertices)
+        {
+            if ((vertices == null) || (vertices.Length == 0)) return 1.0;
+
+            Vector3 min = vertices[0].ToVector3();
+            Vector3 max = min;
+
+            for (int i = 1; i < vertices.Length; i++)
+            {
+                Vector3 p = vertices[i].ToVector3();
+
+                min = Vector3.Min(min, p);
+                max = Vector3.Max(max, p);
+            }
+
+            Vector3 size = max - min;
+            float largest = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+
+            return (largest > 0.0f) ? (largest) : (1.0);
         }
 
         /// <summary>
