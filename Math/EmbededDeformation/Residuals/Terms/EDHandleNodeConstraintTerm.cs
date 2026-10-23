@@ -56,14 +56,20 @@ namespace UC.ED
         /// </summary>
         public void SetPinTerminalFrame(bool value) => pinTerminalFrame = value;
 
+        // Off is what every golden and every run before 2026-10-23 solved under: rows in world units.
+        [SerializeField, Tooltip("Divide the rows by the rest geometry's size - the largest side of its bounding box - so the term is dimensionless: its energy is the weight times the mean squared miss as a fraction of the size, and a weight tuned on a unit piece means the same on one a hundred across. Off, the rows are world distances. Read at every solve, so it needs no Build.")]
+        protected bool normalizeByRestSize = false;
+
+        public bool normalizesByRestSize => normalizeByRestSize;
+
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
             => new HandleNodeConstraintInstance(this, deformation);
 
         public class HandleNodeConstraintInstance : Instance
         {
-            // The term as its own type, for the one option it carries beside its weight. Read
-            // where it is used and never copied: the option can change between two solves.
+            // The term as its own type, for the two options it carries beside its weight. Read
+            // where they are used and never copied: an option can change between two solves.
             private readonly EDHandleNodeConstraintTerm positionTerm;
 
             public HandleNodeConstraintInstance(EDHandleNodeConstraintTerm term, EmbededDeformation deformation)
@@ -71,6 +77,10 @@ namespace UC.ED
             {
                 positionTerm = term;
             }
+
+            // The weight each row carries: the resolved residual weight, over the rest size when the
+            // term is dimensionless (2026-10-23); the Jacobian blocks take the same number.
+            private double rowWeight => (positionTerm.normalizeByRestSize) ? (residualWeight / deformation.restSize) : (residualWeight);
 
             /// <summary>
             /// Three rows per constrained *point*, and a terminal handle constrains two of them -
@@ -105,7 +115,7 @@ namespace UC.ED
             {
                 if (deformation.handleConstraints == null) return;
 
-                double w = residualWeight;
+                double w = rowWeight;
                 int row = rowOffset;
 
                 for (int c = 0; c < deformation.handleConstraints.Count; c++)
@@ -194,22 +204,22 @@ namespace UC.ED
                     {
                         GetHandleBarPoints(hc, out DVector3 restLeft, out DVector3 restRight, out _, out _);
 
-                        row = FillJacobianBlock(jacobian, row, nodeIndex, restLeft, residualWeight, ref jacobianNormSq);
-                        row = FillJacobianBlock(jacobian, row, nodeIndex, restRight, residualWeight, ref jacobianNormSq);
+                        row = FillJacobianBlock(jacobian, row, nodeIndex, restLeft, rowWeight, ref jacobianNormSq);
+                        row = FillJacobianBlock(jacobian, row, nodeIndex, restRight, rowWeight, ref jacobianNormSq);
 
                         if (positionTerm.pinTerminalFrame)
                         {
                             GetHandleFramePoints(hc, out DVector3 restAbove, out DVector3 restAhead, out _, out _);
 
-                            row = FillJacobianBlock(jacobian, row, nodeIndex, restAbove, residualWeight, ref jacobianNormSq);
-                            row = FillJacobianBlock(jacobian, row, nodeIndex, restAhead, residualWeight, ref jacobianNormSq);
+                            row = FillJacobianBlock(jacobian, row, nodeIndex, restAbove, rowWeight, ref jacobianNormSq);
+                            row = FillJacobianBlock(jacobian, row, nodeIndex, restAhead, rowWeight, ref jacobianNormSq);
                         }
                     }
                     else
                     {
                         DVector3 restPosition = hc.restHandleMatrix.MultiplyPoint3x4(Vector3.zero).ToDVector3();
 
-                        row = FillJacobianBlock(jacobian, row, nodeIndex, restPosition, residualWeight, ref jacobianNormSq);
+                        row = FillJacobianBlock(jacobian, row, nodeIndex, restPosition, rowWeight, ref jacobianNormSq);
                     }
                 }
             }

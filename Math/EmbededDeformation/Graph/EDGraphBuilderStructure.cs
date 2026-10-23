@@ -159,10 +159,13 @@ namespace UC.ED
                 TopologyStatic topology = ResolveTopology();
                 if (topology == null) return;
 
+                // The two lengths in world units for this mesh, under the builder's length basis.
+                ResolveLengths(topology);
+
                 deformation.BeginGraphBuild(DeformationGraphSource.StructureOnly);
 
                 using (Stage("Skeleton"))
-                    deformation.BuildStructure(structureSource, def.maxSegmentLength, nav.tryGetSurfaceNormal);
+                    deformation.BuildStructure(structureSource, resolvedMaxSegmentLength, nav.tryGetSurfaceNormal);
 
                 var structure = deformation.structure;
 
@@ -208,7 +211,7 @@ namespace UC.ED
                 // 3) Bind navmesh vertices to the structure graph.
                 // -----------------------------------------------------------------
                 using (Stage("Bindings"))
-                    deformation.SetGraphBindings(topology, def.binding, def.sampleMinDistance);
+                    deformation.SetGraphBindings(topology, def.binding, resolvedSampleMinDistance);
 
                 deformation.EndGraphBuild();
 

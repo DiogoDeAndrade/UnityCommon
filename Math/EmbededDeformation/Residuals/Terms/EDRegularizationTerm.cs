@@ -27,16 +27,32 @@ namespace UC.ED
     {
         public override string name => "regularization";
 
+        // Off is what every golden and every run before 2026-10-23 solved under: rows in world units.
+        [SerializeField, Tooltip("Divide the rows by the rest geometry's size - the largest side of its bounding box - so the term is dimensionless: its energy is the weight times the mean squared error as a fraction of the size, and a weight tuned on a unit mesh means the same on one a hundred across. Off, the rows are world distances. Read at every solve, so it needs no Build.")]
+        protected bool normalizeByRestSize = false;
+
+        public bool normalizesByRestSize => normalizeByRestSize;
+
 #if MATH_NET_AVAILABLE
         public override Instance NewInstance(EmbededDeformation deformation, bool normalizeWeights)
             => new RegularizationInstance(this, deformation);
 
         public class RegularizationInstance : Instance
         {
+            // The term as its own type, for the option it carries beside its weight. Read where it
+            // is used and never copied: the option can change between two solves.
+            private readonly EDRegularizationTerm regularizationTerm;
+
             public RegularizationInstance(EDRegularizationTerm term, EmbededDeformation deformation)
                 : base(term, deformation)
             {
+                regularizationTerm = term;
             }
+
+            // The weight each row carries: the resolved residual weight, over the rest size when the
+            // term is dimensionless (2026-10-23), so the energy is weight x mean((r / L)^2) and the
+            // Jacobian scales with it. Off, the weight it always was.
+            private double rowWeight => (regularizationTerm.normalizeByRestSize) ? (residualWeight / deformation.restSize) : (residualWeight);
 
             protected override int ComputeRowCount()
             {
@@ -50,7 +66,7 @@ namespace UC.ED
 
             public override void EvaluateResidual(EDStateView state, Vector<double> residual, int rowOffset)
             {
-                double w = residualWeight;
+                double w = rowWeight;
                 int row = rowOffset;
 
                 for (int j = 0; j < deformation.nodes.Count; j++)
@@ -86,7 +102,7 @@ namespace UC.ED
                 for (int j = 0; j < deformation.nodes.Count; j++)
                 {
                     foreach (int k in deformation.nodes[j].neighbors)
-                        row = FillJacobianBlock(jacobian, row, j, k, residualWeight, ref jacobianNormSq);
+                        row = FillJacobianBlock(jacobian, row, j, k, rowWeight, ref jacobianNormSq);
                 }
             }
 
