@@ -213,8 +213,10 @@ namespace UC
         {
             Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(uiCamera, worldPosition);
 
-            // Convert the screen point to local coordinates in the RectTransform
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, screenPoint, uiCamera, out Vector2 localPoint);
+            // Convert the screen point to local coordinates in the RectTransform. A Screen Space - Overlay canvas takes
+            // no camera for this step (uiCamera is then only the one that sees the world, for the projection above)
+            var canvasCamera = (canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? (null) : (uiCamera);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, screenPoint, canvasCamera, out Vector2 localPoint);
 
             return localPoint;
         }
