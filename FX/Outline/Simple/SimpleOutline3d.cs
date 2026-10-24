@@ -158,6 +158,36 @@ namespace UC
             {
                 UpdateMaterials();
             }
+
+            DrawOtherSubMeshes();
+        }
+
+        // A material added past the last submesh only draws that last submesh, so on meshes with several submeshes
+        // the outline of the others is drawn here, every frame (mesh renderers only, not skinned ones)
+        private void DrawOtherSubMeshes()
+        {
+            foreach (var kv in rendererOutlineMaterial)
+            {
+                var renderer = kv.Key;
+                if ((!renderer) || (!renderer.enabled) || (!renderer.gameObject.activeInHierarchy)) continue;
+                if (!(renderer is MeshRenderer)) continue;
+
+                var filter = renderer.GetComponent<MeshFilter>();
+                var mesh = (filter) ? (filter.sharedMesh) : (null);
+                if ((mesh == null) || (mesh.subMeshCount < 2)) continue;
+
+                var renderParams = new RenderParams(kv.Value)
+                {
+                    layer = renderer.gameObject.layer,
+                    shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off,
+                    receiveShadows = false,
+                    worldBounds = renderer.bounds
+                };
+                for (int i = 0; i < mesh.subMeshCount - 1; i++)
+                {
+                    Graphics.RenderMesh(renderParams, mesh, i, renderer.localToWorldMatrix);
+                }
+            }
         }
 
         [NoAutoStaticsCleanup]

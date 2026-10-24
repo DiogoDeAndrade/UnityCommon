@@ -77,10 +77,12 @@ Shader "Unity Common/Effects/Outline (Backface Extrude)"
                 float4 positionCS : SV_POSITION; 
             };
 
-            // Transform like a normal (handles non-uniform scale)
+            // Transform like a normal: by the inverse transpose of the object matrix, so rotation and non-uniform
+            // scale are both handled (multiplying by the inverse alone turns the direction the wrong way when the
+            // object is rotated)
             float3 TransformObjectToWorldDirSafe(float3 dirOS)
             {
-                return normalize(mul((float3x3)UNITY_MATRIX_I_M, dirOS));
+                return TransformObjectToWorldNormal(dirOS, true);
             }
 
             Varyings vert (Attributes IN)
