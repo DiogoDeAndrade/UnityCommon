@@ -211,7 +211,7 @@ namespace UC
 
         Vector2 WorldToLocal(Vector3 worldPosition)
         {
-            Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(uiCamera, worldPosition);
+            Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(ViewCamera(), worldPosition);
 
             // Convert the screen point to local coordinates in the RectTransform. A Screen Space - Overlay canvas takes
             // no camera for this step (uiCamera is then only the one that sees the world, for the projection above)
@@ -219,6 +219,21 @@ namespace UC
             RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, screenPoint, canvasCamera, out Vector2 localPoint);
 
             return localPoint;
+        }
+
+        // The camera the world is seen through: uiCamera, unless it's switched off (another camera has taken over the
+        // screen, e.g. in a cutscene); then the enabled camera drawing to the screen with the highest depth
+        Camera ViewCamera()
+        {
+            if ((uiCamera != null) && (uiCamera.isActiveAndEnabled)) return uiCamera;
+
+            Camera best = null;
+            foreach (var c in Camera.allCameras)
+            {
+                if (c.targetTexture != null) continue;
+                if ((best == null) || (c.depth > best.depth)) best = c;
+            }
+            return (best != null) ? (best) : (uiCamera);
         }
 
         // ScreenPointToLocalPointInRectangle hands back a point in the container's local space, whose origin is the container's pivot. anchoredPosition, on
