@@ -184,7 +184,7 @@ namespace UC
             {
                 if (clip == null) return null;
 
-                musicSource = _PlaySound(SoundType.Music, clip, 0.0f, 1, true, (defaultTag == null) ? (musicTag) : (defaultTag));
+                musicSource = _PlaySound(SoundType.Music, clip, 0.0f, pitch, true, (defaultTag == null) ? (musicTag) : (defaultTag));
                 musicSource.FadeTo(volume, (crossFadeTime < 0.0f) ? (defaultCrossfadeTime) : (crossFadeTime));
 
                 return musicSource;
@@ -207,7 +207,7 @@ namespace UC
             }
 
             // Crossfade
-            var newMusicSource = _PlaySound(SoundType.Music, clip, 0, 1, true, (defaultTag == null) ? (musicTag) : (defaultTag));
+            var newMusicSource = _PlaySound(SoundType.Music, clip, 0, pitch, true, (defaultTag == null) ? (musicTag) : (defaultTag));
 
             newMusicSource.FadeTo(volume, defaultCrossfadeTime);
             var oldMusicSource = musicSource;
@@ -247,6 +247,13 @@ namespace UC
             }
             audioSource.linkedObject = prsObject;
 
+            // A negative pitch plays the clip backwards, from its end; Unity can only do that with a clip that's
+            // decompressed on load
+            if ((pitch < 0.0f) && (clip != null) && (clip.loadType != AudioClipLoadType.DecompressOnLoad))
+            {
+                Debug.LogWarning($"SoundManager: {clip.name} can't play backwards: its load type is {clip.loadType}, it needs Decompress On Load");
+            }
+            audioSource.audioSource.timeSamples = ((pitch < 0.0f) && (clip != null)) ? (Mathf.Max(0, clip.samples - 1)) : (0);
             audioSource.audioSource.Play();
 
             if ((tag) && (maxSoundsPerCategory.TryGetValue(tag, out var parameters)))

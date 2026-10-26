@@ -32,6 +32,8 @@ namespace UC
         public Vector2          volumeRange = new Vector2(1f, 1f);
         [MinMaxSlider(0.0f, 2.0f)]
         public Vector2          pitchRange = new Vector2(1f, 1f);
+        [Tooltip("Plays the clip backwards (a negative pitch for the SoundManager); the clip has to be Decompress On Load")]
+        public bool             reverse = false;
         [ShowIf(nameof(is3d))]        
         public Vector2          distanceRange = new Vector2(0.0f, 100.0f);
         public Hypertag         defaultTag;
@@ -89,21 +91,25 @@ namespace UC
 
             AudioSource ret = null;
 
+            // Reversed, it's a negative pitch: the SoundManager plays the clip backwards
+            float pitch = pitchMultiplier * pitchRange.Random();
+            if (reverse) pitch = -pitch;
+
             if (isNotMusic)
             {
                 if (loop)
                 {
                     if (prsObject)
-                        ret = SoundManager.PlaySoundAndFollow(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, distanceRange, prsObject);
+                        ret = SoundManager.PlaySoundAndFollow(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitch, defaultTag, distanceRange, prsObject);
                     else
-                        ret = SoundManager.PlaySound(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
+                        ret = SoundManager.PlaySound(soundType, clip, true, volumeMultiplier * volumeRange.Random(), pitch, defaultTag, is3d || force3d, distanceRange, position);
                 }
                 else
                 {
                     if (prsObject)
-                        ret = SoundManager.PlaySoundAndFollow(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, distanceRange, prsObject);
+                        ret = SoundManager.PlaySoundAndFollow(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitch, defaultTag, distanceRange, prsObject);
                     else
-                        ret = SoundManager.PlaySound(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), defaultTag, is3d || force3d, distanceRange, position);
+                        ret = SoundManager.PlaySound(soundType, clip, false, volumeMultiplier * volumeRange.Random(), pitch, defaultTag, is3d || force3d, distanceRange, position);
                 }
             }
             else
@@ -113,7 +119,7 @@ namespace UC
                     DebugHelpers.LogWarning("Positional music is not supported...");
                 }
 
-                ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitchMultiplier * pitchRange.Random(), crossfadeTime, defaultTag);
+                ret = SoundManager.PlayMusic(clip, volumeMultiplier * volumeRange.Random(), pitch, crossfadeTime, defaultTag);
             }
 
             if (subtitleTrack)
@@ -153,7 +159,8 @@ namespace UC
             previewSource.Stop();
             previewSource.clip = previewClip;
             previewSource.volume = volumeRange.Random();
-            previewSource.pitch = pitchRange.Random();
+            previewSource.pitch = (reverse) ? (-pitchRange.Random()) : (pitchRange.Random());
+            previewSource.timeSamples = (reverse) ? (Mathf.Max(0, previewClip.samples - 1)) : (0);
             previewSource.Play();
         }
 
