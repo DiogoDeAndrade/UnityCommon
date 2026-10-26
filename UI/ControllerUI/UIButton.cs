@@ -52,8 +52,7 @@ namespace UC
 
         public override void Interact()
         {
-            GlobalsBase.uiChangeValueSnd?.Play();
-
+            // No sound of its own: the UIGroup plays the select sound when it runs the interaction
             NotifyInteract();
 
             switch (interactEvent)
