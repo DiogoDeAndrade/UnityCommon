@@ -53,7 +53,13 @@ namespace UC.ED
         /// <summary>Alpha-entmax over negated distances. The only mapping here that can put a weight
         /// at exactly zero through the normalization rather than through a cutoff, so the effective
         /// number of influences varies by itself.</summary>
-        Entmax
+        Entmax,
+        /// <summary>The embedded deformation paper's weight, (1 - d / d_max)² over the k nearest with
+        /// d_max the (k + 1)-th distance - the bindings' OriginalED, on the field's geodesic distances
+        /// (2026-10-30). A node's weight and its slope both reach zero as it leaves the k set, so the
+        /// handover between node sets is smooth, which none of the mappings above gives at a hard k.
+        /// Appended, since assets store the index.</summary>
+        OriginalED
     }
 
     /// <summary>
@@ -206,6 +212,13 @@ namespace UC.ED
         /// </summary>
         public virtual EDFieldRotationBlend deformationFieldRotationBlend => EDFieldRotationBlend.Chordal;
         public virtual EDFieldScaleBlend deformationFieldScaleBlend => EDFieldScaleBlend.Full;
+
+        /// <summary>
+        /// What the field's trilinear sampling interpolates between cell centres - the cells' weights,
+        /// every golden's, or their distances, the weights then made at the point (2026-10-30). See
+        /// EDFieldInterpolation.
+        /// </summary>
+        public virtual EDFieldInterpolation deformationFieldInterpolation => EDFieldInterpolation.Weights;
 
         /// <summary>
         /// The distance-to-weight mapping this builder's settings describe, freshly built.

@@ -28,8 +28,14 @@ public partial class FullDeformationField
         /// this runs once per cell and returning a fresh array would allocate once per cell too.
         ///
         /// Weights are expected to sum to one. Writing all zeros is allowed and means "nothing acts here", which the field already treats as a result rather than a gap.
+        ///
+        /// <paramref name="nextDistance"/> is the distance of the nearest node *outside* the set - the (k + 1)-th - or float.MaxValue when the cell holds no such node. Only
+        /// OriginalED reads it (2026-10-30); the other mappings are functions of the set alone and ignore it, so their arithmetic is what it was.
+        ///
+        /// Since 2026-10-30 this also runs per query, from the parallel deformation passes, when the field interpolates distances rather than weights - so a resolver's scratch
+        /// has to be thread-local or absent, never an instance field.
         /// </summary>
-        public abstract void ComputeCellWeights(float[] distances, int count, float[] weights);
+        public abstract void ComputeCellWeights(float[] distances, int count, float[] weights, float nextDistance);
 
         /// <summary>
         /// The mapping and its parameters, short and stable, for the golden dump and for the check that refuses a comparison across a weighting change.
@@ -109,7 +115,7 @@ public partial class FullDeformationField
     {
         public override string Describe() => "invdist";
 
-        public override void ComputeCellWeights(float[] distances, int count, float[] weights)
+        public override void ComputeCellWeights(float[] distances, int count, float[] weights, float nextDistance)
         {
             int zeroDistanceCount = 0;
 
@@ -185,7 +191,7 @@ public partial class FullDeformationField
         // dump that recorded nothing.
         public override string Describe() => $"invpow p {power:F4} floor {distanceFloor:F6}";
 
-        public override void ComputeCellWeights(float[] distances, int count, float[] weights)
+        public override void ComputeCellWeights(float[] distances, int count, float[] weights, float nextDistance)
         {
             for (int i = 0; i < count; i++)
             {
@@ -210,7 +216,9 @@ public partial class FullDeformationField
         private readonly float power;
         private readonly bool normalizeDistances;
 
-        private float[] scratch;
+        // Thread-local rather than per instance: since 2026-10-30 a resolver may run per query from
+        // the parallel deformation passes, when the field interpolates distances.
+        [ThreadStatic] private static float[] scratch;
 
         public GaussianWeights(float sigma, float power, bool normalizeDistances)
         {
@@ -221,7 +229,7 @@ public partial class FullDeformationField
 
         public override string Describe() => $"gauss sigma {sigma:F4} p {power:F4} norm {normalizeDistances}";
 
-        public override void ComputeCellWeights(float[] distances, int count, float[] weights)
+        public override void ComputeCellWeights(float[] distances, int count, float[] weights, float nextDistance)
         {
             float[] source = distances;
 
@@ -263,7 +271,8 @@ public partial class FullDeformationField
         private readonly float temperature;
         private readonly bool normalizeDistances;
 
-        private float[] scratch;
+        // Thread-local, as the Gaussian's: a per-query resolver runs on the deformation passes' threads.
+        [ThreadStatic] private static float[] scratch;
 
         public EntmaxWeights(float alpha, float temperature, bool normalizeDistances)
         {
@@ -276,7 +285,7 @@ public partial class FullDeformationField
 
         public override string Describe() => $"entmax a {alpha:F4} t {temperature:F4} norm {normalizeDistances}";
 
-        public override void ComputeCellWeights(float[] distances, int count, float[] weights)
+        public override void ComputeCellWeights(float[] distances, int count, float[] weights, float nextDistance)
         {
             float[] source = distances;
 
@@ -329,6 +338,49 @@ public partial class FullDeformationField
 
             // The bisection lands close to a sum of one but not on it, and a blend that does not sum to one is a blend that shrinks or inflates the deformation. Renormalizing costs a pass
             // and removes the tolerance from the answer, at the price of nothing: it is a positive rescale, so it cannot resurrect a weight the threshold set to zero.
+            NormalizeInPlace(weights, count);
+        }
+    }
+
+    /// <summary>
+    /// The embedded deformation paper's own weight - Sumner, Schmid and Pauly 2007, Eq. 4: (1 - d / d_max)² over the k nearest nodes, d_max the distance to the (k + 1)-th nearest,
+    /// normalized to sum to one. The same formula the bindings use under BindingWeightMode.OriginalED, here on the field's geodesic distances (2026-10-30).
+    ///
+    /// What it has that the mappings above lack is a smooth handover: a node's weight and its slope both reach zero as its distance reaches the (k + 1)-th's, so when the k set changes
+    /// from one place to the next nothing in the blend jumps. Inverse power at a hard k drops the k-th node from 1/d^p to nothing where the next node overtakes it; entmax fades by its
+    /// own threshold; this one fades by the paper's rule, which is the one the bindings carry everywhere else in the project.
+    ///
+    /// The fallback when the cell holds no (k + 1)-th node - a graph of k nodes or fewer, or a region reached by fewer - is the bindings' own: d_max is the k-th distance, so the last node
+    /// weighs exactly zero. A set every one of whose nodes sits at d_max, which is one node alone at its own distance, has nothing to discriminate on and splits evenly, as the legacy
+    /// mapping treats a tie.
+    /// </summary>
+    public sealed class OriginalEDWeights : WeightResolver
+    {
+        public override string Describe() => "origed";
+
+        public override void ComputeCellWeights(float[] distances, int count, float[] weights, float nextDistance)
+        {
+            float last = distances[count - 1];
+            float dMax = ((nextDistance < float.MaxValue) && (nextDistance > last)) ? (nextDistance) : (last);
+
+            dMax = Mathf.Max(dMax, DistanceEpsilon);
+
+            float sum = 0.0f;
+
+            for (int i = 0; i < count; i++)
+            {
+                float w = 1.0f - (distances[i] / dMax);
+
+                weights[i] = (w > 0.0f) ? (w * w) : (0.0f);
+                sum += weights[i];
+            }
+
+            if (sum <= 0.0f)
+            {
+                WriteEvenSplit(count, weights);
+                return;
+            }
+
             NormalizeInPlace(weights, count);
         }
     }

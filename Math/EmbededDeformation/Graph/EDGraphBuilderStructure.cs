@@ -68,6 +68,8 @@ namespace UC.ED
         private float fieldWeightTemperature = 0.25f;
         [SerializeField, ShowIf(nameof(usesNormalizedDistances)), Tooltip("Divide each cell's distances by the furthest one it keeps before mapping them. This is what makes sigma and the entmax temperature dimensionless - without it they are world-space lengths, and as brittle against voxel density and piece scale as a fixed softmax temperature. Off exists to demonstrate that rather than assert it.")]
         private bool fieldWeightNormalizeDistances = true;
+        [SerializeField, Tooltip("What trilinear sampling interpolates between cell centres. Weights: each cell's weights - every golden's setting - with the gradient jumps at the cell-centre planes that come with it. Distances: each cell's geodesic distances, the nearest nodes and their weights then made at the point by the same mapping, so the creases at the planes go. Not available with a kink fix, whose volume tail walks the region's stored weights.")]
+        private EDFieldInterpolation fieldInterpolation = EDFieldInterpolation.Weights;
 
         [SerializeField, Tooltip("How the transforms of the influencing nodes are combined once their weights are known. The weights decide how much each node says; this decides what averaging what they say means. LinearAffine is the component-wise mean of the affine matrices - the original formulation, and what every golden is captured against. Polar splits each transform into translation, rotation and stretch and combines each where it lives.")]
         private EDFieldBlendMode fieldBlendMode = EDFieldBlendMode.LinearAffine;
@@ -117,6 +119,7 @@ namespace UC.ED
         public override EDFieldBlendMode deformationFieldBlendMode => fieldBlendMode;
         public override EDFieldRotationBlend deformationFieldRotationBlend => fieldRotationBlend;
         public override EDFieldScaleBlend deformationFieldScaleBlend => fieldScaleBlend;
+        public override EDFieldInterpolation deformationFieldInterpolation => fieldInterpolation;
 
         public override FullDeformationField.WeightResolver CreateFieldWeightResolver()
         {
@@ -130,6 +133,9 @@ namespace UC.ED
 
                 case EDFieldWeightMode.Entmax:
                     return new FullDeformationField.EntmaxWeights(fieldWeightAlpha, fieldWeightTemperature, fieldWeightNormalizeDistances);
+
+                case EDFieldWeightMode.OriginalED:
+                    return new FullDeformationField.OriginalEDWeights();
 
                 default:
                     return new FullDeformationField.InverseDistanceWeights();
@@ -600,10 +606,23 @@ namespace UC.ED
                     Debug.LogWarning($"AlongSkeleton influence with {storageSlots} stored nodes per cell: three or more are needed for a linked pair to be found reliably, so expect the no-linked-pair fallback. Raise Max Weights or the storage.");
                 }
 
+                // Interpolated distances hand a kink fix nothing to walk: its volume tail reads the
+                // region's entries as weights, and under Distances they are distances. Refused out
+                // loud and built with weights, which the golden harness then reports as the field
+                // disagreeing with the builder - the right answer for a combination nobody measured.
+                EDFieldInterpolation interpolation = def.fieldInterpolation;
+
+                if ((interpolation == EDFieldInterpolation.Distances) && (def.vertexInfluence == EDVertexInfluenceMethod.AlongSkeleton) && (def.skeletonKinkFix != EDSkeletonKinkFix.None))
+                {
+                    Debug.LogError($"{def.name}: Interpolate Distances is not available with a kink fix ({def.skeletonKinkFix}), whose volume tail walks the region's stored weights. The field is built interpolating weights; set the kink fix to None or the interpolation to Weights.");
+
+                    interpolation = EDFieldInterpolation.Weights;
+                }
+
                 FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, def.fieldConnectivity,
                                                                       def.deformationFieldSeedTerminals, def.deformationFieldSeedCorridors, def.fieldBlendMode,
                                                                       def.fieldRotationBlend, def.fieldScaleBlend, def.vertexInfluence, def.skeletonSections,
-                                                                      def.skeletonKinkFix, def.skeletonKinkDistance);
+                                                                      def.skeletonKinkFix, def.skeletonKinkDistance, interpolation);
 
                 // -------------------------------------------------------------
                 // 3) Fill the field using source geometry.

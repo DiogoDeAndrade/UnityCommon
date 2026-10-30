@@ -252,7 +252,9 @@ public partial class FullDeformationField
                 listWeights = null;
             }
 
-            this.tailScale = (raw.valid && (raw.table == null)) ? (tailScale) : (0.0f);
+            // No tail off a list: its raw set is already the list, and under interpolated distances
+            // the region behind it holds distances, which a tail walk would read as weights.
+            this.tailScale = (raw.valid && (raw.table == null) && (!raw.list)) ? (tailScale) : (0.0f);
             tailIndex = (raw.trilinear) ? (raw.region.influenceStart) : (0);
             index = 0;
         }
@@ -890,6 +892,18 @@ public partial class FullDeformationField
             if (!TryGetTrilinearRegion(position, out TrilinearRegion region, out float fx, out float fy, out float fz))
             {
                 return new InfluenceEnumerator(this, default(TrilinearRegion), 0.0f, 0.0f, 0.0f, false);
+            }
+
+            // Interpolated distances (2026-10-30): the weights are made here, at the point, and
+            // handed over as an explicit list - the region's entries are distances and must not be
+            // walked as weights, which is also why the list carries no tail.
+            if (interpolation == EDFieldInterpolation.Distances)
+            {
+                int count = ResolveDistanceInfluences(region, fx, fy, fz);
+
+                InfluenceEnumerator raw = new InfluenceEnumerator(this, region, fx, fy, fz, true);
+
+                return new InfluenceEnumerator(this, raw, 0.0f, count, distanceQueryNodes, distanceQueryWeights);
             }
 
             return new InfluenceEnumerator(this, region, fx, fy, fz, true);

@@ -74,6 +74,8 @@ namespace UC.ED
         private float fieldWeightTemperature = 0.25f;
         [SerializeField, ShowIf(nameof(usesFieldNormalizedDistances)), Tooltip("Divide each cell's distances by the furthest one it keeps before mapping them, so sigma and the temperature are dimensionless.")]
         private bool fieldWeightNormalizeDistances = true;
+        [SerializeField, ShowIf(nameof(buildField)), Tooltip("What trilinear sampling interpolates between cell centres. Weights: each cell's weights, interpolated - the weight field is continuous but its gradient jumps at every cell-centre plane, and the deformation creases there. Distances: each cell's geodesic distances, interpolated, the nearest nodes and their weights then made at the point by the same mapping - a distance is nearly linear inside a cell where an inverse-square weight is not, so the creases go. Only the field carrier and the field quality term's samples read it; the per-cell weights are computed under both.")]
+        private EDFieldInterpolation fieldInterpolation = EDFieldInterpolation.Weights;
         [SerializeField, ShowIf(nameof(usesFieldCarrier)), Tooltip("How the influencing nodes' transforms are combined. LinearAffine, the default, is ED's own blend - the weighted mean of the affine maps - with the field's weights in place of the bindings', and gives the pin term an analytic Jacobian. Polar blends translation, rotation and stretch each where it lives, and the pin term's Jacobian is then taken by finite differences.")]
         private EDFieldBlendMode fieldBlendMode = EDFieldBlendMode.LinearAffine;
         [SerializeField, ShowIf(nameof(usesFieldDecomposedBlend)), Tooltip("How the rotations are averaged under Polar. Chordal is the smallest departure from the linear blend.")]
@@ -102,6 +104,7 @@ namespace UC.ED
         public override EDFieldBlendMode deformationFieldBlendMode => (usesFieldCarrier) ? (fieldBlendMode) : (EDFieldBlendMode.LinearAffine);
         public override EDFieldRotationBlend deformationFieldRotationBlend => fieldRotationBlend;
         public override EDFieldScaleBlend deformationFieldScaleBlend => fieldScaleBlend;
+        public override EDFieldInterpolation deformationFieldInterpolation => fieldInterpolation;
 
         // The structure builder's mapping, read off this builder's own settings. Null with the field
         // off, as for a builder that produces none.
@@ -119,6 +122,9 @@ namespace UC.ED
 
                 case EDFieldWeightMode.Entmax:
                     return new FullDeformationField.EntmaxWeights(fieldWeightAlpha, fieldWeightTemperature, fieldWeightNormalizeDistances);
+
+                case EDFieldWeightMode.OriginalED:
+                    return new FullDeformationField.OriginalEDWeights();
 
                 default:
                     return new FullDeformationField.InverseDistanceWeights();

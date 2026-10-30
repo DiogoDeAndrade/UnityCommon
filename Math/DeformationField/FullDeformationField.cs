@@ -26,6 +26,25 @@ public enum EDFieldConnectivity
     FacesEdgesCorners26
 }
 
+/// <summary>
+/// What trilinear sampling interpolates between cell centres (2026-10-30).
+///
+/// Weights: each cell's weights, computed once by ComputeWeights, interpolated at the point - the
+/// field as it has always sampled, and what every golden with a field is captured under. The weight
+/// field is then continuous but its gradient jumps at every cell-centre plane, and so does the
+/// deformation's Jacobian: a crease at every plane, which on the twisted bar was the look of the field
+/// carrier. Distances: each cell's stored geodesic distances interpolated at the point, the nearest
+/// nodes taken there and the weights computed there, by the same resolver. A distance is nearly
+/// linear inside a cell where an inverse-square weight is anything but, so the interpolation's kinks
+/// are of the distance's curvature rather than the weight's. The per-cell weights are still computed
+/// and stored under both, for the cell sampling and the tools that read it.
+/// </summary>
+public enum EDFieldInterpolation
+{
+    Weights,
+    Distances
+}
+
 [Serializable]
 public partial class FullDeformationField
 {
@@ -255,6 +274,13 @@ public partial class FullDeformationField
     EDFieldRotationBlend                rotationBlend;
     [SerializeField, HideInInspector]
     EDFieldScaleBlend                   scaleBlend;
+    /// <summary>
+    /// What trilinear sampling interpolates, weights or distances - see EDFieldInterpolation.
+    /// Recorded as the blend is: it changes every trilinearly deformed position without changing a
+    /// stored weight, so nothing else in a dump would move to explain it.
+    /// </summary>
+    [SerializeField, HideInInspector]
+    EDFieldInterpolation                interpolation;
     [SerializeField, HideInInspector]
     List<DeformationNode>               deformationNodes = new List<DeformationNode>();
     [SerializeField, HideInInspector]
@@ -282,6 +308,7 @@ public partial class FullDeformationField
     public EDFieldRotationBlend builtRotationBlend => rotationBlend;
     public EDFieldScaleBlend builtScaleBlend => scaleBlend;
     public string builtBlendDescriptor => DescribeBlend(blendMode, rotationBlend, scaleBlend);
+    public EDFieldInterpolation builtInterpolation => interpolation;
 
     /// <summary>
     /// The seeded nodes, for drawing. The rest frame and the bar length are what the field was
@@ -784,9 +811,11 @@ public partial class FullDeformationField
                                 EDVertexInfluenceMethod influenceMethod = EDVertexInfluenceMethod.ThroughVolume,
                                 EDSkeletonSection skeletonSections = EDSkeletonSection.LinkPerpendicular,
                                 EDSkeletonKinkFix skeletonKinkFix = EDSkeletonKinkFix.None,
-                                float skeletonKinkDistance = 0.5f)
+                                float skeletonKinkDistance = 0.5f,
+                                EDFieldInterpolation interpolation = EDFieldInterpolation.Weights)
     {
         this.voxelSize = Mathf.Max(voxelSize, DistanceEpsilon);
+        this.interpolation = interpolation;
         this.voxelDensity = voxelDensity;
         this.maxWeights = Mathf.Max(1, maxWeights);
         this.storageSlots = Mathf.Max(this.maxWeights, storageSlots);
@@ -1123,6 +1152,11 @@ public partial class FullDeformationField
 
         weightDescriptor = resolver.Describe();
 
+        // Kept for the per-query path: under EDFieldInterpolation.Distances the same resolver runs
+        // again at every sampled point, on the interpolated distances. Not serialized, as the
+        // resolver never is; a field rebuilt is a field whose ComputeWeights runs again.
+        weightResolver = resolver;
+
         // Still clamped to maxWeights, never to storageSlots. This is what keeps extra stored nodes
         // inert: the sort above puts the nearest first, so weighting only the leading weightCount
         // produces exactly the weights a cell that had evicted the rest would have produced.
@@ -1171,7 +1205,18 @@ public partial class FullDeformationField
 
             if (validCount == 0) continue;
 
-            resolver.ComputeCellWeights(gatheredDistances, validCount, gatheredWeights);
+            // The nearest node outside the weighted set, for the mappings that normalize by it
+            // (OriginalED). It sits in the next sorted slot when the cell stores one; a set that
+            // came up short of weightCount has no node beyond it.
+            float nextDistance = float.MaxValue;
+
+            if ((validCount == weightCount) && (weightCount < storageSlots) &&
+                (element.nodeId[weightCount] >= 0) && (element.distances[weightCount] < float.MaxValue))
+            {
+                nextDistance = element.distances[weightCount];
+            }
+
+            resolver.ComputeCellWeights(gatheredDistances, validCount, gatheredWeights, nextDistance);
 
             for (int i = 0; i < validCount; i++)
             {
@@ -1430,6 +1475,14 @@ public partial class FullDeformationField
             return;
         }
 
+        // Its own build, so the statements below - the ones every golden with a field was captured
+        // through - stay as they are under Weights.
+        if (interpolation == EDFieldInterpolation.Distances)
+        {
+            BuildDistanceRegionsInternal();
+            return;
+        }
+
         Vector3Int regionSize = voxelData.gridSize + Vector3Int.one;
 
         long regionCountLong = (long)regionSize.x * regionSize.y * regionSize.z;
@@ -1532,6 +1585,347 @@ public partial class FullDeformationField
         trilinearRegions = newRegions;
         trilinearInfluences = allInfluences.ToArray();
         trilinearRegionsDirty = false;
+    }
+
+    // ----------------------------------------------------------------------------------------------
+    // Interpolated distances - EDFieldInterpolation.Distances, 2026-10-30.
+    //
+    // The regions hold the same TrilinearInfluence entries, with each node's *distance* at the eight
+    // corner cells in place of its weight. The weights are made per query: the corner distances
+    // interpolated, the nearest maxWeights nodes taken with the (k + 1)-th beside them, and the
+    // resolver ComputeWeights ran per cell run once more at the point - so at a cell centre, where
+    // the interpolation returns the corner's own distances, the point's weights are the cell's.
+    //
+    // A corner the node never reached - a cell across a wall from everything the node's wavefront
+    // touched, or inside a void it could not enter - has no distance to interpolate, and it is given
+    // one beyond every real distance in the grid: the largest stored distance plus the grid's
+    // diagonal. Far rather than an estimate, because the node is unreachable from that cell and an
+    // estimate from its neighbours was measured letting it back in through the wall, nearer than
+    // the nodes that did reach the cell; a constant rather than anything per region, because a node
+    // present in one region and absent from the next is a step at their shared face, and the first
+    // build of this, which dropped such nodes, was measured doing exactly that. With far at the
+    // missing corners a node's interpolated distance climbs towards it, so the node leaves the blend
+    // before the corner and the same value stands on both sides of every face.
+    //
+    // At a query a node whose interpolated distance has passed the largest real distance in the
+    // grid is not there: nothing really reached that far, so the node is beyond reach at that point
+    // by its own number, and its weight there was already that of the grid's farthest reach. That is
+    // what makes a point every node is far from unreached, as the cell's own weights make it, and
+    // what makes a cell's centre read the cell's own slots and no other. When fewer than k + 1 nodes
+    // remain the resolver's next distance is that largest real distance rather than the cell
+    // convention's none - so a (k + 1)-th node that fades out hands over to the same value it faded
+    // to, and the OriginalED normalization stays continuous there; it differs from the cell's own
+    // weights only in a cell fewer than k + 1 nodes reached, which on a connected piece is none.
+    //
+    // A region keeps only the nodes that can be among the nearest k + 1 somewhere inside it: node j
+    // is out when k + 1 other nodes have a *largest* corner distance under its *smallest*, since every
+    // interpolated distance lies between its corners and those nodes are then nearer than j at every
+    // point of the region. That is what keeps the region lists near k + 1 entries under AllNodes
+    // storage instead of every node in the graph.
+    // ----------------------------------------------------------------------------------------------
+
+    const float MissingCornerDistance = -1.0f;
+
+    static readonly Vector4 MissingCorners = new Vector4(MissingCornerDistance, MissingCornerDistance, MissingCornerDistance, MissingCornerDistance);
+
+    // The resolver the per-query weights are made by, the one ComputeWeights last ran; never
+    // serialized, as resolvers are not. Null until ComputeWeights runs, when the legacy mapping
+    // stands in, as it does for ComputeWeights itself.
+    [NonSerialized] WeightResolver weightResolver;
+
+    static readonly WeightResolver fallbackResolver = new InverseDistanceWeights();
+
+    // The largest distance any cell stores for any node, set when the distance regions are built;
+    // an interpolated distance above it is a missing corner's far value showing through.
+    [NonSerialized] float distanceFarThreshold = float.MaxValue;
+
+    // Per thread: the deformation passes query from their workers. Sized to k + 1 and copied out of
+    // by the enumerator before the next query on the thread can overwrite them.
+    [ThreadStatic] static float[] distanceQueryDistances;
+    [ThreadStatic] static int[]   distanceQueryNodes;
+    [ThreadStatic] static float[] distanceQueryWeights;
+
+    static void SetTrilinearCornerValue(ref TrilinearInfluence influence, int cornerIndex, float value)
+    {
+        if (cornerIndex < 4)
+        {
+            Vector4 values = influence.lowZ;
+            values[cornerIndex] = value;
+            influence.lowZ = values;
+        }
+        else
+        {
+            Vector4 values = influence.highZ;
+            values[cornerIndex - 4] = value;
+            influence.highZ = values;
+        }
+    }
+
+    static bool HasEveryCorner(TrilinearInfluence influence)
+    {
+        return (influence.lowZ.x >= 0.0f) && (influence.lowZ.y >= 0.0f) && (influence.lowZ.z >= 0.0f) && (influence.lowZ.w >= 0.0f) &&
+               (influence.highZ.x >= 0.0f) && (influence.highZ.y >= 0.0f) && (influence.highZ.z >= 0.0f) && (influence.highZ.w >= 0.0f);
+    }
+
+    static float SmallestCorner(TrilinearInfluence influence)
+    {
+        float low = Mathf.Min(Mathf.Min(influence.lowZ.x, influence.lowZ.y), Mathf.Min(influence.lowZ.z, influence.lowZ.w));
+        float high = Mathf.Min(Mathf.Min(influence.highZ.x, influence.highZ.y), Mathf.Min(influence.highZ.z, influence.highZ.w));
+
+        return Mathf.Min(low, high);
+    }
+
+    static float LargestCorner(TrilinearInfluence influence)
+    {
+        float low = Mathf.Max(Mathf.Max(influence.lowZ.x, influence.lowZ.y), Mathf.Max(influence.lowZ.z, influence.lowZ.w));
+        float high = Mathf.Max(Mathf.Max(influence.highZ.x, influence.highZ.y), Mathf.Max(influence.highZ.z, influence.highZ.w));
+
+        return Mathf.Max(low, high);
+    }
+
+    void BuildDistanceRegionsInternal()
+    {
+        Vector3Int regionSize = voxelData.gridSize + Vector3Int.one;
+
+        long regionCountLong = (long)regionSize.x * regionSize.y * regionSize.z;
+
+        if (regionCountLong > int.MaxValue)
+        {
+            throw new InvalidOperationException($"Trilinear region grid is too large: {regionSize}.");
+        }
+
+        TrilinearRegion[] newRegions = new TrilinearRegion[(int)regionCountLong];
+
+        List<TrilinearInfluence> allInfluences = new();
+        List<TrilinearInfluence> regionInfluences = new(Mathf.Max(1, 8 * storageSlots));
+        List<float> largestCorners = new(Mathf.Max(1, 8 * storageSlots));
+
+        Dictionary<int, int> influenceSlotByNode = new(Mathf.Max(1, 8 * storageSlots));
+
+        int keepCount = Mathf.Max(1, maxWeights) + 1;
+
+        // Beyond every real distance in the grid: the largest one stored, plus the grid's diagonal.
+        float largestReal = 0.0f;
+
+        for (int i = 0; i < voxelData.data.Length; i++)
+        {
+            DeformationFieldWeights element = voxelData.data[i];
+
+            if ((element.nodeId == null) || (element.distances == null)) continue;
+
+            int influenceCount = Mathf.Min(element.nodeId.Length, element.distances.Length);
+
+            for (int j = 0; j < influenceCount; j++)
+            {
+                if (element.nodeId[j] < 0) continue;
+
+                float distance = element.distances[j];
+
+                if ((distance < float.MaxValue) && (distance > largestReal)) largestReal = distance;
+            }
+        }
+
+        float farDistance = largestReal + new Vector3(voxelData.gridSize.x * voxelSize, voxelData.gridSize.y * voxelSize, voxelData.gridSize.z * voxelSize).magnitude;
+
+        distanceFarThreshold = largestReal;
+
+        int regionIndex = 0;
+
+        // Region coordinate r corresponds to base cell coordinate b = r - 1, with one clamped region
+        // on each low border, as the weight regions are laid out.
+        for (int rz = 0; rz < regionSize.z; rz++)
+        {
+            int bz = rz - 1;
+
+            for (int ry = 0; ry < regionSize.y; ry++)
+            {
+                int by = ry - 1;
+
+                for (int rx = 0; rx < regionSize.x; rx++, regionIndex++)
+                {
+                    int bx = rx - 1;
+
+                    influenceSlotByNode.Clear();
+                    regionInfluences.Clear();
+
+                    for (int dz = 0; dz <= 1; dz++)
+                    {
+                        int z = Mathf.Clamp(bz + dz, 0, voxelData.gridSize.z - 1);
+
+                        for (int dy = 0; dy <= 1; dy++)
+                        {
+                            int y = Mathf.Clamp(by + dy, 0, voxelData.gridSize.y - 1);
+
+                            for (int dx = 0; dx <= 1; dx++)
+                            {
+                                int x = Mathf.Clamp(bx + dx, 0, voxelData.gridSize.x - 1);
+
+                                int cornerIndex = dx + 2 * dy + 4 * dz;
+
+                                DeformationFieldWeights element = voxelData.data[IndexOf(x, y, z)];
+
+                                if ((element.nodeId == null) || (element.distances == null)) continue;
+
+                                int influenceCount = Mathf.Min(element.nodeId.Length, element.distances.Length);
+
+                                for (int i = 0; i < influenceCount; i++)
+                                {
+                                    int nodeIndex = element.nodeId[i];
+                                    float distance = element.distances[i];
+
+                                    if (nodeIndex < 0) continue;
+                                    if (distance >= float.MaxValue) continue;
+
+                                    if (!influenceSlotByNode.TryGetValue(nodeIndex, out int slot))
+                                    {
+                                        slot = regionInfluences.Count;
+                                        influenceSlotByNode.Add(nodeIndex, slot);
+
+                                        regionInfluences.Add(new TrilinearInfluence
+                                        {
+                                            nodeId = nodeIndex,
+                                            lowZ = MissingCorners,
+                                            highZ = MissingCorners,
+                                        });
+                                    }
+
+                                    TrilinearInfluence influence = regionInfluences[slot];
+
+                                    SetTrilinearCornerValue(ref influence, cornerIndex, distance);
+
+                                    regionInfluences[slot] = influence;
+                                }
+                            }
+                        }
+                    }
+
+                    // A corner a node never reached is far - the same value in every region that
+                    // shares the corner, which is what keeps the interpolation continuous across faces.
+                    for (int i = 0; i < regionInfluences.Count; i++)
+                    {
+                        TrilinearInfluence influence = regionInfluences[i];
+
+                        if (HasEveryCorner(influence)) continue;
+
+                        for (int cornerIndex = 0; cornerIndex < 8; cornerIndex++)
+                        {
+                            float value = (cornerIndex < 4) ? (influence.lowZ[cornerIndex]) : (influence.highZ[cornerIndex - 4]);
+
+                            if (value < 0.0f) SetTrilinearCornerValue(ref influence, cornerIndex, farDistance);
+                        }
+
+                        regionInfluences[i] = influence;
+                    }
+
+                    // Then the prune: the (k + 1)-th smallest largest-corner distance is the bound,
+                    // and a node whose smallest corner lies above it is nearer than nothing anywhere
+                    // in the region.
+                    float bound = float.MaxValue;
+
+                    if (regionInfluences.Count > keepCount)
+                    {
+                        largestCorners.Clear();
+
+                        for (int i = 0; i < regionInfluences.Count; i++) largestCorners.Add(LargestCorner(regionInfluences[i]));
+
+                        largestCorners.Sort();
+
+                        bound = largestCorners[keepCount - 1];
+                    }
+
+                    int start = allInfluences.Count;
+
+                    for (int i = 0; i < regionInfluences.Count; i++)
+                    {
+                        if (SmallestCorner(regionInfluences[i]) > bound) continue;
+
+                        allInfluences.Add(regionInfluences[i]);
+                    }
+
+                    newRegions[regionIndex] = new TrilinearRegion
+                    {
+                        influenceStart = start,
+                        influenceCount = allInfluences.Count - start,
+                    };
+                }
+            }
+        }
+
+        trilinearRegionGridSize = regionSize;
+        trilinearRegions = newRegions;
+        trilinearInfluences = allInfluences.ToArray();
+        trilinearRegionsDirty = false;
+    }
+
+    /// <summary>
+    /// The weights at a point of a region under EDFieldInterpolation.Distances, written into the
+    /// thread-local query arrays - distanceQueryNodes and distanceQueryWeights, the first
+    /// <c>count</c> entries - and the count returned; zero when no node reaches the region. The
+    /// nearest maxWeights by interpolated distance, ordered by (distance, node) as SortInfluences
+    /// orders a cell, the (k + 1)-th handed to the resolver as its next distance - the largest real
+    /// distance in the grid when there is none, see the block above.
+    /// </summary>
+    int ResolveDistanceInfluences(TrilinearRegion region, float fx, float fy, float fz)
+    {
+        int k = Mathf.Max(1, maxWeights);
+
+        if ((distanceQueryDistances == null) || (distanceQueryDistances.Length < k + 1))
+        {
+            distanceQueryDistances = new float[k + 1];
+            distanceQueryNodes = new int[k + 1];
+            distanceQueryWeights = new float[k + 1];
+        }
+
+        int kept = 0;
+        int end = region.influenceStart + region.influenceCount;
+
+        for (int i = region.influenceStart; i < end; i++)
+        {
+            TrilinearInfluence influence = trilinearInfluences[i];
+
+            int node = influence.nodeId;
+
+            if ((node < 0) || (node >= deformationNodes.Count)) continue;
+
+            float d = InterpolateTrilinearWeight(influence, fx, fy, fz);
+
+            // Past the largest real distance in the grid: a missing corner's far value, the node is
+            // beyond reach here.
+            if (d > distanceFarThreshold) continue;
+
+            int pos;
+
+            if (kept < k + 1)
+            {
+                pos = kept++;
+            }
+            else
+            {
+                // Full: only an entry nearer than the last one displaces it.
+                if (!((d < distanceQueryDistances[k]) || ((d == distanceQueryDistances[k]) && (node < distanceQueryNodes[k])))) continue;
+
+                pos = k;
+            }
+
+            while ((pos > 0) && ((d < distanceQueryDistances[pos - 1]) || ((d == distanceQueryDistances[pos - 1]) && (node < distanceQueryNodes[pos - 1]))))
+            {
+                distanceQueryDistances[pos] = distanceQueryDistances[pos - 1];
+                distanceQueryNodes[pos] = distanceQueryNodes[pos - 1];
+                pos--;
+            }
+
+            distanceQueryDistances[pos] = d;
+            distanceQueryNodes[pos] = node;
+        }
+
+        if (kept == 0) return 0;
+
+        int count = Mathf.Min(kept, k);
+        float nextDistance = (kept > k) ? (distanceQueryDistances[k]) : (distanceFarThreshold);
+
+        (weightResolver ?? fallbackResolver).ComputeCellWeights(distanceQueryDistances, count, distanceQueryWeights, nextDistance);
+
+        return count;
     }
 
     static float InterpolateTrilinearWeight(TrilinearInfluence influence, float fx, float fy, float fz)

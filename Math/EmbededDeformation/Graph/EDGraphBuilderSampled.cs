@@ -200,7 +200,8 @@ namespace UC.ED
                 // without a skeleton has.
                 FullDeformationField field = new FullDeformationField(voxelSize, safeDensity, safeMaxWeights, storageSlots, slotPerNode, builder.deformationFieldConnectivity,
                                                                       false, false, builder.deformationFieldBlendMode,
-                                                                      builder.deformationFieldRotationBlend, builder.deformationFieldScaleBlend);
+                                                                      builder.deformationFieldRotationBlend, builder.deformationFieldScaleBlend,
+                                                                      interpolation: builder.deformationFieldInterpolation);
 
                 // Baked to world space by SetSourceGeometry, so the voxelizer takes identities.
                 List<Matrix4x4> identityMatrices = new();
