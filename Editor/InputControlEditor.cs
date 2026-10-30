@@ -99,8 +99,10 @@ namespace UC
                     }
                     else
                     {
-                        // Get the InputActionAsset from the PlayerInput
-                        var inputActionAsset = playerInput.actions;
+                        // Get the InputActionAsset from the PlayerInput, through the serialized field: reading PlayerInput.actions initializes it, and without a
+                        // domain reload that lasts into play mode, so this PlayerInput wouldn't get its own copy of the actions and players would share a device
+                        using var playerInputObject = new SerializedObject(playerInput);
+                        var inputActionAsset = playerInputObject.FindProperty("m_Actions").objectReferenceValue as InputActionAsset;
                         if (inputActionAsset == null)
                         {
                             Rect warningRect = new Rect(position.x, position.y + singleLineHeight + spacing, position.width, singleLineHeight * 2);
