@@ -48,6 +48,12 @@ namespace UC
         public AnimationClip currentClip { get; private set; }
         public bool currentReversed { get; private set; }
 
+        public float speed
+        {
+            get => animationSpeed;
+            set => animationSpeed = value;
+        }
+
         public bool IsTransitioning => crossFadeCR != null;
 
         public AnimationClip TransitionFromClip => transitionFromClip;
