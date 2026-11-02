@@ -319,6 +319,8 @@ namespace UC
                     Log("Deleted Burst Debug Information folder: " + burstDebugPath);
                 }
 
+                CopyReleaseNotes(windowsPath);
+
                 if (buildDefs.createZipFiles)
                 {
                     CreateZip(buildFolder, productName + "_Windows", buildFolder + productName + "_Windows_v" + buildDefs.version + ".zip");
@@ -338,6 +340,7 @@ namespace UC
                 Log("WebGL build completed: " + webPath);
 
                 DeleteIgnoredStreamingAssets(webPath);
+                CopyReleaseNotes(webPath);
 
                 if (buildDefs.createZipFiles)
                 {
@@ -350,6 +353,15 @@ namespace UC
                     }
                 }
             }
+        }
+
+        private void CopyReleaseNotes(string buildRootPath)
+        {
+            string releaseNotesPath = "RELEASE_NOTES.md";
+            if (!File.Exists(releaseNotesPath)) return;
+
+            File.Copy(releaseNotesPath, Path.Combine(buildRootPath, releaseNotesPath), true);
+            Log("Copied release notes to: " + buildRootPath);
         }
 
         private void CreateZip(string parentFolder, string folderName, string zipFilePath)
