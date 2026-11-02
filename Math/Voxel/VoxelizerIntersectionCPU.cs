@@ -93,15 +93,21 @@ namespace UC
                         var max_y = Mathf.CeilToInt((Mathf.Max(v1.y, v2.y, v3.y) - voxelData.minBound.y) * densityV.y);
                         var max_z = Mathf.CeilToInt((Mathf.Max(v1.z, v2.z, v3.z) - voxelData.minBound.z) * densityV.z);
 
+                        // The lower index is clamped into the grid as the upper one is. Without it a
+                        // triangle lying exactly on the grid's maximum plane (its normalised coordinate
+                        // exactly gridSize, which happens whenever the grid is not padded) started its
+                        // range outside the grid, the loop never ran, and the triangle marked nothing:
+                        // two whole faces of an axis-aligned box went missing from the solid that way
+                        // (2026-11-02). The overlap test still decides occupancy; this only lets it run.
                         var offset = Vector3.zero;
 
-                        for (int z = Mathf.Max(0, min_z); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
+                        for (int z = Mathf.Min(Mathf.Max(0, min_z), gridSize.z - 1); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
                         {
                             offset.z = voxelData.minBound.z + z * voxelData.voxelSize.z;
-                            for (int y = Mathf.Max(0, min_y); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
+                            for (int y = Mathf.Min(Mathf.Max(0, min_y), gridSize.y - 1); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
                             {
                                 offset.y = voxelData.minBound.y + y * voxelData.voxelSize.y;
-                                for (int x = Mathf.Max(0, min_x); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
+                                for (int x = Mathf.Min(Mathf.Max(0, min_x), gridSize.x - 1); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
                                 {
                                     int voxelIndex = x + (y * gridSize.x) + (z * gridSize.x * gridSize.y);
                                     if (voxelData.data[voxelIndex] == 0)
@@ -208,15 +214,21 @@ namespace UC
                         var max_y = Mathf.CeilToInt((Mathf.Max(v1.y, v2.y, v3.y) - voxelData.minBound.y) * densityV.y);
                         var max_z = Mathf.CeilToInt((Mathf.Max(v1.z, v2.z, v3.z) - voxelData.minBound.z) * densityV.z);
 
+                        // The lower index is clamped into the grid as the upper one is. Without it a
+                        // triangle lying exactly on the grid's maximum plane (its normalised coordinate
+                        // exactly gridSize, which happens whenever the grid is not padded) started its
+                        // range outside the grid, the loop never ran, and the triangle marked nothing:
+                        // two whole faces of an axis-aligned box went missing from the solid that way
+                        // (2026-11-02). The overlap test still decides occupancy; this only lets it run.
                         var offset = Vector3.zero;
 
-                        for (int z = Mathf.Max(0, min_z); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
+                        for (int z = Mathf.Min(Mathf.Max(0, min_z), gridSize.z - 1); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
                         {
                             offset.z = voxelData.minBound.z + z * voxelData.voxelSize.z;
-                            for (int y = Mathf.Max(0, min_y); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
+                            for (int y = Mathf.Min(Mathf.Max(0, min_y), gridSize.y - 1); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
                             {
                                 offset.y = voxelData.minBound.y + y * voxelData.voxelSize.y;
-                                for (int x = Mathf.Max(0, min_x); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
+                                for (int x = Mathf.Min(Mathf.Max(0, min_x), gridSize.x - 1); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
                                 {
                                     int voxelIndex = x + (y * gridSize.x) + (z * gridSize.x * gridSize.y);
                                     if (voxelData.data[voxelIndex].IsEmpty())
@@ -307,15 +319,17 @@ namespace UC
                     /*min_x = min_y = min_z = 0;
                     max_x = gridSize.x; max_y = gridSize.y; max_z = gridSize.z; //*/
 
+                    // The lower index is clamped into the grid as the upper one is - see the first
+                    // overload for why.
                     var offset = Vector3.zero;
 
-                    for (int z = Mathf.Max(0, min_z); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
+                    for (int z = Mathf.Min(Mathf.Max(0, min_z), gridSize.z - 1); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
                     {
                         offset.z = voxelData.minBound.z + z * voxelData.voxelSize.z;
-                        for (int y = Mathf.Max(0, min_y); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
+                        for (int y = Mathf.Min(Mathf.Max(0, min_y), gridSize.y - 1); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
                         {
                             offset.y = voxelData.minBound.y + y * voxelData.voxelSize.y;
-                            for (int x = Mathf.Max(0, min_x); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
+                            for (int x = Mathf.Min(Mathf.Max(0, min_x), gridSize.x - 1); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
                             {
                                 int voxelIndex = x + (y * gridSize.x) + (z * gridSize.x * gridSize.y);
                                 if (voxelData.data[voxelIndex] == 0)
@@ -405,15 +419,17 @@ namespace UC
                     /*min_x = min_y = min_z = 0;
                     max_x = gridSize.x; max_y = gridSize.y; max_z = gridSize.z; //*/
 
+                    // The lower index is clamped into the grid as the upper one is - see the first
+                    // overload for why.
                     var offset = Vector3.zero;
 
-                    for (int z = Mathf.Max(0, min_z); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
+                    for (int z = Mathf.Min(Mathf.Max(0, min_z), gridSize.z - 1); z <= Mathf.Min(max_z, gridSize.z - 1); z++)
                     {
                         offset.z = voxelData.minBound.z + z * voxelData.voxelSize.z;
-                        for (int y = Mathf.Max(0, min_y); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
+                        for (int y = Mathf.Min(Mathf.Max(0, min_y), gridSize.y - 1); y <= Mathf.Min(max_y, gridSize.y - 1); y++)
                         {
                             offset.y = voxelData.minBound.y + y * voxelData.voxelSize.y;
-                            for (int x = Mathf.Max(0, min_x); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
+                            for (int x = Mathf.Min(Mathf.Max(0, min_x), gridSize.x - 1); x <= Mathf.Min(max_x, gridSize.x - 1); x++)
                             {
                                 int voxelIndex = x + (y * gridSize.x) + (z * gridSize.x * gridSize.y);
                                 ref T voxel = ref voxelData.data[voxelIndex];
@@ -667,9 +683,12 @@ namespace UC
         // Returns true if the triangle plane does NOT intersect the box, meaning the full triangle/AABB test can be skipped safely.
         private static bool CheapPlaneReject(Vector3 aabbMin, Vector3 aabbMax, Vector3 v0, Vector3 v1, Vector3 v2)
         {
-            // Box center and half extents
+            // Box center and half extents - the half extents widened by the same 1e-3 the full
+            // overlap test (AABB.Intersects) uses. A triangle lying exactly on a face of the box
+            // has |s| == r here in exact arithmetic, and float rounding can put it a last bit
+            // over, rejecting a cell the overlap test would have accepted (2026-11-02).
             Vector3 c = (aabbMin + aabbMax) * 0.5f;
-            Vector3 e = (aabbMax - aabbMin) * 0.5f;
+            Vector3 e = (aabbMax - aabbMin) * 0.5f + new Vector3(1e-3f, 1e-3f, 1e-3f);
 
             // Triangle plane normal
             Vector3 n = Vector3.Cross(v1 - v0, v2 - v0);
