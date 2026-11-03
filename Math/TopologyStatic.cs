@@ -8,7 +8,7 @@ namespace UC
     public class TopologyStatic
     {
         [System.Serializable]
-        public struct IdPair
+        public struct IdPair : System.IEquatable<IdPair>
         {
             public int i1;
             public int i2;
@@ -22,10 +22,18 @@ namespace UC
             public static implicit operator IdPair((int, int) tuple) => new IdPair(tuple.Item1, tuple.Item2);
 
             public override string ToString() => $"({i1}, {i2})";
+
+            // The pair keys the edge dictionary. Without these a struct key goes through
+            // ValueType's reflection-based Equals and GetHashCode on every lookup, which on a mesh
+            // of a hundred thousand edges is most of the dictionary's cost; a lookup's result does
+            // not change, only its speed.
+            public bool Equals(IdPair other) => (i1 == other.i1) && (i2 == other.i2);
+            public override bool Equals(object obj) => (obj is IdPair other) && Equals(other);
+            public override int GetHashCode() => unchecked((i1 * 486187739) ^ i2);
         }
 
         [System.Serializable]
-        public struct IdTriplet
+        public struct IdTriplet : System.IEquatable<IdTriplet>
         {
             public int i1;
             public int i2;
@@ -41,6 +49,10 @@ namespace UC
             public static implicit operator IdTriplet((int, int, int) tuple) => new IdTriplet(tuple.Item1, tuple.Item2, tuple.Item3);
 
             public override string ToString() => $"({i1}, {i2}, {i3})";
+
+            public bool Equals(IdTriplet other) => (i1 == other.i1) && (i2 == other.i2) && (i3 == other.i3);
+            public override bool Equals(object obj) => (obj is IdTriplet other) && Equals(other);
+            public override int GetHashCode() => unchecked(((i1 * 486187739) ^ i2) * 486187739 ^ i3);
         }
 
         [System.Serializable]
@@ -151,12 +163,16 @@ namespace UC
             if (weld)
             {
                 _vertices = new List<TVertex>();
-                // Transform vertices and weld mesh
+                // Transform vertices and weld mesh. The grid lives for the weld only: it answers
+                // "which vertices so far are within epsilon of this one" by looking at 27 cells
+                // instead of every vertex, and the answer is the one the scan gave - see WeldGrid.
+                weldGrid = new WeldGrid(epsilon);
                 for (int i = 0; i < verts.Length; i++)
                 {
                     Vector3 tvertex = matrix * new Vector4(verts[i].x, verts[i].y, verts[i].z, 1);
                     vertexMatch.Add(GetOrAddVertex(tvertex, epsilon));
                 }
+                weldGrid = null;
             }
             else
             {
@@ -264,8 +280,91 @@ namespace UC
             }
         }
 
+        /// <summary>
+        /// The cells of the vertices welded so far, each cell twice the weld epsilon on a side.
+        /// Two positions within epsilon of each other are then at most one cell apart on every
+        /// axis - their coordinates divided by the cell size differ by under a half, so their
+        /// floors differ by at most one whatever the division's rounding - and a query reads the
+        /// 27 cells around its own. Before this the weld compared every vertex with every vertex
+        /// welded before it: 800 million distances on a 40,000-vertex benchmark, minutes of every
+        /// Build and of every output subdivision; a grid is a few hundred.
+        /// </summary>
+        private class WeldGrid
+        {
+            private readonly float cellSize;
+            private readonly Dictionary<Vector3Int, List<int>> cells = new Dictionary<Vector3Int, List<int>>();
+
+            public WeldGrid(float epsilon)
+            {
+                cellSize = 2.0f * epsilon;
+            }
+
+            // The floors in double: a float quotient at a coordinate of a thousand over a cell of two
+            // thousandths is half a million, where a float is good to a thirtieth and a double to
+            // nothing that matters against the half-cell margin.
+            private Vector3Int KeyOf(Vector3 p)
+                => new Vector3Int((int)System.Math.Floor(p.x / (double)cellSize), (int)System.Math.Floor(p.y / (double)cellSize), (int)System.Math.Floor(p.z / (double)cellSize));
+
+            /// <summary>
+            /// The lowest index among the vertices within epsilon of the position, or -1: the
+            /// vertex the old scan returned, which stopped at the first match in index order.
+            /// </summary>
+            public int Find(Vector3 pos, float epsilon, List<TVertex> vertices)
+            {
+                Vector3Int center = KeyOf(pos);
+                int best = -1;
+
+                for (int dz = -1; dz <= 1; dz++)
+                    for (int dy = -1; dy <= 1; dy++)
+                        for (int dx = -1; dx <= 1; dx++)
+                        {
+                            if (!cells.TryGetValue(new Vector3Int(center.x + dx, center.y + dy, center.z + dz), out var list)) continue;
+
+                            foreach (int j in list)
+                            {
+                                if ((best != -1) && (j >= best)) continue;
+
+                                if (Vector3.Distance(pos, vertices[j].position) < epsilon) best = j;
+                            }
+                        }
+
+                return best;
+            }
+
+            public void Add(Vector3 pos, int index)
+            {
+                Vector3Int key = KeyOf(pos);
+
+                if (!cells.TryGetValue(key, out var list))
+                {
+                    list = new List<int>();
+                    cells.Add(key, list);
+                }
+
+                list.Add(index);
+            }
+        }
+
+        [System.NonSerialized]
+        private WeldGrid weldGrid;
+
         int GetOrAddVertex(Vector3 pos, float epsilon = 1e-6f)
         {
+            // The scan this replaced returned the first vertex in index order within epsilon; the
+            // grid returns the lowest such index, which is the same vertex. Without a grid (the
+            // constructor builds one for the weld; nothing else calls this) the scan stays.
+            if (weldGrid != null)
+            {
+                int found = weldGrid.Find(pos, epsilon, _vertices);
+
+                if (found != -1) return found;
+
+                _vertices.Add(new TVertex(pos));
+                weldGrid.Add(pos, _vertices.Count - 1);
+
+                return _vertices.Count - 1;
+            }
+
             for (int j = 0; j < _vertices.Count; j++)
             {
                 if (Vector3.Distance(pos, _vertices[j].position) < epsilon)
