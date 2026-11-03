@@ -9,7 +9,9 @@ namespace UC.RPG
 
     public class ResourceBar : MonoBehaviour
     {
-        public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY, Text, FillAmount };
+        // ResizeImageX and ResizeImageY move the far anchor of the bar instead of scaling it, so a 9-sliced bar keeps its ends; the bar
+        // has to be anchored to its full size, and with no offsets, so that it can go all the way down to nothing
+        public enum DisplayMode { ScaleImageX, DiscreteItems, ScaleImageY, Text, FillAmount, ResizeImageX, ResizeImageY };
         public enum UpdateMode { Direct, FeedbackLoop, ConstantSpeed };
 
         [SerializeField] private DisplayMode displayMode;
@@ -42,7 +44,8 @@ namespace UC.RPG
         [SerializeField] private string          _textOnEmpty;
         [SerializeField] private TextMeshProUGUI header;
 
-        bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY) || (displayMode == DisplayMode.FillAmount);
+        bool isBar => (displayMode == DisplayMode.ScaleImageX) || (displayMode == DisplayMode.ScaleImageY) || (displayMode == DisplayMode.FillAmount) ||
+                      (displayMode == DisplayMode.ResizeImageX) || (displayMode == DisplayMode.ResizeImageY);
         bool needSpeedVar => (isBar) && ((updateMode == UpdateMode.FeedbackLoop) || (updateMode == UpdateMode.ConstantSpeed));
         bool needColor => (isBar) && (colorChange);
 
@@ -69,6 +72,7 @@ namespace UC.RPG
         // Keep vars
         Quaternion          initialRotation;
         Vector3             deltaPos;
+        Vector2             fullAnchorMax;
 
         ResourceHandler     sourceResource;
         ResourceInstance    sourceInstance;
@@ -80,6 +84,7 @@ namespace UC.RPG
             {
                 uiImage = bar.GetComponent<Image>();
                 spriteImage = bar.GetComponent<SpriteRenderer>();
+                fullAnchorMax = bar.anchorMax;
                 prevT = currentT = GetNormalizedResource();
             }
             else if (displayMode == DisplayMode.DiscreteItems)
@@ -282,6 +287,12 @@ namespace UC.RPG
                     break;
                 case DisplayMode.FillAmount:
                     uiImage.fillAmount = currentT;
+                    break;
+                case DisplayMode.ResizeImageX:
+                    bar.anchorMax = new Vector2(Mathf.Lerp(bar.anchorMin.x, fullAnchorMax.x, currentT), bar.anchorMax.y);
+                    break;
+                case DisplayMode.ResizeImageY:
+                    bar.anchorMax = new Vector2(bar.anchorMax.x, Mathf.Lerp(bar.anchorMin.y, fullAnchorMax.y, currentT));
                     break;
                 default:
                     break;
