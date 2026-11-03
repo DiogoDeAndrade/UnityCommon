@@ -683,12 +683,14 @@ namespace UC
         // Returns true if the triangle plane does NOT intersect the box, meaning the full triangle/AABB test can be skipped safely.
         private static bool CheapPlaneReject(Vector3 aabbMin, Vector3 aabbMax, Vector3 v0, Vector3 v1, Vector3 v2)
         {
-            // Box center and half extents - the half extents widened by the same 1e-3 the full
-            // overlap test (AABB.Intersects) uses. A triangle lying exactly on a face of the box
-            // has |s| == r here in exact arithmetic, and float rounding can put it a last bit
-            // over, rejecting a cell the overlap test would have accepted (2026-11-02).
+            // Box center and half extents - the half extents widened by the same fraction of
+            // themselves the full overlap test (AABB.Intersects) uses. A triangle lying exactly on a
+            // face of the box has |s| == r here in exact arithmetic, and float rounding can put it a
+            // last bit over, rejecting a cell the overlap test would have accepted (2026-11-02). An
+            // absolute 1e-3 until 2026-11-03, a fraction since, so the voxelizer is the same at every
+            // scale.
             Vector3 c = (aabbMin + aabbMax) * 0.5f;
-            Vector3 e = (aabbMax - aabbMin) * 0.5f + new Vector3(1e-3f, 1e-3f, 1e-3f);
+            Vector3 e = (aabbMax - aabbMin) * (0.5f * (1.0f + AABB.ExtentsTolerance));
 
             // Triangle plane normal
             Vector3 n = Vector3.Cross(v1 - v0, v2 - v0);

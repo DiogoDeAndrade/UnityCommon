@@ -5,13 +5,21 @@ namespace UC
 
     public static class AABB
     {
+        // The half extents are widened by this fraction of themselves, so a triangle lying exactly on a
+        // face of the box - the normal case for an axis-aligned mesh on a voxel grid - is not lost to float
+        // rounding. It was an absolute 1e-3 until 2026-11-03, which is 2.4% of the unit cactus's voxel and
+        // 0.03% of the hundred-unit bar's: the same mesh voxelized differently at different scales.
+        // VoxelizerIntersectionCPU's plane reject widens by the same fraction, and must, or it rejects
+        // cells this test would accept.
+        public const float ExtentsTolerance = 1e-3f;
+
         // Adapted from https://github.com/mattatz/unity-intersections
         public static bool Intersects(Vector3 aabb_min, Vector3 aabb_max, Vector3 tri_p1, Vector3 tri_p2, Vector3 tri_p3)
         {
             float p0, p1, p2, r;
 
             Vector3 center = (aabb_min + aabb_max) * 0.5f;
-            Vector3 extents = aabb_max - center + new Vector3(1e-3f, 1e-3f, 1e-3f);
+            Vector3 extents = (aabb_max - center) * (1.0f + ExtentsTolerance);
 
             Vector3 v0 = tri_p1 - center,
                     v1 = tri_p2 - center,
@@ -153,7 +161,7 @@ namespace UC
         public static bool Intersects(Vector3 aabb_min, Vector3 aabb_max, Vector3 plane_normal, float plane_dist)
         {
             Vector3 center = (aabb_min + aabb_max) * 0.5f,
-                    extents = aabb_max - center + new Vector3(1e-3f, 1e-3f, 1e-3f);
+                    extents = (aabb_max - center) * (1.0f + ExtentsTolerance);
 
             var r = extents.x * Mathf.Abs(plane_normal.x) + extents.y * Mathf.Abs(plane_normal.y) + extents.z * Mathf.Abs(plane_normal.z);
             var s = Vector3.Dot(plane_normal, center) - plane_dist;
