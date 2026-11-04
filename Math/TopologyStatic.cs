@@ -132,6 +132,11 @@ namespace UC
 
         private Dictionary<IdPair, int> edgeDic;
 
+        // A count of the construction, never serialized: a topology read back from a scene
+        // answers zero. See degenerateTriangleCount.
+        [System.NonSerialized]
+        private int _degenerateTriangles;
+
         public List<TVertex> vertices => _vertices;
         public List<TEdge> edges => _edges;
         public List<TTriangle> triangles => _triangles;
@@ -194,6 +199,18 @@ namespace UC
                     int index1 = vertexMatch[indices[i]];
                     int index2 = vertexMatch[indices[i + 1]];
                     int index3 = vertexMatch[indices[i + 2]];
+
+                    // A triangle two or three of whose corners are one welded vertex has no area, a
+                    // zero normal and a zero-length edge, and that edge's key (i, i) is its own
+                    // mirror - GetOrAddEdge adds both orientations of a key, so it used to throw on
+                    // the second. Dropped and counted; the callers report the count. The Armadillo
+                    // (2026-11-04) is where it first happened: four source vertices within the weld
+                    // epsilon of each other, eight triangles collapsed to a point or a line.
+                    if ((index1 == index2) || (index2 == index3) || (index3 == index1))
+                    {
+                        _degenerateTriangles++;
+                        continue;
+                    }
 
                     int e1 = GetOrAddEdge(index1, index2);
                     int e2 = GetOrAddEdge(index2, index3);
@@ -422,6 +439,18 @@ namespace UC
         public int vertexCount => (_vertices == null) ? 0 : _vertices.Count;
         public int edgeCount => (_edges == null) ? 0 : _edges.Count;
         public int triangleCount => (_triangles == null) ? 0 : _triangles.Count;
+
+        /// <summary>
+        /// The triangles the constructor dropped because two or three of their corners welded to
+        /// one vertex - or were one vertex in the index buffer to begin with. Such a triangle has
+        /// no area, a zero normal and a zero-length edge whose key (i, i) is its own mirror, which
+        /// is where GetOrAddEdge threw until 2026-11-04: the Armadillo has four source vertices
+        /// within the weld epsilon of each other and eight triangles that collapse to a point or a
+        /// line at the weld. The vertices themselves are kept, welded as they are; only the
+        /// triangles go. A count of this construction alone - a topology a subdivision pass makes
+        /// from a mesh answers zero, and so does one read back from a scene.
+        /// </summary>
+        public int degenerateTriangleCount => _degenerateTriangles;
 
         public List<Vector3> GetVertexPositions()
         {
