@@ -19,7 +19,9 @@ namespace UC.ED
                                                    bool choleskyFactorization = false,
                                                    double relativeEnergyStop = 0.0,
                                                    bool restartDamping = false,
-                                                   bool sparseNormalEquations = false) where TState : class
+                                                   bool sparseNormalEquations = false,
+                                                   EDDampingScaling dampingScaling = EDDampingScaling.Identity,
+                                                   double dampingScaleFloor = 1e-9) where TState : class
         {
             if (resetBeforeSolve)
                 problem.Reset();
@@ -135,6 +137,9 @@ namespace UC.ED
                 // transpose and two products the loop always made, the sparse one the option's.
                 problem.FormNormalEquations(f, sparseNormalEquations, out Matrix<double> H, out Vector<double> g);
 
+                // Null under the identity, the default: the damping is then added as it always was.
+                double[] dampingScale = EDSolver.DampingScale(H, dampingScaling, dampingScaleFloor);
+
                 problem.Mark(EDSolverTimer.NormalEquations);
 
                 Vector<double> delta = null;
@@ -160,7 +165,7 @@ namespace UC.ED
 
                     if (choleskyFactorization)
                     {
-                        if (!EDSolver.TrySolveCholeskyWithDamping(H, g, currentLambda, out delta, out double usedLambda))
+                        if (!EDSolver.TrySolveCholeskyWithDamping(H, g, currentLambda, out delta, out double usedLambda, dampingScale))
                         {
                             currentLambda = usedLambda;
 
@@ -175,8 +180,7 @@ namespace UC.ED
                     {
                         var Hlm = H.Clone();
 
-                        for (int i = 0; i < Hlm.RowCount; i++)
-                            Hlm[i, i] += currentLambda;
+                        EDSolver.AddDamping(Hlm, currentLambda, dampingScale);
 
                         try
                         {

@@ -12,6 +12,13 @@ namespace UC
             Mesh ret = new Mesh();
             ret.name = src.name + "(Clone)";
 
+            // Before anything that sizes the buffers. A new Mesh is 16-bit, and Unity truncates the
+            // indices of a source over 65,535 vertices without a word: the Armadillo's deformation
+            // field was voxelized from 234,581 scrambled triangles that way, through
+            // SetSourceGeometry's BakeTransform (2026-11-05). On a 16-bit source this sets the
+            // format the clone already had.
+            ret.indexFormat = src.indexFormat;
+
             ret.vertices = src.vertices;
             ret.normals = src.normals;
 

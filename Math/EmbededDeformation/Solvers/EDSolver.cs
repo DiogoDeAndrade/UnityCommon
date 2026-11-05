@@ -65,6 +65,8 @@ namespace UC.ED
         public virtual bool choleskyFactorization => false;
         public virtual bool restartsDamping => false;
         public virtual bool sparseNormalEquations => false;
+        public virtual EDDampingScaling dampingScalingMode => EDDampingScaling.Identity;
+        public virtual float dampingScaleRelativeFloor => 0.0f;
         public virtual float smoothnessWeight => 0.1f;
 
         public abstract Instance NewInstance(EmbededDeformation deformation);

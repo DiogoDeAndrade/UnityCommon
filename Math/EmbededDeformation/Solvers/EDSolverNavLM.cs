@@ -42,7 +42,9 @@ namespace UC.ED
                           cholesky,
                           relativeEnergyStop,
                           restartDampingEachIteration,
-                          useSparseNormalEquations);
+                          useSparseNormalEquations,
+                          dampingScaling,
+                          dampingScaleFloor);
         }
     }
 }

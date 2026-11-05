@@ -45,6 +45,17 @@ namespace UC.ED
         // asset has always made.
         [SerializeField, Tooltip("Factorise the damped normal equations by Cholesky instead of a general solve. Faster, but it fails on an indefinite matrix, and then raises the damping and retries.")]
         protected bool cholesky = false;
+        // Identity, the default, is what every damped solve did until 2026-11-05: the damping
+        // added to every column alike, a stiffness in the parameter's own units. Marquardt adds it
+        // in proportion to the column's diagonal of the normal equations, so the damping is a
+        // fraction of each column's curvature - the option exists for the unpinned Armadillo,
+        // whose body a single damping held still (EDSolver.Loop.cs has why). Under it the initial
+        // damping, and every damping the attempts report, is that fraction and no longer a
+        // stiffness. Named in the dump when on.
+        [SerializeField, Tooltip("Identity adds the damping to every column of the normal equations alike. Marquardt adds it in proportion to each column's own diagonal entry, so the damping is a fraction of the curvature the energy already holds that column by - the initial damping becomes that fraction. Named in the dump when not the identity.")]
+        protected EDDampingScaling dampingScaling = EDDampingScaling.Identity;
+        [SerializeField, Min(0.0f), Tooltip("Under Marquardt, a column's diagonal is raised to at least this fraction of the largest, so a column no row reaches still gets some damping. A guard, not a setting to tune.")]
+        protected float dampingScaleFloor = 1e-9f;
         [SerializeField]
         protected float residualTolerance = 1e-5f;
         [SerializeField]
@@ -56,6 +67,8 @@ namespace UC.ED
         public override bool restartsDamping => restartDampingEachIteration;
         public override bool sparseNormalEquations => useSparseNormalEquations;
         public override bool choleskyFactorization => cholesky;
+        public override EDDampingScaling dampingScalingMode => dampingScaling;
+        public override float dampingScaleRelativeFloor => dampingScaleFloor;
 
         public override Instance NewInstance(EmbededDeformation deformation) => new ProblemInstance(this, deformation);
 
@@ -74,7 +87,9 @@ namespace UC.ED
                                   cholesky,
                                   relativeEnergyStop,
                                   restartDampingEachIteration,
-                                  useSparseNormalEquations);
+                                  useSparseNormalEquations,
+                                  dampingScaling,
+                                  dampingScaleFloor);
         }
     }
 }
