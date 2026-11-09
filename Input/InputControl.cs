@@ -435,9 +435,17 @@ namespace UC
 #if ENABLE_LEGACY_INPUT_MANAGER
             return Input.mouseScrollDelta;
 #elif ENABLE_INPUT_SYSTEM
-            throw new NotImplementedException("InputControl.GetMouseScrollDelta not implemented if legacy input manager is turned off!");
+            var mouse = Mouse.current;
+            if (mouse == null)
+            {
+                return default;
+            }
+
+            // Per frame, like the legacy one. A wheel notch is 1 with the default scroll delta behaviour (Uniform
+            // Across All Platforms), 120 on Windows with Keep Platform Specific Input Range
+            return mouse.scroll.ReadValue();
 #else
-        return false;
+            return default;
 #endif
         }
 
