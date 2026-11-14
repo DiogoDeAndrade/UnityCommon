@@ -59,7 +59,10 @@ namespace UC.ED
                      residualTolerance,
                      stepTolerance,
                      resetBeforeSolve,
-                     relativeEnergyStop);
+                     relativeEnergyStop,
+                     remainingDisplacementStop,
+                     recentDisplacementStop,
+                     recentDisplacementSteps);
         }
     }
 }

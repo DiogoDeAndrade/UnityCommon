@@ -22,7 +22,10 @@ namespace UC.ED
                                                            bool restartDamping = false,
                                                            bool sparseNormalEquations = false,
                                                            EDDampingScaling dampingScaling = EDDampingScaling.Identity,
-                                                           double dampingScaleFloor = 1e-9) where TState : class
+                                                           double dampingScaleFloor = 1e-9,
+                                                           double remainingDisplacementStop = 0.0,
+                                                           double recentDisplacementStop = 0.0,
+                                                           int recentDisplacementWindow = 10) where TState : class
         {
             if (resetBeforeSolve)
                 problem.Reset();
@@ -33,6 +36,10 @@ namespace UC.ED
             // residual evaluation, as the layout builder used to be. They are a function of the
             // graph and the weights, neither of which changes during a solve.
             problem.BeginSolve(false);
+
+            // Null unless the stop criteria is RemainingDisplacement (2026-11-12): with it null
+            // nothing below measures the geometry, and the loop is the one it was.
+            EDDisplacementStop displacementStop = EDSolver.BeginDisplacementStop(problem, remainingDisplacementStop, recentDisplacementStop, recentDisplacementWindow);
 
             problem.Mark(EDSolverTimer.Iteration);
 
@@ -80,6 +87,9 @@ namespace UC.ED
                 {
                     previousError = double.NaN;
                     flatIterations = 0;
+
+                    // And the steps before it were taken towards another request.
+                    displacementStop?.Reset();
                 }
 
                 // Checked at entry, before the Jacobian - the expensive half of an iteration that
@@ -281,6 +291,16 @@ namespace UC.ED
                 }
 
                 problem.Accept(acceptedState);
+
+                // The remaining-displacement stop, on the step just taken - here, and not at the
+                // next iteration's entry, so an end costs no further residual. The step is taken
+                // into account while the inputs are still moving, and ends nothing then.
+                if ((displacementStop != null) && (EDSolver.TakeDisplacementStep(displacementStop, problem, acceptedState)) && (!inputs.pending))
+                {
+                    end = displacementStop.reached;
+                    endIteration = iter;
+                    break;
+                }
             }
 
             problem.ReportEnd(end, endIteration);

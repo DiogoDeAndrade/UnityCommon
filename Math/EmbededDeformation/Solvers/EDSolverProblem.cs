@@ -80,6 +80,10 @@ namespace UC.ED
         NoImprovingStep,
         /// <summary>The linear solve threw, or gave a step that is not finite (Gauss-Newton).</summary>
         LinearSolveFailed,
+        /// <summary>The distance the geometry still has to travel was estimated under the tolerance on consecutive iterations (the RemainingDisplacement stop).</summary>
+        DisplacementStop,
+        /// <summary>No point of the geometry was further than the tolerance from where it was a window of iterations before, on consecutive iterations (the RecentDisplacement stop).</summary>
+        RecentDisplacementStop,
     }
 
     /// <summary>
@@ -160,6 +164,28 @@ namespace UC.ED
 
         /// <summary>The current state moved by scale times the step, in place.</summary>
         void ApplyStep(Vector<double> step, double scale);
+
+        /// <summary>
+        /// The largest distance any point of the problem's geometry moves between the state this
+        /// was last called with and this one, over the geometry's largest side - what the
+        /// RemainingDisplacement stop reads (<see cref="EDDisplacementStop"/>). The problem keeps
+        /// the geometry of the state it was last given, so a solver calls it once with the state
+        /// the solve departs from - that call has nothing to compare with and answers zero - and
+        /// then with every state a step produces, a candidate before it is accepted or the current
+        /// one after a step in place. NaN where the problem has no geometry to measure, and the
+        /// stop is then never met. Called only under that stop: a solve without it measures nothing.
+        /// </summary>
+        double GeometryStep(TState state);
+
+        /// <summary>
+        /// The largest distance any point of the problem's geometry is, at the state
+        /// <see cref="GeometryStep"/> was last given, from where it was <paramref name="steps"/>
+        /// calls of it before, over the geometry's largest side - what the RecentDisplacement stop
+        /// reads. Asking is what makes the problem keep that many states back, from the call on:
+        /// NaN until it has them, and where it has no geometry to measure. Called only under that
+        /// stop.
+        /// </summary>
+        double GeometryTravel(int steps);
 
         /// <summary>One attempt, or the state the attempts depart from; the state is the one the residual was evaluated at, null where there was none.</summary>
         void ReportAttempt(int attempt, EDAttemptOutcome outcome, double damping, double stepNorm, Vector<double> residual, TState state);

@@ -44,7 +44,10 @@ namespace UC.ED
                           restartDampingEachIteration,
                           useSparseNormalEquations,
                           dampingScaling,
-                          dampingScaleFloor);
+                          dampingScaleFloor,
+                          remainingDisplacementStop,
+                          recentDisplacementStop,
+                          recentDisplacementSteps);
         }
     }
 }

@@ -21,7 +21,10 @@ namespace UC.ED
                                               double residualTolerance = 1e-5,
                                               double stepTolerance = 1e-6,
                                               bool resetBeforeSolve = true,
-                                              double relativeEnergyStop = 0.0) where TState : class
+                                              double relativeEnergyStop = 0.0,
+                                              double remainingDisplacementStop = 0.0,
+                                              double recentDisplacementStop = 0.0,
+                                              int recentDisplacementWindow = 10) where TState : class
         {
             if (resetBeforeSolve)
                 problem.Reset();
@@ -32,6 +35,10 @@ namespace UC.ED
             if (!((backtrackFactor > 0.0) && (backtrackFactor < 1.0))) backtrackFactor = 0.5;
 
             problem.BeginSolve(false);
+
+            // Null unless the stop criteria is RemainingDisplacement (2026-11-12): with it null
+            // nothing below measures the geometry, and the loop is the one it was.
+            EDDisplacementStop displacementStop = EDSolver.BeginDisplacementStop(problem, remainingDisplacementStop, recentDisplacementStop, recentDisplacementWindow);
 
             problem.Mark(EDSolverTimer.Iteration);
 
@@ -94,6 +101,8 @@ namespace UC.ED
                 {
                     previousError = double.NaN;
                     flatIterations = 0;
+
+                    displacementStop?.Reset();
 
                     ForgetHistory();
 
@@ -289,6 +298,15 @@ namespace UC.ED
                 if ((acceptedNorm < stepTolerance) && (!inputs.pending))
                 {
                     end = EDSolveEnd.StepTolerance;
+                    endIteration = iter;
+                    break;
+                }
+
+                // The remaining-displacement stop, on the step just taken. Taken into account
+                // while the inputs are still moving, and ends nothing then.
+                if ((displacementStop != null) && (EDSolver.TakeDisplacementStep(displacementStop, problem, acceptedState)) && (!inputs.pending))
+                {
+                    end = displacementStop.reached;
                     endIteration = iter;
                     break;
                 }
