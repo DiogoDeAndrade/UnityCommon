@@ -32,10 +32,14 @@ namespace UC
         private float           screenMargin = 0.05f;
         [SerializeField, ShowIf(nameof(allowMouseControl)), Min(0.0f), Tooltip("Edge panning moves at the camera speed times this")]
         private float           mouseSpeedMultiplier = 1.0f;
+        [SerializeField, Tooltip("Hold a button and drag to grab the world and move it with the cursor, like the scene view")]
+        private bool            allowDragPan;
         [SerializeField]
         private bool            allowButtonControl;
-        [SerializeField, ShowIf(nameof(allowButtonControl))]
+        [SerializeField, ShowIf(EConditionOperator.Or, nameof(allowButtonControl), nameof(allowDragPan))]
         private PlayerInput     playerInput;
+        [SerializeField, ShowIf(nameof(allowDragPan)), InputPlayer(nameof(playerInput)), AllowInput(AllowInput.NewInput | AllowInput.NoInput), InputButton, Tooltip("A button action held while dragging, e.g. the middle mouse button")]
+        private InputControl    dragControl;
         [SerializeField, ShowIf(nameof(allowButtonControl)), InputPlayer(nameof(playerInput)), AllowInput(AllowInput.NewInput | AllowInput.NoInput), Tooltip("A Vector2 action, e.g. a WASD/arrows 2D composite or a stick")]
         private InputControl    directionalInput;
         [SerializeField, ShowIf(nameof(allowButtonControl)), Min(0.0f), Tooltip("The directional input moves at the camera speed times this")]
@@ -55,6 +59,9 @@ namespace UC
 
         bool hasZoom => zoomSpeed > 0.0f;
 
+        /// <summary>True while the drag button is held and moving the camera.</summary>
+        public bool isDragging => dragging;
+
         // A wheel notch counts as this many seconds of held zoom input
         const float WheelNotchTime = 0.1f;
         // How quickly the orthographic size catches up with the zoom target (exponential, per second)
@@ -67,6 +74,8 @@ namespace UC
         Vector2 writtenPosition;    // What was last written to the transform, to notice when something else moves it
         Vector2 velocity;
         float   targetSize;
+        bool    dragging;
+        Vector2 dragLastMouse;      // Cursor pixel position last frame of the drag
 
         void Awake()
         {
@@ -76,6 +85,10 @@ namespace UC
             {
                 directionalInput.playerInput = playerInput;
                 scrollControl.playerInput = playerInput;
+            }
+            if (allowDragPan)
+            {
+                dragControl.playerInput = playerInput;
             }
         }
 
@@ -110,6 +123,10 @@ namespace UC
 
         void UpdateMovement(float dt)
         {
+            // A drag owns the camera outright: the world point under the cursor stays under it, so edge
+            // panning, keys and any glide left over are all off until the button is let go
+            if (UpdateDrag()) return;
+
             // Each source is capped at length 1 on its own, so two edges or two keys are no faster on a diagonal than
             // on a straight line (an analog stick that's only partly pushed keeps its partial speed), then scaled by
             // its own multiplier
@@ -158,6 +175,47 @@ namespace UC
             // While the sideways part dies off, never faster than it was or than it's heading for (switching from a
             // faster source to a slower one eases down instead of cutting the speed)
             return Vector2.ClampMagnitude(dir * along + across, Mathf.Max(v.magnitude, targetSpeed));
+        }
+
+        // Returns whether a drag is in progress (and so moved the camera this frame)
+        bool UpdateDrag()
+        {
+            if ((!allowDragPan) || (!Application.isFocused))
+            {
+                dragging = false;
+                return false;
+            }
+
+            Vector2 mouse = InputControl.GetMousePixelPosition();
+
+            if (!dragging)
+            {
+                // Only a press inside the window starts one, so a click that began elsewhere and slid in
+                // doesn't yank the view
+                if (!dragControl.IsDown()) return false;
+                if ((mouse.x < 0.0f) || (mouse.y < 0.0f) || (mouse.x > Screen.width) || (mouse.y > Screen.height)) return false;
+
+                dragging = true;
+                dragLastMouse = mouse;
+                velocity = Vector2.zero;
+                return true;
+            }
+
+            if (!dragControl.IsPressed())
+            {
+                dragging = false;
+                return false;
+            }
+
+            // Orthographic, so a pixel is the same size in the world everywhere on screen. Worked out from
+            // this frame's zoom, so zooming mid drag keeps the grab consistent from then on
+            float worldPerPixel = 2.0f * cam.orthographicSize / Mathf.Max(1, cam.pixelHeight);
+
+            position -= (mouse - dragLastMouse) * worldPerPixel;
+            dragLastMouse = mouse;
+            velocity = Vector2.zero;
+
+            return true;
         }
 
         // -1/0/+1 per axis, depending on which edge bands the cursor is in
